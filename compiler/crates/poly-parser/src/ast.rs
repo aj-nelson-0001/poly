@@ -210,6 +210,11 @@ pub enum Expression {
         variant: String,
         data: Option<Vec<Expression>>,
     },
+    /// Loop range expression (loop: 1..3, 7, 19..21 step 2)
+    LoopRange {
+        ranges: Vec<LoopRangePart>,
+        body: Vec<Statement>,
+    },
     /// As expression (type cast)
     AsExpression {
         expr: Box<Expression>,
@@ -266,7 +271,14 @@ pub enum UnaryOp {
 pub struct MatchArm {
     pub pattern: Pattern,
     pub guard: Option<Expression>,
-    pub body: Expression,
+    pub body: MatchArmBody,
+}
+
+/// The body of a match arm: either a single expression or a block of statements.
+#[derive(Debug, Clone)]
+pub enum MatchArmBody {
+    Expression(Expression),
+    Block(Vec<Statement>),
 }
 
 /// Patterns in match expressions.
@@ -280,11 +292,16 @@ pub enum Pattern {
     Identifier(String),
     /// Tuple pattern
     Tuple(Vec<Pattern>),
-    /// Enum pattern
+    /// Enum pattern (can have named fields too: Error(FileError::NotFound))
     Enum {
         enum_name: String,
         variant: String,
         inner: Option<Vec<Pattern>>,
+    },
+    /// Named field pattern: Foo { bar, baz }
+    NamedFields {
+        name: String,
+        fields: Vec<(String, Pattern)>,
     },
     /// Range pattern
     Range {
@@ -297,6 +314,18 @@ pub enum Pattern {
         name: String,
         pattern: Box<Pattern>,
     },
+}
+
+/// A part of a loop range (either a range, a single value, or a range with step).
+#[derive(Debug, Clone)]
+pub enum LoopRangePart {
+    Range {
+        start: Box<Expression>,
+        end: Box<Expression>,
+        inclusive: bool,
+        step: Option<Expression>,
+    },
+    Value(Box<Expression>),
 }
 
 /// Get expression (input from stdin/files).

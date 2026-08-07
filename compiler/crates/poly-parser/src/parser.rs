@@ -102,6 +102,7 @@ impl<'a> Parser<'a> {
             TokenKind::Module => self.parse_module_declaration().map(Statement::ModuleDeclaration),
             TokenKind::Use => self.parse_use_declaration().map(Statement::UseDeclaration),
             TokenKind::Type => self.parse_type_declaration().map(Statement::TypeDeclaration),
+            TokenKind::While => self.parse_while_statement(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Break => {
                 self.advance();
@@ -192,6 +193,19 @@ impl<'a> Parser<'a> {
             Some(self.parse_expression()?)
         };
         Ok(Statement::ReturnStatement(value))
+    }
+
+    fn parse_while_statement(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // consume 'while'
+        let condition = self.parse_expression()?;
+        let body = self.parse_block()?;
+        self.expect(&TokenKind::End)?;
+        self.expect(&TokenKind::While)?;
+        Ok(Statement::ExpressionStatement(Expression::IfExpression {
+            condition: Box::new(condition),
+            then_block: body,
+            else_block: None,
+        }))
     }
 
     fn parse_put_statement(&mut self) -> Result<Statement, ParseError> {
@@ -326,15 +340,58 @@ impl<'a> Parser<'a> {
             } else {
                 let variant_name = self.expect_identifier()?;
                 if self.match_token(&TokenKind::LParen) {
-                    let mut types = Vec::new();
+                    let mut fields = Vec::new();
                     if self.peek() != &TokenKind::RParen {
-                        types.push(self.parse_type()?);
+                        // Check if this is named tuple variant: Variant(param: type, ...)
+                        // or plain tuple variant: Variant(type, type, ...)
+                        if let TokenKind::Identifier(_) = self.peek() {
+                            // Look ahead: is the next token ':' or ',' or ')'?
+                            // If Identifier followed by ':' it's a named field
+                            let saved_pos = self.pos;
+                            let param_name = self.expect_identifier()?;
+                            if self.match_token(&TokenKind::Colon) {
+                                // Named field: param: type
+                                let ty = self.parse_type()?;
+                                fields.push((param_name, ty));
+                            } else {
+                                // Not a named field - rewind and parse as type
+                                self.pos = saved_pos;
+                                let ty = self.parse_type()?;
+                                fields.push(("".to_string(), ty)); // unnamed field placeholder
+                            }
+                        } else {
+                            let ty = self.parse_type()?;
+                            fields.push(("".to_string(), ty)); // unnamed field placeholder
+                        }
                         while self.match_token(&TokenKind::Comma) {
-                            types.push(self.parse_type()?);
+                            if self.peek() == &TokenKind::RParen {
+                                break;
+                            }
+                            if let TokenKind::Identifier(_) = self.peek() {
+                                let saved_pos = self.pos;
+                                let param_name = self.expect_identifier()?;
+                                if self.match_token(&TokenKind::Colon) {
+                                    let ty = self.parse_type()?;
+                                    fields.push((param_name, ty));
+                                } else {
+                                    self.pos = saved_pos;
+                                    let ty = self.parse_type()?;
+                                    fields.push(("".to_string(), ty));
+                                }
+                            } else {
+                                let ty = self.parse_type()?;
+                                fields.push(("".to_string(), ty));
+                            }
                         }
                     }
                     self.expect(&TokenKind::RParen)?;
-                    variants.push(EnumVariant::Tuple(variant_name, types));
+                    // Check if all fields have names -> Struct variant, else Tuple variant
+                    if fields.iter().all(|(name, _)| !name.is_empty()) {
+                        variants.push(EnumVariant::Struct(variant_name, fields));
+                    } else {
+                        let types: Vec<TypeAnnotation> = fields.into_iter().map(|(_, ty)| ty).collect();
+                        variants.push(EnumVariant::Tuple(variant_name, types));
+                    }
                 } else if self.peek() == &TokenKind::LBrace {
                     self.advance();
                     let mut fields = Vec::new();
@@ -797,6 +854,105 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_loop_expression(&mut self) -> Result<Expression, ParseError> {
+        self.advance(); // consume 'loop'
+        
+        // Check for range loop: loop: 0..10 or loop: 1..3, 7, 19..21 step 2
+        if self.peek() == &TokenKind::Colon {
+            self.advance(); // consume ':'
+            
+            // Parse the loop range spec (can be multiple ranges separated by commas)
+            let mut range_parts = Vec::new();
+            
+            loop {
+                let part = self.parse_loop_range_part()?;
+                range_parts.push(part);
+                
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            
+            let body = self.parse_block()?;
+            self.expect(&TokenKind::End)?;
+            self.expect(&TokenKind::Loop)?;
+            
+            return Ok(Expression::LoopRange {
+                ranges: range_parts,
+                body,
+            });
+        }
+        
+        // Infinite loop
+        let _body = self.parse_block()?;
+        self.expect(&TokenKind::End)?;
+        self.expect(&TokenKind::Loop)?;
+        Ok(Expression::Call {
+            func: Box::new(Expression::Identifier("loop".into())),
+            args: vec![],
+        })
+    }
+
+    /// Parse a single part of a loop range spec.
+    /// This can be: 0..10, 0..=10, 0..10 step 2, or just 5 (a single value).
+    fn parse_loop_range_part(&mut self) -> Result<LoopRangePart, ParseError> {
+        let first = self.parse_expression()?;
+        
+        // If parse_expression already consumed a range (e.g., 0..10), extract it
+        if let Expression::Range { start, end, inclusive } = first {
+            // Check for optional step: ..10 step 2
+            let step = if self.peek() == &TokenKind::Step {
+                self.advance(); // consume 'step'
+                Some(self.parse_expression()?)
+            } else {
+                None
+            };
+            Ok(LoopRangePart::Range {
+                start,
+                end,
+                inclusive,
+                step,
+            })
+        } else if self.peek() == &TokenKind::DotDot || self.peek() == &TokenKind::DotDotEq {
+            let inclusive = self.peek() == &TokenKind::DotDotEq;
+            self.advance(); // consume .. or ..=
+            let end = self.parse_expression()?;
+            
+            // Check for optional step: ..10 step 2
+            let step = if self.peek() == &TokenKind::Step {
+                self.advance(); // consume 'step'
+                Some(self.parse_expression()?)
+            } else {
+                None
+            };
+            
+            Ok(LoopRangePart::Range {
+                start: Box::new(first),
+                end: Box::new(end),
+                inclusive,
+                step,
+            })
+        } else {
+            // Single value
+            Ok(LoopRangePart::Value(Box::new(first)))
+        }
+    }
+
+    fn parse_for_expression(&mut self) -> Result<Expression, ParseError> {
+        self.advance(); // consume 'for'
+        let variable = self.expect_identifier()?;
+        self.expect(&TokenKind::In)?;
+        let iter = self.parse_expression()?;
+        let body = self.parse_block()?;
+        self.expect(&TokenKind::End)?;
+        self.expect(&TokenKind::For)?;
+        // Represent as a call for now
+        Ok(Expression::Call {
+            func: Box::new(Expression::Identifier("for_loop".into())),
+            args: vec![Expression::Identifier(variable), iter],
+        })
+    }
+
     fn parse_postfix(&mut self) -> Result<Expression, ParseError> {
         let mut expr = self.parse_primary()?;
 
@@ -1013,16 +1169,11 @@ impl<'a> Parser<'a> {
                 self.parse_match_expression()
             }
             TokenKind::Loop => {
-                // Infinite loop - treated as expression for now
-                self.advance();
-                let _body = self.parse_block()?;
-                self.expect(&TokenKind::End)?;
-                self.expect(&TokenKind::Loop)?;
-                // For now, return as a call to loop
-                Ok(Expression::Call {
-                    func: Box::new(Expression::Identifier("loop".into())),
-                    args: vec![],
-                })
+                self.parse_loop_expression()
+            }
+            TokenKind::For => {
+                // For loop: for item in collection
+                self.parse_for_expression()
             }
             TokenKind::Unsafe => {
                 self.advance();
@@ -1079,7 +1230,7 @@ impl<'a> Parser<'a> {
                 None
             };
             self.expect(&TokenKind::FatArrow)?;
-            let body = self.parse_expression()?;
+            let body = self.parse_match_arm_body()?;
             arms.push(MatchArm { pattern, guard, body });
         }
         self.expect(&TokenKind::End)?;
@@ -1089,6 +1240,143 @@ impl<'a> Parser<'a> {
             scrutinee: Box::new(scrutinee),
             arms,
         })
+    }
+
+    /// Parse the body of a match arm: either a single expression or a block of statements.
+    fn parse_match_arm_body(&mut self) -> Result<MatchArmBody, ParseError> {
+        // Parse statements until we hit something that starts a new match arm or end of match
+        let mut stmts = Vec::new();
+        
+        loop {
+            if self.is_at_end() || *self.peek() == TokenKind::End {
+                break;
+            }
+            
+            // Check if this looks like a new match arm pattern:
+            // identifier, int literal, string literal, negative, or tuple pattern
+            if self.could_be_pattern_start() {
+                // Peek ahead: if we see FatArrow after a potential pattern, this is a new arm
+                if self.peek_ahead_is_fatarrow() {
+                    break;
+                }
+            }
+            
+            stmts.push(self.parse_statement()?);
+        }
+        
+        if stmts.is_empty() {
+            // Shouldn't happen, but handle gracefully
+            let expr = self.parse_expression()?;
+            Ok(MatchArmBody::Expression(expr))
+        } else if stmts.len() == 1 {
+            if let Statement::ExpressionStatement(expr) = &stmts[0] {
+                Ok(MatchArmBody::Expression(expr.clone()))
+            } else {
+                Ok(MatchArmBody::Block(stmts))
+            }
+        } else {
+            Ok(MatchArmBody::Block(stmts))
+        }
+    }
+    
+    /// Check if the current token could be the start of a match arm pattern.
+    fn could_be_pattern_start(&self) -> bool {
+        matches!(self.peek(),
+            TokenKind::Identifier(_)
+            | TokenKind::IntLiteral(_)
+            | TokenKind::StringLiteral(_)
+            | TokenKind::UnicodeStringLiteral(_)
+            | TokenKind::BoolLiteral(_)
+            | TokenKind::Minus
+            | TokenKind::LParen
+            | TokenKind::Pipe
+        )
+    }
+    
+    /// Peek ahead to check if a FatArrow follows (indicating a new match arm).
+    /// This does a limited lookahead.
+    fn peek_ahead_is_fatarrow(&mut self) -> bool {
+        let saved_pos = self.pos;
+        let mut found_fatarrow = false;
+        
+        // Skip over what looks like a pattern
+        match self.peek().clone() {
+            TokenKind::Identifier(_) => {
+                self.advance();
+                // Check for Enum::Variant pattern
+                if *self.peek() == TokenKind::ColonColon {
+                    self.advance(); // ::
+                    if matches!(self.peek(), TokenKind::Identifier(_)) {
+                        self.advance(); // variant name
+                    }
+                    // Check for (args)
+                    if *self.peek() == TokenKind::LParen {
+                        self.advance(); // (
+                        // Skip until matching )
+                        let mut depth = 1;
+                        while depth > 0 && !self.is_at_end() {
+                            match self.peek() {
+                                TokenKind::LParen => depth += 1,
+                                TokenKind::RParen => depth -= 1,
+                                _ => {}
+                            }
+                            self.advance();
+                        }
+                    }
+                } else if *self.peek() == TokenKind::LParen {
+                    // Variant pattern without :: (e.g., Ok(content), Error(e))
+                    self.advance(); // (
+                    let mut depth = 1;
+                    while depth > 0 && !self.is_at_end() {
+                        match self.peek() {
+                            TokenKind::LParen => depth += 1,
+                            TokenKind::RParen => depth -= 1,
+                            _ => {}
+                        }
+                        self.advance();
+                    }
+                }
+            }
+            TokenKind::IntLiteral(_) => { self.advance(); }
+            TokenKind::StringLiteral(_) => { self.advance(); }
+            TokenKind::UnicodeStringLiteral(_) => { self.advance(); }
+            TokenKind::BoolLiteral(_) => { self.advance(); }
+            TokenKind::Minus => {
+                self.advance();
+                if matches!(self.peek(), TokenKind::IntLiteral(_)) {
+                    self.advance();
+                }
+            }
+            TokenKind::LParen => {
+                // Tuple pattern: skip to matching )
+                self.advance();
+                let mut depth = 1;
+                while depth > 0 && !self.is_at_end() {
+                    match self.peek() {
+                        TokenKind::LParen => depth += 1,
+                        TokenKind::RParen => depth -= 1,
+                        _ => {}
+                    }
+                    self.advance();
+                }
+            }
+            _ => {}
+        }
+        
+        // Now check for optional guard (if condition)
+        if *self.peek() == TokenKind::If {
+            self.advance();
+            // Skip expression until FatArrow
+            // (simplified: just skip tokens until we find =>)
+        }
+        
+        if *self.peek() == TokenKind::FatArrow {
+            found_fatarrow = true;
+        }
+        
+        // Restore position
+        self.pos = saved_pos;
+        found_fatarrow
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern, ParseError> {
@@ -1113,7 +1401,7 @@ impl<'a> Parser<'a> {
                     return Ok(Pattern::Wildcard);
                 }
                 if self.peek() == &TokenKind::ColonColon {
-                    // Enum pattern
+                    // Enum pattern: EnumName::Variant(args)
                     self.advance();
                     let variant = self.expect_identifier()?;
                     let inner = if self.peek() == &TokenKind::LParen {
@@ -1131,6 +1419,19 @@ impl<'a> Parser<'a> {
                         None
                     };
                     Ok(Pattern::Enum { enum_name: name, variant, inner })
+                } else if self.peek() == &TokenKind::LParen {
+                    // Variant pattern without :: (e.g., Ok(content), Error(e))
+                    self.advance();
+                    let mut patterns = Vec::new();
+                    if self.peek() != &TokenKind::RParen {
+                        patterns.push(self.parse_pattern()?);
+                        while self.match_token(&TokenKind::Comma) {
+                            patterns.push(self.parse_pattern()?);
+                        }
+                    }
+                    self.expect(&TokenKind::RParen)?;
+                    // Treat as Enum pattern with empty enum_name for now
+                    Ok(Pattern::Enum { enum_name: String::new(), variant: name, inner: Some(patterns) })
                 } else {
                     Ok(Pattern::Identifier(name))
                 }
@@ -1401,6 +1702,98 @@ mod tests {
                 assert!(!inclusive);
             }
             _ => panic!("Expected range"),
+        }
+    }
+
+    #[test]
+    fn test_parse_loop_range() {
+        let prog = parse_source("loop: 0..10\n    put i\nend loop").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::LoopRange { ranges, body }) => {
+                assert_eq!(ranges.len(), 1);
+                assert_eq!(body.len(), 1);
+            }
+            _ => panic!("Expected LoopRange"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multi_range_loop() {
+        let prog = parse_source("loop: 1..3, 7, 19..21\n    put i\nend loop").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::LoopRange { ranges, .. }) => {
+                assert_eq!(ranges.len(), 3);
+            }
+            _ => panic!("Expected LoopRange with 3 parts"),
+        }
+    }
+
+    #[test]
+    fn test_parse_step_range() {
+        let prog = parse_source("loop: 0..10 step 2\n    put i\nend loop").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::LoopRange { ranges, .. }) => {
+                assert_eq!(ranges.len(), 1);
+                match &ranges[0] {
+                    LoopRangePart::Range { step, .. } => {
+                        assert!(step.is_some());
+                    }
+                    _ => panic!("Expected range with step"),
+                }
+            }
+            _ => panic!("Expected LoopRange"),
+        }
+    }
+
+    #[test]
+    fn test_parse_match_with_block_body() {
+        let prog = parse_source("match x\n    1 =>\n        put \"one\"\n        x + 1\n    _ => 0\nend match").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
+                assert_eq!(arms.len(), 2);
+                // First arm should have a block body
+                match &arms[0].body {
+                    MatchArmBody::Block(stmts) => {
+                        assert_eq!(stmts.len(), 2);
+                    }
+                    _ => panic!("Expected block body"),
+                }
+            }
+            _ => panic!("Expected MatchExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_variant_pattern_without_colons() {
+        let prog = parse_source("match x\n    Ok(content) => put content\n    Error(e) => error e\nend match").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
+                assert_eq!(arms.len(), 2);
+            }
+            _ => panic!("Expected MatchExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_named_enum_variant() {
+        let prog = parse_source("enum Error\n    NotFound(message: ustring)\nend enum").unwrap();
+        match &prog.statements[0] {
+            Statement::EnumDeclaration(decl) => {
+                assert_eq!(decl.variants.len(), 1);
+                match &decl.variants[0] {
+                    EnumVariant::Struct(name, fields) => {
+                        assert_eq!(name, "NotFound");
+                        assert_eq!(fields.len(), 1);
+                    }
+                    _ => panic!("Expected struct variant"),
+                }
+            }
+            _ => panic!("Expected EnumDeclaration"),
         }
     }
 }

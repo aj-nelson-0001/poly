@@ -168,6 +168,19 @@ impl CodeGen {
                 self.writeln(&format!("eprintln!(\"[INFO] {}\", {});", "{}", expr_str));
             }
             Statement::ExpressionStatement(expr) => {
+                // Check for while loop pattern (IfExpression without else used as while)
+                if let Expression::IfExpression { condition, then_block, else_block } = expr {
+                    if else_block.is_none() {
+                        self.writeln(&format!("while {} {{", self.gen_expression(condition)));
+                        self.indent += 1;
+                        for stmt in then_block {
+                            self.gen_statement(stmt);
+                        }
+                        self.indent -= 1;
+                        self.writeln("}");
+                        return;
+                    }
+                }
                 let expr_str = self.gen_expression(expr);
                 self.writeln(&format!("{};", expr_str));
             }
@@ -319,6 +332,18 @@ impl CodeGen {
                 format!("({}{})", op_str, e)
             }
             Expression::Call { func, args } => {
+                // Check for special loop constructs
+                if let Expression::Identifier(name) = func.as_ref() {
+                    if name == "for_loop" && args.len() == 1 {
+                        // Range loop: for_loop(range)
+                        let range_str = self.gen_expression(&args[0]);
+                        return format!("for i in {} {{ /* loop body */ }}", range_str);
+                    }
+                    if name == "loop" && args.is_empty() {
+                        // Infinite loop
+                        return "loop { /* loop body */ }".to_string();
+                    }
+                }
                 let func_str = self.gen_expression(func);
                 let args_str: Vec<String> = args.iter().map(|a| self.gen_expression(a)).collect();
                 format!("{}({})", func_str, args_str.join(", "))
@@ -387,6 +412,57 @@ impl CodeGen {
                     format!("{}..{}", s, e)
                 }
             }
+            Expression::LoopRange { ranges, body } => {
+                let mut result = String::new();
+                // Generate for loop(s) for the range parts
+                if ranges.len() == 1 {
+                    match &ranges[0] {
+                        LoopRangePart::Range { start, end, inclusive, step } => {
+                            let s = self.gen_expression(start);
+                            let e = self.gen_expression(end);
+                            let range = if *inclusive {
+                                format!("{}..={}", s, e)
+                            } else {
+                                format!("{}..{}", s, e)
+                            };
+                            let step_str = step.as_ref().map(|s| format!(".step_by({})", self.gen_expression(s))).unwrap_or_default();
+                            result.push_str(&format!("for i in {}{} {{\n", range, step_str));
+                        }
+                        LoopRangePart::Value(val) => {
+                            let v = self.gen_expression(val);
+                            result.push_str(&format!("for i in [{}] {{\n", v));
+                        }
+                    }
+                } else {
+                    // Multiple ranges: generate a chain of iterators or a flat vec
+                    let mut range_strs = Vec::new();
+                    for part in ranges {
+                        match part {
+                            LoopRangePart::Range { start, end, inclusive, step } => {
+                                let s = self.gen_expression(start);
+                                let e = self.gen_expression(end);
+                                let range = if *inclusive {
+                                    format!("{}..={}", s, e)
+                                } else {
+                                    format!("{}..{}", s, e)
+                                };
+                                range_strs.push(range);
+                            }
+                            LoopRangePart::Value(val) => {
+                                let v = self.gen_expression(val);
+                                range_strs.push(format!("[{}]", v));
+                            }
+                        }
+                    }
+                    result.push_str(&format!("for i in [{}] {{\n", range_strs.join(", ")));
+                }
+                // Generate body
+                for stmt in body {
+                    result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
+                }
+                result.push_str("}\n");
+                result.trim().to_string()
+            }
             Expression::AsExpression { expr, ty } => {
                 let e = self.gen_expression(expr);
                 let t = self.gen_type(ty);
@@ -404,7 +480,16 @@ impl CodeGen {
                 let mut result = format!("match {} {{\n", scrutinee_str);
                 for arm in arms {
                     let pattern_str = self.gen_pattern(&arm.pattern);
-                    let body_str = self.gen_expression(&arm.body);
+                    let body_str = match &arm.body {
+                        MatchArmBody::Expression(expr) => self.gen_expression(expr),
+                        MatchArmBody::Block(stmts) => {
+                            let mut block = String::new();
+                            for stmt in stmts {
+                                block.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
+                            }
+                            block.trim().to_string()
+                        }
+                    };
                     if let Some(guard) = &arm.guard {
                         let guard_str = self.gen_expression(guard);
                         result.push_str(&format!("    {} if {} => {},\n", pattern_str, guard_str, body_str));
@@ -571,6 +656,15 @@ impl CodeGen {
             }
             Pattern::Binding { name, pattern } => {
                 format!("{} @ {}", name, self.gen_pattern(pattern))
+            }
+            Pattern::NamedFields { name, fields } => {
+                let field_strs: Vec<String> = fields.iter().map(|(n, p)| {
+                    match p {
+                        Pattern::Identifier(id) if id == n => n.clone(), // shorthand
+                        _ => format!("{}: {}", n, self.gen_pattern(p)),
+                    }
+                }).collect();
+                format!("{} {{ {} }}", name, field_strs.join(", "))
             }
         }
     }

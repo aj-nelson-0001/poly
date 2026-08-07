@@ -602,6 +602,16 @@ impl<'a> Parser<'a> {
                 self.expect(&TokenKind::RBracket)?;
                 Ok(TypeAnnotation::Array(Box::new(inner), Box::new(size)))
             }
+            TokenKind::LParen => {
+                // Tuple type: (Type, Type, ...)
+                self.advance(); // (
+                let mut types = vec![self.parse_type()?];
+                while self.match_token(&TokenKind::Comma) {
+                    types.push(self.parse_type()?);
+                }
+                self.expect(&TokenKind::RParen)?;
+                Ok(TypeAnnotation::Tuple(types))
+            }
             _ => Err(ParseError::new(
                 format!("Expected type, got {:?}", self.peek()),
                 self.current().span,
@@ -828,6 +838,11 @@ impl<'a> Parser<'a> {
                 // Closure: |params| body
                 self.parse_closure()
             }
+            TokenKind::Try => {
+                self.advance(); // consume 'try'
+                let expr = self.parse_unary()?;
+                Ok(Expression::TryExpression(Box::new(expr)))
+            }
             _ => self.parse_postfix(),
         }
     }
@@ -835,11 +850,14 @@ impl<'a> Parser<'a> {
     fn parse_closure(&mut self) -> Result<Expression, ParseError> {
         self.advance(); // consume first |
         let mut params = Vec::new();
-        if self.peek() != &TokenKind::Pipe {
+        if *self.peek() != TokenKind::Pipe {
             loop {
                 let name = self.expect_identifier()?;
-                self.expect(&TokenKind::Colon)?;
-                let ty = self.parse_type()?;
+                let ty = if self.match_token(&TokenKind::Colon) {
+                    self.parse_type()?
+                } else {
+                    TypeAnnotation::Named("_".into()) // untyped
+                };
                 params.push(Parameter { name, ty, default: None });
                 if !self.match_token(&TokenKind::Comma) {
                     break;
@@ -861,7 +879,43 @@ impl<'a> Parser<'a> {
         if self.peek() == &TokenKind::Colon {
             self.advance(); // consume ':'
             
-            // Parse the loop range spec (can be multiple ranges separated by commas)
+            // Check for tuple destructuring: loop: (a, b) in collection
+            if *self.peek() == TokenKind::LParen {
+                // Parse tuple destructuring variables
+                self.advance(); // (
+                let mut vars = Vec::new();
+                loop {
+                    let name = self.expect_identifier()?;
+                    vars.push(name);
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                }
+                self.expect(&TokenKind::RParen)?;
+                
+                // Expect 'in' keyword
+                self.expect(&TokenKind::In)?;
+                
+                // Parse the collection expression
+                let collection = self.parse_expression()?;
+                
+                let body = self.parse_block()?;
+                self.expect(&TokenKind::End)?;
+                self.expect(&TokenKind::Loop)?;
+                
+                // Return as a for-each call with destructuring
+                return Ok(Expression::Call {
+                    func: Box::new(Expression::Identifier("for_each_destructure".into())),
+                    args: vec![
+                        Expression::TupleLiteral(vars.into_iter().map(|v| Expression::Identifier(v)).collect()),
+                        collection,
+                    ],
+                });
+            }
+            
+            // Check for collection iteration: loop: collection
+            // or multi-range: loop: 1..3, 7, 19..21
+            // First, parse the first part
             let mut range_parts = Vec::new();
             
             loop {
@@ -1489,10 +1543,14 @@ impl<'a> Parser<'a> {
                             self.advance();
                             flags.push(GetFlag::Until(self.parse_expression()?));
                         }
-                            TokenKind::Bytes => {
-                                self.advance();
-                                flags.push(GetFlag::Bytes(self.parse_expression()?));
-                            }
+                        TokenKind::Bytes => {
+                            self.advance();
+                            flags.push(GetFlag::Bytes(self.parse_expression()?));
+                        }
+                        TokenKind::Identifier(ref s) if s == "bytes" => {
+                            self.advance();
+                            flags.push(GetFlag::Bytes(self.parse_expression()?));
+                        }
                             _ => break,
                         }
                     } else {
@@ -1507,7 +1565,13 @@ impl<'a> Parser<'a> {
                     match self.peek() {
                         TokenKind::Validate => {
                             self.advance();
-                            with_clause = Some(WithClause::Validate(self.parse_expression()?));
+                            // Check if next is a closure
+                            if *self.peek() == TokenKind::Pipe {
+                                let closure = self.parse_closure()?;
+                                with_clause = Some(WithClause::Validate(closure));
+                            } else {
+                                with_clause = Some(WithClause::Validate(self.parse_expression()?));
+                            }
                         }
                         TokenKind::Complete => {
                             self.advance();
@@ -1556,6 +1620,7 @@ impl<'a> Parser<'a> {
         while !self.is_at_end()
             && self.peek() != &TokenKind::End
             && self.peek() != &TokenKind::RBrace
+            && self.peek() != &TokenKind::Else
         {
             stmts.push(self.parse_statement()?);
         }

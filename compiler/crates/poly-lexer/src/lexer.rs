@@ -194,6 +194,20 @@ impl<'a> Lexer<'a> {
                 if self.peek() == '"' {
                     self.advance(); // consume the "
                     self.scan_unicode_string(start);
+                } else if self.peek() == 0x27 as char {
+                    // Unicode character literal: u'X'
+                    self.advance(); // consume the '
+                    let ch = self.advance();
+                    if self.peek() == 0x27 as char {
+                        self.advance(); // consume closing '
+                        self.add_token(TokenKind::UnicodeStringLiteral(ch.to_string()), start);
+                    } else {
+                        self.errors.push(LexerError::new(
+                            LexerErrorKind::UnterminatedString,
+                            Span::new(start, self.pos),
+                            "Unterminated Unicode character literal",
+                        ));
+                    }
                 } else {
                     self.scan_identifier_or_keyword(start);
                 }
@@ -524,6 +538,7 @@ impl<'a> Lexer<'a> {
             "type" => TokenKind::Type,
             "macro" => TokenKind::Macro,
             "try" => TokenKind::Try,
+            "not" => TokenKind::Not,
             "panic" => TokenKind::Panic,
             "null" => TokenKind::Null,
             "addr" => TokenKind::Addr,

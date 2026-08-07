@@ -17,6 +17,7 @@ fn main() -> Result<()> {
         eprintln!();
         eprintln!("Options:");
         eprintln!("  --tokens    Print tokens and exit");
+        eprintln!("  --ast       Print AST and exit");
         eprintln!("  --help      Show this help message");
         eprintln!("  --version   Show version information");
         process::exit(1);
@@ -30,6 +31,7 @@ fn main() -> Result<()> {
             println!();
             println!("Options:");
             println!("  --tokens    Print tokens and exit");
+            println!("  --ast       Print AST and exit");
             println!("  --help      Show this help message");
             println!("  --version   Show version information");
             Ok(())
@@ -62,8 +64,12 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        file if file.ends_with(".poly") => {
-            let path = PathBuf::from(file);
+        "--ast" => {
+            if args.len() < 3 {
+                eprintln!("Error: --ast requires a file argument");
+                process::exit(1);
+            }
+            let path = PathBuf::from(&args[2]);
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
@@ -76,6 +82,23 @@ fn main() -> Result<()> {
                 }
                 process::exit(1);
             }
+
+            let mut parser = poly_parser::Parser::new(&tokens);
+            match parser.parse() {
+                Ok(program) => {
+                    println!("{:#?}", program);
+                }
+                Err(e) => {
+                    eprintln!("Parse error: {}", e);
+                    process::exit(1);
+                }
+            }
+            Ok(())
+        }
+        file if file.ends_with(".poly") => {
+            let path = PathBuf::from(file);
+            let source = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
             let transpiler = poly_transpiler::Transpiler::new();
             let rust_code = transpiler.transpile(&source)

@@ -1,0 +1,215 @@
+# Poly Comprehensive I/O Tests
+# Tests for the new I/O syntax with flags and error/warning commands
+
+# ============================================================
+# OUTPUT TESTS
+# ============================================================
+
+# Test 1: Basic Output
+put "=== Test 1: Basic Output ==="
+put "Hello, World!"
+put 42
+put 3.14159
+put true
+
+# Test 2: Output without newline (-n flag)
+put "\n=== Test 2: Output Without Newline (-n flag) ==="
+put -n "Loading"
+put -n "."
+put -n "."
+put "."
+put "Done!"
+
+# Test 3: Error/Warning/Info commands
+put "\n=== Test 3: Error/Warning/Info Commands ==="
+error "This is an error message"
+warn "This is a warning message"
+info "This is debug info"
+
+# Test 4: Output formatting
+put "\n=== Test 4: Output Formatting ==="
+var name: ustring = u"Poly"
+var version: i32 = 1
+put "Language: {name}, Version: {version}"
+put "Pi: {3.14159:.2f}"
+
+# Test 5: File output
+put "\n=== Test 5: File Output ==="
+put "Writing to test_output.txt..."
+put "Line 1\nLine 2\nLine 3" > "test_output.txt"
+put "Appending to test_output.txt..."
+put "Line 4" >> "test_output.txt"
+put "Done."
+
+# ============================================================
+# INPUT TESTS
+# ============================================================
+
+# Test 6: Basic Input
+put "\n=== Test 6: Basic Input ==="
+put -n "Enter your name: "
+var name_input: ustring = get
+put "Hello, " + name_input + "!"
+
+# Test 7: Typed Input
+put "\n=== Test 7: Typed Input ==="
+put -n "Enter your age: "
+var age: i32 = get
+put "In 10 years you will be: " + (age + 10)
+
+# Test 8: Input with default value (--default flag)
+put "\n=== Test 8: Input with Default Value ==="
+put -n "Enter color (or press Enter for default): "
+var color: ustring = get --default u"blue"
+put "Color: " + color
+
+# Test 9: Input with mask (--mask flag)
+put "\n=== Test 9: Input with Mask ==="
+put -n "Enter password (masked): "
+var password: ustring = get --mask u"*"
+put "Password length: " + password.len()
+
+# Test 10: Input with timeout (--timeout flag)
+put "\n=== Test 10: Input with Timeout ==="
+put -n "Quick! Type something within 3 seconds: "
+match get --timeout 3000
+    Ok(input) => put "You typed: " + input
+    Timeout => warn "Too slow!"
+    Error(e) => error "Error: " + e
+end match
+
+# Test 11: Input with validation
+put "\n=== Test 11: Input with Validation ==="
+put -n "Enter a number between 1 and 100: "
+var validated: i32 = get with validate |x| x >= 1 && x <= 100
+put "You entered: " + validated
+
+# Test 12: Input with delimiter (--until flag)
+put "\n=== Test 12: Input with Delimiter ==="
+put -n "Enter CSV line (comma-separated): "
+var csv_line: ustring = get --until u","
+put "First field: " + csv_line
+
+# Test 13: Type conversion (--as flag)
+put "\n=== Test 13: Type Conversion ==="
+put -n "Enter a number: "
+var num: i32 = get --as i32
+put "You entered: " + num.to_string()
+put "Doubled: " + (num * 2).to_string()
+
+# Test 14: File input
+put "\n=== Test 14: File Input ==="
+put "Reading from test_output.txt..."
+var file_content: ustring = get < "test_output.txt"
+put "File content:\n" + file_content
+
+# Test 15: Binary file input
+put "\n=== Test 15: Binary File Input ==="
+put "Reading binary from test_output.txt..."
+var binary_data: bytes = get < "test_output.txt"
+put "Binary size: " + binary_data.len() + " bytes"
+
+# Test 16: Input with bytes flag (--bytes flag)
+put "\n=== Test 16: Input with Bytes Flag ==="
+put "Creating test file..."
+put "Hello, World!" > "test_bytes.txt"
+put "Reading first 5 bytes..."
+var first_five: bytes = get < "test_bytes.txt" --bytes 5
+put "First 5 bytes: " + first_five.len() + " bytes"
+
+# Test 17: Completion
+put "\n=== Test 17: Completion ==="
+put -n "Choose a command (start/stop/pause): "
+var command: ustring = get with complete [u"start", u"stop", u"pause"]
+put "You chose: " + command
+
+# Test 18: Structured input
+put "\n=== Test 18: Structured Input ==="
+struct Person
+    var name: ustring
+    var age: i32
+end struct
+
+put -n "Enter person as 'name,age' (e.g., Alice,30): "
+var person: Person = get --as Person
+put "Name: " + person.name + ", Age: " + person.age
+
+# Test 19: Input loop
+put "\n=== Test 19: Input Loop ==="
+put "Enter numbers (type 'quit' to exit):"
+var inputs: Vec<ustring> = []
+loop
+    var input: ustring = get
+    if input == u"quit" then
+        break
+    end if
+    inputs.push(input)
+    put "Stored: " + input
+end loop
+put "You entered " + inputs.len() + " numbers."
+
+# Test 20: Error recovery
+put "\n=== Test 20: Error Recovery ==="
+var valid_number: i32 = loop
+    put -n "Enter a positive number: "
+    match get
+        Ok(input) =>
+            // parse::<i32>() is a standard library method for string parsing
+            var num: i32 = input.parse::<i32>()
+            if num > 0 then
+                break num
+            else
+                warn "Please enter a positive number"
+            end if
+        Error(e) => error "Invalid input: " + e
+    end match
+end loop
+put "You entered: " + valid_number
+
+# ============================================================
+# COMBINED TESTS
+# ============================================================
+
+# Test 21: Combined flags
+put "\n=== Test 21: Combined Flags ==="
+put -n "Enter a number (will timeout in 5 seconds): "
+match get --timeout 5000 --default u"0"
+    Ok(input) => put "You entered: " + input
+    Timeout => warn "Timeout, using default"
+    Error(e) => error "Error: " + e
+end match
+
+# Test 22: Multiple outputs with different flags
+put "\n=== Test 22: Multiple Outputs with Flags ==="
+put "Normal output"
+put -n "No newline output"
+put " (this continues on same line)"
+error "Error output"
+warn "Warning output"
+info "Debug output"
+
+# Test 23: File operations with flags
+put "\n=== Test 23: File Operations with Flags ==="
+put "Creating file..."
+put "Line 1" > "test_flags.txt"
+put "Line 2" >> "test_flags.txt"
+put "Reading file..."
+var content: ustring = get < "test_flags.txt"
+put "Content:\n" + content
+
+# Test 24: Complex input scenario
+put "\n=== Test 24: Complex Input Scenario ==="
+put "This test demonstrates multiple input features combined"
+put -n "Enter your name (default: Anonymous): "
+var user_name: ustring = get --default u"Anonymous"
+put -n "Enter your age: "
+var user_age: i32 = get with validate |x| x > 0 && x < 150
+put -n "Enter your email: "
+var user_email: ustring = get with validate |e| e.contains(u"@")
+
+put "\nUser Information:"
+put "Name: " + user_name
+put "Age: " + user_age
+put "Email: " + user_email
+
+put "\n=== All Tests Complete ==="

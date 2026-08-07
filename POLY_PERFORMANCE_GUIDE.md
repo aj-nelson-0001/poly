@@ -1,0 +1,463 @@
+# Poly Language Performance Optimization Guide
+
+## Overview
+
+This guide covers performance optimization techniques for the new Poly I/O and error handling syntax.
+
+---
+
+## 1. Output Optimization
+
+### Use `-n` for Frequent Output
+
+```poly
+// Good: Efficient progress updates
+loop: 0..10000
+    put -n "\\rProcessing: " + i.to_string()
+end loop
+put ""
+
+// Bad: Inefficient output
+loop: 0..10000
+    put "Processing: " + i.to_string()  // Creates 10000 lines
+end loop
+```
+
+### Buffer Output When Possible
+
+```poly
+// Good: Buffer output
+var output: ustring = ""
+loop: items
+    output = output + item.to_string() + "\\n"
+end loop
+put output
+
+// Bad: Frequent output
+loop: items
+    put item.to_string()  // Multiple system calls
+end loop
+```
+
+### Use String Concatenation Efficiently
+
+```poly
+// Good: Build string efficiently
+var parts: Vec<ustring> = []
+loop: 0..1000
+    parts.push(i.to_string())
+end loop
+var result: ustring = parts.join(", ")
+put result
+
+// Bad: String concatenation in loop
+var result: ustring = ""
+loop: 0..1000
+    result = result + i.to_string() + ", "  // O(n²) complexity
+end loop
+```
+
+### Avoid Unnecessary Formatting
+
+```poly
+// Good: Simple output
+put age.to_string()
+
+// Bad: Unnecessary formatting
+put "{age}"  // Slower than direct to_string()
+```
+
+---
+
+## 2. Input Optimization
+
+### Use Appropriate Data Types
+
+```poly
+// Good: Use appropriate types
+var count: i32 = get --as i32
+var price: f64 = get --as f64
+
+// Bad: Wrong types
+var count: ustring = get  // Then parse later
+var price: ustring = get  // Then convert later
+```
+
+### Validate Early
+
+```poly
+// Good: Validate immediately
+var age: i32 = get with validate |x| x > 0 && x < 150
+
+// Bad: Validate late
+var age: i32 = get
+if age < 0 || age > 150 then
+    error "Invalid age"
+    // ... more code before handling
+end if
+```
+
+### Use Timeouts
+
+```poly
+// Good: Prevent hanging
+match get --timeout 5000
+    Ok(input) => process(input)
+    Timeout => warn "Timeout, using default"
+    Error(e) => error e
+end match
+
+// Bad: No timeout
+var input: ustring = get  // Can hang forever
+```
+
+### Batch Input Operations
+
+```poly
+// Good: Batch reads
+var lines: Vec<ustring> = []
+var file = open("data.txt")
+while !file.eof()
+    lines.push(file.get_line())
+end while
+
+// Bad: Frequent reads
+var file = open("data.txt")
+while !file.eof()
+    var line: ustring = file.get_line()
+    process(line)  // Process each line immediately
+end while
+```
+
+---
+
+## 3. File I/O Optimization
+
+### Use Buffering
+
+```poly
+// Good: Buffered writes
+var buffer: Vec<ustring> = []
+loop: 0..10000
+    buffer.push("Line " + i.to_string())
+end loop
+put buffer.join("\\n") > "output.txt"
+
+// Bad: Unbuffered writes
+loop: 0..10000
+    put "Line " + i.to_string() >> "output.txt"  // 10000 file operations
+end loop
+```
+
+### Read Files Efficiently
+
+```poly
+// Good: Read entire file
+var content: ustring = get < "large_file.txt"
+var lines: Vec<ustring> = content.split("\\n")
+
+// Bad: Read line by line
+var file = open("large_file.txt")
+while !file.eof()
+    var line: ustring = file.get_line()
+    // Process each line
+end while
+```
+
+### Use Binary Mode When Appropriate
+
+```poly
+// Good: Binary read for binary files
+var data: bytes = get < "image.png"
+
+// Bad: Text read for binary files
+var data: ustring = get < "image.png"  // May corrupt data
+```
+
+---
+
+## 4. Error Handling Optimization
+
+### Use `try` for Error Propagation
+
+```poly
+// Good: Propagate errors
+fn process(): Result<ustring, Error>
+    var data = try read_file("config.txt")
+    var validated = try validate(data)
+    return Ok(validated)
+end fn
+
+// Bad: Handle every error
+fn process(): Result<ustring, Error>
+    match read_file("config.txt")
+        Ok(data) =>
+            match validate(data)
+                Ok(validated) => return Ok(validated)
+                Error(e) => return Error(e)
+            end match
+        Error(e) => return Error(e)
+    end match
+end fn
+```
+
+### Use Pattern Matching
+
+```poly
+// Good: Pattern matching
+match result
+    Ok(value) => process(value)
+    Error(e) => handle_error(e)
+end match
+
+// Bad: If-else chains
+if result.is_ok() then
+    process(result.unwrap())
+else
+    handle_error(result.error())
+end if
+```
+
+### Avoid Unnecessary Error Creation
+
+```poly
+// Good: Create errors only when needed
+fn validate(input: ustring): Result<ustring, ustring>
+    if input.len() == 0 then
+        return Error(u"Empty input")
+    end if
+    return Ok(input)
+end fn
+
+// Bad: Create errors unnecessarily
+fn validate(input: ustring): Result<ustring, ustring>
+    if input.len() == 0 then
+        var error: ustring = u"Empty input"
+        return Error(error)
+    end if
+    return Ok(input)
+end fn
+```
+
+---
+
+## 5. Memory Optimization
+
+### Use References When Possible
+
+```poly
+// Good: Pass by reference
+fn process(data: &ustring)
+    // Use data without copying
+end fn
+
+// Bad: Pass by value
+fn process(data: ustring)
+    // Copies data
+end fn
+```
+
+### Reuse Buffers
+
+```poly
+// Good: Reuse buffer
+var buffer: Vec<ustring> = []
+loop: 0..1000
+    buffer.clear()  // Reuse buffer
+    buffer.push(i.to_string())
+    process(buffer)
+end loop
+
+// Bad: Create new buffer each time
+loop: 0..1000
+    var buffer: Vec<ustring> = [i.to_string()]  // New allocation
+    process(buffer)
+end loop
+```
+
+### Use Primitive Types
+
+```poly
+// Good: Use primitive types
+var count: i32 = 42
+var flag: bool = true
+
+// Bad: Use wrapper types
+var count: Box<i32> = Box::new(42)  // Unnecessary boxing
+var flag: Box<bool> = Box::new(true)
+```
+
+---
+
+## 6. String Optimization
+
+### Use String Interpolation
+
+```poly
+// Good: String interpolation
+var name: ustring = "Alice"
+var age: i32 = 30
+put "Name: {name}, Age: {age}"
+
+// Bad: String concatenation
+put "Name: " + name + ", Age: " + age.to_string()
+```
+
+### Pre-allocate Strings
+
+```poly
+// Good: Pre-allocate
+var result: ustring = "".repeat(1000)
+// Fill result...
+
+// Bad: Dynamic growth
+var result: ustring = ""
+loop: 0..1000
+    result = result + "a"  // Multiple reallocations
+end loop
+```
+
+### Use String Views
+
+```poly
+// Good: Use string views
+fn process(data: &ustring)
+    // Use data without copying
+end fn
+
+// Bad: Copy strings
+fn process(data: ustring)
+    // Copies data
+end fn
+```
+
+---
+
+## 7. Collection Optimization
+
+### Use Appropriate Collection Types
+
+```poly
+// Good: Use appropriate types
+var list: Vec<i32> = [1, 2, 3]  // Dynamic array
+var map: Map<ustring, i32> = []  // Hash map
+var set: Set<ustring> = []  // Hash set
+
+// Bad: Wrong types
+var list: Vec<ustring> = ["1", "2", "3"]  // Strings for numbers
+var map: Vec<(ustring, i32)> = []  // Vector for map
+```
+
+### Pre-allocate Collections
+
+```poly
+// Good: Pre-allocate
+var list: Vec<i32> = []
+list.reserve(1000)  // Pre-allocate space
+loop: 0..1000
+    list.push(i)
+end loop
+
+// Bad: Dynamic growth
+var list: Vec<i32> = []
+loop: 0..1000
+    list.push(i)  // Multiple reallocations
+end loop
+```
+
+### Use Iterators
+
+```poly
+// Good: Use iterators
+var sum: i32 = list.iter().sum()
+
+// Bad: Manual iteration
+var sum: i32 = 0
+loop: list
+    sum = sum + item
+end loop
+```
+
+---
+
+## 8. Parallel Processing
+
+### Use Parallel Iterators
+
+```poly
+// Good: Parallel processing
+var results: Vec<i32> = list.par_iter().map(|x| x * 2).collect()
+
+// Bad: Sequential processing
+var results: Vec<i32> = []
+loop: list
+    results.push(item * 2)
+end loop
+```
+
+### Use Async I/O
+
+```poly
+// Good: Async file operations
+var content = async read_file("large_file.txt")
+// Do other work while reading
+process_other_data()
+// Wait for read to complete
+var data = await content
+
+// Bad: Synchronous file operations
+var data = read_file("large_file.txt")  // Blocks execution
+```
+
+---
+
+## 9. Profiling and Benchmarking
+
+### Profile Your Code
+
+```poly
+// Good: Profile critical sections
+var start = time_now()
+// Critical code here
+var duration = time_now() - start
+info "Duration: " + duration.to_string() + "ms"
+
+// Bad: No profiling
+// Critical code here
+// No idea how long it took
+```
+
+### Benchmark Different Approaches
+
+```poly
+// Good: Benchmark approaches
+var start1 = time_now()
+approach1()
+var duration1 = time_now() - start1
+
+var start2 = time_now()
+approach2()
+var duration2 = time_now() - start2
+
+put "Approach 1: " + duration1.to_string() + "ms"
+put "Approach 2: " + duration2.to_string() + "ms"
+
+// Bad: No benchmarking
+approach1()
+approach2()
+// No idea which is faster
+```
+
+---
+
+## Summary
+
+1. **Output**: Use `-n`, buffer output, avoid unnecessary formatting
+2. **Input**: Use appropriate types, validate early, use timeouts
+3. **File I/O**: Use buffering, read efficiently, use binary mode
+4. **Error Handling**: Use `try`, pattern matching, avoid unnecessary errors
+5. **Memory**: Use references, reuse buffers, use primitive types
+6. **Strings**: Use interpolation, pre-allocate, use views
+7. **Collections**: Use appropriate types, pre-allocate, use iterators
+8. **Parallelism**: Use parallel iterators, async I/O
+9. **Profiling**: Profile critical sections, benchmark approaches

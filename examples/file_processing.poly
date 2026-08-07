@@ -1,0 +1,79 @@
+# Poly Example: File Processing
+# Demonstrates file I/O with the new syntax
+
+fn main()
+    put "=== File Processing Demo ==="
+    put ""
+    
+    # Create a sample file
+    put "Creating sample file..."
+    put "Line 1: Hello, World!" > "sample.txt"
+    put "Line 2: Poly is awesome" >> "sample.txt"
+    put "Line 3: File I/O is easy" >> "sample.txt"
+    put "Sample file created."
+    put ""
+    
+    # Read entire file
+    put "Reading entire file:"
+    var content: ustring = get < "sample.txt"
+    put content
+    put ""
+    
+    # Read file line by line
+    put "Reading line by line:"
+    var file = open("sample.txt")
+    var line_num: i32 = 1
+    while !file.eof()
+        var line: ustring = file.get_line()
+        put "Line " + line_num.to_string() + ": " + line
+        add line_num
+    end while
+    put ""
+    
+    # Write formatted data
+    put "Writing CSV data..."
+    var records: Vec<ustring> = [
+        u"Name,Age,Email",
+        u"Alice,30,alice@example.com",
+        u"Bob,25,bob@example.com",
+        u"Charlie,35,charlie@example.com"
+    ]
+    
+    loop: records
+        put record >> "contacts.csv"
+    end loop
+    put "CSV file created."
+    put ""
+    
+    # Read and process CSV
+    put "Processing CSV file:"
+    var csv_content: ustring = get < "contacts.csv"
+    var lines: Vec<ustring> = csv_content.split(u"\n")
+    
+    var i: i32 = 0
+    loop: lines
+        if i > 0 then  # Skip header
+            var fields: Vec<ustring> = line.split(u",")
+            if fields.len() >= 2 then
+                put "Name: " + fields[0] + ", Age: " + fields[1]
+            end if
+        end if
+        add i
+    end loop
+    put ""
+    
+    # Binary file example
+    put "Writing binary file..."
+    var data: bytes = [0x48, 0x65, 0x6C, 0x6C, 0x6F]  # "Hello" in bytes
+    data > "binary.bin"
+    put "Binary file created."
+    put ""
+    
+    # Read binary file
+    put "Reading binary file:"
+    var binary_data: bytes = get < "binary.bin"
+    put "Binary size: " + binary_data.len().to_string() + " bytes"
+    put ""
+    
+    put "File processing complete!"
+end fn

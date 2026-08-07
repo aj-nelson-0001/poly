@@ -1,0 +1,153 @@
+# Poly Input Tests
+# Tests for the `get` command with new syntax.
+
+# ============================================================
+# Test 1: Basic Input
+# ============================================================
+put "\n=== Test 1: Basic Input ==="
+put -n "Enter your name: "
+var name_input: ustring = get
+put "Hello, " + name_input + "!"
+
+# ============================================================
+# Test 2: Typed Input
+# ============================================================
+put "\n=== Test 2: Typed Input ==="
+put -n "Enter your age: "
+var age: i32 = get
+put "In 10 years you will be: " + (age + 10)
+
+# ============================================================
+# Test 3: Input with Default Value (--default flag)
+# ============================================================
+put "\n=== Test 3: Input with Default Value ==="
+put -n "Enter color (or press Enter for default): "
+var color: ustring = get --default u"blue"
+put "Color: " + color
+
+# ============================================================
+# Test 4: Input with Mask (--mask flag)
+# ============================================================
+put "\n=== Test 4: Input with Mask ==="
+put -n "Enter password (masked): "
+var password: ustring = get --mask u"*"
+put "Password length: " + password.len()
+
+# ============================================================
+# Test 5: Input with Timeout (--timeout flag)
+# ============================================================
+put "\n=== Test 5: Input with Timeout ==="
+put -n "Quick! Type something within 3 seconds: "
+match get --timeout 3000
+    Ok(input) => put "You typed: " + input
+    Timeout => warn "Too slow!"
+    Error(e) => error "Error: " + e
+end match
+
+# ============================================================
+# Test 6: Input with Validation
+# ============================================================
+put "\n=== Test 6: Input with Validation ==="
+put -n "Enter a number between 1 and 100: "
+var validated: i32 = get with validate |x| x >= 1 && x <= 100
+put "You entered: " + validated
+
+# ============================================================
+# Test 7: Input with Delimiter (--until flag)
+# ============================================================
+put "\n=== Test 7: Input with Delimiter ==="
+put -n "Enter CSV line (comma-separated): "
+var csv_line: ustring = get --until u","
+put "First field: " + csv_line
+
+# ============================================================
+# Test 8: Type Conversion (--as flag)
+# ============================================================
+put "\n=== Test 8: Type Conversion ==="
+put -n "Enter a number: "
+var num: i32 = get --as i32
+put "You entered: " + num.to_string()
+put "Doubled: " + (num * 2).to_string()
+
+# ============================================================
+# Test 9: File Input
+# ============================================================
+put "\n=== Test 9: File Input ==="
+put "Reading from test_output.txt..."
+var file_content: ustring = get < "test_output.txt"
+put "File content:\n" + file_content
+
+# ============================================================
+# Test 10: Binary File Input
+# ============================================================
+put "\n=== Test 10: Binary File Input ==="
+put "Reading binary from test_output.txt..."
+var binary_data: bytes = get < "test_output.txt"
+put "Binary size: " + binary_data.len() + " bytes"
+
+# ============================================================
+# Test 11: Input with Bytes Flag (--bytes flag)
+# ============================================================
+put "\n=== Test 11: Input with Bytes Flag ==="
+put "Creating test file..."
+put "Hello, World!" > "test_bytes.txt"
+put "Reading first 5 bytes..."
+var first_five: bytes = get < "test_bytes.txt" --bytes 5
+put "First 5 bytes: " + first_five.len() + " bytes"
+
+# ============================================================
+# Test 12: Completion
+# ============================================================
+put "\n=== Test 12: Completion ==="
+put -n "Choose a command (start/stop/pause): "
+var command: ustring = get with complete [u"start", u"stop", u"pause"]
+put "You chose: " + command
+
+# ============================================================
+# Test 13: Structured Input
+# ============================================================
+put "\n=== Test 13: Structured Input ==="
+struct Person
+    var name: ustring
+    var age: i32
+end struct
+
+put -n "Enter person as 'name,age' (e.g., Alice,30): "
+var person: Person = get --as Person
+put "Name: " + person.name + ", Age: " + person.age
+
+# ============================================================
+# Test 14: Input Loop
+# ============================================================
+put "\n=== Test 14: Input Loop ==="
+put "Enter numbers (type 'quit' to exit):"
+var inputs: Vec<ustring> = []
+loop
+    var input: ustring = get
+    if input == u"quit" then
+        break
+    end if
+    inputs.push(input)
+    put "Stored: " + input
+end loop
+put "You entered " + inputs.len() + " numbers."
+
+# ============================================================
+# Test 15: Error Recovery
+# ============================================================
+put "\n=== Test 15: Error Recovery ==="
+var valid_number: i32 = loop
+    put -n "Enter a positive number: "
+    match get
+        Ok(input) =>
+            // parse::<i32>() is a standard library method for string parsing
+            var num: i32 = input.parse::<i32>()
+            if num > 0 then
+                break num
+            else
+                warn "Please enter a positive number"
+            end if
+        Error(e) => error "Invalid input: " + e
+    end match
+end loop
+put "You entered: " + valid_number

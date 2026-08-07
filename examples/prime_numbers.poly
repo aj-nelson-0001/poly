@@ -1,0 +1,33 @@
+# Poly Example: First 20 Prime Numbers
+# This program calculates and displays the first 20 prime numbers.
+
+# Function to check if a number is prime
+fn is_prime(n: i32): bool
+    if n <= 1 then
+        return false
+    end if
+    var i: i32 = 2
+    while i * i <= n
+        if n % i == 0 then
+            return false
+        end if
+        add i
+    end while
+    return true
+end fn
+
+# Main program
+put u"First 20 prime numbers:"
+
+var count: i32 = 0
+loop: 2..200
+    if is_prime(num) then
+        put num
+        add count
+        if count >= 20 then
+            break
+        end if
+    end if
+end loop
+
+put u"\nDone!"

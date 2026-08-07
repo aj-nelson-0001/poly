@@ -1,0 +1,244 @@
+# Poly Example: Error Handling Patterns
+# Demonstrates proper error handling with Error(e) syntax
+
+# ============================================================
+# Basic Error Handling
+# ============================================================
+
+# Define custom error types
+enum FileError
+    NotFound
+    PermissionDenied
+    InvalidData
+    Unknown(message: ustring)
+end enum
+
+enum ValidationError
+    EmptyInput
+    TooShort(min: i32)
+    TooLong(max: i32)
+    InvalidFormat
+end enum
+
+# Function that can fail
+fn read_file(path: ustring): Result<ustring, FileError>
+    # Simulate file reading
+    if path.len() == 0 then
+        return Error(FileError::NotFound)
+    end if
+    
+    # Simulate successful read
+    return Ok(u"File content from: " + path)
+end fn
+
+# ============================================================
+# Pattern Matching with Error Handling
+# ============================================================
+
+fn process_file(path: ustring)
+    match read_file(path)
+        Ok(content) => 
+            put "File loaded successfully"
+            put "Content: " + content
+        Error(FileError::NotFound) => 
+            error "File not found: " + path
+        Error(FileError::PermissionDenied) => 
+            error "Permission denied: " + path
+        Error(FileError::InvalidData) => 
+            error "Invalid file data: " + path
+        Error(Unknown(message)) => 
+            error "Unknown error: " + message
+    end match
+end fn
+
+# ============================================================
+# Error Propagation with 'try'
+# ============================================================
+
+fn read_config(path: ustring): Result<ustring, FileError>
+    # 'try' propagates errors up the call stack
+    var content = try read_file(path)
+    
+    # Process content...
+    return Ok(content)
+end fn
+
+fn load_application()
+    match read_config(u"config.txt")
+        Ok(config) => 
+            put "Config loaded"
+            process_config(config)
+        Error(e) => 
+            error "Failed to load config"
+            exit(1)
+    end match
+end fn
+
+# ============================================================
+# Validation Functions
+# ============================================================
+
+fn validate_name(name: ustring): Result<ustring, ValidationError>
+    if name.len() == 0 then
+        return Error(ValidationError::EmptyInput)
+    end if
+    
+    if name.len() < 2 then
+        return Error(ValidationError::TooShort(2))
+    end if
+    
+    if name.len() > 50 then
+        return Error(ValidationError::TooLong(50))
+    end if
+    
+    return Ok(name)
+end fn
+
+fn validate_email(email: ustring): Result<ustring, ValidationError>
+    if email.len() == 0 then
+        return Error(ValidationError::EmptyInput)
+    end if
+    
+    # Simple email validation
+    if not email.contains(u"@") then
+        return Error(ValidationError::InvalidFormat)
+    end if
+    
+    return Ok(email)
+end fn
+
+# ============================================================
+# Combining Multiple Validations
+# ============================================================
+
+fn validate_user(name: ustring, email: ustring): Result<(ustring, ustring), ValidationError>
+    # Validate name
+    var valid_name = try validate_name(name)
+    
+    # Validate email
+    var valid_email = try validate_email(email)
+    
+    # Both validations passed
+    return Ok((valid_name, valid_email))
+end fn
+
+# ============================================================
+# Handling Validation Results
+# ============================================================
+
+fn process_user_input()
+    put "Enter your name: "
+    var name: ustring = get
+    
+    put "Enter your email: "
+    var email: ustring = get
+    
+    match validate_user(name, email)
+        Ok((valid_name, valid_email)) => 
+            put "User validated successfully"
+            put "Name: " + valid_name
+            put "Email: " + valid_email
+        Error(EmptyInput) => 
+            error "Name and email cannot be empty"
+        Error(TooShort(min)) => 
+            error "Name too short, minimum " + min.to_string() + " characters"
+        Error(TooLong(max)) => 
+            error "Name too long, maximum " + max.to_string() + " characters"
+        Error(InvalidFormat) => 
+            error "Invalid email format"
+    end match
+end fn
+
+# ============================================================
+# Error Handling with Timeout
+# ============================================================
+
+fn read_with_timeout(path: ustring, timeout_ms: i32): Result<ustring, FileError>
+    match get --timeout timeout_ms
+        Ok(content) => return Ok(content)
+        Timeout => return Error(FileError::Unknown(u"Read timeout"))
+        Error(e) => return Error(FileError::Unknown(u"Read error: " + e))
+    end match
+end fn
+
+# ============================================================
+# Advanced Error Handling Patterns
+# ============================================================
+
+# Error chaining
+enum AppError
+    IoError(message: ustring)
+    ValidationError(message: ustring)
+    NetworkError(code: i32)
+end enum
+
+fn chain_errors(): Result<ustring, AppError>
+    # Use try to propagate, then convert error type
+    match read_config(u"config.txt")
+        Ok(content) => return Ok(content)
+        Error(e) => return Error(AppError::IoError(u"Config error: " + e.to_string()))
+    end match
+end fn
+
+# Retry pattern (simplified)
+fn retry_operation(max_retries: i32): Result<ustring, AppError>
+    var attempt: i32 = 0
+    while attempt < max_retries
+        # Simulate a risky operation
+        if attempt < 2 then
+            warn "Attempt " + attempt.to_string() + " failed"
+            add attempt
+        else
+            return Ok(u"Success on attempt " + attempt.to_string())
+        end if
+    end while
+    return Error(AppError::NetworkError(0))
+end fn
+
+# Wildcard pattern for catch-all
+fn handle_any_error()
+    match validate_name(input)
+        Ok(name) => put "Valid: " + name
+        Error(_) => error "Validation failed"  # Catches any validation error
+    end match
+end fn
+
+# ============================================================
+# Main Program
+# ============================================================
+
+fn main()
+    put "=== Error Handling Examples ==="
+    put ""
+    
+    # Example 1: Basic error handling
+    put "Example 1: Basic Error Handling"
+    process_file(u"test.txt")
+    put ""
+    
+    # Example 2: Error propagation
+    put "Example 2: Error Propagation"
+    load_application()
+    put ""
+    
+    # Example 3: Validation
+    put "Example 3: User Validation"
+    process_user_input()
+    put ""
+    
+    # Example 4: Multiple error types
+    put "Example 4: Multiple Error Types"
+    match validate_user(u"John", u"john@example.com")
+        Ok((name, email)) => 
+            put "Valid: " + name + " (" + email + ")"
+        Error(e) => 
+            error "Validation failed"
+    end match
+    
+    # Example 5: Wildcard pattern
+    put "Example 5: Wildcard Pattern"
+    handle_any_error()
+    put ""
+    
+    put "All examples completed!"
+end fn

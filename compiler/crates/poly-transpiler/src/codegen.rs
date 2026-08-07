@@ -234,6 +234,24 @@ impl CodeGen {
                     }
                 }
             }
+            Statement::ModuleDeclaration(decl) => {
+                // Module declarations are not directly transpiled to Rust
+                // They're used for organizing code
+                self.writeln(&format!("// module {}", decl.name));
+                // Transpile module contents
+                for stmt in &decl.statements {
+                    self.gen_statement(stmt);
+                }
+            }
+            Statement::UseDeclaration(decl) => {
+                // Convert Poly use statements to Rust use statements
+                let path = decl.path.join("::");
+                if let Some(alias) = &decl.alias {
+                    self.writeln(&format!("use {} as {};", path, alias));
+                } else {
+                    self.writeln(&format!("use {};", path));
+                }
+            }
             _ => {
                 self.writeln("/* unimplemented statement */");
             }

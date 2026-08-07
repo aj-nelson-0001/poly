@@ -46,6 +46,8 @@ impl Default for Transpiler {
 struct CodeGen {
     indent: usize,
     output: String,
+    /// Track what imports are needed
+    needs_io_write: bool,
 }
 
 impl CodeGen {
@@ -53,6 +55,7 @@ impl CodeGen {
         Self {
             indent: 0,
             output: String::new(),
+            needs_io_write: false,
         }
     }
 
@@ -61,19 +64,52 @@ impl CodeGen {
     }
 
     fn generate(&mut self, program: &Program) -> String {
-        self.writeln("// Generated from Poly source code");
-        self.writeln("#![allow(unused_variables, unused_mut, unused_imports)]");
-        self.writeln("");
-        self.writeln("fn main() {");
+        // First pass: collect top-level declarations and separate from main body
+        let mut top_level = Vec::new();
+        let mut main_body = Vec::new();
 
-        self.indent += 1;
         for stmt in &program.statements {
-            self.gen_statement(stmt);
+            match stmt {
+                Statement::FunctionDeclaration(_)
+                | Statement::StructDeclaration(_)
+                | Statement::EnumDeclaration(_) => {
+                    top_level.push(stmt);
+                }
+                _ => {
+                    main_body.push(stmt);
+                }
+            }
         }
-        self.indent -= 1;
 
-        self.writeln("}");
-        self.output.clone()
+        // Generate header with imports
+        self.writeln("// Generated from Poly source code");
+        self.writeln("#![allow(unused_variables, unused_mut, unused_imports, dead_code)]");
+        self.writeln("");
+
+        // Generate top-level declarations
+        for stmt in &top_level {
+            self.gen_statement(stmt);
+            self.writeln("");
+        }
+
+        // Generate main function with remaining statements
+        if !main_body.is_empty() {
+            self.writeln("fn main() {");
+            self.indent += 1;
+            for stmt in &main_body {
+                self.gen_statement(stmt);
+            }
+            self.indent -= 1;
+            self.writeln("}");
+        }
+
+        // Add needed imports at the top
+        let mut result = String::new();
+        if self.needs_io_write {
+            result.push_str("use std::io::Write;\n");
+        }
+        result.push_str(&self.output);
+        result
     }
 
     fn writeln(&mut self, s: &str) {
@@ -168,10 +204,14 @@ impl CodeGen {
                 self.writeln(&format!("eprintln!(\"[INFO] {}\", {});", "{}", expr_str));
             }
             Statement::ExpressionStatement(expr) => {
-                // Check for while loop pattern (IfExpression without else used as while)
+                // Check for while loop pattern: IfExpression with None else_block
+                // While loops are parsed as: IfExpression { ..., else_block: None }
+                // If statements are parsed as: IfExpression { ..., else_block: Some([]) }
                 if let Expression::IfExpression { condition, then_block, else_block } = expr {
                     if else_block.is_none() {
-                        self.writeln(&format!("while {} {{", self.gen_expression(condition)));
+                        // This is a while loop
+                        let cond = self.gen_expression(condition);
+                        self.writeln(&format!("while {} {{", cond));
                         self.indent += 1;
                         for stmt in then_block {
                             self.gen_statement(stmt);
@@ -182,10 +222,20 @@ impl CodeGen {
                     }
                 }
                 let expr_str = self.gen_expression(expr);
-                self.writeln(&format!("{};", expr_str));
+                // Only add semicolon for statements that need it
+                match expr {
+                    Expression::IfExpression { .. }
+                    | Expression::LoopRange { .. }
+                    | Expression::MatchExpression { .. } => {
+                        self.writeln(&expr_str);
+                    }
+                    _ => {
+                        self.writeln(&format!("{};", expr_str));
+                    }
+                }
             }
             _ => {
-                self.writeln("// TODO: unimplemented statement");
+                self.writeln("/* unimplemented statement */");
             }
         }
     }
@@ -219,11 +269,7 @@ impl CodeGen {
 
         for field in &decl.fields {
             let ty = self.gen_type(&field.ty);
-            if field.mutable {
-                self.writeln(&format!("{}: {},", field.name, ty));
-            } else {
-                self.writeln(&format!("{}: {},", field.name, ty));
-            }
+            self.writeln(&format!("{}: {},", field.name, ty));
         }
 
         self.indent -= 1;
@@ -288,6 +334,7 @@ impl CodeGen {
         match redirect {
             Some(Redirect::Write(path)) => {
                 let path_str = self.gen_expression(path);
+                self.needs_io_write = true;
                 if no_newline {
                     self.writeln(&format!("std::fs::write({}, format!(\"{{}}\", {})).unwrap();", path_str, expr_str));
                 } else {
@@ -296,7 +343,8 @@ impl CodeGen {
             }
             Some(Redirect::Append(path)) => {
                 let path_str = self.gen_expression(path);
-                self.writeln(&format!("use std::io::Write; let mut f = std::fs::OpenOptions::new().append(true).open({}).unwrap(); writeln!(f, \"{{}}\", {}).unwrap();", path_str, expr_str));
+                self.needs_io_write = true;
+                self.writeln(&format!("{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{{}}\", {}).unwrap(); }}", path_str, expr_str));
             }
             None => {
                 if no_newline {
@@ -332,18 +380,6 @@ impl CodeGen {
                 format!("({}{})", op_str, e)
             }
             Expression::Call { func, args } => {
-                // Check for special loop constructs
-                if let Expression::Identifier(name) = func.as_ref() {
-                    if name == "for_loop" && args.len() == 1 {
-                        // Range loop: for_loop(range)
-                        let range_str = self.gen_expression(&args[0]);
-                        return format!("for i in {} {{ /* loop body */ }}", range_str);
-                    }
-                    if name == "loop" && args.is_empty() {
-                        // Infinite loop
-                        return "loop { /* loop body */ }".to_string();
-                    }
-                }
                 let func_str = self.gen_expression(func);
                 let args_str: Vec<String> = args.iter().map(|a| self.gen_expression(a)).collect();
                 format!("{}({})", func_str, args_str.join(", "))
@@ -442,11 +478,11 @@ impl CodeGen {
                         }
                     }
                 } else {
-                    // Multiple ranges: generate a chain of iterators or a flat vec
+                    // Multiple ranges
                     let mut range_strs = Vec::new();
                     for part in ranges {
                         match part {
-                            LoopRangePart::Range { start, end, inclusive, step } => {
+                            LoopRangePart::Range { start, end, inclusive, .. } => {
                                 let s = self.gen_expression(start);
                                 let e = self.gen_expression(end);
                                 let range = if *inclusive {
@@ -458,18 +494,19 @@ impl CodeGen {
                             }
                             LoopRangePart::Value(val) => {
                                 let v = self.gen_expression(val);
-                                range_strs.push(format!("[{}]", v));
+                                range_strs.push(v);
                             }
                         }
                     }
-                    result.push_str(&format!("for i in [{}] {{\n", range_strs.join(", ")));
+                    // Chain ranges using flat_map or chain
+                    result.push_str(&format!("for i in [{}].iter().flat_map(|r| r.clone()) {{\n", range_strs.join(", ")));
                 }
                 // Generate body
                 for stmt in body {
                     result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
                 }
-                result.push_str("}\n");
-                result.trim().to_string()
+                result.push('}');
+                result
             }
             Expression::AsExpression { expr, ty } => {
                 let e = self.gen_expression(expr);
@@ -533,7 +570,6 @@ impl CodeGen {
     }
 
     fn gen_statement_str(&self, stmt: &Statement) -> String {
-        // Simple statement to string conversion for inline use
         match stmt {
             Statement::ExpressionStatement(expr) => self.gen_expression(expr),
             Statement::ReturnStatement(Some(expr)) => format!("return {}", self.gen_expression(expr)),
@@ -545,6 +581,32 @@ impl CodeGen {
                 } else {
                     format!("println!(\"{{}}\", {})", expr_str)
                 }
+            }
+            Statement::VarDeclaration { name, ty, value } => {
+                let ty_str = ty.as_ref().map(|t| self.gen_type(t)).unwrap_or_default();
+                match value {
+                    Some(val) => {
+                        let val_str = self.gen_expression(val);
+                        if ty.is_some() {
+                            format!("let mut {}: {} = {}", name, ty_str, val_str)
+                        } else {
+                            format!("let mut {} = {}", name, val_str)
+                        }
+                    }
+                    None => {
+                        if ty.is_some() {
+                            format!("let mut {}: {}", name, ty_str)
+                        } else {
+                            format!("let mut {}", name)
+                        }
+                    }
+                }
+            }
+            Statement::Assignment { target, op, value } => {
+                let target_str = self.gen_expression(target);
+                let value_str = self.gen_expression(value);
+                let op_str = self.gen_assignment_op(op);
+                format!("{} {} {}", target_str, op_str, value_str)
             }
             _ => "/* statement */".to_string(),
         }
@@ -682,16 +744,27 @@ impl CodeGen {
     }
 
     fn gen_get_expression(&self, get_expr: &GetExpr) -> String {
-        let mut result = String::new();
+        // Check if we have a source (file redirection)
+        if let Some(source) = &get_expr.source {
+            let path_str = self.gen_expression(source);
 
-        // For now, generate a simple stdin read
-        result.push_str("{\n");
-        result.push_str("    let mut input = String::new();\n");
-        result.push_str("    std::io::stdin().read_line(&mut input).unwrap();\n");
-        result.push_str("    input.trim().to_string()\n");
-        result.push('}');
+            // Check for --bytes flag
+            for flag in &get_expr.flags {
+                match flag {
+                    GetFlag::Bytes(count) => {
+                        let count_str = self.gen_expression(count);
+                        return format!("{{ let bytes = std::fs::read({}).unwrap(); bytes[..{}].to_vec() }}", path_str, count_str);
+                    }
+                    _ => {}
+                }
+            }
 
-        result
+            // Default: read entire file as string
+            return format!("std::fs::read_to_string({}).unwrap()", path_str);
+        }
+
+        // No source: read from stdin
+        "{ let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); input.trim().to_string() }".to_string()
     }
 }
 
@@ -723,8 +796,8 @@ mod tests {
     #[test]
     fn test_transpile_function() {
         let t = Transpiler::new();
-        let result = t.transpile("fn add(a: i32, b: i32): i32\n    return a + b\nend fn").unwrap();
-        assert!(result.contains("fn add(a: i32, b: i32) -> i32"));
+        let result = t.transpile("fn sum(a: i32, b: i32): i32\n    return a + b\nend fn").unwrap();
+        assert!(result.contains("fn sum(a: i32, b: i32) -> i32"));
         assert!(result.contains("return (a + b);"));
     }
 
@@ -780,5 +853,31 @@ mod tests {
         let result = t.transpile(r#"error "something failed""#).unwrap();
         assert!(result.contains("eprintln!"));
         assert!(result.contains("ERROR"));
+    }
+
+    #[test]
+    fn test_transpile_top_level_functions() {
+        let t = Transpiler::new();
+        let result = t.transpile("fn sum(a: i32, b: i32): i32\n    return a + b\nend fn\n\nvar x = sum(1, 2)").unwrap();
+        // Function should be at top level, not inside main
+        assert!(result.contains("fn sum(a: i32, b: i32) -> i32"));
+        assert!(result.contains("fn main()"));
+        // x should be inside main
+        assert!(result.contains("let mut x = sum(1, 2);"));
+    }
+
+    #[test]
+    fn test_transpile_get_from_file() {
+        let t = Transpiler::new();
+        let result = t.transpile(r#"var content = get < "test.txt""#).unwrap();
+        assert!(result.contains("std::fs::read_to_string"));
+    }
+
+    #[test]
+    fn test_transpile_get_bytes() {
+        let t = Transpiler::new();
+        let result = t.transpile(r#"var data = get < "test.bin" --bytes 10"#).unwrap();
+        assert!(result.contains("std::fs::read"));
+        assert!(result.contains("10"));
     }
 }

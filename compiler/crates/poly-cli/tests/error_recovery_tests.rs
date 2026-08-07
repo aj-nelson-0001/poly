@@ -77,11 +77,11 @@ fn test_error_recovery_lexer_errors() {
 #[test]
 fn test_error_recovery_function_and_var() {
     let source = r#"
-fn add(a: i32, b: i32): i32
+fn sum(a: i32, b: i32): i32
     return a + b
 end fn
 
-var x = add(1, 2)
+var x = sum(1, 2)
 put x
 "#;
     let (tokens, _errors) = Lexer::lex(source);

@@ -332,6 +332,7 @@ pub enum LoopRangePart {
 #[derive(Debug, Clone)]
 pub struct GetExpr {
     pub prompt: Option<Box<Expression>>,
+    pub source: Option<Box<Expression>>, // input redirection: < "file"
     pub flags: Vec<GetFlag>,
     pub with_clause: Option<WithClause>,
 }

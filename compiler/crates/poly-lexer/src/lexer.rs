@@ -518,6 +518,7 @@ impl<'a> Lexer<'a> {
             "for" => TokenKind::For,
             "in" => TokenKind::In,
             "match" => TokenKind::Match,
+            "add" => TokenKind::Add,
             "break" => TokenKind::Break,
             "continue" => TokenKind::Continue,
             "return" => TokenKind::Return,
@@ -706,11 +707,11 @@ mod tests {
 
     #[test]
     fn test_function_declaration() {
-        let source = "fn add(a: i32, b: i32): i32";
+        let source = "fn sum(a: i32, b: i32): i32";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Fn);
-        assert_eq!(tokens[1].kind, TokenKind::Identifier("add".to_string()));
+        assert_eq!(tokens[1].kind, TokenKind::Identifier("sum".to_string()));
         assert_eq!(tokens[2].kind, TokenKind::LParen);
         assert_eq!(tokens[3].kind, TokenKind::Identifier("a".to_string()));
         assert_eq!(tokens[4].kind, TokenKind::Colon);

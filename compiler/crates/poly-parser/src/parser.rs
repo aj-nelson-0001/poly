@@ -178,6 +178,16 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Statement::ContinueStatement)
             }
+            TokenKind::Add => {
+                self.advance(); // consume 'add'
+                let name = self.expect_identifier()?;
+                // add x means x = x + 1
+                Ok(Statement::Assignment {
+                    target: Expression::Identifier(name),
+                    op: AssignmentOp::PlusEq,
+                    value: Expression::IntLiteral("1".to_string()),
+                })
+            }
             TokenKind::Put => self.parse_put_statement(),
             TokenKind::Error => {
                 self.advance();
@@ -1615,11 +1625,18 @@ impl<'a> Parser<'a> {
     fn parse_get_expression(&mut self) -> Result<Expression, ParseError> {
         self.advance(); // consume 'get'
         let mut prompt = None;
+        let mut source = None; // input redirection: < "file"
         let mut flags = Vec::new();
         let mut with_clause = None;
 
+        // Check for input redirection: < "file"
+        if *self.peek() == TokenKind::Lt {
+            self.advance(); // consume '<'
+            source = Some(Box::new(self.parse_primary()?));
+        }
+
         // Check for prompt (string literal right after get)
-        if matches!(self.peek(), TokenKind::StringLiteral(_) | TokenKind::UnicodeStringLiteral(_)) {
+        if source.is_none() && matches!(self.peek(), TokenKind::StringLiteral(_) | TokenKind::UnicodeStringLiteral(_)) {
             prompt = Some(self.parse_expression()?);
         }
 
@@ -1694,6 +1711,7 @@ impl<'a> Parser<'a> {
 
         Ok(Expression::GetExpression(Box::new(GetExpr {
             prompt: prompt.map(Box::new),
+            source,
             flags,
             with_clause,
         })))
@@ -1759,11 +1777,11 @@ mod tests {
 
     #[test]
     fn test_parse_function() {
-        let prog = parse_source("fn add(a: i32, b: i32): i32").unwrap();
+        let prog = parse_source("fn sum(a: i32, b: i32): i32").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
             Statement::FunctionDeclaration(decl) => {
-                assert_eq!(decl.name, "add");
+                assert_eq!(decl.name, "sum");
                 assert_eq!(decl.params.len(), 2);
                 assert!(decl.return_type.is_some());
             }

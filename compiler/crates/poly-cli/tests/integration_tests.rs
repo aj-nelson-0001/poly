@@ -105,7 +105,7 @@ fn test_transpile_basic_programs() {
         ("var x: i32 = 42", "let mut x: i32 = 42"),
         (r#"put "Hello""#, r#"println!("{}", "Hello")"#),
         ("const PI = 3.14", "const PI"),
-        ("fn add(a: i32, b: i32): i32\n    return a + b\nend fn", "fn add"),
+        ("fn sum(a: i32, b: i32): i32\n    return a + b\nend fn", "fn sum"),
     ];
     
     let t = Transpiler::new();

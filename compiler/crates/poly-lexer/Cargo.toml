@@ -1,0 +1,11 @@
+[package]
+name = "poly-lexer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lexer/tokenizer for the Poly programming language"
+
+[dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]

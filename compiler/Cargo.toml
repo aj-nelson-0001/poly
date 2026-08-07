@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/poly-lexer",
+    "crates/poly-parser",
+    "crates/poly-types",
+    "crates/poly-transpiler",
+    "crates/poly-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/poly-lang/poly"
+description = "A minimalist, assembly-inspired systems programming language that transpiles to Rust"
+
+[workspace.dependencies]
+poly-lexer = { path = "crates/poly-lexer" }
+poly-parser = { path = "crates/poly-parser" }
+poly-types = { path = "crates/poly-types" }
+poly-transpiler = { path = "crates/poly-transpiler" }
+poly-cli = { path = "crates/poly-cli" }
+thiserror = "2"
+anyhow = "1"

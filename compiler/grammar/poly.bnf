@@ -1,0 +1,518 @@
+# Poly Language Grammar (BNF)
+
+**Version:** 1.5 Draft  
+**Status:** Work in Progress
+
+This document defines the formal grammar for the Poly programming language using Extended Backus-Naur Form (EBNF) notation.
+
+---
+
+## Notation
+
+- `::=` means "is defined as"
+- `|` means "or" (alternative)
+- `{ }` means "zero or more"
+- `[ ]` means "optional"
+- `( )` means grouping
+- `"..."` means a literal token
+- `// ...` means a comment (not part of grammar)
+
+---
+
+## Lexical Grammar
+
+### Comments
+
+```
+comment         ::= single_line_comment
+                   | multi_line_comment
+
+single_line_comment ::= "//" <any characters except newline> newline
+multi_line_comment  ::= "/*" <any characters> "*/"
+```
+
+### Identifiers
+
+```
+identifier      ::= <ident_start> { <ident_continue> }
+ident_start     ::= "_" | <letter>
+ident_continue  ::= "_" | <letter> | <digit>
+
+letter          ::= "a".."z" | "A".."Z"
+digit           ::= "0".."9"
+```
+
+### Literals
+
+```
+literal         ::= <int_literal>
+                   | <float_literal>
+                   | <string_literal>
+                   | <unicode_string_literal>
+                   | <byte_literal>
+                   | <bool_literal>
+
+int_literal     ::= <decimal_int>
+                   | <hex_int>
+                   | <binary_int>
+                   | <octal_int>
+
+decimal_int     ::= <digit> { <digit> }
+hex_int         ::= "0x" <hex_digit> { <hex_digit> }
+binary_int      ::= "0b" <binary_digit> { <binary_digit> }
+octal_int       ::= "0o" <octal_digit> { <octal_digit> }
+
+hex_digit       ::= <digit> | "a".."f" | "A".."F"
+binary_digit    ::= "0" | "1"
+octal_digit     ::= "0".."7"
+
+float_literal   ::= <digit> { <digit> } "." <digit> { <digit> }
+                   | <digit> { <digit> } "." <digit> { <digit> } ("e" | "E") ["+" | "-"] <digit> { <digit> }
+
+string_literal  ::= '"' { <string_char> } '"'
+string_char     ::= <any character except '"' and newline>
+                   | <escape_sequence>
+
+unicode_string_literal ::= 'u' '"' { <unicode_char> } '"'
+unicode_char    ::= <any character except '"' and newline>
+                   | <escape_sequence>
+
+byte_literal    ::= <hex_byte> { <hex_byte> }
+hex_byte        ::= <hex_digit> <hex_digit>
+
+bool_literal    ::= "true" | "false"
+
+escape_sequence ::= "\\" ("n" | "t" | "r" | "\\" | '"' | "'" | "0")
+```
+
+### Operators
+
+```
+operator        ::= <arithmetic_op>
+                   | <comparison_op>
+                   | <logical_op>
+                   | <bitwise_op>
+                   | <assignment_op>
+
+arithmetic_op   ::= "+" | "-" | "*" | "/" | "%"
+comparison_op   ::= "==" | "!=" | "<" | ">" | "<=" | ">="
+logical_op      ::= "&&" | "||" | "!"
+bitwise_op      ::= "&" | "|" | "^" | "~" | "<<" | ">>"
+
+assignment_op   ::= "=" | "+=" | "-=" | "*=" | "/=" | "%="
+                   | "&=" | "|=" | "^=" | "<<=" | ">>="
+```
+
+### Delimiters
+
+```
+delimiter       ::= "(" | ")" | "[" | "]" | "{" | "}"
+                   | "," | ";" | ":" | "." | "::"
+                   | "->" | "=>" | ".." | "..="
+                   | "<" | ">"  // for file I/O
+                   | ">>"       // for file append
+```
+
+### Keywords
+
+```
+keyword         ::= "var" | "let" | "const" | "fn" | "end"
+                   | "if" | "then" | "else" | "while" | "loop"
+                   | "for" | "in" | "match" | "case" | "break"
+                   | "continue" | "return" | "struct" | "enum"
+                   | "trait" | "impl" | "for" | "module" | "use"
+                   | "pub" | "as" | "where" | "unsafe" | "async"
+                   | "await" | "spawn" | "move" | "type" | "macro"
+                   | "try" | "panic" | "null" | "addr" | "deref"
+                   | "ptr" | "add" | "sub" | "inc" | "dec"
+                   | "put" | "get" | "error" | "warn" | "info"
+                   | "with" | "validate" | "complete" | "encoding"
+                   | "timeout" | "default" | "mask" | "bytes"
+                   | "step" | "capture"
+```
+
+---
+
+## Syntax Grammar
+
+### Program Structure
+
+```
+program         ::= { <statement> } EOF
+
+statement       ::= <var_declaration>
+                   | <let_declaration>
+                   | <const_declaration>
+                   | <assignment>
+                   | <function_declaration>
+                   | <struct_declaration>
+                   | <enum_declaration>
+                   | <trait_declaration>
+                   | <impl_declaration>
+                   | <module_declaration>
+                   | <use_declaration>
+                   | <type_declaration>
+                   | <macro_declaration>
+                   | <if_expression>
+                   | <while_expression>
+                   | <loop_expression>
+                   | <match_expression>
+                   | <put_statement>
+                   | <error_statement>
+                   | <warn_statement>
+                   | <info_statement>
+                   | <return_statement>
+                   | <break_statement>
+                   | <continue_statement>
+                   | <try_expression>
+                   | <panic_expression>
+                   | <unsafe_block>
+                   | <async_block>
+                   | <expression>
+```
+
+### Variable Declarations
+
+```
+var_declaration ::= "var" <identifier> ":" <type> "=" <expression>
+
+let_declaration ::= "let" <identifier> ":" <type> "=" <expression>
+
+const_declaration ::= "const" <identifier> "=" <expression>
+
+assignment      ::= <identifier> "=" <expression>
+                   | <identifier> <assignment_op> <expression>
+                   | <identifier> "." <identifier> "=" <expression>
+```
+
+### Types
+
+```
+type            ::= <primitive_type>
+                   | <string_type>
+                   | <pointer_type>
+                   | <nullable_type>
+                   | <array_type>
+                   | <tuple_type>
+                   | <vector_type>
+                   | <option_type>
+                   | <result_type>
+                   | <function_type>
+                   | <generic_type>
+                   | <identifier>
+
+primitive_type  ::= "bool"
+                   | "i8" | "u8" | "i16" | "u16"
+                   | "i32" | "u32" | "i64" | "u64"
+                   | "i128" | "u128"
+                   | "f32" | "f64"
+                   | "isize" | "usize"
+
+string_type     ::= "char" | "string"
+                   | "uchar" | "ustring"
+                   | "byte" | "bytes"
+
+pointer_type    ::= "ptr" <type>
+
+nullable_type   ::= "?" <type>
+
+array_type      ::= "[" <type> ";" <expression> "]"
+
+tuple_type      ::= "(" <type> { "," <type> } ")"
+
+vector_type     ::= "Vec" "<" <type> ">"
+
+option_type     ::= "Option" "<" <type> ">"
+
+result_type     ::= "Result" "<" <type> "," <type> ">"
+
+function_type   ::= "fn" "(" [<type> { "," <type> }] ")" "->" <type>
+
+generic_type    ::= <identifier> "<" <type> { "," <type> } ">"
+```
+
+### Expressions
+
+```
+expression      ::= <literal>
+                   | <identifier>
+                   | <binary_expression>
+                   | <unary_expression>
+                   | <call_expression>
+                   | <method_call>
+                   | <index_expression>
+                   | <field_access>
+                   | <parenthesized_expression>
+                   | <if_expression>
+                   | <match_expression>
+                   | <closure_expression>
+                   | <array_expression>
+                   | <tuple_expression>
+                   | <struct_expression>
+                   | <enum_expression>
+                   | <as_expression>
+                   | <try_expression>
+                   | <get_expression>
+                   | <unsafe_block>
+
+binary_expression ::= <expression> <binary_op> <expression>
+binary_op       ::= <arithmetic_op> | <comparison_op>
+                   | <logical_op> | <bitwise_op>
+
+unary_expression ::= <unary_op> <expression>
+unary_op        ::= "-" | "!" | "~" | "*"
+
+call_expression ::= <expression> "(" [<arguments>] ")"
+arguments       ::= <expression> { "," <expression> }
+
+method_call     ::= <expression> "." <identifier> "(" [<arguments>] ")"
+
+index_expression ::= <expression> "[" <expression> "]"
+
+field_access    ::= <expression> "." <identifier>
+
+parenthesized_expression ::= "(" <expression> ")"
+
+as_expression   ::= <expression> "as" <type>
+
+struct_expression ::= <identifier> "{" [<struct_fields>] "}"
+struct_fields   ::= <struct_field> { "," <struct_field> }
+struct_field    ::= <identifier> ":" <expression>
+
+enum_expression ::= <identifier> "::" <identifier> ["(" <arguments> ")"]
+
+array_expression ::= "[" [<expression> { "," <expression> }] "]"
+
+tuple_expression ::= "(" <expression> { "," <expression> } ")"
+```
+
+### Functions
+
+```
+function_declaration ::= "fn" <identifier> "(" [<parameters>] ")" [":" <type>]
+                         [<where_clause>]
+                         <block>
+
+parameters      ::= <parameter> { "," <parameter> }
+parameter       ::= <identifier> ":" <type> ["=" <expression>]
+
+where_clause    ::= "where" <where_item> { "," <where_item> }
+where_item      ::= <type> ":" <trait_bound> { "+" <trait_bound> }
+trait_bound     ::= <identifier>
+
+block           ::= { <statement> }
+```
+
+### Control Flow
+
+```
+if_expression   ::= "if" <expression> "then" <block>
+                    {"else" "if" <expression> "then" <block>}
+                    ["else" <block>]
+                    "end" "if"
+
+while_expression ::= "while" <expression> <block> "end" "while"
+
+loop_expression ::= <infinite_loop> | <range_loop> | <collection_loop>
+
+infinite_loop   ::= "loop" <block> "end" "loop"
+
+range_loop      ::= "loop" ":" <range_list> [<step_clause>] <block> "end" "loop"
+
+collection_loop ::= "loop" ":" <expression> <block> "end" "loop"
+                   | "loop" ":" <tuple_destructuring> "in" <expression> <block> "end" "loop"
+
+range_list      ::= <range> { "," <range> }
+range           ::= <expression> ".." <expression>
+                   | <expression> "..=" <expression>
+
+step_clause     ::= "step" <expression>
+```
+
+### Match Expression
+
+```
+match_expression ::= "match" <expression> { <match_arm> } "end" "match"
+
+match_arm       ::= <pattern> ["if" <expression>] "=>" <expression>
+
+pattern         ::= <literal_pattern>
+                   | <identifier_pattern>
+                   | <wildcard_pattern>
+                   | <tuple_pattern>
+                   | <struct_pattern>
+                   | <enum_pattern>
+                   | <binding_pattern>
+                   | <range_pattern>
+                   | <or_pattern>
+
+literal_pattern ::= <literal>
+
+identifier_pattern ::= <identifier>
+
+wildcard_pattern ::= "_"
+
+tuple_pattern   ::= "(" <pattern> { "," <pattern> } ")"
+
+struct_pattern  ::= <identifier> "{" <struct_pattern_field> { "," <struct_pattern_field> } "}"
+struct_pattern_field ::= <identifier> [":" <pattern>]
+
+enum_pattern    ::= <identifier> "::" <identifier> ["(" [<pattern> { "," <pattern> }] ")"]
+
+binding_pattern ::= <identifier> "@" <pattern>
+
+range_pattern   ::= <expression> ".." <expression>
+                   | <expression> "..=" <expression>
+
+or_pattern      ::= <pattern> "|" <pattern>
+```
+
+### Closures
+
+```
+closure_expression ::= <closure_start> <closure_params> [":" <type>] ["->" <type>]
+                       (<closure_body> | <block>)
+
+closure_start   ::= ["move"] "|"
+
+closure_params  ::= [<parameter> { "," <parameter> }]
+
+closure_body    ::= <expression>
+```
+
+### Struct Declarations
+
+```
+struct_declaration ::= "struct" <identifier> [<type_params>]
+                       [<struct_body> | <tuple_struct_body>]
+
+struct_body     ::= { <struct_field> } "end" "struct"
+
+struct_field    ::= ["var"] <identifier> ":" <type> ["=" <expression>]
+
+tuple_struct_body ::= "(" <type> { "," <type> } ")"
+```
+
+### Enum Declarations
+
+```
+enum_declaration ::= "enum" <identifier> [<type_params>]
+                     { <enum_variant> } "end" "enum"
+
+enum_variant    ::= <identifier> ["(" <type> { "," <type> } ")"]
+                   | <identifier> "{" <enum_field> { "," <enum_field> } "}"
+
+enum_field      ::= <identifier> ":" <type>
+```
+
+### Trait Declarations
+
+```
+trait_declaration ::= "trait" <identifier> [<type_params>]
+                      { <trait_method> } "end" "trait"
+
+trait_method    ::= "fn" <identifier> "(" [<parameters>] ")" [":" <type>]
+                    [<block>]
+```
+
+### Impl Declarations
+
+```
+impl_declaration ::= "impl" [<type_params>] <trait_bound> "for" <type>
+                     { <impl_method> } "end" "impl"
+
+impl_method     ::= "fn" <identifier> "(" [<parameters>] ")" [":" <type>]
+                    <block>
+
+trait_bound     ::= <identifier> ["+" <identifier>]
+```
+
+### Module Declarations
+
+```
+module_declaration ::= "module" <identifier>
+                       { <statement> } "end" "module"
+```
+
+### Use Declarations
+
+```
+use_declaration ::= "use" <use_path> ["as" <identifier>]
+
+use_path        ::= <identifier> { "::" <identifier> | "::" "*" }
+```
+
+### Type Declarations
+
+```
+type_declaration ::= "type" <identifier> "=" <type>
+```
+
+### Macro Declarations
+
+```
+macro_declaration ::= "macro" <identifier> "(" [<parameters>] ")"
+                      <block> "end" "macro"
+```
+
+### I/O Statements
+
+```
+put_statement   ::= "put" ["-n"] <expression> [<redirect>]
+
+redirect        ::= ">" <expression>
+                   | ">>" <expression>
+
+error_statement ::= "error" <expression>
+
+warn_statement  ::= "warn" <expression>
+
+info_statement  ::= "info" <expression>
+
+get_expression  ::= "get" [<get_prompt>] [<get_flags>] [<get_with>]
+
+get_prompt      ::= <expression>
+
+get_flags       ::= { <get_flag> }
+
+get_flag        ::= "--timeout" <expression>
+                   | "--default" <expression>
+                   | "--mask" <expression>
+                   | "--as" <type>
+                   | "--until" <expression>
+                   | "--bytes" <expression>
+
+get_with        ::= "with" ("validate" <closure_expression>
+                   | "complete" <expression>
+                   | "encoding" <expression>)
+```
+
+### Special Expressions
+
+```
+try_expression  ::= "try" <expression>
+
+panic_expression ::= "panic" "(" <expression> ")"
+
+unsafe_block    ::= "unsafe" <block> "end" "unsafe"
+
+async_block     ::= "async" <block> "end" "async"
+```
+
+---
+
+## Precedence (Lowest to Highest)
+
+1. `||` — Logical OR
+2. `&&` — Logical AND
+3. `==`, `!=`, `<`, `>`, `<=`, `>=` — Comparison
+4. `|` — Bitwise OR
+5. `^` — Bitwise XOR
+6. `&` — Bitwise AND
+7. `<<`, `>>` — Bitwise shift
+8. `+`, `-` — Addition, Subtraction
+9. `*`, `/`, `%` — Multiplication, Division, Modulo
+10. `!`, `-`, `~`, `*` — Unary operators
+11. `as` — Type cast
+12. `.`, `()`, `[]` — Field access, function call, index
+13. `<atom>` — Atoms (literals, identifiers, parenthesized expressions)

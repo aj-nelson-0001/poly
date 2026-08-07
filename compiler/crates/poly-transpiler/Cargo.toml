@@ -1,0 +1,12 @@
+[package]
+name = "poly-transpiler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rust code generator for the Poly programming language"
+
+[dependencies]
+poly-lexer.workspace = true
+poly-parser.workspace = true
+poly-types.workspace = true
+thiserror.workspace = true

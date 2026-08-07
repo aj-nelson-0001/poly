@@ -14,3 +14,7 @@ poly-lexer.workspace = true
 poly-parser.workspace = true
 poly-transpiler.workspace = true
 anyhow.workspace = true
+
+[dev-dependencies]
+poly-lexer.workspace = true
+poly-parser.workspace = true

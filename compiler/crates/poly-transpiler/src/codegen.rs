@@ -367,17 +367,25 @@ impl CodeGen {
             }
             Expression::IfExpression { condition, then_block, else_block } => {
                 let cond = self.gen_expression(condition);
-                let mut result = format!("if {} {{\n", cond);
-                for stmt in then_block {
-                    result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
-                }
-                if let Some(else_stmts) = else_block {
-                    result.push_str("} else {\n");
-                    for stmt in else_stmts {
+                let mut result = format!("if {} {{", cond);
+                if !then_block.is_empty() {
+                    result.push('\n');
+                    for stmt in then_block {
                         result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
                     }
                 }
-                result.push('}');
+                if let Some(else_stmts) = else_block {
+                    if !else_stmts.is_empty() {
+                        result.push_str("}} else {{\n");
+                        for stmt in else_stmts {
+                            result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
+                        }
+                    } else {
+                        result.push('}');
+                    }
+                } else {
+                    result.push('}');
+                }
                 result
             }
             Expression::ArrayLiteral(elements) => {
@@ -503,7 +511,11 @@ impl CodeGen {
             Expression::Closure { params, body } => {
                 let params_str: Vec<String> = params.iter().map(|p| {
                     let ty = self.gen_type(&p.ty);
-                    format!("{}: {}", p.name, ty)
+                    if ty == "_" {
+                        p.name.clone()
+                    } else {
+                        format!("{}: {}", p.name, ty)
+                    }
                 }).collect();
                 let body_str = self.gen_expression(body);
                 format!("|{}| {}", params_str.join(", "), body_str)

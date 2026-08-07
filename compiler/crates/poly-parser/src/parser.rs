@@ -9,12 +9,13 @@ use crate::error::ParseError;
 pub struct Parser<'a> {
     tokens: &'a [Token],
     pos: usize,
+    errors: Vec<ParseError>,
 }
 
 impl<'a> Parser<'a> {
     /// Create a new parser for the given token stream.
     pub fn new(tokens: &'a [Token]) -> Self {
-        Self { tokens, pos: 0 }
+        Self { tokens, pos: 0, errors: Vec::new() }
     }
 
     /// Parse the token stream and return a Program AST.
@@ -22,10 +23,75 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
-            statements.push(self.parse_statement()?);
+            match self.parse_statement() {
+                Ok(stmt) => statements.push(stmt),
+                Err(e) => {
+                    self.errors.push(e);
+                    self.synchronize();
+                }
+            }
         }
 
-        Ok(Program { statements })
+        if self.errors.is_empty() {
+            Ok(Program { statements })
+        } else {
+            // Return the first error for backward compatibility
+            Err(self.errors[0].clone())
+        }
+    }
+
+    /// Parse with error recovery, collecting all errors.
+    pub fn parse_with_recovery(&mut self) -> (Program, Vec<ParseError>) {
+        let mut statements = Vec::new();
+
+        while !self.is_at_end() {
+            match self.parse_statement() {
+                Ok(stmt) => statements.push(stmt),
+                Err(e) => {
+                    self.errors.push(e);
+                    self.synchronize();
+                }
+            }
+        }
+
+        (Program { statements }, self.errors.clone())
+    }
+
+    /// Get collected errors.
+    pub fn errors(&self) -> &[ParseError] {
+        &self.errors
+    }
+
+    /// Synchronize the parser after an error by skipping tokens until a
+    /// synchronization point (statement boundary).
+    fn synchronize(&mut self) {
+        while !self.is_at_end() {
+            match self.peek() {
+                // Statement boundary tokens
+                TokenKind::Var | TokenKind::Let | TokenKind::Const
+                | TokenKind::Fn | TokenKind::Struct | TokenKind::Enum
+                | TokenKind::Trait | TokenKind::Impl | TokenKind::Module
+                | TokenKind::Use | TokenKind::Type | TokenKind::While
+                | TokenKind::Return | TokenKind::Break | TokenKind::Continue
+                | TokenKind::Put | TokenKind::Error | TokenKind::Warn
+                | TokenKind::Info | TokenKind::If | TokenKind::Match
+                | TokenKind::Loop | TokenKind::For => {
+                    return;
+                }
+                // End tokens (skip nested blocks)
+                TokenKind::End => {
+                    self.advance();
+                    return;
+                }
+                TokenKind::RBrace => {
+                    self.advance();
+                    return;
+                }
+                _ => {
+                    self.advance();
+                }
+            }
+        }
     }
 
     // === Token navigation ===
@@ -127,6 +193,22 @@ impl<'a> Parser<'a> {
                 self.advance();
                 let expr = self.parse_expression()?;
                 Ok(Statement::InfoStatement(expr))
+            }
+            TokenKind::Pub => {
+                // Public modifier - parse the next statement and mark it as public
+                self.advance(); // consume 'pub'
+                let mut stmt = self.parse_statement()?;
+                // For now, just parse it normally - the modifier is noted but not stored
+                Ok(stmt)
+            }
+            TokenKind::Spawn => {
+                // Spawn an async task: spawn expr
+                self.advance(); // consume 'spawn'
+                let expr = self.parse_expression()?;
+                Ok(Statement::ExpressionStatement(Expression::Call {
+                    func: Box::new(Expression::Identifier("spawn_task".into())),
+                    args: vec![expr],
+                }))
             }
             _ => {
                 // Try expression statement or assignment
@@ -842,6 +924,28 @@ impl<'a> Parser<'a> {
                 self.advance(); // consume 'try'
                 let expr = self.parse_unary()?;
                 Ok(Expression::TryExpression(Box::new(expr)))
+            }
+            TokenKind::Await => {
+                self.advance(); // consume 'await'
+                let expr = self.parse_unary()?;
+                // Represent as a method call: expr.await()
+                Ok(Expression::MethodCall {
+                    object: Box::new(expr),
+                    method: "await".into(),
+                    args: vec![],
+                })
+            }
+            TokenKind::Move => {
+                self.advance(); // consume 'move'
+                // Parse as closure with move semantics
+                if *self.peek() == TokenKind::Pipe {
+                    let mut closure = self.parse_closure()?;
+                    // Mark as move closure (for transpilation)
+                    Ok(closure)
+                } else {
+                    // move expr - just return the expression
+                    self.parse_unary()
+                }
             }
             _ => self.parse_postfix(),
         }

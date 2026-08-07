@@ -207,7 +207,7 @@ impl<'a> Parser<'a> {
             TokenKind::Pub => {
                 // Public modifier - parse the next statement and mark it as public
                 self.advance(); // consume 'pub'
-                let mut stmt = self.parse_statement()?;
+                let stmt = self.parse_statement()?;
                 // For now, just parse it normally - the modifier is noted but not stored
                 Ok(stmt)
             }
@@ -949,7 +949,7 @@ impl<'a> Parser<'a> {
                 self.advance(); // consume 'move'
                 // Parse as closure with move semantics
                 if *self.peek() == TokenKind::Pipe {
-                    let mut closure = self.parse_closure()?;
+                    let closure = self.parse_closure()?;
                     // Mark as move closure (for transpilation)
                     Ok(closure)
                 } else {
@@ -1013,7 +1013,7 @@ impl<'a> Parser<'a> {
                 // Parse the collection expression
                 let collection = self.parse_expression()?;
                 
-                let body = self.parse_block()?;
+                let _body = self.parse_block()?;
                 self.expect(&TokenKind::End)?;
                 self.expect(&TokenKind::Loop)?;
                 
@@ -1111,7 +1111,7 @@ impl<'a> Parser<'a> {
         let variable = self.expect_identifier()?;
         self.expect(&TokenKind::In)?;
         let iter = self.parse_expression()?;
-        let body = self.parse_block()?;
+        let _body = self.parse_block()?;
         self.expect(&TokenKind::End)?;
         self.expect(&TokenKind::For)?;
         // Represent as a call for now

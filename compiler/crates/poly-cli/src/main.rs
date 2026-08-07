@@ -374,11 +374,8 @@ fn highlight_token(token_str: &str) -> String {
 fn highlight_rust(line: &str) -> String {
     const RESET: &str = "\x1b[0m";
     const DIM: &str = "\x1b[2m";
-    const GREEN: &str = "\x1b[32m";
     const YELLOW: &str = "\x1b[33m";
-    const BLUE: &str = "\x1b[34m";
     const MAGENTA: &str = "\x1b[35m";
-    const CYAN: &str = "\x1b[36m";
 
     // Simple Rust syntax highlighting
     let trimmed = line.trim();

@@ -9,6 +9,7 @@ use crate::token::{Span, Token, TokenKind};
 ///
 /// Converts source code into a stream of tokens.
 pub struct Lexer<'a> {
+    #[allow(dead_code)]
     source: &'a str,
     chars: Vec<char>,
     pos: usize,

@@ -8,7 +8,9 @@ use poly_parser::Parser;
 
 /// The Poly-to-Rust transpiler.
 pub struct Transpiler {
+    #[allow(dead_code)]
     indent: usize,
+    #[allow(dead_code)]
     output: String,
 }
 
@@ -117,6 +119,7 @@ impl CodeGen {
         writeln!(self.output, "{}{}", indent, s).unwrap();
     }
 
+    #[allow(dead_code)]
     fn write(&mut self, s: &str) {
         write!(self.output, "{}", s).unwrap();
     }
@@ -258,7 +261,7 @@ impl CodeGen {
         }
     }
 
-    fn gen_function(&mut self, decl: &FunctionDecl, is_method: bool) {
+    fn gen_function(&mut self, decl: &FunctionDecl, _is_method: bool) {
         let params: Vec<String> = decl.params.iter().map(|p| {
             let ty = self.gen_type(&p.ty);
             format!("{}: {}", p.name, ty)
@@ -583,7 +586,6 @@ impl CodeGen {
                 result.push('}');
                 result
             }
-            _ => "/* unimplemented expression */".to_string(),
         }
     }
 

@@ -300,6 +300,21 @@ cargo test
 ./target/debug/poly-cli ../examples/prime_numbers.poly
 ```
 
+### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `poly <file.poly>` | Transpile a Poly file to Rust |
+| `poly --tokens <file>` | Print tokens and exit |
+| `poly --ast <file>` | Print AST and exit |
+| `poly --check <file>` | Validate code and verify Rust compilation |
+| `poly --format <file>` | Format output with rustfmt |
+| `poly --diff <file>` | Show diff between unformatted and formatted |
+| `poly --watch <file>` | Watch file and re-transpile on changes |
+| `poly --repl` | Start interactive REPL |
+| `poly --help` | Show help message |
+| `poly --version` | Show version information |
+
 ---
 
 ## Contributing

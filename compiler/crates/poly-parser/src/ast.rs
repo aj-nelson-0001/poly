@@ -37,10 +37,7 @@ pub enum Statement {
         value: Expression,
     },
     /// Constant declaration: `const MAX = 100`
-    ConstDeclaration {
-        name: String,
-        value: Expression,
-    },
+    ConstDeclaration { name: String, value: Expression },
     /// Assignment: `x = 5` or `x += 5`
     Assignment {
         target: Expression,
@@ -152,10 +149,7 @@ pub enum Expression {
         right: Box<Expression>,
     },
     /// Unary operation
-    UnaryOp {
-        op: UnaryOp,
-        expr: Box<Expression>,
-    },
+    UnaryOp { op: UnaryOp, expr: Box<Expression> },
     /// Function call
     Call {
         func: Box<Expression>,
@@ -310,10 +304,7 @@ pub enum Pattern {
         inclusive: bool,
     },
     /// @ binding
-    Binding {
-        name: String,
-        pattern: Box<Pattern>,
-    },
+    Binding { name: String, pattern: Box<Pattern> },
 }
 
 /// A part of a loop range (either a range, a single value, or a range with step).

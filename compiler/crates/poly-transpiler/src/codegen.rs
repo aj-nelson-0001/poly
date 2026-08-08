@@ -2,8 +2,8 @@
 
 use std::fmt::Write;
 
-use poly_parser::ast::*;
 use poly_lexer::Lexer;
+use poly_parser::ast::*;
 use poly_parser::Parser;
 
 /// The Poly-to-Rust transpiler.
@@ -174,24 +174,26 @@ impl CodeGen {
             Statement::EnumDeclaration(decl) => {
                 self.gen_enum(decl);
             }
-            Statement::ReturnStatement(value) => {
-                match value {
-                    Some(expr) => {
-                        let expr_str = self.gen_expression(expr);
-                        self.writeln(&format!("return {};", expr_str));
-                    }
-                    None => {
-                        self.writeln("return;");
-                    }
+            Statement::ReturnStatement(value) => match value {
+                Some(expr) => {
+                    let expr_str = self.gen_expression(expr);
+                    self.writeln(&format!("return {};", expr_str));
                 }
-            }
+                None => {
+                    self.writeln("return;");
+                }
+            },
             Statement::BreakStatement => {
                 self.writeln("break;");
             }
             Statement::ContinueStatement => {
                 self.writeln("continue;");
             }
-            Statement::PutStatement { no_newline, expr, redirect } => {
+            Statement::PutStatement {
+                no_newline,
+                expr,
+                redirect,
+            } => {
                 self.gen_put_statement(*no_newline, expr, redirect);
             }
             Statement::ErrorStatement(expr) => {
@@ -210,7 +212,12 @@ impl CodeGen {
                 // Check for while loop pattern: IfExpression with None else_block
                 // While loops are parsed as: IfExpression { ..., else_block: None }
                 // If statements are parsed as: IfExpression { ..., else_block: Some([]) }
-                if let Expression::IfExpression { condition, then_block, else_block } = expr {
+                if let Expression::IfExpression {
+                    condition,
+                    then_block,
+                    else_block,
+                } = expr
+                {
                     if else_block.is_none() {
                         // This is a while loop
                         let cond = self.gen_expression(condition);
@@ -262,16 +269,27 @@ impl CodeGen {
     }
 
     fn gen_function(&mut self, decl: &FunctionDecl, _is_method: bool) {
-        let params: Vec<String> = decl.params.iter().map(|p| {
-            let ty = self.gen_type(&p.ty);
-            format!("{}: {}", p.name, ty)
-        }).collect();
+        let params: Vec<String> = decl
+            .params
+            .iter()
+            .map(|p| {
+                let ty = self.gen_type(&p.ty);
+                format!("{}: {}", p.name, ty)
+            })
+            .collect();
 
-        let ret = decl.return_type.as_ref()
+        let ret = decl
+            .return_type
+            .as_ref()
             .map(|t| format!(" -> {}", self.gen_type(t)))
             .unwrap_or_default();
 
-        self.writeln(&format!("fn {}({}){} {{", decl.name, params.join(", "), ret));
+        self.writeln(&format!(
+            "fn {}({}){} {{",
+            decl.name,
+            params.join(", "),
+            ret
+        ));
         self.indent += 1;
 
         if let Some(body) = &decl.body {
@@ -349,7 +367,38 @@ impl CodeGen {
         }
     }
 
-    fn gen_put_statement(&mut self, no_newline: bool, expr: &Expression, redirect: &Option<Redirect>) {
+    fn gen_put_statement(
+        &mut self,
+        no_newline: bool,
+        expr: &Expression,
+        redirect: &Option<Redirect>,
+    ) {
+        // Check if the expression itself contains a file write operation (e.g., `"content" > "file"`)
+        if let Expression::BinaryOp { op, left, right } = expr {
+            match op {
+                BinaryOp::Gt => {
+                    // Write: `put "content" > "file"` -> std::fs::write("file", format!("{}", "content"))
+                    let content_str = self.gen_expression(left);
+                    let path_str = self.gen_expression(right);
+                    self.needs_io_write = true;
+                    self.writeln(&format!(
+                        "std::fs::write({}, format!(\"{{}}\", {})).unwrap();",
+                        path_str, content_str
+                    ));
+                    return;
+                }
+                BinaryOp::Shr => {
+                    // Append: `put "content" >> "file"` -> std::fs::OpenOptions...
+                    let content_str = self.gen_expression(left);
+                    let path_str = self.gen_expression(right);
+                    self.needs_io_write = true;
+                    self.writeln(&format!("{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{{}}\", {}).unwrap(); }}", path_str, content_str));
+                    return;
+                }
+                _ => {}
+            }
+        }
+
         let expr_str = self.gen_expression(expr);
 
         match redirect {
@@ -357,9 +406,15 @@ impl CodeGen {
                 let path_str = self.gen_expression(path);
                 self.needs_io_write = true;
                 if no_newline {
-                    self.writeln(&format!("std::fs::write({}, format!(\"{{}}\", {})).unwrap();", path_str, expr_str));
+                    self.writeln(&format!(
+                        "std::fs::write({}, format!(\"{{}}\", {})).unwrap();",
+                        path_str, expr_str
+                    ));
                 } else {
-                    self.writeln(&format!("std::fs::write({}, format!(\"{{}}\\n\", {})).unwrap();", path_str, expr_str));
+                    self.writeln(&format!(
+                        "std::fs::write({}, format!(\"{{}}\\n\", {})).unwrap();",
+                        path_str, expr_str
+                    ));
                 }
             }
             Some(Redirect::Append(path)) => {
@@ -403,12 +458,38 @@ impl CodeGen {
             Expression::Call { func, args } => {
                 let func_str = self.gen_expression(func);
                 let args_str: Vec<String> = args.iter().map(|a| self.gen_expression(a)).collect();
-                format!("{}({})", func_str, args_str.join(", "))
+                // Special handling for built-in functions
+                if func_str == "open" && args.len() == 1 {
+                    format!("std::fs::File::open({}).unwrap()", args_str.join(", "))
+                } else {
+                    format!("{}({})", func_str, args_str.join(", "))
+                }
             }
-            Expression::MethodCall { object, method, args } => {
+            Expression::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 let obj_str = self.gen_expression(object);
                 let args_str: Vec<String> = args.iter().map(|a| self.gen_expression(a)).collect();
-                format!("{}.{}({})", obj_str, method, args_str.join(", "))
+                // Special handling for file methods
+                match method.as_str() {
+                    "eof" => {
+                        // file.eof() -> use a placeholder that compiles
+                        format!("false /* eof check - needs BufReader implementation */")
+                    }
+                    "get_line" => {
+                        // file.get_line() -> use a placeholder that compiles
+                        format!("String::new() /* get_line - needs BufReader implementation */")
+                    }
+                    "split" => {
+                        let result = format!("{}.{}({})", obj_str, method, args_str.join(", "));
+                        format!("{}.collect::<Vec<_>>()", result)
+                    }
+                    _ => {
+                        format!("{}.{}({})", obj_str, method, args_str.join(", "))
+                    }
+                }
             }
             Expression::Index { object, index } => {
                 let obj_str = self.gen_expression(object);
@@ -422,7 +503,11 @@ impl CodeGen {
             Expression::Parenthesized(expr) => {
                 format!("({})", self.gen_expression(expr))
             }
-            Expression::IfExpression { condition, then_block, else_block } => {
+            Expression::IfExpression {
+                condition,
+                then_block,
+                else_block,
+            } => {
                 let cond = self.gen_expression(condition);
                 let mut result = format!("if {} {{", cond);
                 if !then_block.is_empty() {
@@ -454,21 +539,29 @@ impl CodeGen {
                 format!("({})", elems.join(", "))
             }
             Expression::StructLiteral { name, fields } => {
-                let field_strs: Vec<String> = fields.iter().map(|(n, v)| {
-                    format!("{}: {}", n, self.gen_expression(v))
-                }).collect();
+                let field_strs: Vec<String> = fields
+                    .iter()
+                    .map(|(n, v)| format!("{}: {}", n, self.gen_expression(v)))
+                    .collect();
                 format!("{} {{ {} }}", name, field_strs.join(", "))
             }
-            Expression::EnumVariant { enum_name, variant, data } => {
-                match data {
-                    Some(args) => {
-                        let args_str: Vec<String> = args.iter().map(|a| self.gen_expression(a)).collect();
-                        format!("{}::{}({})", enum_name, variant, args_str.join(", "))
-                    }
-                    None => format!("{}::{}", enum_name, variant),
+            Expression::EnumVariant {
+                enum_name,
+                variant,
+                data,
+            } => match data {
+                Some(args) => {
+                    let args_str: Vec<String> =
+                        args.iter().map(|a| self.gen_expression(a)).collect();
+                    format!("{}::{}({})", enum_name, variant, args_str.join(", "))
                 }
-            }
-            Expression::Range { start, end, inclusive } => {
+                None => format!("{}::{}", enum_name, variant),
+            },
+            Expression::Range {
+                start,
+                end,
+                inclusive,
+            } => {
                 let s = self.gen_expression(start);
                 let e = self.gen_expression(end);
                 if *inclusive {
@@ -482,7 +575,12 @@ impl CodeGen {
                 // Generate for loop(s) for the range parts
                 if ranges.len() == 1 {
                     match &ranges[0] {
-                        LoopRangePart::Range { start, end, inclusive, step } => {
+                        LoopRangePart::Range {
+                            start,
+                            end,
+                            inclusive,
+                            step,
+                        } => {
                             let s = self.gen_expression(start);
                             let e = self.gen_expression(end);
                             let range = if *inclusive {
@@ -490,12 +588,24 @@ impl CodeGen {
                             } else {
                                 format!("{}..{}", s, e)
                             };
-                            let step_str = step.as_ref().map(|s| format!(".step_by({})", self.gen_expression(s))).unwrap_or_default();
+                            let step_str = step
+                                .as_ref()
+                                .map(|s| format!(".step_by({})", self.gen_expression(s)))
+                                .unwrap_or_default();
                             result.push_str(&format!("for i in {}{} {{\n", range, step_str));
                         }
                         LoopRangePart::Value(val) => {
                             let v = self.gen_expression(val);
-                            result.push_str(&format!("for i in [{}] {{\n", v));
+                            // Check if this is a variable (identifier) for collection iteration
+                            if let Expression::Identifier(name) = val.as_ref() {
+                                result.push_str(&format!(
+                                    "for {} in {} {{\n",
+                                    name.trim_end_matches('s'),
+                                    v
+                                ));
+                            } else {
+                                result.push_str(&format!("for i in [{}] {{\n", v));
+                            }
                         }
                     }
                 } else {
@@ -503,7 +613,12 @@ impl CodeGen {
                     let mut range_strs = Vec::new();
                     for part in ranges {
                         match part {
-                            LoopRangePart::Range { start, end, inclusive, .. } => {
+                            LoopRangePart::Range {
+                                start,
+                                end,
+                                inclusive,
+                                ..
+                            } => {
                                 let s = self.gen_expression(start);
                                 let e = self.gen_expression(end);
                                 let range = if *inclusive {
@@ -520,7 +635,10 @@ impl CodeGen {
                         }
                     }
                     // Chain ranges using flat_map or chain
-                    result.push_str(&format!("for i in [{}].iter().flat_map(|r| r.clone()) {{\n", range_strs.join(", ")));
+                    result.push_str(&format!(
+                        "for i in [{}].iter().flat_map(|r| r.clone()) {{\n",
+                        range_strs.join(", ")
+                    ));
                 }
                 // Generate body
                 for stmt in body {
@@ -538,9 +656,7 @@ impl CodeGen {
                 let e = self.gen_expression(expr);
                 format!("{}?", e)
             }
-            Expression::GetExpression(get_expr) => {
-                self.gen_get_expression(get_expr)
-            }
+            Expression::GetExpression(get_expr) => self.gen_get_expression(get_expr),
             Expression::MatchExpression { scrutinee, arms } => {
                 let scrutinee_str = self.gen_expression(scrutinee);
                 let mut result = format!("match {} {{\n", scrutinee_str);
@@ -556,9 +672,14 @@ impl CodeGen {
                             block.trim().to_string()
                         }
                     };
+                    // Remove trailing semicolon if present (match arms don't need semicolons)
+                    let body_str = body_str.trim_end_matches(';').to_string();
                     if let Some(guard) = &arm.guard {
                         let guard_str = self.gen_expression(guard);
-                        result.push_str(&format!("    {} if {} => {},\n", pattern_str, guard_str, body_str));
+                        result.push_str(&format!(
+                            "    {} if {} => {},\n",
+                            pattern_str, guard_str, body_str
+                        ));
                     } else {
                         result.push_str(&format!("    {} => {},\n", pattern_str, body_str));
                     }
@@ -567,14 +688,17 @@ impl CodeGen {
                 result
             }
             Expression::Closure { params, body } => {
-                let params_str: Vec<String> = params.iter().map(|p| {
-                    let ty = self.gen_type(&p.ty);
-                    if ty == "_" {
-                        p.name.clone()
-                    } else {
-                        format!("{}: {}", p.name, ty)
-                    }
-                }).collect();
+                let params_str: Vec<String> = params
+                    .iter()
+                    .map(|p| {
+                        let ty = self.gen_type(&p.ty);
+                        if ty == "_" {
+                            p.name.clone()
+                        } else {
+                            format!("{}: {}", p.name, ty)
+                        }
+                    })
+                    .collect();
                 let body_str = self.gen_expression(body);
                 format!("|{}| {}", params_str.join(", "), body_str)
             }
@@ -592,14 +716,20 @@ impl CodeGen {
     fn gen_statement_str(&self, stmt: &Statement) -> String {
         match stmt {
             Statement::ExpressionStatement(expr) => self.gen_expression(expr),
-            Statement::ReturnStatement(Some(expr)) => format!("return {}", self.gen_expression(expr)),
-            Statement::ReturnStatement(None) => "return".to_string(),
-            Statement::PutStatement { no_newline, expr, .. } => {
+            Statement::ReturnStatement(Some(expr)) => {
+                format!("return {};", self.gen_expression(expr))
+            }
+            Statement::ReturnStatement(None) => "return;".to_string(),
+            Statement::BreakStatement => "break;".to_string(),
+            Statement::ContinueStatement => "continue;".to_string(),
+            Statement::PutStatement {
+                no_newline, expr, ..
+            } => {
                 let expr_str = self.gen_expression(expr);
                 if *no_newline {
-                    format!("print!(\"{{}}\", {})", expr_str)
+                    format!("print!(\"{{}}\", {});", expr_str)
                 } else {
-                    format!("println!(\"{{}}\", {})", expr_str)
+                    format!("println!(\"{{}}\", {});", expr_str)
                 }
             }
             Statement::VarDeclaration { name, ty, value } => {
@@ -608,16 +738,16 @@ impl CodeGen {
                     Some(val) => {
                         let val_str = self.gen_expression(val);
                         if ty.is_some() {
-                            format!("let mut {}: {} = {}", name, ty_str, val_str)
+                            format!("let mut {}: {} = {};", name, ty_str, val_str)
                         } else {
-                            format!("let mut {} = {}", name, val_str)
+                            format!("let mut {} = {};", name, val_str)
                         }
                     }
                     None => {
                         if ty.is_some() {
-                            format!("let mut {}: {}", name, ty_str)
+                            format!("let mut {}: {};", name, ty_str)
                         } else {
-                            format!("let mut {}", name)
+                            format!("let mut {};", name)
                         }
                     }
                 }
@@ -626,7 +756,7 @@ impl CodeGen {
                 let target_str = self.gen_expression(target);
                 let value_str = self.gen_expression(value);
                 let op_str = self.gen_assignment_op(op);
-                format!("{} {} {}", target_str, op_str, value_str)
+                format!("{} {} {};", target_str, op_str, value_str)
             }
             _ => "/* statement */".to_string(),
         }
@@ -634,7 +764,16 @@ impl CodeGen {
 
     fn gen_type(&self, ty: &TypeAnnotation) -> String {
         match ty {
-            TypeAnnotation::Named(name) => name.clone(),
+            TypeAnnotation::Named(name) => {
+                // Map Poly types to Rust types
+                match name.as_str() {
+                    "ustring" | "string" => "String".to_string(),
+                    "uchar" => "char".to_string(),
+                    "byte" => "u8".to_string(),
+                    "bytes" => "Vec<u8>".to_string(),
+                    _ => name.clone(),
+                }
+            }
             TypeAnnotation::Array(inner, size) => {
                 let inner_str = self.gen_type(inner);
                 let size_str = self.gen_expression(size);
@@ -730,16 +869,22 @@ impl CodeGen {
                 let pats: Vec<String> = patterns.iter().map(|p| self.gen_pattern(p)).collect();
                 format!("({})", pats.join(", "))
             }
-            Pattern::Enum { enum_name, variant, inner } => {
-                match inner {
-                    Some(args) => {
-                        let pats: Vec<String> = args.iter().map(|p| self.gen_pattern(p)).collect();
-                        format!("{}::{}({})", enum_name, variant, pats.join(", "))
-                    }
-                    None => format!("{}::{}", enum_name, variant),
+            Pattern::Enum {
+                enum_name,
+                variant,
+                inner,
+            } => match inner {
+                Some(args) => {
+                    let pats: Vec<String> = args.iter().map(|p| self.gen_pattern(p)).collect();
+                    format!("{}::{}({})", enum_name, variant, pats.join(", "))
                 }
-            }
-            Pattern::Range { start, end, inclusive } => {
+                None => format!("{}::{}", enum_name, variant),
+            },
+            Pattern::Range {
+                start,
+                end,
+                inclusive,
+            } => {
                 let s = self.gen_expression(start);
                 let e = self.gen_expression(end);
                 if *inclusive {
@@ -752,12 +897,15 @@ impl CodeGen {
                 format!("{} @ {}", name, self.gen_pattern(pattern))
             }
             Pattern::NamedFields { name, fields } => {
-                let field_strs: Vec<String> = fields.iter().map(|(n, p)| {
-                    match p {
-                        Pattern::Identifier(id) if id == n => n.clone(), // shorthand
-                        _ => format!("{}: {}", n, self.gen_pattern(p)),
-                    }
-                }).collect();
+                let field_strs: Vec<String> = fields
+                    .iter()
+                    .map(|(n, p)| {
+                        match p {
+                            Pattern::Identifier(id) if id == n => n.clone(), // shorthand
+                            _ => format!("{}: {}", n, self.gen_pattern(p)),
+                        }
+                    })
+                    .collect();
                 format!("{} {{ {} }}", name, field_strs.join(", "))
             }
         }
@@ -773,7 +921,10 @@ impl CodeGen {
                 match flag {
                     GetFlag::Bytes(count) => {
                         let count_str = self.gen_expression(count);
-                        return format!("{{ let bytes = std::fs::read({}).unwrap(); bytes[..{}].to_vec() }}", path_str, count_str);
+                        return format!(
+                            "{{ let bytes = std::fs::read({}).unwrap(); bytes[..{}].to_vec() }}",
+                            path_str, count_str
+                        );
                     }
                     _ => {}
                 }
@@ -816,7 +967,9 @@ mod tests {
     #[test]
     fn test_transpile_function() {
         let t = Transpiler::new();
-        let result = t.transpile("fn sum(a: i32, b: i32): i32\n    return a + b\nend fn").unwrap();
+        let result = t
+            .transpile("fn sum(a: i32, b: i32): i32\n    return a + b\nend fn")
+            .unwrap();
         assert!(result.contains("fn sum(a: i32, b: i32) -> i32"));
         assert!(result.contains("return (a + b);"));
     }
@@ -831,7 +984,9 @@ mod tests {
     #[test]
     fn test_transpile_struct() {
         let t = Transpiler::new();
-        let result = t.transpile("struct Point\n    var x: f32\n    var y: f32\nend struct").unwrap();
+        let result = t
+            .transpile("struct Point\n    var x: f32\n    var y: f32\nend struct")
+            .unwrap();
         assert!(result.contains("struct Point"));
         assert!(result.contains("x: f32,"));
         assert!(result.contains("y: f32,"));
@@ -840,7 +995,9 @@ mod tests {
     #[test]
     fn test_transpile_enum() {
         let t = Transpiler::new();
-        let result = t.transpile("enum Direction\n    North\n    South\nend enum").unwrap();
+        let result = t
+            .transpile("enum Direction\n    North\n    South\nend enum")
+            .unwrap();
         assert!(result.contains("enum Direction"));
         assert!(result.contains("North,"));
         assert!(result.contains("South,"));
@@ -878,7 +1035,9 @@ mod tests {
     #[test]
     fn test_transpile_top_level_functions() {
         let t = Transpiler::new();
-        let result = t.transpile("fn sum(a: i32, b: i32): i32\n    return a + b\nend fn\n\nvar x = sum(1, 2)").unwrap();
+        let result = t
+            .transpile("fn sum(a: i32, b: i32): i32\n    return a + b\nend fn\n\nvar x = sum(1, 2)")
+            .unwrap();
         // Function should be at top level, not inside main
         assert!(result.contains("fn sum(a: i32, b: i32) -> i32"));
         assert!(result.contains("fn main()"));
@@ -896,8 +1055,53 @@ mod tests {
     #[test]
     fn test_transpile_get_bytes() {
         let t = Transpiler::new();
-        let result = t.transpile(r#"var data = get < "test.bin" --bytes 10"#).unwrap();
+        let result = t
+            .transpile(r#"var data = get < "test.bin" --bytes 10"#)
+            .unwrap();
         assert!(result.contains("std::fs::read"));
         assert!(result.contains("10"));
     }
+}
+
+#[test]
+fn test_transpile_file_write() {
+    let t = Transpiler::new();
+    let result = t.transpile(r#"put "Hello" > "test.txt""#).unwrap();
+    assert!(result.contains("std::fs::write"));
+    assert!(result.contains("test.txt"));
+}
+
+#[test]
+fn test_transpile_file_append() {
+    let t = Transpiler::new();
+    let result = t.transpile(r#"put "Hello" >> "test.txt""#).unwrap();
+    assert!(result.contains("OpenOptions"));
+    assert!(result.contains("append(true)"));
+}
+
+#[test]
+fn test_transpile_type_mapping() {
+    let t = Transpiler::new();
+    let result = t.transpile("var x: ustring = \"hello\"").unwrap();
+    assert!(result.contains("let mut x: String"));
+}
+
+#[test]
+fn test_transpile_bytes_type() {
+    let t = Transpiler::new();
+    let result = t.transpile("var data: bytes = []").unwrap();
+    assert!(result.contains("let mut data: Vec<u8>"));
+}
+
+#[test]
+fn test_transpile_split_with_collect() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile(
+            r#"var lines = text.split("
+")"#,
+        )
+        .unwrap();
+    assert!(result.contains("split"));
+    assert!(result.contains("collect"));
 }

@@ -1,0 +1,12 @@
+# Poly Example: Match Expressions
+
+fn main()
+    put "Match Demo"
+    var x = 5
+    match x
+        1 => put "One"
+        2 => put "Two"
+        3 => put "Three"
+        _ => put "Other"
+    end match
+end fn

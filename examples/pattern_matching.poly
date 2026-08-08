@@ -1,0 +1,11 @@
+# Poly Example: Pattern Matching
+
+fn main()
+    put "Pattern Matching Demo"
+    var x = 5
+    match x
+        1 => put "One"
+        2 => put "Two"
+        _ => put "Other"
+    end match
+end fn

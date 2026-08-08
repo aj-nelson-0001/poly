@@ -15,7 +15,11 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     /// Create a new parser for the given token stream.
     pub fn new(tokens: &'a [Token]) -> Self {
-        Self { tokens, pos: 0, errors: Vec::new() }
+        Self {
+            tokens,
+            pos: 0,
+            errors: Vec::new(),
+        }
     }
 
     /// Parse the token stream and return a Program AST.
@@ -68,14 +72,29 @@ impl<'a> Parser<'a> {
         while !self.is_at_end() {
             match self.peek() {
                 // Statement boundary tokens
-                TokenKind::Var | TokenKind::Let | TokenKind::Const
-                | TokenKind::Fn | TokenKind::Struct | TokenKind::Enum
-                | TokenKind::Trait | TokenKind::Impl | TokenKind::Module
-                | TokenKind::Use | TokenKind::Type | TokenKind::While
-                | TokenKind::Return | TokenKind::Break | TokenKind::Continue
-                | TokenKind::Put | TokenKind::Error | TokenKind::Warn
-                | TokenKind::Info | TokenKind::If | TokenKind::Match
-                | TokenKind::Loop | TokenKind::For => {
+                TokenKind::Var
+                | TokenKind::Let
+                | TokenKind::Const
+                | TokenKind::Fn
+                | TokenKind::Struct
+                | TokenKind::Enum
+                | TokenKind::Trait
+                | TokenKind::Impl
+                | TokenKind::Module
+                | TokenKind::Use
+                | TokenKind::Type
+                | TokenKind::While
+                | TokenKind::Return
+                | TokenKind::Break
+                | TokenKind::Continue
+                | TokenKind::Put
+                | TokenKind::Error
+                | TokenKind::Warn
+                | TokenKind::Info
+                | TokenKind::If
+                | TokenKind::Match
+                | TokenKind::Loop
+                | TokenKind::For => {
                     return;
                 }
                 // End tokens (skip nested blocks)
@@ -160,14 +179,28 @@ impl<'a> Parser<'a> {
             TokenKind::Var => self.parse_var_declaration(),
             TokenKind::Let => self.parse_let_declaration(),
             TokenKind::Const => self.parse_const_declaration(),
-            TokenKind::Fn => self.parse_function_declaration().map(Statement::FunctionDeclaration),
-            TokenKind::Struct => self.parse_struct_declaration().map(Statement::StructDeclaration),
-            TokenKind::Enum => self.parse_enum_declaration().map(Statement::EnumDeclaration),
-            TokenKind::Trait => self.parse_trait_declaration().map(Statement::TraitDeclaration),
-            TokenKind::Impl => self.parse_impl_declaration().map(Statement::ImplDeclaration),
-            TokenKind::Module => self.parse_module_declaration().map(Statement::ModuleDeclaration),
+            TokenKind::Fn => self
+                .parse_function_declaration()
+                .map(Statement::FunctionDeclaration),
+            TokenKind::Struct => self
+                .parse_struct_declaration()
+                .map(Statement::StructDeclaration),
+            TokenKind::Enum => self
+                .parse_enum_declaration()
+                .map(Statement::EnumDeclaration),
+            TokenKind::Trait => self
+                .parse_trait_declaration()
+                .map(Statement::TraitDeclaration),
+            TokenKind::Impl => self
+                .parse_impl_declaration()
+                .map(Statement::ImplDeclaration),
+            TokenKind::Module => self
+                .parse_module_declaration()
+                .map(Statement::ModuleDeclaration),
             TokenKind::Use => self.parse_use_declaration().map(Statement::UseDeclaration),
-            TokenKind::Type => self.parse_type_declaration().map(Statement::TypeDeclaration),
+            TokenKind::Type => self
+                .parse_type_declaration()
+                .map(Statement::TypeDeclaration),
             TokenKind::While => self.parse_while_statement(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Break => {
@@ -279,11 +312,12 @@ impl<'a> Parser<'a> {
 
     fn parse_return_statement(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'return'
-        let value = if self.is_at_end() || matches!(self.peek(), TokenKind::Newline | TokenKind::Eof) {
-            None
-        } else {
-            Some(self.parse_expression()?)
-        };
+        let value =
+            if self.is_at_end() || matches!(self.peek(), TokenKind::Newline | TokenKind::Eof) {
+                None
+            } else {
+                Some(self.parse_expression()?)
+            };
         Ok(Statement::ReturnStatement(value))
     }
 
@@ -481,7 +515,8 @@ impl<'a> Parser<'a> {
                     if fields.iter().all(|(name, _)| !name.is_empty()) {
                         variants.push(EnumVariant::Struct(variant_name, fields));
                     } else {
-                        let types: Vec<TypeAnnotation> = fields.into_iter().map(|(_, ty)| ty).collect();
+                        let types: Vec<TypeAnnotation> =
+                            fields.into_iter().map(|(_, ty)| ty).collect();
                         variants.push(EnumVariant::Tuple(variant_name, types));
                     }
                 } else if self.peek() == &TokenKind::LBrace {
@@ -608,27 +643,90 @@ impl<'a> Parser<'a> {
 
     fn parse_type(&mut self) -> Result<TypeAnnotation, ParseError> {
         match self.peek().clone() {
-            TokenKind::I8 => { self.advance(); Ok(TypeAnnotation::Named("i8".into())) }
-            TokenKind::U8 => { self.advance(); Ok(TypeAnnotation::Named("u8".into())) }
-            TokenKind::I16 => { self.advance(); Ok(TypeAnnotation::Named("i16".into())) }
-            TokenKind::U16 => { self.advance(); Ok(TypeAnnotation::Named("u16".into())) }
-            TokenKind::I32 => { self.advance(); Ok(TypeAnnotation::Named("i32".into())) }
-            TokenKind::U32 => { self.advance(); Ok(TypeAnnotation::Named("u32".into())) }
-            TokenKind::I64 => { self.advance(); Ok(TypeAnnotation::Named("i64".into())) }
-            TokenKind::U64 => { self.advance(); Ok(TypeAnnotation::Named("u64".into())) }
-            TokenKind::I128 => { self.advance(); Ok(TypeAnnotation::Named("i128".into())) }
-            TokenKind::U128 => { self.advance(); Ok(TypeAnnotation::Named("u128".into())) }
-            TokenKind::F32 => { self.advance(); Ok(TypeAnnotation::Named("f32".into())) }
-            TokenKind::F64 => { self.advance(); Ok(TypeAnnotation::Named("f64".into())) }
-            TokenKind::ISize => { self.advance(); Ok(TypeAnnotation::Named("isize".into())) }
-            TokenKind::USize => { self.advance(); Ok(TypeAnnotation::Named("usize".into())) }
-            TokenKind::Bool => { self.advance(); Ok(TypeAnnotation::Named("bool".into())) }
-            TokenKind::Char => { self.advance(); Ok(TypeAnnotation::Named("char".into())) }
-            TokenKind::String => { self.advance(); Ok(TypeAnnotation::Named("string".into())) }
-            TokenKind::UChar => { self.advance(); Ok(TypeAnnotation::Named("uchar".into())) }
-            TokenKind::UString => { self.advance(); Ok(TypeAnnotation::Named("ustring".into())) }
-            TokenKind::Byte => { self.advance(); Ok(TypeAnnotation::Named("byte".into())) }
-            TokenKind::Bytes => { self.advance(); Ok(TypeAnnotation::Named("bytes".into())) }
+            TokenKind::I8 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("i8".into()))
+            }
+            TokenKind::U8 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("u8".into()))
+            }
+            TokenKind::I16 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("i16".into()))
+            }
+            TokenKind::U16 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("u16".into()))
+            }
+            TokenKind::I32 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("i32".into()))
+            }
+            TokenKind::U32 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("u32".into()))
+            }
+            TokenKind::I64 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("i64".into()))
+            }
+            TokenKind::U64 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("u64".into()))
+            }
+            TokenKind::I128 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("i128".into()))
+            }
+            TokenKind::U128 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("u128".into()))
+            }
+            TokenKind::F32 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("f32".into()))
+            }
+            TokenKind::F64 => {
+                self.advance();
+                Ok(TypeAnnotation::Named("f64".into()))
+            }
+            TokenKind::ISize => {
+                self.advance();
+                Ok(TypeAnnotation::Named("isize".into()))
+            }
+            TokenKind::USize => {
+                self.advance();
+                Ok(TypeAnnotation::Named("usize".into()))
+            }
+            TokenKind::Bool => {
+                self.advance();
+                Ok(TypeAnnotation::Named("bool".into()))
+            }
+            TokenKind::Char => {
+                self.advance();
+                Ok(TypeAnnotation::Named("char".into()))
+            }
+            TokenKind::String => {
+                self.advance();
+                Ok(TypeAnnotation::Named("string".into()))
+            }
+            TokenKind::UChar => {
+                self.advance();
+                Ok(TypeAnnotation::Named("uchar".into()))
+            }
+            TokenKind::UString => {
+                self.advance();
+                Ok(TypeAnnotation::Named("ustring".into()))
+            }
+            TokenKind::Byte => {
+                self.advance();
+                Ok(TypeAnnotation::Named("byte".into()))
+            }
+            TokenKind::Bytes => {
+                self.advance();
+                Ok(TypeAnnotation::Named("bytes".into()))
+            }
             TokenKind::Ptr => {
                 self.advance();
                 let inner = self.parse_type()?;
@@ -752,32 +850,56 @@ impl<'a> Parser<'a> {
                 TokenKind::EqEq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Eq, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Eq,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 TokenKind::NotEq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp { op: BinaryOp::NotEq, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::NotEq,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 TokenKind::Lt => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Lt, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Lt,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 TokenKind::Gt => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Gt, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Gt,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 TokenKind::LtEq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp { op: BinaryOp::LtEq, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::LtEq,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 TokenKind::GtEq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp { op: BinaryOp::GtEq, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::GtEq,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 _ => break,
             }
@@ -834,12 +956,20 @@ impl<'a> Parser<'a> {
                 TokenKind::LtLt => {
                     self.advance();
                     let right = self.parse_add_sub()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Shl, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Shl,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 TokenKind::GtGt => {
                     self.advance();
                     let right = self.parse_add_sub()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Shr, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Shr,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 _ => break,
             }
@@ -854,12 +984,20 @@ impl<'a> Parser<'a> {
                 TokenKind::Plus => {
                     self.advance();
                     let right = self.parse_mul_div()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Add, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Add,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 TokenKind::Minus => {
                     self.advance();
                     let right = self.parse_mul_div()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Sub, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Sub,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 _ => break,
             }
@@ -874,17 +1012,29 @@ impl<'a> Parser<'a> {
                 TokenKind::Star => {
                     self.advance();
                     let right = self.parse_unary()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Mul, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Mul,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 TokenKind::Slash => {
                     self.advance();
                     let right = self.parse_unary()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Div, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Div,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 TokenKind::Percent => {
                     self.advance();
                     let right = self.parse_unary()?;
-                    left = Expression::BinaryOp { op: BinaryOp::Mod, left: Box::new(left), right: Box::new(right) };
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Mod,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
                 }
                 _ => break,
             }
@@ -947,7 +1097,7 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Move => {
                 self.advance(); // consume 'move'
-                // Parse as closure with move semantics
+                                // Parse as closure with move semantics
                 if *self.peek() == TokenKind::Pipe {
                     let closure = self.parse_closure()?;
                     // Mark as move closure (for transpilation)
@@ -972,7 +1122,11 @@ impl<'a> Parser<'a> {
                 } else {
                     TypeAnnotation::Named("_".into()) // untyped
                 };
-                params.push(Parameter { name, ty, default: None });
+                params.push(Parameter {
+                    name,
+                    ty,
+                    default: None,
+                });
                 if !self.match_token(&TokenKind::Comma) {
                     break;
                 }
@@ -988,11 +1142,11 @@ impl<'a> Parser<'a> {
 
     fn parse_loop_expression(&mut self) -> Result<Expression, ParseError> {
         self.advance(); // consume 'loop'
-        
+
         // Check for range loop: loop: 0..10 or loop: 1..3, 7, 19..21 step 2
         if self.peek() == &TokenKind::Colon {
             self.advance(); // consume ':'
-            
+
             // Check for tuple destructuring: loop: (a, b) in collection
             if *self.peek() == TokenKind::LParen {
                 // Parse tuple destructuring variables
@@ -1006,51 +1160,55 @@ impl<'a> Parser<'a> {
                     }
                 }
                 self.expect(&TokenKind::RParen)?;
-                
+
                 // Expect 'in' keyword
                 self.expect(&TokenKind::In)?;
-                
+
                 // Parse the collection expression
                 let collection = self.parse_expression()?;
-                
+
                 let _body = self.parse_block()?;
                 self.expect(&TokenKind::End)?;
                 self.expect(&TokenKind::Loop)?;
-                
+
                 // Return as a for-each call with destructuring
                 return Ok(Expression::Call {
                     func: Box::new(Expression::Identifier("for_each_destructure".into())),
                     args: vec![
-                        Expression::TupleLiteral(vars.into_iter().map(|v| Expression::Identifier(v)).collect()),
+                        Expression::TupleLiteral(
+                            vars.into_iter()
+                                .map(|v| Expression::Identifier(v))
+                                .collect(),
+                        ),
                         collection,
                     ],
                 });
             }
-            
+
             // Check for collection iteration: loop: collection
             // or multi-range: loop: 1..3, 7, 19..21
             // First, parse the first part
             let mut range_parts = Vec::new();
-            
+
             loop {
                 let part = self.parse_loop_range_part()?;
                 range_parts.push(part);
-                
+
                 if !self.match_token(&TokenKind::Comma) {
                     break;
                 }
             }
-            
+
             let body = self.parse_block()?;
             self.expect(&TokenKind::End)?;
             self.expect(&TokenKind::Loop)?;
-            
+
             return Ok(Expression::LoopRange {
                 ranges: range_parts,
                 body,
             });
         }
-        
+
         // Infinite loop
         let _body = self.parse_block()?;
         self.expect(&TokenKind::End)?;
@@ -1065,9 +1223,14 @@ impl<'a> Parser<'a> {
     /// This can be: 0..10, 0..=10, 0..10 step 2, or just 5 (a single value).
     fn parse_loop_range_part(&mut self) -> Result<LoopRangePart, ParseError> {
         let first = self.parse_expression()?;
-        
+
         // If parse_expression already consumed a range (e.g., 0..10), extract it
-        if let Expression::Range { start, end, inclusive } = first {
+        if let Expression::Range {
+            start,
+            end,
+            inclusive,
+        } = first
+        {
             // Check for optional step: ..10 step 2
             let step = if self.peek() == &TokenKind::Step {
                 self.advance(); // consume 'step'
@@ -1085,7 +1248,7 @@ impl<'a> Parser<'a> {
             let inclusive = self.peek() == &TokenKind::DotDotEq;
             self.advance(); // consume .. or ..=
             let end = self.parse_expression()?;
-            
+
             // Check for optional step: ..10 step 2
             let step = if self.peek() == &TokenKind::Step {
                 self.advance(); // consume 'step'
@@ -1093,7 +1256,7 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            
+
             Ok(LoopRangePart::Range {
                 start: Box::new(first),
                 end: Box::new(end),
@@ -1327,18 +1490,10 @@ impl<'a> Parser<'a> {
                 self.expect(&TokenKind::RBracket)?;
                 Ok(Expression::ArrayLiteral(elements))
             }
-            TokenKind::Get => {
-                self.parse_get_expression()
-            }
-            TokenKind::If => {
-                self.parse_if_expression()
-            }
-            TokenKind::Match => {
-                self.parse_match_expression()
-            }
-            TokenKind::Loop => {
-                self.parse_loop_expression()
-            }
+            TokenKind::Get => self.parse_get_expression(),
+            TokenKind::If => self.parse_if_expression(),
+            TokenKind::Match => self.parse_match_expression(),
+            TokenKind::Loop => self.parse_loop_expression(),
             TokenKind::For => {
                 // For loop: for item in collection
                 self.parse_for_expression()
@@ -1399,7 +1554,11 @@ impl<'a> Parser<'a> {
             };
             self.expect(&TokenKind::FatArrow)?;
             let body = self.parse_match_arm_body()?;
-            arms.push(MatchArm { pattern, guard, body });
+            arms.push(MatchArm {
+                pattern,
+                guard,
+                body,
+            });
         }
         self.expect(&TokenKind::End)?;
         self.expect(&TokenKind::Match)?;
@@ -1414,12 +1573,12 @@ impl<'a> Parser<'a> {
     fn parse_match_arm_body(&mut self) -> Result<MatchArmBody, ParseError> {
         // Parse statements until we hit something that starts a new match arm or end of match
         let mut stmts = Vec::new();
-        
+
         loop {
             if self.is_at_end() || *self.peek() == TokenKind::End {
                 break;
             }
-            
+
             // Check if this looks like a new match arm pattern:
             // identifier, int literal, string literal, negative, or tuple pattern
             if self.could_be_pattern_start() {
@@ -1428,10 +1587,10 @@ impl<'a> Parser<'a> {
                     break;
                 }
             }
-            
+
             stmts.push(self.parse_statement()?);
         }
-        
+
         if stmts.is_empty() {
             // Shouldn't happen, but handle gracefully
             let expr = self.parse_expression()?;
@@ -1446,27 +1605,28 @@ impl<'a> Parser<'a> {
             Ok(MatchArmBody::Block(stmts))
         }
     }
-    
+
     /// Check if the current token could be the start of a match arm pattern.
     fn could_be_pattern_start(&self) -> bool {
-        matches!(self.peek(),
+        matches!(
+            self.peek(),
             TokenKind::Identifier(_)
-            | TokenKind::IntLiteral(_)
-            | TokenKind::StringLiteral(_)
-            | TokenKind::UnicodeStringLiteral(_)
-            | TokenKind::BoolLiteral(_)
-            | TokenKind::Minus
-            | TokenKind::LParen
-            | TokenKind::Pipe
+                | TokenKind::IntLiteral(_)
+                | TokenKind::StringLiteral(_)
+                | TokenKind::UnicodeStringLiteral(_)
+                | TokenKind::BoolLiteral(_)
+                | TokenKind::Minus
+                | TokenKind::LParen
+                | TokenKind::Pipe
         )
     }
-    
+
     /// Peek ahead to check if a FatArrow follows (indicating a new match arm).
     /// This does a limited lookahead.
     fn peek_ahead_is_fatarrow(&mut self) -> bool {
         let saved_pos = self.pos;
         let mut found_fatarrow = false;
-        
+
         // Skip over what looks like a pattern
         match self.peek().clone() {
             TokenKind::Identifier(_) => {
@@ -1480,7 +1640,7 @@ impl<'a> Parser<'a> {
                     // Check for (args)
                     if *self.peek() == TokenKind::LParen {
                         self.advance(); // (
-                        // Skip until matching )
+                                        // Skip until matching )
                         let mut depth = 1;
                         while depth > 0 && !self.is_at_end() {
                             match self.peek() {
@@ -1505,10 +1665,18 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
-            TokenKind::IntLiteral(_) => { self.advance(); }
-            TokenKind::StringLiteral(_) => { self.advance(); }
-            TokenKind::UnicodeStringLiteral(_) => { self.advance(); }
-            TokenKind::BoolLiteral(_) => { self.advance(); }
+            TokenKind::IntLiteral(_) => {
+                self.advance();
+            }
+            TokenKind::StringLiteral(_) => {
+                self.advance();
+            }
+            TokenKind::UnicodeStringLiteral(_) => {
+                self.advance();
+            }
+            TokenKind::BoolLiteral(_) => {
+                self.advance();
+            }
             TokenKind::Minus => {
                 self.advance();
                 if matches!(self.peek(), TokenKind::IntLiteral(_)) {
@@ -1530,18 +1698,18 @@ impl<'a> Parser<'a> {
             }
             _ => {}
         }
-        
+
         // Now check for optional guard (if condition)
         if *self.peek() == TokenKind::If {
             self.advance();
             // Skip expression until FatArrow
             // (simplified: just skip tokens until we find =>)
         }
-        
+
         if *self.peek() == TokenKind::FatArrow {
             found_fatarrow = true;
         }
-        
+
         // Restore position
         self.pos = saved_pos;
         found_fatarrow
@@ -1554,12 +1722,21 @@ impl<'a> Parser<'a> {
                 self.advance();
                 if let TokenKind::IntLiteral(val) = self.peek().clone() {
                     self.advance();
-                    Ok(Pattern::Literal(Expression::IntLiteral(format!("-{}", val))))
+                    Ok(Pattern::Literal(Expression::IntLiteral(format!(
+                        "-{}",
+                        val
+                    ))))
                 } else {
-                    Err(ParseError::new("Expected integer after -", self.current().span))
+                    Err(ParseError::new(
+                        "Expected integer after -",
+                        self.current().span,
+                    ))
                 }
             }
-            TokenKind::IntLiteral(_) | TokenKind::StringLiteral(_) | TokenKind::UnicodeStringLiteral(_) | TokenKind::BoolLiteral(_) => {
+            TokenKind::IntLiteral(_)
+            | TokenKind::StringLiteral(_)
+            | TokenKind::UnicodeStringLiteral(_)
+            | TokenKind::BoolLiteral(_) => {
                 let expr = self.parse_primary()?;
                 Ok(Pattern::Literal(expr))
             }
@@ -1586,7 +1763,11 @@ impl<'a> Parser<'a> {
                     } else {
                         None
                     };
-                    Ok(Pattern::Enum { enum_name: name, variant, inner })
+                    Ok(Pattern::Enum {
+                        enum_name: name,
+                        variant,
+                        inner,
+                    })
                 } else if self.peek() == &TokenKind::LParen {
                     // Variant pattern without :: (e.g., Ok(content), Error(e))
                     self.advance();
@@ -1599,7 +1780,11 @@ impl<'a> Parser<'a> {
                     }
                     self.expect(&TokenKind::RParen)?;
                     // Treat as Enum pattern with empty enum_name for now
-                    Ok(Pattern::Enum { enum_name: String::new(), variant: name, inner: Some(patterns) })
+                    Ok(Pattern::Enum {
+                        enum_name: String::new(),
+                        variant: name,
+                        inner: Some(patterns),
+                    })
                 } else {
                     Ok(Pattern::Identifier(name))
                 }
@@ -1636,7 +1821,12 @@ impl<'a> Parser<'a> {
         }
 
         // Check for prompt (string literal right after get)
-        if source.is_none() && matches!(self.peek(), TokenKind::StringLiteral(_) | TokenKind::UnicodeStringLiteral(_)) {
+        if source.is_none()
+            && matches!(
+                self.peek(),
+                TokenKind::StringLiteral(_) | TokenKind::UnicodeStringLiteral(_)
+            )
+        {
             prompt = Some(self.parse_expression()?);
         }
 
@@ -1660,18 +1850,18 @@ impl<'a> Parser<'a> {
                                 self.advance();
                                 flags.push(GetFlag::Mask(self.parse_expression()?));
                             }
-                        TokenKind::Identifier(ref s) if s == "until" => {
-                            self.advance();
-                            flags.push(GetFlag::Until(self.parse_expression()?));
-                        }
-                        TokenKind::Bytes => {
-                            self.advance();
-                            flags.push(GetFlag::Bytes(self.parse_expression()?));
-                        }
-                        TokenKind::Identifier(ref s) if s == "bytes" => {
-                            self.advance();
-                            flags.push(GetFlag::Bytes(self.parse_expression()?));
-                        }
+                            TokenKind::Identifier(ref s) if s == "until" => {
+                                self.advance();
+                                flags.push(GetFlag::Until(self.parse_expression()?));
+                            }
+                            TokenKind::Bytes => {
+                                self.advance();
+                                flags.push(GetFlag::Bytes(self.parse_expression()?));
+                            }
+                            TokenKind::Identifier(ref s) if s == "bytes" => {
+                                self.advance();
+                                flags.push(GetFlag::Bytes(self.parse_expression()?));
+                            }
                             _ => break,
                         }
                     } else {
@@ -1719,17 +1909,50 @@ impl<'a> Parser<'a> {
 
     fn parse_assignment_op(&mut self) -> Result<AssignmentOp, ParseError> {
         match self.peek() {
-            TokenKind::Eq => { self.advance(); Ok(AssignmentOp::Eq) }
-            TokenKind::PlusEq => { self.advance(); Ok(AssignmentOp::PlusEq) }
-            TokenKind::MinusEq => { self.advance(); Ok(AssignmentOp::MinusEq) }
-            TokenKind::StarEq => { self.advance(); Ok(AssignmentOp::StarEq) }
-            TokenKind::SlashEq => { self.advance(); Ok(AssignmentOp::SlashEq) }
-            TokenKind::PercentEq => { self.advance(); Ok(AssignmentOp::PercentEq) }
-            TokenKind::AmpEq => { self.advance(); Ok(AssignmentOp::AmpEq) }
-            TokenKind::PipeEq => { self.advance(); Ok(AssignmentOp::PipeEq) }
-            TokenKind::CaretEq => { self.advance(); Ok(AssignmentOp::CaretEq) }
-            TokenKind::LtLtEq => { self.advance(); Ok(AssignmentOp::LtLtEq) }
-            TokenKind::GtGtEq => { self.advance(); Ok(AssignmentOp::GtGtEq) }
+            TokenKind::Eq => {
+                self.advance();
+                Ok(AssignmentOp::Eq)
+            }
+            TokenKind::PlusEq => {
+                self.advance();
+                Ok(AssignmentOp::PlusEq)
+            }
+            TokenKind::MinusEq => {
+                self.advance();
+                Ok(AssignmentOp::MinusEq)
+            }
+            TokenKind::StarEq => {
+                self.advance();
+                Ok(AssignmentOp::StarEq)
+            }
+            TokenKind::SlashEq => {
+                self.advance();
+                Ok(AssignmentOp::SlashEq)
+            }
+            TokenKind::PercentEq => {
+                self.advance();
+                Ok(AssignmentOp::PercentEq)
+            }
+            TokenKind::AmpEq => {
+                self.advance();
+                Ok(AssignmentOp::AmpEq)
+            }
+            TokenKind::PipeEq => {
+                self.advance();
+                Ok(AssignmentOp::PipeEq)
+            }
+            TokenKind::CaretEq => {
+                self.advance();
+                Ok(AssignmentOp::CaretEq)
+            }
+            TokenKind::LtLtEq => {
+                self.advance();
+                Ok(AssignmentOp::LtLtEq)
+            }
+            TokenKind::GtGtEq => {
+                self.advance();
+                Ok(AssignmentOp::GtGtEq)
+            }
             _ => Err(ParseError::new(
                 format!("Expected assignment operator, got {:?}", self.peek()),
                 self.current().span,
@@ -1794,10 +2017,14 @@ mod tests {
         let prog = parse_source("var x = a + b * 2").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
-            Statement::VarDeclaration { value: Some(expr), .. } => {
+            Statement::VarDeclaration {
+                value: Some(expr), ..
+            } => {
                 // Should be a + (b * 2) due to precedence
                 match expr {
-                    Expression::BinaryOp { op: BinaryOp::Add, .. } => {}
+                    Expression::BinaryOp {
+                        op: BinaryOp::Add, ..
+                    } => {}
                     _ => panic!("Expected Add operation"),
                 }
             }
@@ -1810,7 +2037,9 @@ mod tests {
         let prog = parse_source(r#"put "Hello""#).unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
-            Statement::PutStatement { no_newline, expr, .. } => {
+            Statement::PutStatement {
+                no_newline, expr, ..
+            } => {
                 assert!(!no_newline);
                 match expr {
                     Expression::StringLiteral(s) => assert_eq!(s, "Hello"),
@@ -1834,7 +2063,8 @@ mod tests {
 
     #[test]
     fn test_parse_struct() {
-        let prog = parse_source("struct Point\n    var x: f32\n    var y: f32\nend struct").unwrap();
+        let prog =
+            parse_source("struct Point\n    var x: f32\n    var y: f32\nend struct").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
             Statement::StructDeclaration(decl) => {
@@ -1873,7 +2103,10 @@ mod tests {
         let prog = parse_source("var square = |x: i32| x * x").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
-            Statement::VarDeclaration { value: Some(Expression::Closure { params, .. }), .. } => {
+            Statement::VarDeclaration {
+                value: Some(Expression::Closure { params, .. }),
+                ..
+            } => {
                 assert_eq!(params.len(), 1);
             }
             _ => panic!("Expected closure"),
@@ -1885,7 +2118,10 @@ mod tests {
         let prog = parse_source("var r = 0..10").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
-            Statement::VarDeclaration { value: Some(Expression::Range { inclusive, .. }), .. } => {
+            Statement::VarDeclaration {
+                value: Some(Expression::Range { inclusive, .. }),
+                ..
+            } => {
                 assert!(!inclusive);
             }
             _ => panic!("Expected range"),
@@ -1937,7 +2173,10 @@ mod tests {
 
     #[test]
     fn test_parse_match_with_block_body() {
-        let prog = parse_source("match x\n    1 =>\n        put \"one\"\n        x + 1\n    _ => 0\nend match").unwrap();
+        let prog = parse_source(
+            "match x\n    1 =>\n        put \"one\"\n        x + 1\n    _ => 0\nend match",
+        )
+        .unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
             Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
@@ -1956,7 +2195,10 @@ mod tests {
 
     #[test]
     fn test_parse_variant_pattern_without_colons() {
-        let prog = parse_source("match x\n    Ok(content) => put content\n    Error(e) => error e\nend match").unwrap();
+        let prog = parse_source(
+            "match x\n    Ok(content) => put content\n    Error(e) => error e\nend match",
+        )
+        .unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
             Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {

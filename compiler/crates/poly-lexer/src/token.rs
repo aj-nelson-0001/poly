@@ -121,15 +121,24 @@ pub enum TokenKind {
 
     // Type keywords
     Bool,
-    I8, U8,
-    I16, U16,
-    I32, U32,
-    I64, U64,
-    I128, U128,
-    F32, F64,
-    ISize, USize,
-    Char, String,
-    UChar, UString,
+    I8,
+    U8,
+    I16,
+    U16,
+    I32,
+    U32,
+    I64,
+    U64,
+    I128,
+    U128,
+    F32,
+    F64,
+    ISize,
+    USize,
+    Char,
+    String,
+    UChar,
+    UString,
     Byte,
     Ptr,
     Vec,
@@ -138,68 +147,68 @@ pub enum TokenKind {
 
     // === Operators ===
     // Arithmetic
-    Plus,       // +
-    Minus,      // -
-    Star,       // *
-    Slash,      // /
-    Percent,    // %
+    Plus,    // +
+    Minus,   // -
+    Star,    // *
+    Slash,   // /
+    Percent, // %
 
     // Comparison
-    EqEq,       // ==
-    NotEq,      // !=
-    Lt,         // <
-    Gt,         // >
-    LtEq,       // <=
-    GtEq,       // >=
+    EqEq,  // ==
+    NotEq, // !=
+    Lt,    // <
+    Gt,    // >
+    LtEq,  // <=
+    GtEq,  // >=
 
     // Logical
-    AndAnd,     // &&
-    OrOr,       // ||
-    Not,        // !
+    AndAnd, // &&
+    OrOr,   // ||
+    Not,    // !
 
     // Bitwise
-    Amp,        // &
-    Pipe,       // |
-    Caret,      // ^
-    Tilde,      // ~
-    LtLt,       // <<
-    GtGt,       // >>
+    Amp,   // &
+    Pipe,  // |
+    Caret, // ^
+    Tilde, // ~
+    LtLt,  // <<
+    GtGt,  // >>
 
     // Assignment
-    Eq,         // =
-    PlusEq,     // +=
-    MinusEq,    // -=
-    StarEq,     // *=
-    SlashEq,    // /=
-    PercentEq,  // %=
-    AmpEq,      // &=
-    PipeEq,     // |=
-    CaretEq,    // ^=
-    LtLtEq,     // <<=
-    GtGtEq,     // >>=
+    Eq,        // =
+    PlusEq,    // +=
+    MinusEq,   // -=
+    StarEq,    // *=
+    SlashEq,   // /=
+    PercentEq, // %=
+    AmpEq,     // &=
+    PipeEq,    // |=
+    CaretEq,   // ^=
+    LtLtEq,    // <<=
+    GtGtEq,    // >>=
 
     // Arrow & fat arrow
-    Arrow,      // ->
-    FatArrow,   // =>
+    Arrow,    // ->
+    FatArrow, // =>
 
     // Range
-    DotDot,     // ..
-    DotDotEq,   // ..=
+    DotDot,   // ..
+    DotDotEq, // ..=
 
     // Path separator
     ColonColon, // ::
 
     // === Delimiters ===
-    LParen,     // (
-    RParen,     // )
-    LBracket,   // [
-    RBracket,   // ]
-    LBrace,     // {
-    RBrace,     // }
-    Comma,      // ,
-    Semicolon,  // ;
-    Colon,      // :
-    Dot,        // .
+    LParen,    // (
+    RParen,    // )
+    LBracket,  // [
+    RBracket,  // ]
+    LBrace,    // {
+    RBrace,    // }
+    Comma,     // ,
+    Semicolon, // ;
+    Colon,     // :
+    Dot,       // .
 
     // Note: File I/O (<, >, >>) uses Lt, Gt, GtGt tokens.
     // The parser determines file I/O context from these tokens.

@@ -41,10 +41,8 @@ impl<'a> Lexer<'a> {
         while !self.is_at_end() {
             self.scan_token();
         }
-        self.tokens.push(Token::new(
-            TokenKind::Eof,
-            Span::new(self.pos, self.pos),
-        ));
+        self.tokens
+            .push(Token::new(TokenKind::Eof, Span::new(self.pos, self.pos)));
     }
 
     /// Get the tokens produced by lexing.
@@ -349,7 +347,8 @@ impl<'a> Lexer<'a> {
     }
 
     fn add_token(&mut self, kind: TokenKind, start: usize) {
-        self.tokens.push(Token::new(kind, Span::new(start, self.pos)));
+        self.tokens
+            .push(Token::new(kind, Span::new(start, self.pos)));
     }
 
     // === Scanners ===
@@ -743,10 +742,7 @@ mod tests {
         let source = "var x: i32 = 0xFF";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
-        assert_eq!(
-            tokens[5].kind,
-            TokenKind::IntLiteral("0xFF".to_string())
-        );
+        assert_eq!(tokens[5].kind, TokenKind::IntLiteral("0xFF".to_string()));
     }
 
     #[test]
@@ -754,10 +750,7 @@ mod tests {
         let source = "var x: i32 = 0b1010";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
-        assert_eq!(
-            tokens[5].kind,
-            TokenKind::IntLiteral("0b1010".to_string())
-        );
+        assert_eq!(tokens[5].kind, TokenKind::IntLiteral("0b1010".to_string()));
     }
 
     #[test]
@@ -807,10 +800,7 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Var);
-        assert_eq!(
-            tokens[1].kind,
-            TokenKind::Identifier("square".to_string())
-        );
+        assert_eq!(tokens[1].kind, TokenKind::Identifier("square".to_string()));
         assert_eq!(tokens[2].kind, TokenKind::Eq);
         assert_eq!(tokens[3].kind, TokenKind::Pipe);
     }
@@ -829,15 +819,9 @@ mod tests {
         let source = "Shape::Circle";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
-        assert_eq!(
-            tokens[0].kind,
-            TokenKind::Identifier("Shape".to_string())
-        );
+        assert_eq!(tokens[0].kind, TokenKind::Identifier("Shape".to_string()));
         assert_eq!(tokens[1].kind, TokenKind::ColonColon);
-        assert_eq!(
-            tokens[2].kind,
-            TokenKind::Identifier("Circle".to_string())
-        );
+        assert_eq!(tokens[2].kind, TokenKind::Identifier("Circle".to_string()));
     }
 
     #[test]

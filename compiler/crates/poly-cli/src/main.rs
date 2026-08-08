@@ -18,7 +18,10 @@ fn main() -> Result<()> {
         eprintln!("Options:");
         eprintln!("  --tokens    Print tokens and exit");
         eprintln!("  --ast       Print AST and exit");
-        eprintln!("  --check     Validate code without transpiling");
+        eprintln!("  --check     Validate code and verify Rust compilation");
+        eprintln!("  --format    Format output with rustfmt");
+        eprintln!("  --diff      Show diff between unformatted and formatted");
+        eprintln!("  --watch     Watch file and re-transpile on changes");
         eprintln!("  --repl      Start interactive REPL");
         eprintln!("  --help      Show this help message");
         eprintln!("  --version   Show version information");
@@ -34,7 +37,8 @@ fn main() -> Result<()> {
             println!("Options:");
             println!("  --tokens    Print tokens and exit");
             println!("  --ast       Print AST and exit");
-            println!("  --check     Validate code without transpiling");
+            println!("  --check     Validate code and verify Rust compilation");
+            println!("  --format    Format output with rustfmt");
             println!("  --repl      Start interactive REPL");
             println!("  --help      Show this help message");
             println!("  --version   Show version information");
@@ -137,8 +141,20 @@ fn main() -> Result<()> {
                 if !has_errors {
                     let transpiler = poly_transpiler::Transpiler::new();
                     match transpiler.transpile(&source) {
-                        Ok(_) => {
-                            println!("OK: {} statements parsed", program.statements.len());
+                        Ok(rust_code) => {
+                            // Verify generated Rust code compiles
+                            match verify_rust_compiles(&rust_code) {
+                                Ok(_) => {
+                                    println!(
+                                        "OK: {} statements parsed, Rust code compiles",
+                                        program.statements.len()
+                                    );
+                                }
+                                Err(e) => {
+                                    eprintln!("Rust compilation error: {}", e);
+                                    has_errors = true;
+                                }
+                            }
                         }
                         Err(e) => {
                             eprintln!("Transpile error: {}", e);
@@ -154,6 +170,67 @@ fn main() -> Result<()> {
 
             Ok(())
         }
+        "--watch" => {
+            if args.len() < 3 {
+                eprintln!("Error: --watch requires a file argument");
+                process::exit(1);
+            }
+            let path = PathBuf::from(&args[2]);
+            watch_file(&path)?;
+            Ok(())
+        }
+        "--diff" => {
+            if args.len() < 3 {
+                eprintln!("Error: --diff requires a file argument");
+                process::exit(1);
+            }
+            let path = PathBuf::from(&args[2]);
+            let source = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read file: {}", path.display()))?;
+
+            let transpiler = poly_transpiler::Transpiler::new();
+            let rust_code = transpiler
+                .transpile(&source)
+                .map_err(|e| anyhow::anyhow!(e))?;
+
+            // Get formatted version
+            match format_with_rustfmt(&rust_code) {
+                Some(formatted) => {
+                    println!("--- Original");
+                    println!("+++ Formatted");
+                    show_diff(&rust_code, &formatted);
+                }
+                None => {
+                    eprintln!("Warning: rustfmt not available");
+                    println!("{}", rust_code);
+                }
+            }
+            Ok(())
+        }
+        "--format" => {
+            if args.len() < 3 {
+                eprintln!("Error: --format requires a file argument");
+                process::exit(1);
+            }
+            let path = PathBuf::from(&args[2]);
+            let source = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read file: {}", path.display()))?;
+
+            let transpiler = poly_transpiler::Transpiler::new();
+            let rust_code = transpiler
+                .transpile(&source)
+                .map_err(|e| anyhow::anyhow!(e))?;
+
+            // Format with rustfmt
+            match format_with_rustfmt(&rust_code) {
+                Some(formatted) => println!("{}", formatted),
+                None => {
+                    eprintln!("Warning: rustfmt not available, outputting unformatted code");
+                    println!("{}", rust_code);
+                }
+            }
+            Ok(())
+        }
         "--repl" => {
             run_repl();
             Ok(())
@@ -164,10 +241,13 @@ fn main() -> Result<()> {
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
             let transpiler = poly_transpiler::Transpiler::new();
-            let rust_code = transpiler.transpile(&source)
+            let rust_code = transpiler
+                .transpile(&source)
                 .map_err(|e| anyhow::anyhow!(e))?;
 
-            println!("{}", rust_code);
+            // Try to format with rustfmt
+            let formatted = format_with_rustfmt(&rust_code).unwrap_or(rust_code);
+            println!("{}", formatted);
             Ok(())
         }
         other => {
@@ -193,8 +273,17 @@ fn run_repl() {
     const MAGENTA: &str = "\x1b[35m";
     const CYAN: &str = "\x1b[36m";
 
-    println!("{}{}Poly Language REPL{} v{}", BOLD, CYAN, RESET, env!("CARGO_PKG_VERSION"));
-    println!("{}Type Poly code and press Enter to transpile to Rust.{}", DIM, RESET);
+    println!(
+        "{}{}Poly Language REPL{} v{}",
+        BOLD,
+        CYAN,
+        RESET,
+        env!("CARGO_PKG_VERSION")
+    );
+    println!(
+        "{}Type Poly code and press Enter to transpile to Rust.{}",
+        DIM, RESET
+    );
     println!("{}Commands: :help, :tokens, :ast, :quit{}", DIM, RESET);
     println!();
 
@@ -234,9 +323,18 @@ fn run_repl() {
                     println!("  {}:{}    Exit the REPL", CYAN, RESET);
                     println!();
                     println!("{}Poly Syntax:{}", BOLD, RESET);
-                    println!("  {}var{} x: {}i32{} = {}", MAGENTA, RESET, BLUE, RESET, GREEN);
-                    println!("  {}put{} \"{}Hello, World!{}\"", MAGENTA, RESET, YELLOW, RESET);
-                    println!("  {}fn{} {}add{}(a: {}i32{}, b: {}i32{}): {}i32{}", MAGENTA, RESET, CYAN, RESET, BLUE, RESET, BLUE, RESET, BLUE, RESET);
+                    println!(
+                        "  {}var{} x: {}i32{} = {}",
+                        MAGENTA, RESET, BLUE, RESET, GREEN
+                    );
+                    println!(
+                        "  {}put{} \"{}Hello, World!{}\"",
+                        MAGENTA, RESET, YELLOW, RESET
+                    );
+                    println!(
+                        "  {}fn{} {}add{}(a: {}i32{}, b: {}i32{}): {}i32{}",
+                        MAGENTA, RESET, CYAN, RESET, BLUE, RESET, BLUE, RESET, BLUE, RESET
+                    );
                     println!("      {}return{} a {}+{} b", MAGENTA, RESET, RED, RESET);
                     println!("  {}end{} {}fn{}", MAGENTA, RESET, MAGENTA, RESET);
                     println!();
@@ -357,16 +455,86 @@ fn highlight_token(token_str: &str) -> String {
         format!("{}{}{}", YELLOW, token_str, RESET)
     } else if token_str.contains("IntLiteral") || token_str.contains("FloatLiteral") {
         format!("{}{}{}", BLUE, token_str, RESET)
-    } else if token_str.contains("Fn") || token_str.contains("Let") || token_str.contains("Var")
-        || token_str.contains("Return") || token_str.contains("If") || token_str.contains("Else")
-        || token_str.contains("While") || token_str.contains("For") || token_str.contains("Match")
-        || token_str.contains("End") || token_str.contains("Struct") || token_str.contains("Enum")
-        || token_str.contains("Break") || token_str.contains("Continue") {
+    } else if token_str.contains("Fn")
+        || token_str.contains("Let")
+        || token_str.contains("Var")
+        || token_str.contains("Return")
+        || token_str.contains("If")
+        || token_str.contains("Else")
+        || token_str.contains("While")
+        || token_str.contains("For")
+        || token_str.contains("Match")
+        || token_str.contains("End")
+        || token_str.contains("Struct")
+        || token_str.contains("Enum")
+        || token_str.contains("Break")
+        || token_str.contains("Continue")
+    {
         format!("{}{}{}", MAGENTA, token_str, RESET)
     } else if token_str.contains("Identifier") {
         format!("{}{}{}", CYAN, token_str, RESET)
     } else {
         format!("{}{}{}", GREEN, token_str, RESET)
+    }
+}
+
+/// Format Rust code with rustfmt
+fn format_with_rustfmt(code: &str) -> Option<String> {
+    use std::io::Write;
+    use std::process::Command;
+
+    let mut child = Command::new("rustfmt")
+        .arg("--edition")
+        .arg("2021")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .ok()?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(code.as_bytes()).ok()?;
+    }
+
+    let output = child.wait_with_output().ok()?;
+    if output.status.success() {
+        String::from_utf8(output.stdout).ok()
+    } else {
+        None // Fall back to unformatted code
+    }
+}
+
+/// Verify that Rust code compiles by running rustc --edition 2021 --crate-type lib
+fn verify_rust_compiles(code: &str) -> Result<()> {
+    use std::io::Write;
+    use std::process::Command;
+
+    // Write code to a temporary file
+    let temp_dir = std::env::temp_dir();
+    let temp_file = temp_dir.join("poly_check.rs");
+    std::fs::write(&temp_file, code).context("Failed to write temp file")?;
+
+    // Run rustc to check compilation
+    let output = Command::new("rustc")
+        .arg("--edition")
+        .arg("2021")
+        .arg("--crate-type")
+        .arg("lib")
+        .arg("--out-dir")
+        .arg(&temp_dir)
+        .arg(&temp_file)
+        .output()
+        .context("Failed to run rustc. Is Rust installed?")?;
+
+    // Clean up
+    let _ = std::fs::remove_file(&temp_file);
+    let _ = std::fs::remove_file(temp_dir.join("libpoly_check.rlib"));
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(anyhow::anyhow!(stderr.to_string()))
     }
 }
 
@@ -389,9 +557,11 @@ fn highlight_rust(line: &str) -> String {
     let mut result = line.to_string();
 
     // Apply highlighting to common patterns
-    let keywords = ["fn", "let", "mut", "return", "if", "else", "while", "for", "loop",
-                     "struct", "enum", "impl", "use", "pub", "const", "break", "continue",
-                     "match", "self", "Self", "true", "false"];
+    let keywords = [
+        "fn", "let", "mut", "return", "if", "else", "while", "for", "loop", "struct", "enum",
+        "impl", "use", "pub", "const", "break", "continue", "match", "self", "Self", "true",
+        "false",
+    ];
 
     for keyword in keywords {
         // Color keywords
@@ -422,4 +592,93 @@ fn highlight_rust(line: &str) -> String {
     }
 
     result
+}
+
+/// Show diff between original and formatted code
+fn show_diff(original: &str, formatted: &str) {
+    let original_lines: Vec<&str> = original.lines().collect();
+    let formatted_lines: Vec<&str> = formatted.lines().collect();
+
+    let mut i = 0;
+    let mut j = 0;
+
+    while i < original_lines.len() || j < formatted_lines.len() {
+        if i < original_lines.len() && j < formatted_lines.len() {
+            if original_lines[i] == formatted_lines[j] {
+                // Lines match, show with space prefix
+                println!(" {}", original_lines[i]);
+                i += 1;
+                j += 1;
+            } else {
+                // Lines differ, show removal and addition
+                println!("-{}", original_lines[i]);
+                println!("+{}", formatted_lines[j]);
+                i += 1;
+                j += 1;
+            }
+        } else if i < original_lines.len() {
+            println!("-{}", original_lines[i]);
+            i += 1;
+        } else {
+            println!("+{}", formatted_lines[j]);
+            j += 1;
+        }
+    }
+}
+
+/// Watch a file for changes and re-transpile
+fn watch_file(path: &std::path::Path) -> anyhow::Result<()> {
+    use std::time::Duration;
+
+    println!(
+        "Watching {} for changes... (Ctrl+C to stop)",
+        path.display()
+    );
+
+    let mut last_modified = std::fs::metadata(path).and_then(|m| m.modified()).ok();
+
+    loop {
+        std::thread::sleep(Duration::from_millis(500));
+
+        let current_modified = std::fs::metadata(path).and_then(|m| m.modified()).ok();
+
+        if current_modified != last_modified {
+            last_modified = current_modified;
+
+            // Read and transpile
+            match std::fs::read_to_string(path) {
+                Ok(source) => {
+                    let transpiler = poly_transpiler::Transpiler::new();
+                    match transpiler.transpile(&source) {
+                        Ok(rust_code) => match format_with_rustfmt(&rust_code) {
+                            Some(formatted) => {
+                                println!("\n--- Transpiled at {} ---", chrono_free_timestamp());
+                                println!("{}", formatted);
+                            }
+                            None => {
+                                println!("\n--- Transpiled at {} ---", chrono_free_timestamp());
+                                println!("{}", rust_code);
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("Transpile error: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Read error: {}", e);
+                }
+            }
+        }
+    }
+}
+
+/// Get a simple timestamp without chrono
+fn chrono_free_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    format!("{}", secs)
 }

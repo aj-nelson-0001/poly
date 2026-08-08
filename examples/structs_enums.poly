@@ -1,0 +1,20 @@
+# Poly Example: Structs and Enums
+
+struct Point
+    var x: f64
+    var y: f64
+end struct
+
+enum Color
+    Red
+    Green
+    Blue
+end enum
+
+fn main()
+    put "Structs and Enums Demo"
+    var p = Point { x: 3.0, y: 4.0 }
+    put "Point created"
+    var color = Color::Red
+    put "Color created"
+end fn

@@ -106,7 +106,13 @@ impl SourceMap {
     }
 
     /// Add a named symbol mapping.
-    pub fn add_symbol(&mut self, name: &str, source_line: usize, source_column: usize, length: usize) {
+    pub fn add_symbol(
+        &mut self,
+        name: &str,
+        source_line: usize,
+        source_column: usize,
+        length: usize,
+    ) {
         self.symbols.insert(
             name.to_string(),
             SourceLocation {
@@ -133,7 +139,11 @@ impl SourceMap {
     }
 
     /// Look up the source location for a target position (line and column).
-    pub fn lookup_target_position(&self, target_line: usize, _target_column: usize) -> Option<SourceMapping> {
+    pub fn lookup_target_position(
+        &self,
+        target_line: usize,
+        _target_column: usize,
+    ) -> Option<SourceMapping> {
         // Find the closest mapping
         self.mappings
             .iter()
@@ -197,7 +207,11 @@ impl SourceMap {
   "names": [{}],
   "mappings": "{}"
 }}"#,
-            names.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>().join(", "),
+            names
+                .iter()
+                .map(|n| format!("\"{}\"", n))
+                .collect::<Vec<_>>()
+                .join(", "),
             mappings_str
         )
     }
@@ -263,24 +277,24 @@ impl SourceMap {
     /// - Base64 alphabet: A-Z (0-25), a-z (26-51), 0-9 (52-61), + (62), / (63)
     fn encode_vlq(&self, value: i64) -> String {
         let mut result = String::new();
-        
+
         // Determine sign bit (1 for negative, 0 for positive)
         let sign_bit = if value < 0 { 1 } else { 0 };
-        let mut value = value.unsigned_abs() as u64;
-        
+        let mut value = value.unsigned_abs();
+
         // First sextet: add sign bit by shifting value left 1 and adding sign
         value = (value << 1) | sign_bit;
-        
+
         loop {
             // Extract 5 bits for continuation + data
             let mut byte = (value & 0x1F) as u8;
             value >>= 5;
-            
+
             // Set continuation bit if more data follows
             if value != 0 {
                 byte |= 0x20; // Set bit 5 (continuation)
             }
-            
+
             // Convert to Base64 character
             // Base64 alphabet: A-Z (0-25), a-z (26-51), 0-9 (52-61), + (62), / (63)
             let ch = match byte {
@@ -292,12 +306,12 @@ impl SourceMap {
                 _ => unreachable!(),
             };
             result.push(ch);
-            
+
             if value == 0 {
                 break;
             }
         }
-        
+
         result
     }
 
@@ -305,8 +319,14 @@ impl SourceMap {
     pub fn summary(&self) -> String {
         let mut result = String::new();
         result.push_str("Source Map Summary:\n");
-        result.push_str(&format!("  Source lines: {}\n", self.source.lines().count()));
-        result.push_str(&format!("  Target lines: {}\n", self.target.lines().count()));
+        result.push_str(&format!(
+            "  Source lines: {}\n",
+            self.source.lines().count()
+        ));
+        result.push_str(&format!(
+            "  Target lines: {}\n",
+            self.target.lines().count()
+        ));
         result.push_str(&format!("  Mappings: {}\n", self.mappings.len()));
         result.push_str(&format!("  Symbols: {}\n", self.symbols.len()));
         result.push_str("\nMappings:\n");
@@ -385,7 +405,7 @@ mod tests {
     #[test]
     fn test_vlq_encoding() {
         let source_map = SourceMap::new("", "");
-        
+
         // Test basic VLQ encoding
         assert_eq!(source_map.encode_vlq(0), "A");
         assert_eq!(source_map.encode_vlq(1), "C");

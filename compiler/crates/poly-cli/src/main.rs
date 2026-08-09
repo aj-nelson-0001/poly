@@ -284,7 +284,10 @@ fn run_repl() {
         "{}Type Poly code and press Enter to transpile to Rust.{}",
         DIM, RESET
     );
-    println!("{}Commands: :help, :tokens, :ast, :history, :clear, :quit{}", DIM, RESET);
+    println!(
+        "{}Commands: :help, :tokens, :ast, :history, :clear, :quit{}",
+        DIM, RESET
+    );
     println!();
 
     // Load command history
@@ -347,8 +350,14 @@ fn run_repl() {
                     println!();
                     println!("{}Tips:{}", BOLD, RESET);
                     println!("{}  - Use ↑/↓ arrows to navigate history{}", DIM, RESET);
-                    println!("{}  - Multi-line: continue on next line for blocks{}", DIM, RESET);
-                    println!("{}  - Use :tokens or :ast to inspect buffered input{}", DIM, RESET);
+                    println!(
+                        "{}  - Multi-line: continue on next line for blocks{}",
+                        DIM, RESET
+                    );
+                    println!(
+                        "{}  - Use :tokens or :ast to inspect buffered input{}",
+                        DIM, RESET
+                    );
                     println!();
                     continue;
                 }
@@ -429,7 +438,7 @@ fn run_repl() {
                 // Add to history if not empty
                 if !input.is_empty() {
                     // Avoid adding duplicates consecutively
-                    if history.last().map_or(true, |last| last != input) {
+                    if history.last().is_none_or(|last| last != input) {
                         history.push(input.to_string());
                         // Keep history reasonable size
                         if history.len() > 1000 {
@@ -505,10 +514,7 @@ fn load_history(path: &std::path::Path) -> Vec<String> {
 
 /// Save command history to file
 fn save_history(path: &std::path::Path, history: &[String]) {
-    let _ = std::fs::write(
-        path,
-        history.join("\n"),
-    );
+    let _ = std::fs::write(path, history.join("\n"));
 }
 
 /// Show helpful suggestions based on error message
@@ -519,35 +525,42 @@ fn show_error_suggestions(error: &str) {
     const YELLOW: &str = "\x1b[33m";
 
     if error.contains("Expected") && error.contains("end") {
-        println!("{}  💡 Tip: Blocks must end with 'end <keyword>' (e.g., end fn, end if){}", YELLOW, RESET);
+        println!(
+            "{}  💡 Tip: Blocks must end with 'end <keyword>' (e.g., end fn, end if){}",
+            YELLOW, RESET
+        );
     } else if error.contains("Unexpected token") {
-        println!("{}  💡 Tip: Check for missing semicolons or keywords{}
+        println!(
+            "{}  💡 Tip: Check for missing semicolons or keywords{}
 {}     Poly uses 'put' for output and 'get' for input{}
 {}     Function calls use: fn_name(args){}
-{}     Strings use double quotes: \"hello\"{}", YELLOW, RESET, DIM, RESET, DIM, RESET, DIM, RESET);
+{}     Strings use double quotes: \"hello\"{}",
+            YELLOW, RESET, DIM, RESET, DIM, RESET, DIM, RESET
+        );
     } else if error.contains("type") {
-        println!("{}  💡 Tip: Valid types: i32, f64, string, bool, char, u8, etc.{}
+        println!(
+            "{}  💡 Tip: Valid types: i32, f64, string, bool, char, u8, etc.{}
 {}     Or use custom types: MyStruct, MyEnum{}
-{}     Containers: Vec<T>, Option<T>, Result<T, E>{}", YELLOW, RESET, DIM, RESET, DIM, RESET);
+{}     Containers: Vec<T>, Option<T>, Result<T, E>{}",
+            YELLOW, RESET, DIM, RESET, DIM, RESET
+        );
     } else if error.contains("assignment") || error.contains("= ") {
-        println!("{}  💡 Tip: Use '=' for assignment, '==' for comparison{}
+        println!(
+            "{}  💡 Tip: Use '=' for assignment, '==' for comparison{}
 {}     var x = 42  # declaration{}
-{}     x = 10     # reassignment{}", YELLOW, RESET, DIM, RESET, DIM, RESET);
+{}     x = 10     # reassignment{}",
+            YELLOW, RESET, DIM, RESET, DIM, RESET
+        );
     }
 }
 
 /// Poly keywords for tab completion
 const POLY_KEYWORDS: &[&str] = &[
-    "var", "let", "const", "fn", "return", "if", "else", "end",
-    "while", "for", "in", "loop", "struct", "enum", "match", "trait",
-    "impl", "async", "await", "unsafe", "pub", "module", "use", "type",
-    "as", "try", "spawn", "move", "break", "continue",
-    // Types
-    "i8", "i16", "i32", "i64", "i128",
-    "u8", "u16", "u32", "u64", "u128",
-    "f32", "f64", "bool", "char", "string",
-    "usize", "isize", "byte", "bytes",
-    // Builtins
+    "var", "let", "const", "fn", "return", "if", "else", "end", "while", "for", "in", "loop",
+    "struct", "enum", "match", "trait", "impl", "async", "await", "unsafe", "pub", "module", "use",
+    "type", "as", "try", "spawn", "move", "break", "continue", // Types
+    "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "f32", "f64", "bool",
+    "char", "string", "usize", "isize", "byte", "bytes", // Builtins
     "put", "get", "error", "warn", "info",
 ];
 
@@ -625,7 +638,6 @@ fn format_with_rustfmt(code: &str) -> Option<String> {
 
 /// Verify that Rust code compiles by running rustc --edition 2021 --crate-type lib
 fn verify_rust_compiles(code: &str) -> Result<()> {
-    
     use std::process::Command;
 
     // Write code to a temporary file

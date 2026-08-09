@@ -80,7 +80,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Fn
                 | TokenKind::Struct
                 | TokenKind::Enum
-                |                TokenKind::Trait
+                | TokenKind::Trait
                 | TokenKind::Impl
                 | TokenKind::Module
                 | TokenKind::Use
@@ -1245,7 +1245,7 @@ impl<'a> Parser<'a> {
                     args: vec![
                         Expression::TupleLiteral(
                             vars.into_iter()
-                                .map(|v| Expression::Identifier(v))
+                                .map(Expression::Identifier)
                                 .collect(),
                         ),
                         collection,
@@ -2341,13 +2341,13 @@ mod tests {
 
     #[test]
     fn test_parse_nested_if() {
-        let prog = parse_source("if x > 0,\n    if y > 0,\n        put \"both positive\"\n    end if\nend if").unwrap();
+        let prog = parse_source(
+            "if x > 0,\n    if y > 0,\n        put \"both positive\"\n    end if\nend if",
+        )
+        .unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
-            Statement::ExpressionStatement(Expression::IfExpression {
-                then_block,
-                ..
-            }) => {
+            Statement::ExpressionStatement(Expression::IfExpression { then_block, .. }) => {
                 // The inner if should be in the then_block
                 assert_eq!(then_block.len(), 1);
             }
@@ -2376,7 +2376,8 @@ mod tests {
 
     #[test]
     fn test_parse_if_else_only() {
-        let prog = parse_source("if x > 0,\n    put x\nelse,\n    put \"negative\"\nend if").unwrap();
+        let prog =
+            parse_source("if x > 0,\n    put x\nelse,\n    put \"negative\"\nend if").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
             Statement::ExpressionStatement(Expression::IfExpression {

@@ -52,7 +52,10 @@ impl Transpiler {
     }
 
     /// Transpile Poly source code to Rust code with source map.
-    pub fn transpile_with_source_map(&mut self, source: &str) -> Result<(String, SourceMap), String> {
+    pub fn transpile_with_source_map(
+        &mut self,
+        source: &str,
+    ) -> Result<(String, SourceMap), String> {
         let (tokens, errors) = Lexer::lex(source);
         if !errors.is_empty() {
             return Err(format!("Lexer errors: {:?}", errors));
@@ -66,7 +69,7 @@ impl Transpiler {
 
         // Create source map
         let mut source_map = SourceMap::new(source, &rust_code);
-        
+
         // Add basic line mappings
         for (i, _) in rust_code.lines().enumerate() {
             source_map.add_mapping(i + 1, 1); // Simplified mapping
@@ -141,9 +144,10 @@ impl CodeGen {
         }
 
         // Check if there are any async functions or await expressions
-        let has_async = program.statements.iter().any(|stmt| {
-            matches!(stmt, Statement::FunctionDeclaration(f) if f.is_async)
-        });
+        let has_async = program
+            .statements
+            .iter()
+            .any(|stmt| matches!(stmt, Statement::FunctionDeclaration(f) if f.is_async));
 
         // Generate main function with remaining statements
         if !main_body.is_empty() {
@@ -413,7 +417,12 @@ impl CodeGen {
                 .map(|t| format!(" -> {}", self.gen_type(t)))
                 .unwrap_or_default();
 
-            self.writeln(&format!("fn {}({}){};", method.name, params.join(", "), ret));
+            self.writeln(&format!(
+                "fn {}({}){};",
+                method.name,
+                params.join(", "),
+                ret
+            ));
         }
 
         self.indent -= 1;
@@ -585,18 +594,18 @@ impl CodeGen {
                     let obj_str = self.gen_expression(object);
                     return format!("{}.await", obj_str);
                 }
-                
+
                 let obj_str = self.gen_expression(object);
                 let args_str: Vec<String> = args.iter().map(|a| self.gen_expression(a)).collect();
                 // Special handling for file methods
                 match method.as_str() {
                     "eof" => {
                         // file.eof() -> use a placeholder that compiles
-                        format!("false /* eof check - needs BufReader implementation */")
+                        "false /* eof check - needs BufReader implementation */".to_string()
                     }
                     "get_line" => {
                         // file.get_line() -> use a placeholder that compiles
-                        format!("String::new() /* get_line - needs BufReader implementation */")
+                        "String::new() /* get_line - needs BufReader implementation */".to_string()
                     }
                     "split" => {
                         let result = format!("{}.{}({})", obj_str, method, args_str.join(", "));
@@ -636,12 +645,20 @@ impl CodeGen {
                         // Check if this is an else-if chain
                         if else_stmts.len() == 1 {
                             if let Statement::ExpressionStatement(inner_expr) = &else_stmts[0] {
-                                if let Expression::IfExpression { condition: inner_cond, then_block: inner_then, else_block: inner_else } = inner_expr {
+                                if let Expression::IfExpression {
+                                    condition: inner_cond,
+                                    then_block: inner_then,
+                                    else_block: inner_else,
+                                } = inner_expr
+                                {
                                     // This is an else-if: generate } else if ... {
                                     let cond_str = self.gen_expression(inner_cond);
                                     result.push_str(&format!("}} else if {} {{\n", cond_str));
                                     for stmt in inner_then {
-                                        result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
+                                        result.push_str(&format!(
+                                            "    {}\n",
+                                            self.gen_statement_str(stmt)
+                                        ));
                                     }
                                     // Handle nested else-if or else recursively
                                     if let Some(nested_else) = inner_else {
@@ -1058,10 +1075,15 @@ impl CodeGen {
         if else_stmts.is_empty() {
             return "}\n".to_string();
         }
-        
+
         if else_stmts.len() == 1 {
             if let Statement::ExpressionStatement(inner_expr) = &else_stmts[0] {
-                if let Expression::IfExpression { condition, then_block, else_block } = inner_expr {
+                if let Expression::IfExpression {
+                    condition,
+                    then_block,
+                    else_block,
+                } = inner_expr
+                {
                     // This is an else-if: generate } else if ... {
                     let cond_str = self.gen_expression(condition);
                     let mut result = format!("}} else if {} {{\n", cond_str);
@@ -1083,7 +1105,7 @@ impl CodeGen {
                 }
             }
         }
-        
+
         // Regular else block
         let mut result = "} else {\n".to_string();
         for stmt in else_stmts {
@@ -1100,15 +1122,12 @@ impl CodeGen {
 
             // Check for --bytes flag
             for flag in &get_expr.flags {
-                match flag {
-                    GetFlag::Bytes(count) => {
-                        let count_str = self.gen_expression(count);
-                        return format!(
-                            "{{ let bytes = std::fs::read({}).unwrap(); bytes[..{}].to_vec() }}",
-                            path_str, count_str
-                        );
-                    }
-                    _ => {}
+                if let GetFlag::Bytes(count) = flag {
+                    let count_str = self.gen_expression(count);
+                    return format!(
+                        "{{ let bytes = std::fs::read({}).unwrap(); bytes[..{}].to_vec() }}",
+                        path_str, count_str
+                    );
                 }
             }
 
@@ -1317,11 +1336,13 @@ fn test_transpile_impl_declaration() {
 fn test_transpile_trait_impl() {
     let t = Transpiler::new();
     let result = t
-        .transpile(r#"impl Drawable for Circle
+        .transpile(
+            r#"impl Drawable for Circle
     fn draw(self)
         put "Drawing circle"
     end fn
-end impl"#)
+end impl"#,
+        )
         .unwrap();
     assert!(result.contains("impl Drawable for Circle"));
     assert!(result.contains("fn draw(self: Self)"));
@@ -1364,9 +1385,7 @@ fn test_transpile_await_expression() {
 #[test]
 fn test_transpile_simple_if() {
     let t = Transpiler::new();
-    let result = t
-        .transpile("if x > 0,\n    put x\nend if")
-        .unwrap();
+    let result = t.transpile("if x > 0,\n    put x\nend if").unwrap();
     assert!(result.contains("if (x > 0)"));
     assert!(result.contains("println!"));
 }
@@ -1407,9 +1426,7 @@ fn test_transpile_multiple_else_if() {
 #[test]
 fn test_transpile_inline_if() {
     let t = Transpiler::new();
-    let result = t
-        .transpile("var y = if x > 0, x else -x end if")
-        .unwrap();
+    let result = t.transpile("var y = if x > 0, x else -x end if").unwrap();
     assert!(result.contains("if (x > 0)"));
     assert!(result.contains("} else {"));
 }

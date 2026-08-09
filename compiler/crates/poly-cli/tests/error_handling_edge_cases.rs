@@ -26,7 +26,10 @@ fn test_lexer_unterminated_multiline_string() {
 line2
 line3"#;
     let (_tokens, errors) = Lexer::lex(source);
-    assert!(!errors.is_empty(), "Should detect unterminated multiline string");
+    assert!(
+        !errors.is_empty(),
+        "Should detect unterminated multiline string"
+    );
 }
 
 #[test]
@@ -54,7 +57,10 @@ fn test_lexer_invalid_hex_literal() {
 fn test_lexer_unterminated_block_comment() {
     let source = "/* This comment never ends\nvar x = 1";
     let (_tokens, errors) = Lexer::lex(source);
-    assert!(!errors.is_empty(), "Should detect unterminated block comment");
+    assert!(
+        !errors.is_empty(),
+        "Should detect unterminated block comment"
+    );
 }
 
 #[test]
@@ -70,21 +76,30 @@ fn test_lexer_empty_input() {
     let source = "";
     let (tokens, errors) = Lexer::lex(source);
     assert!(errors.is_empty(), "Empty input should have no errors");
-    assert!(tokens.is_empty() || tokens.len() == 1, "Empty input should produce minimal tokens");
+    assert!(
+        tokens.is_empty() || tokens.len() == 1,
+        "Empty input should produce minimal tokens"
+    );
 }
 
 #[test]
 fn test_lexer_only_whitespace() {
     let source = "   \t\t\n\n  ";
     let (_tokens, errors) = Lexer::lex(source);
-    assert!(errors.is_empty(), "Whitespace-only input should have no errors");
+    assert!(
+        errors.is_empty(),
+        "Whitespace-only input should have no errors"
+    );
 }
 
 #[test]
 fn test_lexer_only_newlines() {
     let source = "\n\n\n\n";
     let (_tokens, errors) = Lexer::lex(source);
-    assert!(errors.is_empty(), "Newline-only input should have no errors");
+    assert!(
+        errors.is_empty(),
+        "Newline-only input should have no errors"
+    );
 }
 
 #[test]
@@ -115,7 +130,13 @@ fn test_lexer_multiple_consecutive_operators() {
     let source = "var x = a ++ b";
     let (tokens, errors) = Lexer::lex(source);
     // '++' is not a valid operator in Poly
-    assert!(!errors.is_empty() || tokens.iter().any(|t| matches!(t.kind, poly_lexer::token::TokenKind::Identifier(_))), "Should handle invalid operator");
+    assert!(
+        !errors.is_empty()
+            || tokens
+                .iter()
+                .any(|t| matches!(t.kind, poly_lexer::token::TokenKind::Identifier(_))),
+        "Should handle invalid operator"
+    );
 }
 
 // =============================================================================
@@ -137,7 +158,10 @@ fn test_parser_missing_identifier_in_var_declaration() {
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
-    assert!(result.is_err(), "Should fail to parse var without identifier");
+    assert!(
+        result.is_err(),
+        "Should fail to parse var without identifier"
+    );
 }
 
 #[test]
@@ -146,7 +170,10 @@ fn test_parser_missing_function_name() {
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
-    assert!(result.is_err(), "Should fail to parse function without name");
+    assert!(
+        result.is_err(),
+        "Should fail to parse function without name"
+    );
 }
 
 #[test]
@@ -201,7 +228,10 @@ fn test_parser_missing_while_condition() {
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
-    assert!(result.is_err(), "Should fail to parse while without condition");
+    assert!(
+        result.is_err(),
+        "Should fail to parse while without condition"
+    );
 }
 
 #[test]
@@ -210,7 +240,10 @@ fn test_parser_unmatched_parentheses() {
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
-    assert!(result.is_err(), "Should fail to parse unmatched parentheses");
+    assert!(
+        result.is_err(),
+        "Should fail to parse unmatched parentheses"
+    );
 }
 
 #[test]
@@ -237,7 +270,10 @@ fn test_parser_missing_colon_in_type_annotation() {
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
-    assert!(result.is_err(), "Should fail without colon in type annotation");
+    assert!(
+        result.is_err(),
+        "Should fail without colon in type annotation"
+    );
 }
 
 #[test]
@@ -294,25 +330,37 @@ fn test_parser_multiple_statements_on_one_line() {
 fn test_transpiler_empty_program() {
     let t = Transpiler::new();
     let result = t.transpile("");
-    assert!(result.is_ok(), "Empty program should transpile successfully");
+    assert!(
+        result.is_ok(),
+        "Empty program should transpile successfully"
+    );
     let rust_code = result.unwrap();
     // Empty programs may or may not have main function
     // Just ensure it's valid Rust
-    assert!(rust_code.contains("// Generated from Poly source code"), "Should have generated header");
+    assert!(
+        rust_code.contains("// Generated from Poly source code"),
+        "Should have generated header"
+    );
 }
 
 #[test]
 fn test_transpiler_whitespace_only() {
     let t = Transpiler::new();
     let result = t.transpile("   \t\t\n\n  ");
-    assert!(result.is_ok(), "Whitespace-only should transpile successfully");
+    assert!(
+        result.is_ok(),
+        "Whitespace-only should transpile successfully"
+    );
 }
 
 #[test]
 fn test_transpiler_comments_only() {
     let t = Transpiler::new();
     let result = t.transpile("// This is a comment\n/* Block comment */");
-    assert!(result.is_ok(), "Comments-only should transpile successfully");
+    assert!(
+        result.is_ok(),
+        "Comments-only should transpile successfully"
+    );
 }
 
 #[test]
@@ -522,7 +570,10 @@ var p = Point { x: 1.0, y: 2.0 }
     let (program, _errors) = parser.parse_with_recovery();
 
     // Should recover and parse struct, enum, and final var
-    assert!(program.statements.len() >= 3, "Should parse multiple structures");
+    assert!(
+        program.statements.len() >= 3,
+        "Should parse multiple structures"
+    );
 }
 
 // =============================================================================

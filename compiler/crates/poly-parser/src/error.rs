@@ -21,7 +21,11 @@ impl ParseError {
         }
     }
 
-    pub fn with_suggestion(message: impl Into<String>, span: Span, suggestion: impl Into<String>) -> Self {
+    pub fn with_suggestion(
+        message: impl Into<String>,
+        span: Span,
+        suggestion: impl Into<String>,
+    ) -> Self {
         Self {
             message: message.into(),
             span,
@@ -38,7 +42,10 @@ impl ParseError {
         let msg = self.message.to_lowercase();
 
         self.suggestion = if msg.contains("expected 'end'") || msg.contains("expected end") {
-            Some("Poly uses 'end' to close blocks. Did you forget 'end fn', 'end if', etc.?".to_string())
+            Some(
+                "Poly uses 'end' to close blocks. Did you forget 'end fn', 'end if', etc.?"
+                    .to_string(),
+            )
         } else if msg.contains("expected identifier") && msg.contains("after 'fn'") {
             Some("Function declarations need a name: fn my_function(...)".to_string())
         } else if msg.contains("expected ':'") && msg.contains("parameter") {

@@ -1,0 +1,105 @@
+# Sorting algorithms using if-else-if chains
+
+# Bubble sort comparison function
+fn should_swap(a: i32, b: i32, ascending: bool): bool
+    if ascending,
+        return a > b
+    else,
+        return a < b
+    end if
+end fn
+
+# Simple selection sort
+fn find_min_index(arr: Vec<i32>, start: i32): i32
+    var min_idx = start
+    var i = start + 1
+    while i < arr.len()
+        if arr[i] < arr[min_idx],
+            min_idx = i
+        end if
+        i = i + 1
+    end while
+    return min_idx
+end fn
+
+# Classification based on multiple conditions
+fn classify_number(n: i32): string
+    if n > 0,
+        if n % 2 == 0,
+            return "positive even"
+        else,
+            return "positive odd"
+        end if
+    else if n < 0,
+        if n % 2 == 0,
+            return "negative even"
+        else,
+            return "negative odd"
+        end if
+    else,
+        return "zero"
+    end if
+end fn
+
+# Temperature range classifier
+fn get_temperature_range(temp: f64): string
+    if temp < -20.0,
+        return "extremely cold"
+    else if temp < 0.0,
+        return "very cold"
+    else if temp < 10.0,
+        return "cold"
+    else if temp < 20.0,
+        return "cool"
+    else if temp < 30.0,
+        return "warm"
+    else if temp < 40.0,
+        return "hot"
+    else,
+        return "extremely hot"
+    end if
+end fn
+
+# Day of week classifier
+fn get_day_type(day: i32): string
+    if day == 0,
+        return "Sunday"
+    else if day == 1,
+        return "Monday"
+    else if day == 2,
+        return "Tuesday"
+    else if day == 3,
+        return "Wednesday"
+    else if day == 4,
+        return "Thursday"
+    else if day == 5,
+        return "Friday"
+    else if day == 6,
+        return "Saturday"
+    else,
+        return "Invalid day"
+    end if
+end fn
+
+# Main function
+fn main()
+    put "=== Sorting and Classification Examples ==="
+    put ""
+    
+    # Test number classification
+    put "Number -4: " + classify_number(-4)
+    put "Number 0: " + classify_number(0)
+    put "Number 7: " + classify_number(7)
+    put ""
+    
+    # Test temperature range
+    put "Temp -25: " + get_temperature_range(-25.0)
+    put "Temp 15: " + get_temperature_range(15.0)
+    put "Temp 35: " + get_temperature_range(35.0)
+    put ""
+    
+    # Test day of week
+    put "Day 0: " + get_day_type(0)
+    put "Day 5: " + get_day_type(5)
+    put "Day 7: " + get_day_type(7)
+end fn

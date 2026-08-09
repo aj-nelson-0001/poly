@@ -1,0 +1,116 @@
+# State machine example using if-else-if chains
+
+# Traffic light state machine
+fn get_traffic_light_action(state: i32): string
+    if state == 0,
+        return "Stop"
+    else if state == 1,
+        return "Prepare to go"
+    else if state == 2,
+        return "Go"
+    else if state == 3,
+        return "Prepare to stop"
+    else,
+        return "Invalid state"
+    end if
+end fn
+
+# Game state machine
+fn get_game_status(state: i32, score: i32): string
+    if state == 0,
+        return "Menu"
+    else if state == 1,
+        if score < 100,
+            return "Playing - Low Score"
+        else if score < 500,
+            return "Playing - Medium Score"
+        else if score < 1000,
+            return "Playing - High Score"
+        else,
+            return "Playing - Expert"
+        end if
+    else if state == 2,
+        return "Paused"
+    else if state == 3,
+        if score > 1000,
+            return "Game Over - Winner!"
+        else,
+            return "Game Over - Try Again"
+        end if
+    else,
+        return "Unknown State"
+    end if
+end fn
+
+# Order status classifier
+fn get_order_status(status: i32, days: i32): string
+    if status == 0,
+        return "Pending"
+    else if status == 1,
+        return "Processing"
+    else if status == 2,
+        if days > 7,
+            return "Shipped - Delayed"
+        else if days > 3,
+            return "Shipped - On Time"
+        else,
+            return "Shipped - Early"
+        end if
+    else if status == 3,
+        return "Delivered"
+    else if status == 4,
+        return "Cancelled"
+    else,
+        return "Unknown Status"
+    end if
+end fn
+
+# User permission checker
+fn check_permission(role: i32, resource: i32): string
+    if role == 0,
+        return "No Access"
+    else if role == 1,
+        if resource == 0,
+            return "Read Access"
+        else,
+            return "No Access"
+        end if
+    else if role == 2,
+        if resource == 0,
+            return "Read Access"
+        else if resource == 1,
+            return "Write Access"
+        else,
+            return "No Access"
+        end if
+    else if role == 3,
+        return "Full Access"
+    else,
+        return "Invalid Role"
+    end if
+end fn
+
+# Main function
+fn main()
+    put "=== State Machine Examples ==="
+    put ""
+    
+    # Test traffic light
+    put "Traffic Light State 0: " + get_traffic_light_action(0)
+    put "Traffic Light State 2: " + get_traffic_light_action(2)
+    put ""
+    
+    # Test game status
+    put "Game State 1, Score 750: " + get_game_status(1, 750)
+    put "Game State 3, Score 1500: " + get_game_status(3, 1500)
+    put ""
+    
+    # Test order status
+    put "Order Status 2, Days 5: " + get_order_status(2, 5)
+    put "Order Status 2, Days 10: " + get_order_status(2, 10)
+    put ""
+    
+    # Test permissions
+    put "Role 2, Resource 1: " + check_permission(2, 1)
+    put "Role 1, Resource 1: " + check_permission(1, 1)
+end fn

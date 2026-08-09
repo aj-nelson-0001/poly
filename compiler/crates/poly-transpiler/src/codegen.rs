@@ -580,6 +580,12 @@ impl CodeGen {
                 method,
                 args,
             } => {
+                // Check for await first (special case)
+                if method == "await" {
+                    let obj_str = self.gen_expression(object);
+                    return format!("{}.await", obj_str);
+                }
+                
                 let obj_str = self.gen_expression(object);
                 let args_str: Vec<String> = args.iter().map(|a| self.gen_expression(a)).collect();
                 // Special handling for file methods
@@ -765,14 +771,6 @@ impl CodeGen {
             Expression::TryExpression(expr) => {
                 let e = self.gen_expression(expr);
                 format!("{}?", e)
-            }
-            Expression::MethodCall {
-                object,
-                method,
-                args,
-            } if method == "await" => {
-                let obj_str = self.gen_expression(object);
-                format!("{}.await", obj_str)
             }
             Expression::GetExpression(get_expr) => self.gen_get_expression(get_expr),
             Expression::MatchExpression { scrutinee, arms } => {
@@ -1222,4 +1220,73 @@ fn test_transpile_split_with_collect() {
         .unwrap();
     assert!(result.contains("split"));
     assert!(result.contains("collect"));
+}
+
+// =============================================================================
+// Trait and Impl Tests
+// =============================================================================
+
+#[test]
+fn test_transpile_trait_declaration() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile("trait Drawable\n    fn draw(self)\n    fn area(self): f32\nend trait")
+        .unwrap();
+    assert!(result.contains("trait Drawable"));
+    assert!(result.contains("fn draw(self: Self);"));
+    assert!(result.contains("fn area(self: Self) -> f32;"));
+}
+
+#[test]
+fn test_transpile_impl_declaration() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile("impl Circle\n    fn new(x: f32, y: f32): Circle\n        return Circle { x: x, y: y }\n    end fn\nend impl")
+        .unwrap();
+    assert!(result.contains("impl Circle"));
+    assert!(result.contains("fn new(x: f32, y: f32) -> Circle"));
+}
+
+#[test]
+fn test_transpile_trait_impl() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile(r#"impl Drawable for Circle
+    fn draw(self)
+        put "Drawing circle"
+    end fn
+end impl"#)
+        .unwrap();
+    assert!(result.contains("impl Drawable for Circle"));
+    assert!(result.contains("fn draw(self: Self)"));
+}
+
+// =============================================================================
+// Async/Await Tests
+// =============================================================================
+
+#[test]
+fn test_transpile_async_function() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile("async fn fetch_data(url: ustring): ustring\n    return u\"data\"\nend fn")
+        .unwrap();
+    assert!(result.contains("async fn fetch_data(url: String) -> String"));
+}
+
+#[test]
+fn test_transpile_async_main() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile("async fn main_task()\n    put u\"Hello\"\nend fn\n\nvar x = 1")
+        .unwrap();
+    assert!(result.contains("#[tokio::main]"));
+    assert!(result.contains("async fn main_task()"));
+}
+
+#[test]
+fn test_transpile_await_expression() {
+    let t = Transpiler::new();
+    let result = t.transpile("var x = fetch_data().await").unwrap();
+    assert!(result.contains("fetch_data().await"));
 }

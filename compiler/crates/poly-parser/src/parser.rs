@@ -78,7 +78,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Fn
                 | TokenKind::Struct
                 | TokenKind::Enum
-                | TokenKind::Trait
+                |                TokenKind::Trait
                 | TokenKind::Impl
                 | TokenKind::Module
                 | TokenKind::Use
@@ -94,7 +94,8 @@ impl<'a> Parser<'a> {
                 | TokenKind::If
                 | TokenKind::Match
                 | TokenKind::Loop
-                | TokenKind::For => {
+                | TokenKind::For
+                | TokenKind::Async => {
                     return;
                 }
                 // End tokens (skip nested blocks)
@@ -179,7 +180,7 @@ impl<'a> Parser<'a> {
             TokenKind::Var => self.parse_var_declaration(),
             TokenKind::Let => self.parse_let_declaration(),
             TokenKind::Const => self.parse_const_declaration(),
-            TokenKind::Fn => self
+            TokenKind::Fn | TokenKind::Async => self
                 .parse_function_declaration()
                 .map(Statement::FunctionDeclaration),
             TokenKind::Struct => self
@@ -405,14 +406,23 @@ impl<'a> Parser<'a> {
         }
         loop {
             let name = self.expect_identifier()?;
-            self.expect(&TokenKind::Colon)?;
-            let ty = self.parse_type()?;
-            let default = if self.match_token(&TokenKind::Eq) {
-                Some(self.parse_expression()?)
+            // Handle 'self' as a special case (no type annotation needed)
+            if name == "self" {
+                params.push(Parameter {
+                    name,
+                    ty: TypeAnnotation::Named("Self".into()),
+                    default: None,
+                });
             } else {
-                None
-            };
-            params.push(Parameter { name, ty, default });
+                self.expect(&TokenKind::Colon)?;
+                let ty = self.parse_type()?;
+                let default = if self.match_token(&TokenKind::Eq) {
+                    Some(self.parse_expression()?)
+                } else {
+                    None
+                };
+                params.push(Parameter { name, ty, default });
+            }
             if !self.match_token(&TokenKind::Comma) {
                 break;
             }
@@ -563,7 +573,26 @@ impl<'a> Parser<'a> {
         let mut methods = Vec::new();
 
         while !self.match_token(&TokenKind::End) {
-            methods.push(self.parse_function_declaration()?);
+            // Check for async modifier
+            let is_async = self.match_token(&TokenKind::Async);
+            self.expect(&TokenKind::Fn)?;
+            let method_name = self.expect_identifier()?;
+            self.expect(&TokenKind::LParen)?;
+            let params = self.parse_params()?;
+            self.expect(&TokenKind::RParen)?;
+            let return_type = if self.match_token(&TokenKind::Colon) {
+                Some(self.parse_type()?)
+            } else {
+                None
+            };
+            // Trait methods don't have bodies
+            methods.push(FunctionDecl {
+                name: method_name,
+                params,
+                return_type,
+                body: None,
+                is_async,
+            });
         }
         // consume 'trait'
         self.expect(&TokenKind::Trait)?;
@@ -590,7 +619,41 @@ impl<'a> Parser<'a> {
 
         let mut methods = Vec::new();
         while !self.match_token(&TokenKind::End) {
-            methods.push(self.parse_function_declaration()?);
+            // Check for async modifier
+            let is_async = self.match_token(&TokenKind::Async);
+            self.expect(&TokenKind::Fn)?;
+            let method_name = self.expect_identifier()?;
+            self.expect(&TokenKind::LParen)?;
+            let params = self.parse_params()?;
+            self.expect(&TokenKind::RParen)?;
+            let return_type = if self.match_token(&TokenKind::Colon) {
+                Some(self.parse_type()?)
+            } else {
+                None
+            };
+            // Parse method body
+            let body = if self.peek() == &TokenKind::LBrace {
+                self.advance();
+                let stmts = self.parse_block()?;
+                self.expect(&TokenKind::RBrace)?;
+                Some(stmts)
+            } else if self.peek() == &TokenKind::End {
+                None
+            } else {
+                let stmts = self.parse_block()?;
+                if self.peek() == &TokenKind::End {
+                    self.advance();
+                    self.expect(&TokenKind::Fn)?;
+                }
+                Some(stmts)
+            };
+            methods.push(FunctionDecl {
+                name: method_name,
+                params,
+                return_type,
+                body,
+                is_async,
+            });
         }
         // consume 'impl'
         self.expect(&TokenKind::Impl)?;
@@ -1294,11 +1357,21 @@ impl<'a> Parser<'a> {
             match self.peek() {
                 TokenKind::Dot => {
                     self.advance();
-                    let field = self.expect_identifier()?;
-                    expr = Expression::FieldAccess {
-                        object: Box::new(expr),
-                        field,
-                    };
+                    // Check for .await
+                    if *self.peek() == TokenKind::Await {
+                        self.advance(); // consume 'await'
+                        expr = Expression::MethodCall {
+                            object: Box::new(expr),
+                            method: "await".into(),
+                            args: vec![],
+                        };
+                    } else {
+                        let field = self.expect_identifier()?;
+                        expr = Expression::FieldAccess {
+                            object: Box::new(expr),
+                            field,
+                        };
+                    }
                 }
                 TokenKind::LParen => {
                     self.advance();

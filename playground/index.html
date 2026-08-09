@@ -420,7 +420,7 @@ fn main()
     put "10 + 20 = " + str(result)
 end fn`,
             fibonacci: `fn fibonacci(n: i32): i32
-    if n <= 1 then
+    if n <= 1,
         return n
     end if
     return fibonacci(n - 1) + fibonacci(n - 2)
@@ -512,7 +512,7 @@ end fn`
 
         // Simple syntax highlighting for display
         function highlightPoly(code) {
-            const keywords = ['var', 'let', 'const', 'fn', 'return', 'if', 'then', 'else', 'end', 
+            const keywords = ['var', 'let', 'const', 'fn', 'return', 'if', 'else', 'end', 
                             'while', 'for', 'in', 'loop', 'struct', 'enum', 'match', 'trait', 
                             'impl', 'async', 'await', 'unsafe', 'pub', 'module', 'use', 'type'];
             const types = ['i8', 'i16', 'i32', 'i64', 'i128', 'u8', 'u16', 'u32', 'u64', 'u128',

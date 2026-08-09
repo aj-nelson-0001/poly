@@ -1,0 +1,97 @@
+# Complex if-else-if chain examples
+
+# Grade calculator
+fn calculate_grade(score: i32): ustring
+    if score >= 90,
+        return u"A+"
+    else if score >= 80,
+        return u"A"
+    else if score >= 70,
+        return u"B"
+    else if score >= 60,
+        return u"C"
+    else if score >= 50,
+        return u"D"
+    else,
+        return u"F"
+    end if
+end fn
+
+# Temperature classifier
+fn classify_temperature(temp: f64): ustring
+    if temp > 40.0,
+        return u"Extremely Hot"
+    else if temp > 30.0,
+        return u"Hot"
+    else if temp > 20.0,
+        return u"Warm"
+    else if temp > 10.0,
+        return u"Cool"
+    else if temp > 0.0,
+        return u"Cold"
+    else,
+        return u"Freezing"
+    end if
+end fn
+
+# Nested conditions
+fn categorize_number(n: i32): ustring
+    if n > 0,
+        if n % 2 == 0,
+            return u"Positive Even"
+        else,
+            return u"Positive Odd"
+        end if
+    else if n < 0,
+        if n % 2 == 0,
+            return u"Negative Even"
+        else,
+            return u"Negative Odd"
+        end if
+    else,
+        return u"Zero"
+    end if
+end fn
+
+# BMI calculator with nested categories
+fn calculate_bmi(weight_kg: f64, height_m: f64): ustring
+    var bmi = weight_kg / (height_m * height_m)
+    
+    if bmi < 18.5,
+        return u"Underweight"
+    else if bmi < 25.0,
+        return u"Normal weight"
+    else if bmi < 30.0,
+        return u"Overweight"
+    else,
+        return u"Obese"
+    end if
+end fn
+
+# Main function
+fn main()
+    put "=== If-Else-If Chain Examples ==="
+    put ""
+    
+    # Test grade calculator
+    put "Grade for score 85: " + calculate_grade(85)
+    put "Grade for score 92: " + calculate_grade(92)
+    put "Grade for score 45: " + calculate_grade(45)
+    put ""
+    
+    # Test temperature classifier
+    put "Temperature 35.0: " + classify_temperature(35.0)
+    put "Temperature 15.0: " + classify_temperature(15.0)
+    put "Temperature -5.0: " + classify_temperature(-5.0)
+    put ""
+    
+    # Test nested conditions
+    put "Number 4: " + categorize_number(4)
+    put "Number -3: " + categorize_number(-3)
+    put "Number 0: " + categorize_number(0)
+    put ""
+    
+    # Test BMI calculator
+    put "BMI (70kg, 1.75m): " + calculate_bmi(70.0, 1.75)
+    put "BMI (90kg, 1.80m): " + calculate_bmi(90.0, 1.80)
+end fn

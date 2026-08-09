@@ -625,24 +625,50 @@ impl CodeGen {
                 else_block,
             } => {
                 let cond = self.gen_expression(condition);
-                let mut result = format!("if {} {{", cond);
+                let mut result = format!("if {} {{\n", cond);
                 if !then_block.is_empty() {
-                    result.push('\n');
                     for stmt in then_block {
                         result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
                     }
                 }
                 if let Some(else_stmts) = else_block {
                     if !else_stmts.is_empty() {
-                        result.push_str("}} else {{\n");
+                        // Check if this is an else-if chain
+                        if else_stmts.len() == 1 {
+                            if let Statement::ExpressionStatement(inner_expr) = &else_stmts[0] {
+                                if let Expression::IfExpression { condition: inner_cond, then_block: inner_then, else_block: inner_else } = inner_expr {
+                                    // This is an else-if: generate } else if ... {
+                                    let cond_str = self.gen_expression(inner_cond);
+                                    result.push_str(&format!("}} else if {} {{\n", cond_str));
+                                    for stmt in inner_then {
+                                        result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
+                                    }
+                                    // Handle nested else-if or else recursively
+                                    if let Some(nested_else) = inner_else {
+                                        if !nested_else.is_empty() {
+                                            // Recursively generate the else part
+                                            let else_result = self.gen_else_chain(nested_else);
+                                            result.push_str(&else_result);
+                                        } else {
+                                            result.push_str("}\n");
+                                        }
+                                    } else {
+                                        result.push_str("}\n");
+                                    }
+                                    return result;
+                                }
+                            }
+                        }
+                        result.push_str("} else {\n");
                         for stmt in else_stmts {
                             result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
                         }
+                        result.push_str("}\n");
                     } else {
-                        result.push('}');
+                        result.push_str("}\n");
                     }
                 } else {
-                    result.push('}');
+                    result.push_str("}\n");
                 }
                 result
             }
@@ -1025,6 +1051,46 @@ impl CodeGen {
                 format!("{} {{ {} }}", name, field_strs.join(", "))
             }
         }
+    }
+
+    /// Generate the else/else-if chain for an if expression
+    fn gen_else_chain(&self, else_stmts: &[Statement]) -> String {
+        if else_stmts.is_empty() {
+            return "}\n".to_string();
+        }
+        
+        if else_stmts.len() == 1 {
+            if let Statement::ExpressionStatement(inner_expr) = &else_stmts[0] {
+                if let Expression::IfExpression { condition, then_block, else_block } = inner_expr {
+                    // This is an else-if: generate } else if ... {
+                    let cond_str = self.gen_expression(condition);
+                    let mut result = format!("}} else if {} {{\n", cond_str);
+                    for stmt in then_block {
+                        result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
+                    }
+                    // Handle nested else-if or else
+                    if let Some(nested_else) = else_block {
+                        if !nested_else.is_empty() {
+                            let else_result = self.gen_else_chain(nested_else);
+                            result.push_str(&else_result);
+                        } else {
+                            result.push_str("}\n");
+                        }
+                    } else {
+                        result.push_str("}\n");
+                    }
+                    return result;
+                }
+            }
+        }
+        
+        // Regular else block
+        let mut result = "} else {\n".to_string();
+        for stmt in else_stmts {
+            result.push_str(&format!("    {}\n", self.gen_statement_str(stmt)));
+        }
+        result.push_str("}\n");
+        result
     }
 
     fn gen_get_expression(&self, get_expr: &GetExpr) -> String {

@@ -1,0 +1,52 @@
+# =============================================================================
+# Trait & Async/Await Demo
+# =============================================================================
+
+# Basic trait
+trait Greetable
+    fn greet(self): ustring
+end trait
+
+# Struct
+struct Person
+    var name: ustring
+    var age: i32
+end struct
+
+# Implement trait
+impl Greetable for Person
+    fn greet(self): ustring
+        return u"Hello, I'm " + self.name
+    end fn
+end impl
+
+# Async trait
+trait DataFetcher
+    async fn fetch(self, url: ustring): Result<ustring, ustring>
+end trait
+
+# Struct with async trait
+struct HttpClient
+    var base_url: ustring
+end struct
+
+impl DataFetcher for HttpClient
+    async fn fetch(self, url: ustring): Result<ustring, ustring>
+        put u"Fetching: " + self.base_url + url
+        var response = http_get(self.base_url + url).await
+        return response
+    end fn
+end impl
+
+# Main
+fn main()
+    put u"=== Trait & Async Demo ==="
+    
+    var person = Person { name: u"Alice", age: 30 }
+    put person.greet()
+    
+    var client = HttpClient { base_url: u"https://api.example.com" }
+    # var result = client.fetch(u"/users").await
+    
+    put u"=== Done ==="
+end fn

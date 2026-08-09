@@ -1,0 +1,137 @@
+# =============================================================================
+# Async Patterns Examples
+# =============================================================================
+
+# =============================================================================
+# 1. Basic Async/Await
+# =============================================================================
+
+async fn simple_async(): ustring
+    put u"Starting async operation..."
+    var result = delay(100).await
+    put u"Operation complete!"
+    return u"Result: " + result
+end fn
+
+# =============================================================================
+# 2. Async with Error Handling
+# =============================================================================
+
+async fn fetch_with_retry(url: ustring, max_retries: i32): Result<ustring, ustring>
+    var attempt: i32 = 0
+    
+    while attempt < max_retries
+        attempt = attempt + 1
+        put u"Attempt " + attempt.to_string() + u"..."
+        
+        match http_get(url).await
+            Ok(data) => return Ok(data)
+            Error(e) => 
+                if attempt < max_retries then
+                    put u"Failed, retrying..."
+                    delay(1000).await
+                end if
+        end match
+    end while
+    
+    return Error(u"Max retries exceeded")
+end fn
+
+# =============================================================================
+# 3. Async Struct Methods
+# =============================================================================
+
+struct Database
+    var connection_string: ustring
+    var connected: bool
+end struct
+
+impl Database
+    async fn connect(self): Result<ustring, ustring>
+        put u"Connecting to database..."
+        var conn = tcp_connect(self.connection_string).await
+        self.connected = true
+        return Ok(u"Connected!")
+    end fn
+    
+    async fn query(self, sql: ustring): Result<Vec<ustring>, ustring>
+        if !self.connected then
+            return Error(u"Not connected")
+        end if
+        
+        put u"Executing query: " + sql
+        var results = db_execute(sql).await
+        return Ok(results)
+    end fn
+    
+    async fn close(self)
+        if self.connected then
+            put u"Closing connection..."
+            self.connected = false
+        end if
+    end fn
+end impl
+
+# =============================================================================
+# 4. Async with Match Expressions
+# =============================================================================
+
+async fn process_response(url: ustring): ustring
+    match http_get(url).await
+        Ok(data) =>
+            if data.len() > 0 then
+                return u"Got data: " + data
+            else
+                return u"Empty response"
+            end if
+        Error(TimeoutError) =>
+            warn u"Request timed out"
+            return u"Timeout"
+        Error(NotFoundError) =>
+            error u"Resource not found"
+            return u"Not found"
+        Error(e) =>
+            error e
+            return u"Unknown error"
+    end match
+end fn
+
+# =============================================================================
+# 5. Main Function - Demo All Patterns
+# =============================================================================
+
+fn main()
+    put u"=== Async Patterns Demo ==="
+    put u""
+    
+    # Demo 1: Simple async
+    put u"--- Pattern 1: Simple Async ---"
+    # var result = simple_async().await
+    # put result
+    put u"(Async calls would run with tokio runtime)"
+    put u""
+    
+    # Demo 2: Async with retry
+    put u"--- Pattern 2: Async with Retry ---"
+    # match fetch_with_retry(u"https://api.example.com", 3).await
+    #     Ok(data) => put u"Success: " + data
+    #     Error(e) => error e
+    # end match
+    put u""
+    
+    # Demo 3: Async struct
+    put u"--- Pattern 3: Async Struct Methods ---"
+    var db = Database { connection_string: u"localhost:5432", connected: false }
+    # var conn = db.connect().await
+    # var results = db.query(u"SELECT * FROM users").await
+    # db.close().await
+    put u""
+    
+    # Demo 4: Async with match
+    put u"--- Pattern 4: Async with Match ---"
+    # var response = process_response(u"https://api.example.com").await
+    # put response
+    put u""
+    
+    put u"=== Demo Complete ==="
+end fn

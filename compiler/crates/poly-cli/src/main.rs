@@ -293,7 +293,7 @@ fn run_repl() {
     // Load command history
     let history_path = dirs_and_history_path();
     let mut history: Vec<String> = load_history(&history_path);
-    let mut history_index: Option<usize> = None;
+    let mut _history_index: Option<usize> = None;
     let mut buffer = String::new();
     let mut line_number = 0;
 
@@ -446,7 +446,7 @@ fn run_repl() {
                         }
                     }
                 }
-                history_index = None;
+                _history_index = None;
 
                 // Accumulate input (multi-line support)
                 if !buffer.is_empty() {
@@ -520,6 +520,7 @@ fn save_history(path: &std::path::Path, history: &[String]) {
 /// Show helpful suggestions based on error message
 fn show_error_suggestions(error: &str) {
     const DIM: &str = "\x1b[2m";
+    #[allow(dead_code)]
     const CYAN: &str = "\x1b[36m";
     const RESET: &str = "\x1b[0m";
     const YELLOW: &str = "\x1b[33m";
@@ -555,6 +556,7 @@ fn show_error_suggestions(error: &str) {
 }
 
 /// Poly keywords for tab completion
+#[allow(dead_code)]
 const POLY_KEYWORDS: &[&str] = &[
     "var", "let", "const", "fn", "return", "if", "else", "end", "while", "for", "in", "loop",
     "struct", "enum", "match", "trait", "impl", "async", "await", "unsafe", "pub", "module", "use",
@@ -565,6 +567,7 @@ const POLY_KEYWORDS: &[&str] = &[
 ];
 
 /// Complete a partial input with keyword suggestions
+#[allow(dead_code)]
 fn complete_input(partial: &str) -> Vec<String> {
     let partial_lower = partial.to_lowercase();
     POLY_KEYWORDS

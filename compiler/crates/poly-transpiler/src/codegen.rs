@@ -330,9 +330,6 @@ impl CodeGen {
                 let ty = self.gen_type(&decl.ty);
                 self.writeln(&format!("type {} = {};", decl.name, ty));
             }
-            _ => {
-                self.writeln("/* unimplemented statement */");
-            }
         }
     }
 

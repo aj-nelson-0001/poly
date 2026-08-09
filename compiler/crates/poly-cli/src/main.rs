@@ -506,7 +506,7 @@ fn format_with_rustfmt(code: &str) -> Option<String> {
 
 /// Verify that Rust code compiles by running rustc --edition 2021 --crate-type lib
 fn verify_rust_compiles(code: &str) -> Result<()> {
-    use std::io::Write;
+    
     use std::process::Command;
 
     // Write code to a temporary file

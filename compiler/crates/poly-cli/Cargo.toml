@@ -18,3 +18,8 @@ anyhow.workspace = true
 [dev-dependencies]
 poly-lexer.workspace = true
 poly-parser.workspace = true
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "performance_benchmarks"
+harness = false

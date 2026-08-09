@@ -353,6 +353,7 @@ pub struct FunctionDecl {
     pub params: Vec<Parameter>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Option<Vec<Statement>>,
+    pub is_async: bool,
 }
 
 /// Function parameter.

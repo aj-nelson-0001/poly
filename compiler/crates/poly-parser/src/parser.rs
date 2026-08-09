@@ -359,6 +359,8 @@ impl<'a> Parser<'a> {
     // === Declaration parsing ===
 
     fn parse_function_declaration(&mut self) -> Result<FunctionDecl, ParseError> {
+        // Check for async modifier
+        let is_async = self.match_token(&TokenKind::Async);
         self.advance(); // consume 'fn'
         let name = self.expect_identifier()?;
         self.expect(&TokenKind::LParen)?;
@@ -392,6 +394,7 @@ impl<'a> Parser<'a> {
             params,
             return_type,
             body,
+            is_async,
         })
     }
 

@@ -242,7 +242,6 @@ fn test_all_examples_compile_to_valid_rust() {
 
 /// Verify that Rust code compiles by running rustc
 fn verify_rust_compiles(code: &str) -> Result<(), String> {
-    use std::io::Write;
     use std::process::Command;
 
     // Write code to a temporary file

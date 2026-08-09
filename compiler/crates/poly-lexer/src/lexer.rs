@@ -843,7 +843,7 @@ mod tests {
     #[test]
     fn test_error_unterminated_string() {
         let source = r#"var x = "hello"#;
-        let (tokens, errors) = Lexer::lex(source);
+        let (_tokens, errors) = Lexer::lex(source);
         assert!(!errors.is_empty());
         assert_eq!(errors[0].kind, LexerErrorKind::UnterminatedString);
     }
@@ -851,7 +851,7 @@ mod tests {
     #[test]
     fn test_error_unexpected_character() {
         let source = "var x = @";
-        let (tokens, errors) = Lexer::lex(source);
+        let (_tokens, errors) = Lexer::lex(source);
         assert!(!errors.is_empty());
         assert_eq!(errors[0].kind, LexerErrorKind::UnexpectedCharacter);
     }

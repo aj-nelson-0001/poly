@@ -6,12 +6,16 @@ use poly_lexer::Lexer;
 use poly_parser::ast::*;
 use poly_parser::Parser;
 
+use crate::source_map::SourceMap;
+
 /// The Poly-to-Rust transpiler.
 pub struct Transpiler {
     #[allow(dead_code)]
     indent: usize,
     #[allow(dead_code)]
     output: String,
+    /// Source map for debugging
+    source_map: Option<SourceMap>,
 }
 
 impl Transpiler {
@@ -20,6 +24,16 @@ impl Transpiler {
         Self {
             indent: 0,
             output: String::new(),
+            source_map: None,
+        }
+    }
+
+    /// Create a new transpiler with source map generation enabled.
+    pub fn with_source_map() -> Self {
+        Self {
+            indent: 0,
+            output: String::new(),
+            source_map: Some(SourceMap::new("", "")),
         }
     }
 
@@ -35,6 +49,35 @@ impl Transpiler {
 
         let mut gen = CodeGen::new();
         Ok(gen.generate(&program))
+    }
+
+    /// Transpile Poly source code to Rust code with source map.
+    pub fn transpile_with_source_map(&mut self, source: &str) -> Result<(String, SourceMap), String> {
+        let (tokens, errors) = Lexer::lex(source);
+        if !errors.is_empty() {
+            return Err(format!("Lexer errors: {:?}", errors));
+        }
+
+        let mut parser = Parser::new(&tokens);
+        let program = parser.parse().map_err(|e| e.to_string())?;
+
+        let mut gen = CodeGen::new();
+        let rust_code = gen.generate(&program);
+
+        // Create source map
+        let mut source_map = SourceMap::new(source, &rust_code);
+        
+        // Add basic line mappings
+        for (i, _) in rust_code.lines().enumerate() {
+            source_map.add_mapping(i + 1, 1); // Simplified mapping
+        }
+
+        Ok((rust_code, source_map))
+    }
+
+    /// Get the source map from the last transpilation.
+    pub fn source_map(&self) -> Option<&SourceMap> {
+        self.source_map.as_ref()
     }
 }
 
@@ -74,7 +117,10 @@ impl CodeGen {
             match stmt {
                 Statement::FunctionDeclaration(_)
                 | Statement::StructDeclaration(_)
-                | Statement::EnumDeclaration(_) => {
+                | Statement::EnumDeclaration(_)
+                | Statement::TraitDeclaration(_)
+                | Statement::ImplDeclaration(_)
+                | Statement::TypeDeclaration(_) => {
                     top_level.push(stmt);
                 }
                 _ => {
@@ -94,8 +140,16 @@ impl CodeGen {
             self.writeln("");
         }
 
+        // Check if there are any async functions or await expressions
+        let has_async = program.statements.iter().any(|stmt| {
+            matches!(stmt, Statement::FunctionDeclaration(f) if f.is_async)
+        });
+
         // Generate main function with remaining statements
         if !main_body.is_empty() {
+            if has_async {
+                self.writeln("#[tokio::main]");
+            }
             self.writeln("fn main() {");
             self.indent += 1;
             for stmt in &main_body {
@@ -262,6 +316,16 @@ impl CodeGen {
                     self.writeln(&format!("use {};", path));
                 }
             }
+            Statement::TraitDeclaration(decl) => {
+                self.gen_trait(decl);
+            }
+            Statement::ImplDeclaration(decl) => {
+                self.gen_impl(decl);
+            }
+            Statement::TypeDeclaration(decl) => {
+                let ty = self.gen_type(&decl.ty);
+                self.writeln(&format!("type {} = {};", decl.name, ty));
+            }
             _ => {
                 self.writeln("/* unimplemented statement */");
             }
@@ -284,8 +348,10 @@ impl CodeGen {
             .map(|t| format!(" -> {}", self.gen_type(t)))
             .unwrap_or_default();
 
+        let async_prefix = if decl.is_async { "async " } else { "" };
         self.writeln(&format!(
-            "fn {}({}){} {{",
+            "{}fn {}({}){} {{",
+            async_prefix,
             decl.name,
             params.join(", "),
             ret
@@ -324,6 +390,50 @@ impl CodeGen {
             self.indent -= 1;
             self.writeln("}");
         }
+    }
+
+    fn gen_trait(&mut self, decl: &TraitDecl) {
+        self.writeln(&format!("trait {} {{", decl.name));
+        self.indent += 1;
+
+        for method in &decl.methods {
+            // Generate method signature without body
+            let params: Vec<String> = method
+                .params
+                .iter()
+                .map(|p| {
+                    let ty = self.gen_type(&p.ty);
+                    format!("{}: {}", p.name, ty)
+                })
+                .collect();
+
+            let ret = method
+                .return_type
+                .as_ref()
+                .map(|t| format!(" -> {}", self.gen_type(t)))
+                .unwrap_or_default();
+
+            self.writeln(&format!("fn {}({}){};", method.name, params.join(", "), ret));
+        }
+
+        self.indent -= 1;
+        self.writeln("}");
+    }
+
+    fn gen_impl(&mut self, decl: &ImplDecl) {
+        if let Some(trait_name) = &decl.trait_name {
+            self.writeln(&format!("impl {} for {} {{", trait_name, decl.type_name));
+        } else {
+            self.writeln(&format!("impl {} {{", decl.type_name));
+        }
+        self.indent += 1;
+
+        for method in &decl.methods {
+            self.gen_function(method, true);
+        }
+
+        self.indent -= 1;
+        self.writeln("}");
     }
 
     fn gen_enum(&mut self, decl: &EnumDecl) {
@@ -655,6 +765,14 @@ impl CodeGen {
             Expression::TryExpression(expr) => {
                 let e = self.gen_expression(expr);
                 format!("{}?", e)
+            }
+            Expression::MethodCall {
+                object,
+                method,
+                args,
+            } if method == "await" => {
+                let obj_str = self.gen_expression(object);
+                format!("{}.await", obj_str)
             }
             Expression::GetExpression(get_expr) => self.gen_get_expression(get_expr),
             Expression::MatchExpression { scrutinee, arms } => {

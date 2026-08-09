@@ -1,0 +1,257 @@
+# =============================================================================
+# Algebraic Data Types and Pattern Matching Examples
+# =============================================================================
+
+# Basic enum with unit variants
+enum Color
+    Red
+    Green
+    Blue
+end enum
+
+# Enum with tuple variants
+enum Shape
+    Circle(f32)
+    Rectangle(f32, f32)
+    Triangle(f32, f32, f32)
+end enum
+
+# Enum with tuple variants
+enum Message
+    Quit
+    Move(i32, i32)
+    Write(String)
+    ChangeColor(i32, i32, i32)
+end enum
+
+# Note: Option and Result are built-in types in Poly
+
+# =============================================================================
+# Pattern Matching
+# =============================================================================
+
+fn describe_color(color: Color): String
+    match color
+        Red => "The color is red"
+        Green => "The color is green"
+        Blue => "The color is blue"
+    end match
+end fn
+
+fn area(shape: Shape): f32
+    match shape
+        Circle(r) => 3.14 * r * r
+        Rectangle(w, h) => w * h
+        Triangle(a, b, c) =>
+            let s = (a + b + c) / 2.0
+            return (s * (s - a) * (s - b) * (s - c))
+    end match
+end fn
+
+fn process_message(msg: Message): String
+    match msg
+        Quit => "Quitting"
+        Move(x, y) => "Moving to (" + x + ", " + y + ")"
+        Write(text) => "Writing: " + text
+        ChangeColor(r, g, b) => "Changing color to RGB(" + r + ", " + g + ", " + b + ")"
+    end match
+end fn
+
+# =============================================================================
+# Pattern Guards
+# =============================================================================
+
+fn classify_number(x: i32): String
+    if x < 0 then
+        return "Negative"
+    end if
+    if x == 0 then
+        return "Zero"
+    end if
+    if x > 0 && x <= 10 then
+        return "Small positive"
+    end if
+    if x > 10 && x <= 100 then
+        return "Medium positive"
+    end if
+    return "Large positive"
+end fn
+
+# =============================================================================
+# Nested Pattern Matching
+# =============================================================================
+
+enum Expr
+    Num(f32)
+    Add(Expr, Expr)
+    Mul(Expr, Expr)
+    Neg(Expr)
+end enum
+
+fn evaluate(expr: Expr): f32
+    match expr
+        Num(n) => n
+        Add(l, r) => evaluate(l) + evaluate(r)
+        Mul(l, r) => evaluate(l) * evaluate(r)
+        Neg(e) => -evaluate(e)
+    end match
+end fn
+
+fn simplify(expr: Expr): Expr
+    match expr
+        Add(Num(0), e) => simplify(e)
+        Add(e, Num(0)) => simplify(e)
+        Mul(Num(1), e) => simplify(e)
+        Mul(e, Num(1)) => simplify(e)
+        Mul(Num(0), _) => Num(0.0)
+        Mul(_, Num(0)) => Num(0.0)
+        Neg(Neg(e)) => simplify(e)
+        Add(l, r) => Add(simplify(l), simplify(r))
+        Mul(l, r) => Mul(simplify(l), simplify(r))
+        Neg(e) => Neg(simplify(e))
+        _ => expr
+    end match
+end fn
+
+# =============================================================================
+# List Processing with Pattern Matching
+# =============================================================================
+
+enum List
+    Cons(i32, List)
+    Nil
+end enum
+
+fn length(list: List): i32
+    match list
+        Cons(_, tail) => 1 + length(tail)
+        Nil => 0
+    end match
+end fn
+
+fn sum(list: List): i32
+    match list
+        Cons(head, tail) => head + sum(tail)
+        Nil => 0
+    end match
+end fn
+
+# Note: Higher-order functions with function type parameters
+# are not yet supported in Poly
+
+# =============================================================================
+# Binary Tree
+# =============================================================================
+
+enum Tree
+    Node(i32, Tree, Tree)
+    Leaf
+end enum
+
+fn tree_sum(tree: Tree): i32
+    match tree
+        Node(val, left, right) => val + tree_sum(left) + tree_sum(right)
+        Leaf => 0
+    end match
+end fn
+
+fn tree_depth(tree: Tree): i32
+    match tree
+        Node(_, left, right) => 1 + max(tree_depth(left), tree_depth(right))
+        Leaf => 0
+    end match
+end fn
+
+fn tree_insert(tree: Tree, val: i32): Tree
+    match tree
+        Node(n, left, right) =>
+            if val < n then
+                return Node(n, tree_insert(left, val), right)
+            end if
+            if val > n then
+                return Node(n, left, tree_insert(right, val))
+            end if
+            return tree
+        Leaf => Node(val, Leaf, Leaf)
+    end match
+end fn
+
+# =============================================================================
+# Main Function
+# =============================================================================
+
+fn main()
+    # Test color matching
+    var color = Red
+    put describe_color(color)
+    
+    # Test shape matching
+    var circle = Circle(5.0)
+    var rect = Rectangle(4.0, 6.0)
+    var tri = Triangle(3.0, 4.0, 5.0)
+    
+    put "Circle area: "
+    put area(circle)
+    put "\n"
+    
+    put "Rectangle area: "
+    put area(rect)
+    put "\n"
+    
+    put "Triangle area: "
+    put area(tri)
+    put "\n"
+    
+    # Test number classification
+    put "Classify -5: "
+    put classify_number(-5)
+    put "\n"
+    
+    put "Classify 0: "
+    put classify_number(0)
+    put "\n"
+    
+    put "Classify 5: "
+    put classify_number(5)
+    put "\n"
+    
+    put "Classify 50: "
+    put classify_number(50)
+    put "\n"
+    
+    put "Classify 150: "
+    put classify_number(150)
+    put "\n"
+    
+    # Test expression evaluation
+    var expr = Add(Num(2.0), Mul(Num(3.0), Num(4.0)))
+    put "Expression result: "
+    put evaluate(expr)
+    put "\n"
+    
+    # Test list operations
+    var my_list = Cons(1, Cons(2, Cons(3, Cons(4, Cons(5, Nil)))))
+    put "List length: "
+    put length(my_list)
+    put "\n"
+    
+    put "List sum: "
+    put sum(my_list)
+    put "\n"
+    
+    # Test tree operations
+    var tree = Leaf
+    tree = tree_insert(tree, 5)
+    tree = tree_insert(tree, 3)
+    tree = tree_insert(tree, 7)
+    tree = tree_insert(tree, 1)
+    tree = tree_insert(tree, 4)
+    
+    put "Tree sum: "
+    put tree_sum(tree)
+    put "\n"
+    
+    put "Tree depth: "
+    put tree_depth(tree)
+    put "\n"
+end fn

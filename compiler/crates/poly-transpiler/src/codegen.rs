@@ -1356,3 +1356,60 @@ fn test_transpile_await_expression() {
     let result = t.transpile("var x = fetch_data().await").unwrap();
     assert!(result.contains("fetch_data().await"));
 }
+
+// =============================================================================
+// If-Else-If Tests
+// =============================================================================
+
+#[test]
+fn test_transpile_simple_if() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile("if x > 0,\n    put x\nend if")
+        .unwrap();
+    assert!(result.contains("if (x > 0)"));
+    assert!(result.contains("println!"));
+}
+
+#[test]
+fn test_transpile_if_else() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile("if x > 0,\n    put x\nelse,\n    put \"negative\"\nend if")
+        .unwrap();
+    assert!(result.contains("if (x > 0)"));
+    assert!(result.contains("} else {"));
+}
+
+#[test]
+fn test_transpile_if_else_if() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile("if x > 0,\n    put x\nelse if x < 0,\n    put \"negative\"\nelse,\n    put \"zero\"\nend if")
+        .unwrap();
+    assert!(result.contains("if (x > 0)"));
+    assert!(result.contains("} else if (x < 0)"));
+    assert!(result.contains("} else {"));
+}
+
+#[test]
+fn test_transpile_multiple_else_if() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile("if x > 10,\n    put \"high\"\nelse if x > 5,\n    put \"medium\"\nelse if x > 0,\n    put \"low\"\nelse,\n    put \"zero\"\nend if")
+        .unwrap();
+    assert!(result.contains("if (x > 10)"));
+    assert!(result.contains("} else if (x > 5)"));
+    assert!(result.contains("} else if (x > 0)"));
+    assert!(result.contains("} else {"));
+}
+
+#[test]
+fn test_transpile_inline_if() {
+    let t = Transpiler::new();
+    let result = t
+        .transpile("var y = if x > 0, x else -x end if")
+        .unwrap();
+    assert!(result.contains("if (x > 0)"));
+    assert!(result.contains("} else {"));
+}

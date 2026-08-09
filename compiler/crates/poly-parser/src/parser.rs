@@ -2338,4 +2338,79 @@ mod tests {
             _ => panic!("Expected VarDeclaration with IfExpression"),
         }
     }
+
+    #[test]
+    fn test_parse_nested_if() {
+        let prog = parse_source("if x > 0,\n    if y > 0,\n        put \"both positive\"\n    end if\nend if").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::IfExpression {
+                then_block,
+                ..
+            }) => {
+                // The inner if should be in the then_block
+                assert_eq!(then_block.len(), 1);
+            }
+            _ => panic!("Expected IfExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_if_without_else() {
+        let prog = parse_source("if x > 0,\n    put x\nend if").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::IfExpression {
+                then_block,
+                else_block,
+                ..
+            }) => {
+                assert_eq!(then_block.len(), 1);
+                // else_block should be Some with empty vec when there's no else
+                assert!(else_block.is_some());
+                assert!(else_block.as_ref().unwrap().is_empty());
+            }
+            _ => panic!("Expected IfExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_if_else_only() {
+        let prog = parse_source("if x > 0,\n    put x\nelse,\n    put \"negative\"\nend if").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::IfExpression {
+                then_block,
+                else_block,
+                ..
+            }) => {
+                assert_eq!(then_block.len(), 1);
+                assert!(else_block.is_some());
+                let else_block = else_block.as_ref().unwrap();
+                assert_eq!(else_block.len(), 1); // else block has one statement
+            }
+            _ => panic!("Expected IfExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_else_if() {
+        let source = "if x > 10,\n    put \"high\"\nelse if x > 5,\n    put \"medium\"\nelse if x > 0,\n    put \"low\"\nelse,\n    put \"zero\"\nend if";
+        let prog = parse_source(source).unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::IfExpression {
+                then_block,
+                else_block,
+                ..
+            }) => {
+                assert_eq!(then_block.len(), 1);
+                assert!(else_block.is_some());
+                // The else block should contain a nested if-else-if chain
+                let else_block = else_block.as_ref().unwrap();
+                assert_eq!(else_block.len(), 1);
+            }
+            _ => panic!("Expected IfExpression"),
+        }
+    }
 }

@@ -229,7 +229,7 @@ pub enum Expression {
 }
 
 /// Binary operators.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOp {
     Add,
     Sub,

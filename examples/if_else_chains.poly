@@ -1,70 +1,70 @@
 # Complex if-else-if chain examples
 
 # Grade calculator
-fn calculate_grade(score: i32): ustring
+fn calculate_grade(score: i32): string
     if score >= 90,
-        return u"A+"
+        return "A+"
     else if score >= 80,
-        return u"A"
+        return "A"
     else if score >= 70,
-        return u"B"
+        return "B"
     else if score >= 60,
-        return u"C"
+        return "C"
     else if score >= 50,
-        return u"D"
+        return "D"
     else,
-        return u"F"
+        return "F"
     end if
 end fn
 
 # Temperature classifier
-fn classify_temperature(temp: f64): ustring
+fn classify_temperature(temp: f64): string
     if temp > 40.0,
-        return u"Extremely Hot"
+        return "Extremely Hot"
     else if temp > 30.0,
-        return u"Hot"
+        return "Hot"
     else if temp > 20.0,
-        return u"Warm"
+        return "Warm"
     else if temp > 10.0,
-        return u"Cool"
+        return "Cool"
     else if temp > 0.0,
-        return u"Cold"
+        return "Cold"
     else,
-        return u"Freezing"
+        return "Freezing"
     end if
 end fn
 
 # Nested conditions
-fn categorize_number(n: i32): ustring
+fn categorize_number(n: i32): string
     if n > 0,
         if n % 2 == 0,
-            return u"Positive Even"
+            return "Positive Even"
         else,
-            return u"Positive Odd"
+            return "Positive Odd"
         end if
     else if n < 0,
         if n % 2 == 0,
-            return u"Negative Even"
+            return "Negative Even"
         else,
-            return u"Negative Odd"
+            return "Negative Odd"
         end if
     else,
-        return u"Zero"
+        return "Zero"
     end if
 end fn
 
 # BMI calculator with nested categories
-fn calculate_bmi(weight_kg: f64, height_m: f64): ustring
+fn calculate_bmi(weight_kg: f64, height_m: f64): string
     var bmi = weight_kg / (height_m * height_m)
     
     if bmi < 18.5,
-        return u"Underweight"
+        return "Underweight"
     else if bmi < 25.0,
-        return u"Normal weight"
+        return "Normal weight"
     else if bmi < 30.0,
-        return u"Overweight"
+        return "Overweight"
     else,
-        return u"Obese"
+        return "Obese"
     end if
 end fn
 

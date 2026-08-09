@@ -2,7 +2,7 @@
 
 **A minimalist, assembly-inspired systems programming language that transpiles to safe, idiomatic Rust.**
 
-![Version](https://img.shields.io/badge/version-1.5%20Draft-orange)
+![Version](https://img.shields.io/badge/version-1.6.0-green)
 ![Status](https://img.shields.io/badge/status-Active%20Development-blue)
 ![Backend](https://img.shields.io/badge/backend-Rust-black)
 
@@ -19,6 +19,19 @@ Poly is designed as a minimalist, low-overhead system programming language with 
 3. **Safe Transpilation** — Leverages Rust's memory safety guarantees
 4. **Zero-Cost Abstractions** — High-level features compile to efficient Rust
 5. **Gradual Complexity** — Simple features for beginners, powerful features for experts
+
+---
+
+## What's New in v1.6.0
+
+🎉 **New If Statement Syntax!** We've simplified if statements to use commas instead of `then`:
+
+**Before:** `if x > 0 then ... end if`
+**After:** `if x > 0, ... end if`
+
+This change makes Poly code more concise and familiar to developers from other languages.
+
+[Read the full blog post](BLOG_POST_if_syntax.md)
 
 ---
 

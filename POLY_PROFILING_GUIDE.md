@@ -61,7 +61,7 @@ fn detect_leaks(iterations: i32)
     var final_memory = get_memory_usage()
     var leaked = final_memory - initial_memory
     
-    if leaked > 0 then
+    if leaked > 0,
         warn "Potential memory leak: " + leaked.to_string() + " bytes"
     else
         info "No memory leaks detected"
@@ -244,7 +244,7 @@ fn profile_locks(iterations: i32): LockProfile
         var duration = time_now() - start
         wait_times.push(duration)
         
-        if duration > 10 then  // Contention threshold
+        if duration > 10, // Contention threshold
             contention_count = contention_count + 1
         end if
         
@@ -284,7 +284,7 @@ fn generate_report(results: Vec<ProfileResult>): ustring
     report = report + "|------|-----------|--------|\n"
     
     loop: results
-        var status = if result.passed then "PASS" else "FAIL" end if
+        var status = if result.passed,"PASS" else "FAIL" end if
         report = report + "| " + result.name + " | " + result.time_ms.to_string() + " | " + status + " |\n"
     end loop
     
@@ -307,7 +307,7 @@ fn analyze_results(results: Vec<ProfileResult>): Vec<Recommendation>
     
     loop: results
         // Check for slow operations
-        if result.time_ms > 1000 then
+        if result.time_ms > 1000,
             recommendations.push(Recommendation {
                 issue: "Slow operation: " + result.name,
                 suggestion: "Consider optimizing or caching",
@@ -316,7 +316,7 @@ fn analyze_results(results: Vec<ProfileResult>): Vec<Recommendation>
         end if
         
         // Check for memory issues
-        if result.memory_allocated > 1000000 then
+        if result.memory_allocated > 1000000,
             recommendations.push(Recommendation {
                 issue: "High memory usage: " + result.name,
                 suggestion: "Consider streaming or chunking",
@@ -325,7 +325,7 @@ fn analyze_results(results: Vec<ProfileResult>): Vec<Recommendation>
         end if
         
         // Check for error rates
-        if result.error_rate > 0.01 then
+        if result.error_rate > 0.01,
             recommendations.push(Recommendation {
                 issue: "High error rate: " + result.name,
                 suggestion: "Add error handling or retry logic",

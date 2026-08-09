@@ -23,7 +23,7 @@ end enum
 # Function that can fail
 fn read_file(path: ustring): Result<ustring, FileError>
     # Simulate file reading
-    if path.len() == 0 then
+    if path.len() == 0,
         return Error(FileError::NotFound)
     end if
     
@@ -79,15 +79,15 @@ end fn
 # ============================================================
 
 fn validate_name(name: ustring): Result<ustring, ValidationError>
-    if name.len() == 0 then
+    if name.len() == 0,
         return Error(ValidationError::EmptyInput)
     end if
     
-    if name.len() < 2 then
+    if name.len() < 2,
         return Error(ValidationError::TooShort(2))
     end if
     
-    if name.len() > 50 then
+    if name.len() > 50,
         return Error(ValidationError::TooLong(50))
     end if
     
@@ -95,12 +95,12 @@ fn validate_name(name: ustring): Result<ustring, ValidationError>
 end fn
 
 fn validate_email(email: ustring): Result<ustring, ValidationError>
-    if email.len() == 0 then
+    if email.len() == 0,
         return Error(ValidationError::EmptyInput)
     end if
     
     # Simple email validation
-    if not email.contains(u"@") then
+    if not email.contains(u"@"),
         return Error(ValidationError::InvalidFormat)
     end if
     
@@ -173,7 +173,7 @@ enum AppError
 end enum
 
 fn chain_errors(): Result<ustring, AppError>
-    # Use try to propagate, then convert error type
+    # Use try to propagate,,convert error type
     match read_config(u"config.txt")
         Ok(content) => return Ok(content)
         Error(e) => return Error(AppError::IoError(u"Config error: " + e.to_string()))
@@ -185,7 +185,7 @@ fn retry_operation(max_retries: i32): Result<ustring, AppError>
     var attempt: i32 = 0
     while attempt < max_retries
         # Simulate a risky operation
-        if attempt < 2 then
+        if attempt < 2,
             warn "Attempt " + attempt.to_string() + " failed"
             add attempt
         else

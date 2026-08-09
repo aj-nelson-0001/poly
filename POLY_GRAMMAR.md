@@ -117,7 +117,7 @@ delimiter       ::= "(" | ")" | "[" | "]" | "{" | "}"
 
 ```
 keyword         ::= "var" | "let" | "const" | "fn" | "end"
-                   | "if" | "then" | "else" | "while" | "loop"
+                   | "if" | "else" | "while" | "loop"
                    | "for" | "in" | "match" | "case" | "break"
                    | "continue" | "return" | "struct" | "enum"
                    | "trait" | "impl" | "for" | "module" | "use"
@@ -306,8 +306,8 @@ block           ::= { <statement> }
 ### Control Flow
 
 ```
-if_expression   ::= "if" <expression> "then" <block>
-                    {"else" "if" <expression> "then" <block>}
+if_expression   ::= "if" <expression> "," <block>
+                    {"else" "if" <expression> "," <block>}
                     ["else" <block>]
                     "end" "if"
 

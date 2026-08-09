@@ -1593,11 +1593,14 @@ impl<'a> Parser<'a> {
     fn parse_if_expression(&mut self) -> Result<Expression, ParseError> {
         self.advance(); // consume 'if'
         let condition = self.parse_expression()?;
-        self.expect(&TokenKind::Then)?;
+        // New syntax: use comma instead of 'then'
+        self.expect(&TokenKind::Comma)?;
         let then_block = self.parse_block()?;
         let else_block = if self.match_token(&TokenKind::Else) {
+            // Consume comma after 'else' if present
+            self.match_token(&TokenKind::Comma);
             if self.peek() == &TokenKind::If {
-                // else if
+                // else if - parse as nested if expression
                 let else_if = self.parse_if_expression()?;
                 vec![Statement::ExpressionStatement(else_if)]
             } else {
@@ -2168,7 +2171,7 @@ mod tests {
 
     #[test]
     fn test_parse_if_expression() {
-        let prog = parse_source("if x > 0 then\n    put x\nend if").unwrap();
+        let prog = parse_source("if x > 0,\n    put x\nend if").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0] {
             Statement::ExpressionStatement(Expression::IfExpression { .. }) => {}
@@ -2301,6 +2304,38 @@ mod tests {
                 }
             }
             _ => panic!("Expected EnumDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_if_else_if() {
+        let prog = parse_source("if x > 0,\n    put x\nelse if x < 0,\n    put \"negative\"\nelse,\n    put \"zero\"\nend if").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::ExpressionStatement(Expression::IfExpression {
+                then_block,
+                else_block,
+                ..
+            }) => {
+                assert_eq!(then_block.len(), 1);
+                assert!(else_block.is_some());
+                let else_block = else_block.as_ref().unwrap();
+                assert_eq!(else_block.len(), 1); // else if is wrapped as single expression
+            }
+            _ => panic!("Expected IfExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_if() {
+        let prog = parse_source("var y = if x > 0, x else -x end if").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0] {
+            Statement::VarDeclaration {
+                value: Some(Expression::IfExpression { .. }),
+                ..
+            } => {}
+            _ => panic!("Expected VarDeclaration with IfExpression"),
         }
     }
 }

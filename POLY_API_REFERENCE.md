@@ -373,7 +373,7 @@ enum MyError
 end enum
 
 fn validate(): Result<ustring, MyError>
-    if invalid then
+    if invalid,
         return Error(MyError::InvalidInput(u"Bad data"))
     end if
     return Ok(u"valid")

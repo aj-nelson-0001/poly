@@ -101,7 +101,7 @@ var age: i32 = get with validate |x| x > 0 && x < 150
 
 // Bad: Validate late
 var age: i32 = get
-if age < 0 || age > 150 then
+if age < 0 || age > 150,
     error "Invalid age"
 end if
 ```
@@ -177,11 +177,11 @@ end match
 
 // Bad: If-else chains
 var result = read_file(u"config.txt")
-if result.is_ok() then
+if result.is_ok(),
     process(result.unwrap())
-else if result.error() == FileError::NotFound then
+else if result.error() == FileError::NotFound,
     create_default_config()
-else if result.error() == FileError::PermissionDenied then
+else if result.error() == FileError::PermissionDenied,
     request_permissions()
 else
     error "Unexpected error"
@@ -239,9 +239,9 @@ fn validate_user(name: ustring, email: ustring): Result<(ustring, ustring), Vali
 end fn
 
 // Bad: Inline complex logic
-var valid_name = if name.len() == 0 then
+var valid_name = if name.len() == 0,
     error "Empty name"
-else if name.len() < 2 then
+else if name.len() < 2,
     error "Name too short"
 else
     name

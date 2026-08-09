@@ -40,7 +40,7 @@ Use the `.await` postfix syntax to wait for async operations:
 var data = fetch_data(u"https://api.example.com").await
 ```
 
-The postfix notation makes the code read naturally: "fetch data, then await the result."
+The postfix notation makes the code read naturally: "fetch data,,await the result."
 
 ### Traits with Async Methods
 
@@ -114,7 +114,7 @@ The transpiler automatically adds `#[tokio::main]` when async functions are dete
 
 We chose postfix `.await` syntax for several reasons:
 
-1. **Natural reading order**: "expression.await" reads as "evaluate expression, then await"
+1. **Natural reading order**: "expression.await" reads as "evaluate expression,,await"
 2. **Consistency**: Matches method call syntax (expression.method())
 3. **Composability**: Easy to chain: `fetch().await.process().await`
 4. **Visual clarity**: The dot makes it clear this is an operation on the expression

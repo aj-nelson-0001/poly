@@ -74,7 +74,7 @@ put result
 
 **If/Else:**
 ```poly
-if x > 0 then
+if x > 0,
     put "positive"
 else
     put "non-positive"

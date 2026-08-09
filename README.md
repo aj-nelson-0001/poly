@@ -101,7 +101,7 @@ end loop
 | Warning output | `warn expr` | Print to stderr with `[WARN]` |
 | Debug output | `info expr` | Print to stderr with `[INFO]` |
 | Basic input | `var x: Type = get` | Read from stdin |
-| Input with prompt | `var x: Type = get "prompt"` | Prompt then read |
+| Input with prompt | `var x: Type = get "prompt"` | Prompt,read |
 | Default value | `get --default u"value"` | Fallback on empty input |
 | Masked input | `get --mask u"*"` | Hide password input |
 | Timeout | `get --timeout 3000` | Timeout in milliseconds |
@@ -141,7 +141,7 @@ end loop
 - **Impls**: `impl Trait for Type ... end impl`
 - **Modules**: `module name ... end module`
 - **Closures**: `|params| expr` or `|params| ... end`
-- **If/Else**: `if cond then ... else ... end if`
+- **If/Else**: `if cond,... else ... end if`
 - **While**: `while cond ... end while`
 - **Loop**: `loop ... end loop` (infinite), `loop: range ... end loop` (range)
 - **Match**: `match expr ... pattern => expr ... end match`
@@ -225,7 +225,7 @@ Poly transpiles to Rust. Every Poly construct has a direct Rust equivalent:
 | `const MAX = 100` | `const MAX: i32 = 100;` |
 | `put "hello"` | `println!("{}", "hello");` |
 | `get` | Standard input reading |
-| `if x > 0 then` | `if x > 0 {` |
+| `if x > 0,` | `if x > 0 {` |
 | `loop: 0..10` | `for i in 0..10 {` |
 | `fn add(a: i32, b: i32): i32` | `fn add(a: i32, b: i32) -> i32` |
 | `struct Point` | `struct Point` |
@@ -241,12 +241,12 @@ Poly transpiles to Rust. Every Poly construct has a direct Rust equivalent:
 
 ```poly
 fn is_prime(n: i32): bool
-    if n <= 1 then
+    if n <= 1,
         return false
     end if
     var i: i32 = 2
     while i * i <= n
-        if n % i == 0 then
+        if n % i == 0,
             return false
         end if
         add i
@@ -257,10 +257,10 @@ end fn
 put u"First 20 prime numbers:"
 var count: i32 = 0
 loop: 2..200
-    if is_prime(num) then
+    if is_prime(num),
         put num
         add count
-        if count >= 20 then
+        if count >= 20,
             break
         end if
     end if

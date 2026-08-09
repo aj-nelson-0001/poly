@@ -27,7 +27,7 @@ async fn fetch_with_retry(url: ustring, max_retries: i32): Result<ustring, ustri
         match http_get(url).await
             Ok(data) => return Ok(data)
             Error(e) => 
-                if attempt < max_retries then
+                if attempt < max_retries,
                     put u"Failed, retrying..."
                     delay(1000).await
                 end if
@@ -55,7 +55,7 @@ impl Database
     end fn
     
     async fn query(self, sql: ustring): Result<Vec<ustring>, ustring>
-        if !self.connected then
+        if !self.connected,
             return Error(u"Not connected")
         end if
         
@@ -65,7 +65,7 @@ impl Database
     end fn
     
     async fn close(self)
-        if self.connected then
+        if self.connected,
             put u"Closing connection..."
             self.connected = false
         end if
@@ -79,7 +79,7 @@ end impl
 async fn process_response(url: ustring): ustring
     match http_get(url).await
         Ok(data) =>
-            if data.len() > 0 then
+            if data.len() > 0,
                 return u"Got data: " + data
             else
                 return u"Empty response"

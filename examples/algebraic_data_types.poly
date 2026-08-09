@@ -62,16 +62,16 @@ end fn
 # =============================================================================
 
 fn classify_number(x: i32): String
-    if x < 0 then
+    if x < 0,
         return "Negative"
     end if
-    if x == 0 then
+    if x == 0,
         return "Zero"
     end if
-    if x > 0 && x <= 10 then
+    if x > 0 && x <= 10,
         return "Small positive"
     end if
-    if x > 10 && x <= 100 then
+    if x > 10 && x <= 100,
         return "Medium positive"
     end if
     return "Large positive"
@@ -165,10 +165,10 @@ end fn
 fn tree_insert(tree: Tree, val: i32): Tree
     match tree
         Node(n, left, right) =>
-            if val < n then
+            if val < n,
                 return Node(n, tree_insert(left, val), right)
             end if
-            if val > n then
+            if val > n,
                 return Node(n, left, tree_insert(right, val))
             end if
             return tree

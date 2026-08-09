@@ -149,7 +149,7 @@ end enum
 
 # Function that can fail
 fn read_file(path: ustring): Result<ustring, FileError>
-    if path.len() == 0 then
+    if path.len() == 0,
         return Error(FileError::NotFound)
     end if
     return Ok(u"File content")
@@ -181,10 +181,10 @@ enum ValidationError
 end enum
 
 fn validate_name(name: ustring): Result<ustring, ValidationError>
-    if name.len() == 0 then
+    if name.len() == 0,
         return Error(ValidationError::EmptyInput)
     end if
-    if name.len() < 2 then
+    if name.len() < 2,
         return Error(ValidationError::TooShort(2))
     end if
     return Ok(name)
@@ -272,7 +272,7 @@ var valid_number: i32 = loop
     match get
         Ok(input) =>
             var num: i32 = input.parse::<i32>()
-            if num > 0 then
+            if num > 0,
                 break num
             else
                 warn "Please enter a positive number"

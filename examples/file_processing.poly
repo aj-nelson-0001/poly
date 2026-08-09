@@ -52,9 +52,9 @@ fn main()
     
     var i: i32 = 0
     loop: lines
-        if i > 0 then  # Skip header
+        if i > 0, # Skip header
             var fields: Vec<ustring> = line.split(u",")
-            if fields.len() >= 2 then
+            if fields.len() >= 2,
                 put "Name: " + fields[0] + ", Age: " + fields[1]
             end if
         end if

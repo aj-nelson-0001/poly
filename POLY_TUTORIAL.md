@@ -149,7 +149,7 @@ end enum
 
 ```poly
 fn divide(a: f64, b: f64): Result<f64, ustring>
-    if b == 0.0 then
+    if b == 0.0,
         return Error(u"Division by zero")
     end if
     return Ok(a / b)
@@ -173,7 +173,7 @@ enum FileError
 end enum
 
 fn read_file(path: ustring): Result<ustring, FileError>
-    if path.len() == 0 then
+    if path.len() == 0,
         return Error(FileError::NotFound)
     end if
     return Ok(u"File content")
@@ -203,10 +203,10 @@ enum ValidationError
 end enum
 
 fn validate_name(name: ustring): Result<ustring, ValidationError>
-    if name.len() == 0 then
+    if name.len() == 0,
         return Error(ValidationError::EmptyInput)
     end if
-    if name.len() < 2 then
+    if name.len() < 2,
         return Error(ValidationError::TooShort(2))
     end if
     return Ok(name)

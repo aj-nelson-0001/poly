@@ -346,9 +346,9 @@ fn run_repl() {
                     println!("  {}end{} {}fn{}", MAGENTA, RESET, MAGENTA, RESET);
                     println!();
                     println!("{}Tips:{}", BOLD, RESET);
-                    println!("  - Use ↑/↓ arrows to navigate history", DIM, RESET);
-                    println!("  - Multi-line: continue on next line for blocks", DIM, RESET);
-                    println!("  - Use :tokens or :ast to inspect buffered input", DIM, RESET);
+                    println!("{}  - Use ↑/↓ arrows to navigate history{}", DIM, RESET);
+                    println!("{}  - Multi-line: continue on next line for blocks{}", DIM, RESET);
+                    println!("{}  - Use :tokens or :ast to inspect buffered input{}", DIM, RESET);
                     println!();
                     continue;
                 }
@@ -538,7 +538,7 @@ fn show_error_suggestions(error: &str) {
 
 /// Poly keywords for tab completion
 const POLY_KEYWORDS: &[&str] = &[
-    "var", "let", "const", "fn", "return", "if", "then", "else", "end",
+    "var", "let", "const", "fn", "return", "if", "else", "end",
     "while", "for", "in", "loop", "struct", "enum", "match", "trait",
     "impl", "async", "await", "unsafe", "pub", "module", "use", "type",
     "as", "try", "spawn", "move", "break", "continue",

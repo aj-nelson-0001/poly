@@ -445,7 +445,7 @@ end fn
 ```poly
 // Basic assertion
 fn assert(condition: bool)
-    if not condition then
+    if not condition,
         error "Assertion failed"
         exit(1)
     end if
@@ -453,7 +453,7 @@ end fn
 
 // Assertion with message
 fn assert(condition: bool, message: ustring)
-    if not condition then
+    if not condition,
         error "Assertion failed: " + message
         exit(1)
     end if

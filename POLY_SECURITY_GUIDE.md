@@ -113,12 +113,12 @@ store_user(username, password)  // Insecure!
 // Good: Validate file paths
 fn is_valid_path(path: ustring): bool
     // Check for path traversal
-    if path.contains(u"..") then
+    if path.contains(u".."),
         return false
     end if
     
     // Check for absolute paths (if not allowed)
-    if path.starts_with(u"/") then
+    if path.starts_with(u"/"),
         return false
     end if
     
@@ -280,7 +280,7 @@ fn authenticate(username: ustring, password: ustring): Result<User, AuthError>
     var user = try get_user(username)
     var hashed_password = try get_password_hash(username)
     
-    if not verify_password(password, hashed_password) then
+    if not verify_password(password, hashed_password),
         return Error(AuthError::InvalidCredentials)
     end if
     
@@ -406,18 +406,18 @@ end fn
 // Good: Validate external data
 fn process_external_data(data: ustring): Result<ustring, ustring>
     // Validate data format
-    if not data.is_valid_json() then
+    if not data.is_valid_json(),
         return Error(u"Invalid JSON format")
     end if
     
     // Validate data size
-    if data.len() > 1000000 then
+    if data.len() > 1000000,
         return Error(u"Data too large")
     end if
     
     // Validate data content
     var parsed = try parse_json(data)
-    if not validate_schema(parsed) then
+    if not validate_schema(parsed),
         return Error(u"Data doesn't match schema")
     end if
     

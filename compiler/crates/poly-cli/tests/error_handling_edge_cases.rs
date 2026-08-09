@@ -355,7 +355,7 @@ end fn
 fn test_transpiler_recursive_function() {
     let source = r#"
 fn factorial(n: i32): i32
-    if n <= 1 then
+    if n <= 1,
         return 1
     end if
     return n * factorial(n - 1)
@@ -370,14 +370,14 @@ end fn
 fn test_transpiler_mutual_recursion() {
     let source = r#"
 fn is_even(n: i32): bool
-    if n == 0 then
+    if n == 0,
         return true
     end if
     return is_odd(n - 1)
 end fn
 
 fn is_odd(n: i32): bool
-    if n == 0 then
+    if n == 0,
         return false
     end if
     return is_even(n - 1)
@@ -444,7 +444,7 @@ end fn
 fn test_transpiler_complex_expressions() {
     let source = r#"
 var x = (1 + 2) * (3 + 4) / (5 - 6)
-var y = if x > 0 then x else -x
+var y = if x > 0, x else -x
 var z = [1, 2, 3, 4, 5]
 "#;
     let t = Transpiler::new();

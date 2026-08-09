@@ -727,14 +727,14 @@ mod tests {
 
     #[test]
     fn test_control_flow() {
-        let source = "if x > 0 then\n    put x\nend if";
+        let source = "if x > 0,\n    put x\nend if";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::If);
         assert_eq!(tokens[1].kind, TokenKind::Identifier("x".to_string()));
         assert_eq!(tokens[2].kind, TokenKind::Gt);
         assert_eq!(tokens[3].kind, TokenKind::IntLiteral("0".to_string()));
-        assert_eq!(tokens[4].kind, TokenKind::Then);
+        assert_eq!(tokens[4].kind, TokenKind::Comma);
     }
 
     #[test]

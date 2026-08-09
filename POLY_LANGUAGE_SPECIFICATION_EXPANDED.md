@@ -671,7 +671,7 @@ end fn
 // Nullable pointers (safe alternative to raw pointers)
 var maybe_ptr: ?ptr i32 = null
 
-if maybe_ptr != null then
+if maybe_ptr != null,
     var value: i32 = deref maybe_ptr
 end if
 
@@ -762,15 +762,15 @@ end enum
 
 // Function that returns custom errors
 fn validate_name(name: ustring): Result<ustring, ValidationError>
-    if name.len() == 0 then
+    if name.len() == 0,
         return Error(ValidationError::EmptyInput)
     end if
     
-    if name.len() < 2 then
+    if name.len() < 2,
         return Error(ValidationError::TooShort(2))
     end if
     
-    if name.len() > 50 then
+    if name.len() > 50,
         return Error(ValidationError::TooLong(50))
     end if
     
@@ -842,23 +842,23 @@ end match
 
 ```poly
 // Basic if/else
-if condition then
+if condition,
     do_something()
-else
+else,
     do_other()
 end if
 
 // If as expression
-var result = if x > 0 then x else -x end if
+var result = if x > 0, x else -x end if
 
 // Chained conditions
-if score >= 90 then
+if score >= 90,
     grade = u"A"
-else if score >= 80 then
+else if score >= 80,
     grade = u"B"
-else if score >= 70 then
+else if score >= 70,
     grade = u"C"
-else
+else,
     grade = u"F"
 end if
 ```
@@ -1057,8 +1057,9 @@ end match
 
 | Poly Syntax | Rust Output |
 |-------------|-------------|
-| `if x then` | `if x {` |
-| `else if x then` | `} else if x {` |
+| `if x,` | `if x {` |
+| `else if x,` | `} else if x {` |
+| `else,` | `} else {` |
 | `end if` | `}` |
 | `while cond` | `while cond {` |
 | `end while` | `}` |
@@ -1663,7 +1664,7 @@ var error_code: i32 = 404
 error "HTTP Error {error_code}: Resource not found"
 
 // Warning with conditional check
-if is_deprecated then
+if is_deprecated,
     warn "Warning: This function is deprecated"
 end if
 ```
@@ -1677,7 +1678,7 @@ put value.to_string()
 put value as i32  // Truncate to integer
 
 // Conditional output
-if verbose then
+if verbose,
     put u"Processing item: " + item.name
 end if
 
@@ -1745,8 +1746,8 @@ end fn
 
 // Structured logging
 fn log_request(method: ustring, path: ustring, status: i32, duration_ms: i32)
-    var level: ustring = if status >= 500 then u"ERROR"
-        else if status >= 400 then u"WARN"
+    var level: ustring = if status >= 500,u"ERROR"
+        else if status >= 400,u"WARN"
         else u"INFO"
     end if
     
@@ -1938,7 +1939,7 @@ info "Memory used: " + (mem_after - mem_before).to_string() + " bytes"
 
 // Conditional debugging
 var debug_mode: bool = get_env("DEBUG") or u"false" == u"true"
-if debug_mode then
+if debug_mode,
     info "Debug mode enabled"
     info "Detailed output here"
 end if
@@ -1985,7 +1986,7 @@ put greeting + ", World!"
 
 // Pluralization
 fn pluralize(count: i32, singular: ustring, plural: ustring): ustring
-    return if count == 1 then singular else plural end if
+    return if count == 1,singular else plural end if
 end fn
 
 // Usage
@@ -2033,7 +2034,7 @@ fn is_rtl(locale: ustring): bool
 end fn
 
 // Usage
-var text_alignment = if is_rtl(locale) then u"right" else u"left" end if
+var text_alignment = if is_rtl(locale),u"right" else u"left" end if
 ```
 
 ### Concurrency
@@ -2252,7 +2253,7 @@ put "Sum: " + (a + b)
 // Boolean input
 put "Enable debug mode? (true/false): "
 var debug: bool = get
-if debug then
+if debug,
     put "Debug mode enabled"
 end if
 
@@ -2330,7 +2331,7 @@ var person: Person = get as Person
 var inputs: Vec<ustring> = []
 loop
     var input: ustring = get
-    if input == u"quit" then
+    if input == u"quit",
         break
     end if
     inputs.push(input)
@@ -2409,7 +2410,7 @@ var valid_input: i32 = loop
     match get
         Ok(input) =>
             var num: i32 = input.parse::<i32>()
-            if num > 0 then
+            if num > 0,
                 break num
             else
                 put u"Please enter a positive number"
@@ -2519,12 +2520,12 @@ end fn
 
 // Platform-specific path separators
 fn path_separator(): ustring
-    return if is_windows() then "\\" else "/" end if
+    return if is_windows(),"\\" else "/" end if
 end fn
 
 // Platform-specific line endings
 fn line_ending(): ustring
-    return if is_windows() then "\r\n" else "\n" end if
+    return if is_windows(),"\r\n" else "\n" end if
 end fn
 ```
 
@@ -2931,8 +2932,8 @@ my_poly_project/
 | `fn foo(x: &i32)` | `fn foo(x: &i32)` |
 | `fn foo(x: &mut i32)` | `fn foo(x: &mut i32)` |
 | **Control Flow** | |
-| `if x then` | `if x {` |
-| `else if x then` | `} else if x {` |
+| `if x,` | `if x {` |
+| `else if x,` | `} else if x {` |
 | `else` | `} else {` |
 | `end if` | `}` |
 | `while x` | `while x {` |

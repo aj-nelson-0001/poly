@@ -52,7 +52,7 @@ fn calculator()
         u"-" => a - b
         u"*" => a * b
         u"/" => 
-            if b == 0.0 then
+            if b == 0.0,
                 error "Error: Division by zero"
                 0.0
             else
@@ -72,7 +72,7 @@ fn password_test()
     
     put "Password length: " + password.len().to_string()
     
-    if password.len() < 8 then
+    if password.len() < 8,
         warn "Password too short (minimum 8 characters)"
     else
         put "Password accepted"

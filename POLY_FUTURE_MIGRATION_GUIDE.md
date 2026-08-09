@@ -34,11 +34,11 @@ This guide covers strategies and best practices for migrating to future Poly syn
 
 ### Compatibility Mode
 
-```poly\n// Compatibility mode flag\nvar compatibility_mode: bool = get_env(\"POLY_COMPAT\") or u\"false\" == u\"true\"\n\n// Compatibility wrapper\nfn compat_putn(expression: ustring)\n    if compatibility_mode then\n        // Old syntax\n        putn expression\n    else\n        // New syntax\n        put -n expression\n    end if\nend fn\n\nfn compat_pute(expression: ustring)\n    if compatibility_mode then\n        // Old syntax\n        pute expression\n    else\n        // New syntax\n        error expression\n    end if\nend fn\n```
+```poly\n// Compatibility mode flag\nvar compatibility_mode: bool = get_env(\"POLY_COMPAT\") or u\"false\" == u\"true\"\n\n// Compatibility wrapper\nfn compat_putn(expression: ustring)\n    if compatibility_mode,\n        // Old syntax\n        putn expression\n    else\n        // New syntax\n        put -n expression\n    end if\nend fn\n\nfn compat_pute(expression: ustring)\n    if compatibility_mode,\n        // Old syntax\n        pute expression\n    else\n        // New syntax\n        error expression\n    end if\nend fn\n```
 
 ### Version Detection
 
-```poly\n// Detect Poly version\nfn get_poly_version(): ustring\n    // This would be provided by the runtime\n    return u\"1.5\"\nend fn\n\n// Use version-specific syntax\nfn version_specific_code()\n    var version = get_poly_version()\n    \n    if compare_versions(parse_version(version), parse_version(u\"2.0\")) >= 0 then\n        // Use new syntax\n        put -n \"Loading...\"\n    else\n        // Use old syntax\n        putn u\"Loading...\"\n    end if\nend fn\n```
+```poly\n// Detect Poly version\nfn get_poly_version(): ustring\n    // This would be provided by the runtime\n    return u\"1.5\"\nend fn\n\n// Use version-specific syntax\nfn version_specific_code()\n    var version = get_poly_version()\n    \n    if compare_versions(parse_version(version), parse_version(u\"2.0\")) >= 0,\n        // Use new syntax\n        put -n \"Loading...\"\n    else\n        // Use old syntax\n        putn u\"Loading...\"\n    end if\nend fn\n```
 
 ---
 
@@ -46,7 +46,7 @@ This guide covers strategies and best practices for migrating to future Poly syn
 
 ### Migration Tests
 
-```poly\n// Test migration correctness\nfn test_migration()\n    // Test old syntax still works (if compatibility mode)\n    if compatibility_mode then\n        test_old_syntax()\n    end if\n    \n    // Test new syntax works\n    test_new_syntax()\n    \n    // Test transformation\n    test_syntax_transformation()\nend fn\n\n// Test old syntax\nfn test_old_syntax()\n    var output = capture putn u\"test\"\n    assert(output == u\"test\")\nend fn\n\n// Test new syntax\nfn test_new_syntax()\n    var output = capture put -n u\"test\"\n    assert(output == u\"test\")\nend fn\n\n// Test transformation\nfn test_syntax_transformation()\n    var old_code = u\"putn \\\"hello\\\"\\npute \\\"error\\\"\"\n    var new_code = transform_syntax(old_code)\n    assert(new_code == u\"put -n \\\"hello\\\"\\nerror \\\"error\\\"\")\nend fn\n```
+```poly\n// Test migration correctness\nfn test_migration()\n    // Test old syntax still works (if compatibility mode)\n    if compatibility_mode,\n        test_old_syntax()\n    end if\n    \n    // Test new syntax works\n    test_new_syntax()\n    \n    // Test transformation\n    test_syntax_transformation()\nend fn\n\n// Test old syntax\nfn test_old_syntax()\n    var output = capture putn u\"test\"\n    assert(output == u\"test\")\nend fn\n\n// Test new syntax\nfn test_new_syntax()\n    var output = capture put -n u\"test\"\n    assert(output == u\"test\")\nend fn\n\n// Test transformation\nfn test_syntax_transformation()\n    var old_code = u\"putn \\\"hello\\\"\\npute \\\"error\\\"\"\n    var new_code = transform_syntax(old_code)\n    assert(new_code == u\"put -n \\\"hello\\\"\\nerror \\\"error\\\"\")\nend fn\n```
 
 ### Performance Testing
 

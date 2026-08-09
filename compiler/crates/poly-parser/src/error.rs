@@ -43,8 +43,8 @@ impl ParseError {
             Some("Function declarations need a name: fn my_function(...)".to_string())
         } else if msg.contains("expected ':'") && msg.contains("parameter") {
             Some("Parameters need type annotations: fn foo(x: i32)".to_string())
-        } else if msg.contains("expected 'then'") {
-            Some("If statements require 'then': if condition then ... end if".to_string())
+        } else if msg.contains("Comma") && msg.contains("Expected") {
+            Some("If statements require comma: if condition, ... end if".to_string())
         } else if msg.contains("expected 'in'") {
             Some("For loops use 'in': for item in collection ... end for".to_string())
         } else if msg.contains("unexpected token") && msg.contains("return") {

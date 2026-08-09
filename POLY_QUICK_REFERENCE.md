@@ -98,7 +98,7 @@ enum MyError
 end enum
 
 fn validate(): Result<ustring, MyError>
-    if invalid then
+    if invalid,
         return Error(MyError::InvalidInput(u"Bad data"))
     end if
     return Ok(u"valid")
@@ -112,11 +112,11 @@ end fn
 ### If/Else
 
 ```poly
-if condition then
+if condition,
     // code
-else if other_condition then
+else if other_condition,
     // code
-else
+else,
     // code
 end if
 ```
@@ -297,7 +297,7 @@ var valid: i32 = loop
     match get
         Ok(input) =>
             var num: i32 = input.parse::<i32>()
-            if num > 0 then
+            if num > 0,
                 break num
             else
                 warn "Please enter a positive number"

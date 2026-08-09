@@ -91,7 +91,7 @@ var age: i32 = get with validate |x| x > 0 && x < 150
 
 // Bad: Validate late
 var age: i32 = get
-if age < 0 || age > 150 then
+if age < 0 || age > 150,
     error "Invalid age"
     // ... more code before handling
 end if
@@ -211,7 +211,7 @@ match result
 end match
 
 // Bad: If-else chains
-if result.is_ok() then
+if result.is_ok(),
     process(result.unwrap())
 else
     handle_error(result.error())
@@ -223,7 +223,7 @@ end if
 ```poly
 // Good: Create errors only when needed
 fn validate(input: ustring): Result<ustring, ustring>
-    if input.len() == 0 then
+    if input.len() == 0,
         return Error(u"Empty input")
     end if
     return Ok(input)
@@ -231,7 +231,7 @@ end fn
 
 // Bad: Create errors unnecessarily
 fn validate(input: ustring): Result<ustring, ustring>
-    if input.len() == 0 then
+    if input.len() == 0,
         var error: ustring = u"Empty input"
         return Error(error)
     end if

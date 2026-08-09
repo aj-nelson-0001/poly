@@ -68,20 +68,20 @@ end fn
 # Helper function to validate email
 fn is_valid_email(email: ustring): bool
     # Simple email validation
-    if email.len() < 5 then
+    if email.len() < 5,
         return false
     end if
     
     # Check for @ symbol
     var has_at: bool = false
     loop: 0..email.len()
-        if email[i] == u'@' then
+        if email[i] == u'@',
             has_at = true
             break
         end if
     end loop
     
-    if not has_at then
+    if not has_at,
         return false
     end if
     
@@ -89,9 +89,9 @@ fn is_valid_email(email: ustring): bool
     var has_dot: bool = false
     var after_at: bool = false
     loop: 0..email.len()
-        if email[i] == u'@' then
+        if email[i] == u'@',
             after_at = true
-        else if after_at && email[i] == u'.' then
+        else if after_at && email[i] == u'.',
             has_dot = true
         end if
     end loop

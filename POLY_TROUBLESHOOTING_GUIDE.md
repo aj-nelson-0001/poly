@@ -48,7 +48,7 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ```poly\nvar input: ustring = get  // Program hangs\n```
 
 **Solutions:**
-```poly\n// Solution 1: Use timeout\nmatch get --timeout 5000\n    Ok(input) => process(input)\n    Timeout => warn \"Input timeout\"\n    Error(e) => error \"Input error: \" + e\nend match\n\n// Solution 2: Check if input is available\nif is_input_available() then\n    var input: ustring = get\nelse\n    warn \"No input available\"\nend if\n\n// Solution 3: Use default value\nvar input: ustring = get --default u\"default\"\n```
+```poly\n// Solution 1: Use timeout\nmatch get --timeout 5000\n    Ok(input) => process(input)\n    Timeout => warn \"Input timeout\"\n    Error(e) => error \"Input error: \" + e\nend match\n\n// Solution 2: Check if input is available\nif is_input_available(),\n    var input: ustring = get\nelse\n    warn \"No input available\"\nend if\n\n// Solution 3: Use default value\nvar input: ustring = get --default u\"default\"\n```
 
 ### Issue: Type Conversion Fails
 
@@ -56,7 +56,7 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ```poly\nvar age: i32 = get  // Input: \"abc\"\n// Error: type conversion failed\n```
 
 **Solutions:**
-```poly\n// Solution 1: Validate before conversion\nvar input: ustring = get\nif input.parse::<i32>().is_ok() then\n    var age: i32 = input.parse::<i32>().unwrap()\nelse\n    error \"Please enter a valid number\"\nend if\n\n// Solution 2: Use validation closure\nvar age: i32 = get with validate |x| x.parse::<i32>().is_ok()\n\n// Solution 3: Use default value\nvar age: i32 = get --as i32 --default 0\n```
+```poly\n// Solution 1: Validate before conversion\nvar input: ustring = get\nif input.parse::<i32>().is_ok(),\n    var age: i32 = input.parse::<i32>().unwrap()\nelse\n    error \"Please enter a valid number\"\nend if\n\n// Solution 2: Use validation closure\nvar age: i32 = get with validate |x| x.parse::<i32>().is_ok()\n\n// Solution 3: Use default value\nvar age: i32 = get --as i32 --default 0\n```
 
 ### Issue: Default Value Not Working
 
@@ -64,7 +64,7 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ```poly\nvar input: ustring = get --default u\"default\"  // Still prompts for input\n```
 
 **Solutions:**
-```poly\n// Solution 1: Check if input is empty\nvar input: ustring = get\nif input.len() == 0 then\n    input = u\"default\"\nend if\n\n// Solution 2: Use validation with default\nvar input: ustring = get with validate |i| i.len() > 0 --default u\"default\"\n\n// Solution 3: Use environment variable\nvar input: ustring = get_env(\"INPUT\") or u\"default\"\n```
+```poly\n// Solution 1: Check if input is empty\nvar input: ustring = get\nif input.len() == 0,\n    input = u\"default\"\nend if\n\n// Solution 2: Use validation with default\nvar input: ustring = get with validate |i| i.len() > 0 --default u\"default\"\n\n// Solution 3: Use environment variable\nvar input: ustring = get_env(\"INPUT\") or u\"default\"\n```
 
 ---
 
@@ -84,7 +84,7 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ```poly\nfn risky_operation(): Result<ustring, ustring>\n    var result = try other_operation()  // Error not propagated\n    return Ok(result)\nend fn\n```
 
 **Solutions:**
-```poly\n// Solution 1: Check return type\nfn risky_operation(): Result<ustring, ustring>  // Must return Result\n    var result = try other_operation()\n    return Ok(result)\nend fn\n\n// Solution 2: Use match instead of try\nfn risky_operation(): Result<ustring, ustring>\n    match other_operation()\n        Ok(result) => return Ok(result)\n        Error(e) => return Error(e)\n    end match\nend fn\n\n// Solution 3: Explicit error handling\nfn risky_operation(): Result<ustring, ustring>\n    var result = other_operation()\n    if result.is_err() then\n        return Error(result.error())\n    end if\n    return Ok(result.unwrap())\nend fn\n```
+```poly\n// Solution 1: Check return type\nfn risky_operation(): Result<ustring, ustring>  // Must return Result\n    var result = try other_operation()\n    return Ok(result)\nend fn\n\n// Solution 2: Use match instead of try\nfn risky_operation(): Result<ustring, ustring>\n    match other_operation()\n        Ok(result) => return Ok(result)\n        Error(e) => return Error(e)\n    end match\nend fn\n\n// Solution 3: Explicit error handling\nfn risky_operation(): Result<ustring, ustring>\n    var result = other_operation()\n    if result.is_err(),\n        return Error(result.error())\n    end if\n    return Ok(result.unwrap())\nend fn\n```
 
 ### Issue: Panic on Unwrap
 
@@ -104,7 +104,7 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ```poly\nvar content: ustring = get < \"file.txt\"  // Error: file not found\n```
 
 **Solutions:**
-```poly\n// Solution 1: Check if file exists\nif file_exists(\"file.txt\") then\n    var content: ustring = get < \"file.txt\"\nelse\n    error \"File not found\"\nend if\n\n// Solution 2: Use error handling\nmatch get < \"file.txt\"\n    Ok(content) => process(content)\n    Error(e) => error \"File error: \" + e\nend match\n\n// Solution 3: Use default value\nvar content: ustring = get < \"file.txt\" --default u\"\"\n```
+```poly\n// Solution 1: Check if file exists\nif file_exists(\"file.txt\"),\n    var content: ustring = get < \"file.txt\"\nelse\n    error \"File not found\"\nend if\n\n// Solution 2: Use error handling\nmatch get < \"file.txt\"\n    Ok(content) => process(content)\n    Error(e) => error \"File error: \" + e\nend match\n\n// Solution 3: Use default value\nvar content: ustring = get < \"file.txt\" --default u\"\"\n```
 
 ### Issue: Permission Denied
 
@@ -176,7 +176,7 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 
 ### Enable Debug Mode
 
-```poly\n// Set debug environment variable\nset_env(\"DEBUG\", \"true\")\n\n// Check debug mode\nvar debug_mode: bool = get_env(\"DEBUG\") or u\"false\" == u\"true\"\nif debug_mode then\n    info \"Debug mode enabled\"\n    // Debug output\nend if\n```
+```poly\n// Set debug environment variable\nset_env(\"DEBUG\", \"true\")\n\n// Check debug mode\nvar debug_mode: bool = get_env(\"DEBUG\") or u\"false\" == u\"true\"\nif debug_mode,\n    info \"Debug mode enabled\"\n    // Debug output\nend if\n```
 
 ### Use Logging
 

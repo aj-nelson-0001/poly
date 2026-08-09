@@ -309,6 +309,61 @@ end loop
 
 ---
 
+## Async/Await
+
+### Async Functions
+
+```poly
+async fn function_name(param: Type): ReturnType
+    // async code
+    var result = some_async_op().await
+    return result
+end fn
+```
+
+### Await Expressions
+
+```poly
+var result = async_function().await
+var data = fetch(url).await
+match async_op().await
+    Ok(val) => process(val)
+    Error(e) => handle_error(e)
+end match
+```
+
+### Struct with Async Methods
+
+```poly
+struct Client
+    var url: ustring
+end struct
+
+impl Client
+    async fn fetch(self): Result<ustring, ustring>
+        var response = http_get(self.url).await
+        return Ok(response)
+    end fn
+end impl
+```
+
+### Traits with Async Methods
+
+```poly
+trait DataFetcher
+    async fn fetch(self, key: ustring): Result<ustring, ustring>
+end trait
+
+impl DataFetcher for MyClient
+    async fn fetch(self, key: ustring): Result<ustring, ustring>
+        var data = self.query(key).await
+        return Ok(data)
+    end fn
+end impl
+```
+
+---
+
 ## Transpilation to Rust
 
 | Poly | Rust |
@@ -322,3 +377,7 @@ end loop
 | `Error(e)` | `Err(e)` |
 | `Ok(val)` | `Ok(val)` |
 | `try expr` | `expr?` |
+| `async fn name()` | `async fn name()` |
+| `expr.await` | `expr.await` |
+| `trait T \n async fn m()` | `trait T { async fn m(); }` |
+| `impl T for X \n async fn m()` | `impl T for X { async fn m() {} }` |

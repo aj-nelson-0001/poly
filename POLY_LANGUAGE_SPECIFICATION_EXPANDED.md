@@ -23,12 +23,13 @@
 12. [Functions & Error Handling](#12-functions--error-handling)
 13. [Control Flow & Loops](#13-control-flow--loops)
 14. [Closures & Functional Programming](#14-closures--functional-programming)
-15. [Pattern Matching](#15-pattern-matching)
-16. [Output: The `put` Command](#16-output-the-put-command)
-17. [Input: The `get` Command](#17-input-the-get-command)
-18. [Standard Library](#18-standard-library)
-19. [Transpilation & Target Project Structure](#19-transpilation--target-project-structure)
-20. [Implementation Roadmap](#20-implementation-roadmap)
+15. [Async/Await & Concurrency](#15-asyncawait--concurrency)
+16. [Pattern Matching](#16-pattern-matching)
+17. [Output: The `put` Command](#17-output-the-put-command)
+18. [Input: The `get` Command](#18-input-the-get-command)
+19. [Standard Library](#19-standard-library)
+20. [Transpilation & Target Project Structure](#20-transpilation--target-project-structure)
+21. [Implementation Roadmap](#21-implementation-roadmap)
 
 ---
 
@@ -1178,7 +1179,234 @@ var result = apply_operation(5, 3, add)
 
 ---
 
-## 15. Pattern Matching
+## 15. Async/Await & Concurrency
+
+### Overview
+
+Poly supports asynchronous programming through `async fn` and `.await` syntax, which transpiles to Rust's async/await system. This enables non-blocking I/O and concurrent operations while maintaining the language's explicit, readable style.
+
+### Key Concepts
+
+1. **Async functions**: Use `async fn` to declare functions that can be paused and resumed
+2. **Await expressions**: Use `.await` postfix syntax to wait for async operations
+3. **Tokio runtime**: Async code runs on the Tokio runtime (automatically added `#[tokio::main]`)
+4. **Trait support**: Traits can have async methods
+
+### Async Function Declaration
+
+```poly
+// Basic async function
+async fn fetch_data(url: ustring): ustring
+    var response = http_get(url).await
+    return response
+end fn
+
+// Async function with Result return type
+async fn fetch_json(url: ustring): Result<ustring, ustring>
+    match http_get(url).await
+        Ok(response) => return Ok(response)
+        Error(e) => return Error(u"Network error: " + e)
+    end match
+end fn
+
+// Async function with no return value
+async fn log_message(message: ustring)
+    put u"Logging: " + message
+    // Simulate async I/O
+    timer_sleep(100).await
+end fn
+```
+
+### Await Expressions
+
+The `.await` syntax is postfix, meaning it comes after the async expression:
+
+```poly
+// Wait for async function result
+var data = fetch_data(u"https://api.example.com").await
+
+// Chain async calls
+var result = process_data(
+    fetch_data(u"https://api.example.com").await
+).await
+
+// Await in variable assignment
+var user = db.get_user(user_id).await
+var posts = db.get_posts(user.id).await
+
+// Await in match expression
+match http_get(url).await
+    Ok(response) => process(response)
+    Error(e) => handle_error(e)
+end match
+
+// Await in function arguments
+var data = transform(
+    fetch_data(url).await,
+    validate(input).await
+)
+```
+
+### Async with Structs and Enums
+
+```poly
+// Struct with async methods
+struct HttpClient
+    var base_url: ustring
+    var timeout: i32
+end struct
+
+impl HttpClient
+    async fn get(self, path: ustring): Result<ustring, ustring>
+        var url = self.base_url + path
+        var response = http_get(url).await
+        return Ok(response)
+    end fn
+    
+    async fn post(self, path: ustring, body: ustring): Result<ustring, ustring>
+        var url = self.base_url + path
+        var response = http_post(url, body).await
+        return Ok(response)
+    end fn
+end impl
+
+// Usage
+var client = HttpClient { base_url: u"https://api.example.com", timeout: 5000 }
+var data = client.get(u"/users").await
+```
+
+### Traits with Async Methods
+
+```poly
+// Trait with async method
+trait DataFetcher
+    async fn fetch(self, key: ustring): Result<ustring, ustring>
+end trait
+
+// Implementation
+impl DataFetcher for Database
+    async fn fetch(self, key: ustring): Result<ustring, ustring>
+        var result = self.query(key).await
+        return Ok(result)
+    end fn
+end impl
+
+// Function with trait bound
+async fn process_fetcher<T: DataFetcher>(fetcher: T, key: ustring): ustring
+    match fetcher.fetch(key).await
+        Ok(data) => return data
+        Error(e) => 
+            error e
+            return u""
+    end match
+end fn
+```
+
+### Concurrency Patterns
+
+```poly
+// Spawn concurrent tasks
+async fn main()
+    // Run multiple async operations concurrently
+    var task1 = fetch_data(u"url1")
+    var task2 = fetch_data(u"url2")
+    var task3 = fetch_data(u"url3")
+    
+    // Await all results
+    var result1 = task1.await
+    var result2 = task2.await
+    var result3 = task3.await
+    
+    put u"All data fetched!"
+end fn
+
+// Async iteration
+async fn process_items(items: Vec<ustring>): Vec<ustring>
+    var results: Vec<ustring> = []
+    loop: items
+        var result = process_item(item).await
+        results.push(result)
+    end loop
+    return results
+end fn
+
+// Error handling in async code
+async fn safe_fetch(url: ustring): Option<ustring>
+    match fetch_with_timeout(url, 5000).await
+        Ok(data) => return Some(data)
+        Error(TimeoutError) => 
+            warn u"Request timed out"
+            return None
+        Error(e) => 
+            error e
+            return None
+    end match
+end fn
+```
+
+### Transpilation Rules
+
+| Poly Syntax | Rust Output |
+|-------------|-------------|
+| `async fn name()` | `async fn name()` |
+| `expr.await` | `expr.await` |
+| `trait T \n async fn m() \n end trait` | `trait T { async fn m(); }` |
+| `impl T for X \n async fn m() \n end impl` | `impl T for X { async fn m() {} }` |
+| (auto-detected) | `#[tokio::main]` on main |
+
+### Example: Complete Async Program
+
+```poly
+# HTTP client example
+
+struct ApiClient
+    var base_url: ustring
+end struct
+
+impl ApiClient
+    async fn get_users(self): Result<Vec<ustring>, ustring>
+        var response = http_get(self.base_url + u"/users").await
+        match response
+            Ok(data) => return Ok(parse_json(data))
+            Error(e) => return Error(e)
+        end match
+    end fn
+    
+    async fn create_user(self, name: ustring): Result<ustring, ustring>
+        var body = u"{\"name\": \"" + name + u"\"}"
+        var response = http_post(self.base_url + u"/users", body).await
+        return response
+    end fn
+end impl
+
+# Main async function
+async fn main_task()
+    var client = ApiClient { base_url: u"https://api.example.com" }
+    
+    # Fetch users
+    match client.get_users().await
+        Ok(users) => 
+            put u"Found " + users.len().to_string() + u" users"
+            loop: users
+                put user
+            end loop
+        Error(e) => error e
+    end match
+    
+    # Create new user
+    var result = client.create_user(u"Alice").await
+    put u"User created: " + result
+end fn
+
+# Entry point (auto-generates #[tokio::main])
+fn main()
+    main_task().await
+end fn
+```
+
+---
+
+## 16. Pattern Matching
 
 ### Basic Patterns
 

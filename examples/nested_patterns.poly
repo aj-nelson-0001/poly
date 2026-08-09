@@ -1,0 +1,115 @@
+# Complex nested if patterns
+
+# FizzBuzz with nested conditions
+fn fizzbuzz(n: i32): string
+    if n % 15 == 0,
+        return "FizzBuzz"
+    else if n % 3 == 0,
+        return "Fizz"
+    else if n % 5 == 0,
+        return "Buzz"
+    else,
+        return str(n)
+    end if
+end fn
+
+# Grade calculator with nested ranges
+fn get_letter_grade(score: i32): string
+    if score >= 90,
+        return "A"
+    else if score >= 80,
+        return "B"
+    else if score >= 70,
+        return "C"
+    else if score >= 60,
+        return "D"
+    else,
+        return "F"
+    end if
+end fn
+
+# Simple validation with nested checks
+fn validate_age(age: i32): string
+    if age < 0,
+        return "Invalid age"
+    else if age < 13,
+        return "Child"
+    else if age < 18,
+        return "Teenager"
+    else if age < 65,
+        return "Adult"
+    else,
+        return "Senior"
+    end if
+end fn
+
+# Simple classification
+fn classify_triangle(a: f64, b: f64, c: f64): string
+    if a == b && b == c,
+        return "Equilateral"
+    else if a == b || b == c,
+        return "Isosceles"
+    else,
+        return "Scalene"
+    end if
+end fn
+
+# Simple state machine
+fn get_status(state: i32, value: i32): string
+    if state == 0,
+        if value > 0,
+            return "Starting with positive"
+        else,
+            return "Starting with zero or negative"
+        end if
+    else if state == 1,
+        if value > 50,
+            return "Processing: high value"
+        else,
+            return "Processing: low value"
+        end if
+    else if state == 2,
+        if value % 2 == 0,
+            return "Finishing: even"
+        else,
+            return "Finishing: odd"
+        end if
+    else,
+        return "Unknown state"
+    end if
+end fn
+
+# Main function
+fn main()
+    put "=== Nested Pattern Examples ==="
+    put ""
+    
+    # Test FizzBuzz
+    put "FizzBuzz for 15: " + fizzbuzz(15)
+    put "FizzBuzz for 9: " + fizzbuzz(9)
+    put "FizzBuzz for 7: " + fizzbuzz(7)
+    put ""
+    
+    # Test grade calculator
+    put "Grade for 97: " + get_letter_grade(97)
+    put "Grade for 83: " + get_letter_grade(83)
+    put "Grade for 72: " + get_letter_grade(72)
+    put ""
+    
+    # Test age validation
+    put "Age 10 with ID: " + validate_age(10, true)
+    put "Age 16 without ID: " + validate_age(16, false)
+    put "Age 30 with ID: " + validate_age(30, true)
+    put ""
+    
+    # Test triangle classification
+    put "Triangle (3,4,5): " + classify_triangle(3.0, 4.0, 5.0)
+    put "Triangle (5,5,5): " + classify_triangle(5.0, 5.0, 5.0)
+    put "Triangle (5,5,3): " + classify_triangle(5.0, 5.0, 3.0)
+    put ""
+    
+    # Test state machine
+    put "State 0, value 5: " + get_status(0, 5)
+    put "State 1, value 75: " + get_status(1, 75)
+    put "State 2, value 42: " + get_status(2, 42)
+end fn

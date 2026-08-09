@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poly Language Playground</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-green: #3fb950;
+            --accent-blue: #58a6ff;
+            --accent-purple: #bc8cff;
+            --accent-orange: #d29922;
+            --accent-red: #f85149;
+            --accent-cyan: #39d353;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--accent-green), var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .playground {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .playground {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .panel-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-title .icon {
+            font-size: 1.2rem;
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-blue);
+        }
+
+        .btn-primary {
+            background: var(--accent-green);
+            border-color: var(--accent-green);
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            background: #46d558;
+        }
+
+        .editor-container {
+            position: relative;
+            height: 500px;
+        }
+
+        #poly-editor {
+            width: 100%;
+            height: 100%;
+            padding: 16px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: none;
+            resize: none;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            tab-size: 4;
+        }
+
+        #poly-editor:focus {
+            outline: none;
+        }
+
+        #rust-output {
+            width: 100%;
+            height: 100%;
+            padding: 16px;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            border: none;
+            resize: none;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            tab-size: 4;
+        }
+
+        .error-output {
+            padding: 12px 16px;
+            background: rgba(248, 81, 73, 0.1);
+            border-top: 1px solid var(--accent-red);
+            color: var(--accent-red);
+            font-family: monospace;
+            font-size: 0.9rem;
+            max-height: 100px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .error-output.visible {
+            display: block;
+        }
+
+        .examples-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 30px;
+        }
+
+        .examples-section h2 {
+            margin-bottom: 16px;
+            font-size: 1.3rem;
+        }
+
+        .examples-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 12px;
+        }
+
+        .example-card {
+            padding: 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .example-card:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+        }
+
+        .example-card h3 {
+            font-size: 1rem;
+            margin-bottom: 6px;
+            color: var(--accent-blue);
+        }
+
+        .example-card p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .features-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .feature-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+        }
+
+        .feature-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .feature-icon {
+            font-size: 1.5rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+        }
+
+        footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        .keyboard-hint {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+
+        .keyboard-hint kbd {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>✦ Poly Language Playground</h1>
+        <p class="subtitle">Write Poly code, see Rust output instantly</p>
+    </header>
+
+    <div class="container">
+        <div class="playground">
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">
+                        <span class="icon">📝</span>
+                        Poly Code
+                    </span>
+                    <div class="panel-actions">
+                        <button class="btn" onclick="clearEditor()">Clear</button>
+                        <button class="btn btn-primary" onclick="transpile()">Transpile →</button>
+                    </div>
+                </div>
+                <div class="editor-container">
+                    <textarea id="poly-editor" spellcheck="false" placeholder="Enter Poly code here...">var x: i32 = 42
+var message: string = "Hello, Poly!"
+
+fn add(a: i32, b: i32): i32
+    return a + b
+end fn
+
+fn main()
+    var result = add(10, 20)
+    put message
+    put "10 + 20 = " + str(result)
+end fn</textarea>
+                </div>
+                <div id="poly-error" class="error-output"></div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">
+                        <span class="icon">🦀</span>
+                        Rust Output
+                    </span>
+                    <div class="panel-actions">
+                        <button class="btn" onclick="copyOutput()">Copy</button>
+                    </div>
+                </div>
+                <div class="editor-container">
+                    <textarea id="rust-output" readonly placeholder="Rust code will appear here..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="examples-section">
+            <h2>📚 Example Programs</h2>
+            <div class="examples-grid">
+                <div class="example-card" onclick="loadExample('hello')">
+                    <h3>Hello World</h3>
+                    <p>Basic output with variables and functions</p>
+                </div>
+                <div class="example-card" onclick="loadExample('fibonacci')">
+                    <h3>Fibonacci</h3>
+                    <p>Recursive Fibonacci function</p>
+                </div>
+                <div class="example-card" onclick="loadExample('struct')">
+                    <h3>Structs & Methods</h3>
+                    <p>Define and use structs with methods</p>
+                </div>
+                <div class="example-card" onclick="loadExample('pattern')">
+                    <h3>Pattern Matching</h3>
+                    <p>Match expressions with destructuring</p>
+                </div>
+                <div class="example-card" onclick="loadExample('async')">
+                    <h3>Async/Await</h3>
+                    <p>Asynchronous functions and await</p>
+                </div>
+                <div class="example-card" onclick="loadExample('closure')">
+                    <h3>Closures</h3>
+                    <p>Anonymous functions and iterators</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="features-section">
+            <div class="feature-card">
+                <h3><span class="feature-icon">🎯</span> Clean Syntax</h3>
+                <p>Poly uses a clean, readable syntax inspired by Python, Ruby, and SuperBASIC. No semicolons, no curly braces.</p>
+            </div>
+            <div class="feature-card">
+                <h3><span class="feature-icon">⚡</span> Fast Transpilation</h3>
+                <p>Poly transpiles to idiomatic Rust code, giving you all the performance benefits of Rust.</p>
+            </div>
+            <div class="feature-card">
+                <h3><span class="feature-icon">🛡️</span> Type Safety</h3>
+                <p>Full static typing with type inference. Catch errors at compile time, not runtime.</p>
+            </div>
+            <div class="feature-card">
+                <h3><span class="feature-icon">🔄</span> Pattern Matching</h3>
+                <p>Powerful pattern matching with guards, destructuring, and exhaustive checks.</p>
+            </div>
+        </div>
+
+        <div class="keyboard-hint" style="text-align: center; margin-bottom: 20px;">
+            <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to transpile • 
+            <kbd>Tab</kbd> for indentation • 
+            Examples are clickable!
+        </div>
+    </div>
+
+    <footer>
+        <p>Poly Language v1.5.0 • <a href="https://github.com/user/poly">GitHub</a> • <a href="#">Documentation</a></p>
+        <p style="margin-top: 8px; font-size: 0.85rem;">Built with ❤️ for developers who love simplicity and performance</p>
+    </footer>
+
+    <script>
+        const examples = {
+            hello: `var x: i32 = 42
+var message: string = "Hello, Poly!"
+
+fn add(a: i32, b: i32): i32
+    return a + b
+end fn
+
+fn main()
+    var result = add(10, 20)
+    put message
+    put "10 + 20 = " + str(result)
+end fn`,
+            fibonacci: `fn fibonacci(n: i32): i32
+    if n <= 1 then
+        return n
+    end if
+    return fibonacci(n - 1) + fibonacci(n - 2)
+end fn
+
+fn main()
+    put "Fibonacci sequence:"
+    for i in 0..10
+        put str(fibonacci(i)) + " "
+    end for
+    put ""
+end fn`,
+            struct: `struct Point
+    var x: f64
+    var y: f64
+end struct
+
+impl Point
+    fn new(x: f64, y: f64): Point
+        return Point { x: x, y: y }
+    end fn
+
+    fn distance(self, other: Point): f64
+        var dx = self.x - other.x
+        var dy = self.y - other.y
+        return (dx * dx + dy * dy) ^ 0.5
+    end fn
+end impl
+
+fn main()
+    var p1 = Point::new(0.0, 0.0)
+    var p2 = Point::new(3.0, 4.0)
+    put "Distance: " + str(p1.distance(p2))
+end fn`,
+            pattern: `enum Shape
+    Circle(f64)
+    Rectangle(f64, f64)
+    Triangle(f64, f64, f64)
+end enum
+
+fn area(shape: Shape): f64
+    match shape
+        Circle(r) => 3.14159 * r * r
+        Rectangle(w, h) => w * h
+        Triangle(a, b, c) =>
+            var s = (a + b + c) / 2.0
+            return (s * (s - a) * (s - b) * (s - c)) ^ 0.5
+    end match
+end fn
+
+fn main()
+    var c = Circle(5.0)
+    var r = Rectangle(4.0, 6.0)
+    put "Circle area: " + str(area(c))
+    put "Rectangle area: " + str(area(r))
+end fn`,
+            async: `async fn fetch_data(): string
+    # Simulate async operation
+    await sleep(100)
+    return "Data loaded!"
+end fn
+
+async fn process_data()
+    var data = fetch_data().await
+    put "Processing: " + data
+end fn
+
+async fn main()
+    put "Starting async operations..."
+    process_data().await
+    put "Done!"
+end fn`,
+            closure: `fn main()
+    var numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    # Filter even numbers
+    var evens = numbers.filter(|n| n % 2 == 0)
+    put "Even numbers: " + str(evens)
+
+    # Map to squares
+    var squares = numbers.map(|n| n * n)
+    put "Squares: " + str(squares)
+
+    # Reduce to sum
+    var sum = numbers.reduce(0, |acc, n| acc + n)
+    put "Sum: " + str(sum)
+end fn`
+        };
+
+        // Simple syntax highlighting for display
+        function highlightPoly(code) {
+            const keywords = ['var', 'let', 'const', 'fn', 'return', 'if', 'then', 'else', 'end', 
+                            'while', 'for', 'in', 'loop', 'struct', 'enum', 'match', 'trait', 
+                            'impl', 'async', 'await', 'unsafe', 'pub', 'module', 'use', 'type'];
+            const types = ['i8', 'i16', 'i32', 'i64', 'i128', 'u8', 'u16', 'u32', 'u64', 'u128',
+                          'f32', 'f64', 'bool', 'char', 'string', 'usize', 'isize'];
+            
+            let result = code;
+            // Highlight strings
+            result = result.replace(/"([^"]*)"/g, '<span style="color: #a5d6ff">"$1"</span>');
+            // Highlight comments
+            result = result.replace(/#.*$/gm, '<span style="color: #8b949e">$&</span>');
+            // Highlight keywords
+            keywords.forEach(kw => {
+                result = result.replace(new RegExp(`\\b${kw}\\b`, 'g'), `<span style="color: #ff7b72">${kw}</span>`);
+            });
+            // Highlight types
+            types.forEach(ty => {
+                result = result.replace(new RegExp(`\\b${ty}\\b`, 'g'), `<span style="color: #79c0ff">${ty}</span>`);
+            });
+            // Highlight numbers
+            result = result.replace(/\b(\d+\.?\d*)\b/g, '<span style="color: #79c0ff">$1</span>');
+            return result;
+        }
+
+        function loadExample(name) {
+            const editor = document.getElementById('poly-editor');
+            editor.value = examples[name];
+            transpile();
+        }
+
+        function clearEditor() {
+            document.getElementById('poly-editor').value = '';
+            document.getElementById('rust-output').value = '';
+            document.getElementById('poly-error').classList.remove('visible');
+        }
+
+        function transpile() {
+            const polyCode = document.getElementById('poly-editor').value;
+            const rustOutput = document.getElementById('rust-output');
+            const errorDiv = document.getElementById('poly-error');
+            
+            // Simple client-side "transpilation" (demo only)
+            // In production, this would call the actual poly compiler
+            try {
+                const rustCode = simulateTranspilation(polyCode);
+                rustOutput.value = rustCode;
+                errorDiv.classList.remove('visible');
+            } catch (e) {
+                errorDiv.textContent = e.message;
+                errorDiv.classList.add('visible');
+            }
+        }
+
+        function simulateTranspilation(code) {
+            // This is a demo - in production, you'd call the actual compiler
+            // For now, we'll generate a basic Rust template
+            
+            let rustCode = `#![allow(unused_variables, unused_mut, unused_imports, dead_code)]\n\n`;
+            
+            // Simple keyword replacements
+            let lines = code.split('\n');
+            let inFunction = false;
+            let functionName = '';
+            
+            for (let line of lines) {
+                let trimmed = line.trim();
+                
+                // Skip empty lines
+                if (!trimmed) {
+                    rustCode += '\n';
+                    continue;
+                }
+                
+                // Comment
+                if (trimmed.startsWith('#')) {
+                    rustCode += line.replace('#', '//') + '\n';
+                    continue;
+                }
+                
+                // Variable declarations
+                if (trimmed.startsWith('var ')) {
+                    let rest = trimmed.slice(4);
+                    rustCode += line.replace('var ', 'let mut ') + '\n';
+                    continue;
+                }
+                
+                if (trimmed.startsWith('let ')) {
+                    rustCode += line.replace('let ', 'let ') + '\n';
+                    continue;
+                }
+                
+                if (trimmed.startsWith('const ')) {
+                    rustCode += line.replace('const ', 'const ') + '\n';
+                    continue;
+                }
+                
+                // Function declarations
+                if (trimmed.startsWith('fn ') || trimmed.startsWith('async fn ')) {
+                    let isAsync = trimmed.startsWith('async fn');
+                    let fnPart = trimmed.replace('async fn ', 'fn ').replace('fn ', '');
+                    let parts = fnPart.split('(');
+                    let name = parts[0];
+                    let params = parts[1] ? '(' + parts[1] : '()';
+                    
+                    // Convert Poly types to Rust
+                    params = params
+                        .replace(/: i32/g, ': i32')
+                        .replace(/: f64/g, ': f64')
+                        .replace(/: string/g, ': String')
+                        .replace(/: bool/g, ': bool');
+                    
+                    // Check for return type
+                    if (params.includes('):')) {
+                        let [paramPart, returnPart] = params.split('):');
+                        params = paramPart + ')';
+                        let returnType = returnPart.trim();
+                        if (returnType === 'string') returnType = 'String';
+                        rustCode += `${isAsync ? 'async ' : ''}fn ${name}${params} -> ${returnType} {\n`;
+                    } else {
+                        rustCode += `${isAsync ? 'async ' : ''}fn ${params} {\n`;
+                    }
+                    inFunction = true;
+                    functionName = name;
+                    continue;
+                }
+                
+                // End keywords
+                if (trimmed === 'end fn' || trimmed === 'end') {
+                    rustCode += '}\n';
+                    inFunction = false;
+                    continue;
+                }
+                
+                // Put statement
+                if (trimmed.startsWith('put ')) {
+                    let content = trimmed.slice(4);
+                    rustCode += `    println!("{}", ${content});\n`;
+                    continue;
+                }
+                
+                // Return statement
+                if (trimmed.startsWith('return ')) {
+                    let value = trimmed.slice(7);
+                    rustCode += `    return ${value};\n`;
+                    continue;
+                }
+                
+                // Default: pass through
+                rustCode += `    ${line}\n`;
+            }
+            
+            // Add main function if not present
+            if (!code.includes('fn main')) {
+                rustCode += `\nfn main() {\n    println!("Hello from Poly!");\n}\n`;
+            }
+            
+            return rustCode;
+        }
+
+        function copyOutput() {
+            const output = document.getElementById('rust-output');
+            navigator.clipboard.writeText(output.value);
+            
+            // Show feedback
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = originalText, 2000);
+        }
+
+        // Keyboard shortcut: Ctrl+Enter to transpile
+        document.getElementById('poly-editor').addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                transpile();
+            }
+            
+            // Tab for indentation
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+                this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
+                this.selectionStart = this.selectionEnd = start + 4;
+            }
+        });
+
+        // Auto-transpile on load
+        window.onload = function() {
+            transpile();
+        };
+    </script>
+</body>
+</html>

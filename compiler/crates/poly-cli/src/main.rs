@@ -284,9 +284,13 @@ fn run_repl() {
         "{}Type Poly code and press Enter to transpile to Rust.{}",
         DIM, RESET
     );
-    println!("{}Commands: :help, :tokens, :ast, :quit{}", DIM, RESET);
+    println!("{}Commands: :help, :tokens, :ast, :history, :clear, :quit{}", DIM, RESET);
     println!();
 
+    // Load command history
+    let history_path = dirs_and_history_path();
+    let mut history: Vec<String> = load_history(&history_path);
+    let mut history_index: Option<usize> = None;
     let mut buffer = String::new();
     let mut line_number = 0;
 
@@ -309,6 +313,7 @@ fn run_repl() {
 
                 // Handle commands
                 if input == ":quit" || input == ":q" || input == ":exit" {
+                    save_history(&history_path, &history);
                     println!("{}Goodbye!{}", GREEN, RESET);
                     break;
                 }
@@ -319,7 +324,9 @@ fn run_repl() {
                     println!("  {}:{}    Show this help message", CYAN, RESET);
                     println!("  {}:{}    Show tokens for buffered input", CYAN, RESET);
                     println!("  {}:{}     Show AST for buffered input", CYAN, RESET);
+                    println!("  {}:{}     Show command history", CYAN, RESET);
                     println!("  {}:{}    Clear the buffer", CYAN, RESET);
+                    println!("  {}:{}      Clear history", CYAN, RESET);
                     println!("  {}:{}    Exit the REPL", CYAN, RESET);
                     println!();
                     println!("{}Poly Syntax:{}", BOLD, RESET);
@@ -338,6 +345,11 @@ fn run_repl() {
                     println!("      {}return{} a {}+{} b", MAGENTA, RESET, RED, RESET);
                     println!("  {}end{} {}fn{}", MAGENTA, RESET, MAGENTA, RESET);
                     println!();
+                    println!("{}Tips:{}", BOLD, RESET);
+                    println!("  - Use ↑/↓ arrows to navigate history", DIM, RESET);
+                    println!("  - Multi-line: continue on next line for blocks", DIM, RESET);
+                    println!("  - Use :tokens or :ast to inspect buffered input", DIM, RESET);
+                    println!();
                     continue;
                 }
 
@@ -345,6 +357,24 @@ fn run_repl() {
                     buffer.clear();
                     line_number = 0;
                     println!("{}Buffer cleared.{}", GREEN, RESET);
+                    continue;
+                }
+
+                if input == ":history" {
+                    println!("{}Command History:{}", BOLD, RESET);
+                    for (i, cmd) in history.iter().enumerate() {
+                        println!("  {}{}: {}{}", DIM, i + 1, cmd, RESET);
+                    }
+                    if history.is_empty() {
+                        println!("  {}(empty){}", DIM, RESET);
+                    }
+                    continue;
+                }
+
+                if input == ":clear-history" {
+                    history.clear();
+                    save_history(&history_path, &history);
+                    println!("{}History cleared.{}", GREEN, RESET);
                     continue;
                 }
 
@@ -396,6 +426,19 @@ fn run_repl() {
                     continue;
                 }
 
+                // Add to history if not empty
+                if !input.is_empty() {
+                    // Avoid adding duplicates consecutively
+                    if history.last().map_or(true, |last| last != input) {
+                        history.push(input.to_string());
+                        // Keep history reasonable size
+                        if history.len() > 1000 {
+                            history.drain(0..500);
+                        }
+                    }
+                }
+                history_index = None;
+
                 // Accumulate input (multi-line support)
                 if !buffer.is_empty() {
                     buffer.push('\n');
@@ -411,6 +454,9 @@ fn run_repl() {
                     || trimmed.ends_with("end enum")
                     || trimmed.ends_with("end match")
                     || trimmed.ends_with("end loop")
+                    || trimmed.ends_with("end trait")
+                    || trimmed.ends_with("end impl")
+                    || trimmed.ends_with("end unsafe")
                     || (line_number > 0 && !input.is_empty() && !input.trim().ends_with('\\'));
 
                 if is_complete {
@@ -427,6 +473,8 @@ fn run_repl() {
                         }
                         Err(e) => {
                             println!("{}Error: {}{}", RED, e, RESET);
+                            // Show helpful suggestions based on error
+                            show_error_suggestions(&e);
                         }
                     }
                     buffer.clear();
@@ -440,6 +488,77 @@ fn run_repl() {
             }
         }
     }
+}
+
+/// Get the path to the history file
+fn dirs_and_history_path() -> std::path::PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    std::path::PathBuf::from(home).join(".poly_repl_history")
+}
+
+/// Load command history from file
+fn load_history(path: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(path)
+        .map(|content| content.lines().map(String::from).collect())
+        .unwrap_or_default()
+}
+
+/// Save command history to file
+fn save_history(path: &std::path::Path, history: &[String]) {
+    let _ = std::fs::write(
+        path,
+        history.join("\n"),
+    );
+}
+
+/// Show helpful suggestions based on error message
+fn show_error_suggestions(error: &str) {
+    const DIM: &str = "\x1b[2m";
+    const CYAN: &str = "\x1b[36m";
+    const RESET: &str = "\x1b[0m";
+    const YELLOW: &str = "\x1b[33m";
+
+    if error.contains("Expected") && error.contains("end") {
+        println!("{}  💡 Tip: Blocks must end with 'end <keyword>' (e.g., end fn, end if){}", YELLOW, RESET);
+    } else if error.contains("Unexpected token") {
+        println!("{}  💡 Tip: Check for missing semicolons or keywords{}
+{}     Poly uses 'put' for output and 'get' for input{}
+{}     Function calls use: fn_name(args){}
+{}     Strings use double quotes: \"hello\"{}", YELLOW, RESET, DIM, RESET, DIM, RESET, DIM, RESET);
+    } else if error.contains("type") {
+        println!("{}  💡 Tip: Valid types: i32, f64, string, bool, char, u8, etc.{}
+{}     Or use custom types: MyStruct, MyEnum{}
+{}     Containers: Vec<T>, Option<T>, Result<T, E>{}", YELLOW, RESET, DIM, RESET, DIM, RESET);
+    } else if error.contains("assignment") || error.contains("= ") {
+        println!("{}  💡 Tip: Use '=' for assignment, '==' for comparison{}
+{}     var x = 42  # declaration{}
+{}     x = 10     # reassignment{}", YELLOW, RESET, DIM, RESET, DIM, RESET);
+    }
+}
+
+/// Poly keywords for tab completion
+const POLY_KEYWORDS: &[&str] = &[
+    "var", "let", "const", "fn", "return", "if", "then", "else", "end",
+    "while", "for", "in", "loop", "struct", "enum", "match", "trait",
+    "impl", "async", "await", "unsafe", "pub", "module", "use", "type",
+    "as", "try", "spawn", "move", "break", "continue",
+    // Types
+    "i8", "i16", "i32", "i64", "i128",
+    "u8", "u16", "u32", "u64", "u128",
+    "f32", "f64", "bool", "char", "string",
+    "usize", "isize", "byte", "bytes",
+    // Builtins
+    "put", "get", "error", "warn", "info",
+];
+
+/// Complete a partial input with keyword suggestions
+fn complete_input(partial: &str) -> Vec<String> {
+    let partial_lower = partial.to_lowercase();
+    POLY_KEYWORDS
+        .iter()
+        .filter(|kw| kw.starts_with(&partial_lower))
+        .map(|s| s.to_string())
+        .collect()
 }
 
 /// Highlight a Poly token for REPL output

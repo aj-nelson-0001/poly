@@ -29,7 +29,8 @@ impl<'a> Parser<'a> {
         while !self.is_at_end() {
             match self.parse_statement() {
                 Ok(stmt) => statements.push(stmt),
-                Err(e) => {
+                Err(mut e) => {
+                    e.generate_suggestion();
                     self.errors.push(e);
                     self.synchronize();
                 }
@@ -51,7 +52,8 @@ impl<'a> Parser<'a> {
         while !self.is_at_end() {
             match self.parse_statement() {
                 Ok(stmt) => statements.push(stmt),
-                Err(e) => {
+                Err(mut e) => {
+                    e.generate_suggestion();
                     self.errors.push(e);
                     self.synchronize();
                 }

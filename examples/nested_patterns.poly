@@ -2,11 +2,11 @@
 
 # FizzBuzz with nested conditions
 fn fizzbuzz(n: i32): string
-    if n % 15 == 0,
+    if n % 15 = 0,
         return "FizzBuzz"
-    else if n % 3 == 0,
+    else if n % 3 = 0,
         return "Fizz"
-    else if n % 5 == 0,
+    else if n % 5 = 0,
         return "Buzz"
     else,
         return str(n)
@@ -45,9 +45,9 @@ end fn
 
 # Simple classification
 fn classify_triangle(a: f64, b: f64, c: f64): string
-    if a == b && b == c,
+    if a = b && b = c,
         return "Equilateral"
-    else if a == b || b == c,
+    else if a = b || b = c,
         return "Isosceles"
     else,
         return "Scalene"
@@ -56,20 +56,20 @@ end fn
 
 # Simple state machine
 fn get_status(state: i32, value: i32): string
-    if state == 0,
+    if state = 0,
         if value > 0,
             return "Starting with positive"
         else,
             return "Starting with zero or negative"
         end if
-    else if state == 1,
+    else if state = 1,
         if value > 50,
             return "Processing: high value"
         else,
             return "Processing: low value"
         end if
-    else if state == 2,
-        if value % 2 == 0,
+    else if state = 2,
+        if value % 2 = 0,
             return "Finishing: even"
         else,
             return "Finishing: odd"
@@ -97,9 +97,9 @@ fn main()
     put ""
     
     # Test age validation
-    put "Age 10 with ID: " + validate_age(10, true)
-    put "Age 16 without ID: " + validate_age(16, false)
-    put "Age 30 with ID: " + validate_age(30, true)
+    put "Age 10 with ID: " + validate_age(10)
+    put "Age 16 without ID: " + validate_age(16)
+    put "Age 30 with ID: " + validate_age(30)
     put ""
     
     # Test triangle classification

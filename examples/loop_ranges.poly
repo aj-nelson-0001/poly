@@ -64,7 +64,7 @@ fn main()
     
     # Test 9: Iterate over collection
     put "Test 9: Iterate over collection"
-    var fruits: Vec<ustring> = [u"apple", u"banana", u"cherry", u"date"]
+    var fruits Vec<ustring> := [unicode "apple", unicode "banana", unicode "cherry", unicode "date"]
     loop: fruits
         put "  " + fruit
     end loop
@@ -82,10 +82,11 @@ fn main()
     put "    |  1   2   3   4   5"
     put "----+-------------------"
     loop: 1..5
-        var row: ustring = " " + i.to_string() + " | "
+        var row ustring := " " + i.to_string() + " | "
         loop: 1..5
-            var product: i32 = i * j
-            row = row + product.to_string().pad_left(3) + " "
+            var product i32 := i * j
+            var next_row := row + product.to_string().pad_left(3) + " "
+            set row to next_row
         end loop
         put row
     end loop
@@ -111,7 +112,7 @@ fn is_prime(n: i32): bool
         return false
     end if
     loop: 2..n-1
-        if n % i == 0,
+        if n % i = 0,
             return false
         end if
     end loop

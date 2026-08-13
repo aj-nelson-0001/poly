@@ -13,7 +13,7 @@ use poly_transpiler::Transpiler;
 // =============================================================================
 
 fn bench_lexer_simple(c: &mut Criterion) {
-    let source = "var x: i32 = 42\nput x";
+    let source = "var x i32 := 42\nput x";
 
     c.bench_function("lexer_simple", |b| {
         b.iter(|| {
@@ -26,13 +26,13 @@ fn bench_lexer_simple(c: &mut Criterion) {
 fn bench_lexer_complex(c: &mut Criterion) {
     let source = r#"
 fn fibonacci(n: i32): i32
-    if n <= 1
+    if n <= 1,
         return n
     end if
     return fibonacci(n - 1) + fibonacci(n - 2)
 end fn
 
-var result = fibonacci(10)
+var result := fibonacci(10)
 put result
 "#;
 
@@ -47,7 +47,7 @@ put result
 fn bench_lexer_large(c: &mut Criterion) {
     let mut source = String::new();
     for i in 0..1000 {
-        source.push_str(&format!("var variable_{}: i32 = {}\n", i, i));
+        source.push_str(&format!("var variable_{} i32 := {}\n", i, i));
     }
 
     c.bench_function("lexer_large_1000_vars", |b| {
@@ -63,14 +63,14 @@ fn bench_lexer_large(c: &mut Criterion) {
 // =============================================================================
 
 fn bench_parser_simple(c: &mut Criterion) {
-    let source = "var x: i32 = 42\nput x";
+    let source = "var x i32 := 42\nput x";
     let (tokens, _) = Lexer::lex(source);
 
     c.bench_function("parser_simple", |b| {
         b.iter(|| {
             let mut parser = Parser::new(black_box(&tokens));
             let result = parser.parse();
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 }
@@ -90,15 +90,15 @@ struct Point
 end struct
 
 fn distance(p1: Point, p2: Point): f32
-    var dx = p2.x - p1.x
-    var dy = p2.y - p1.y
+    var dx := p2.x - p1.x
+    var dy := p2.y - p1.y
     return (dx * dx + dy * dy)
 end fn
 
 fn main()
-    var origin = Point { x: 0.0, y: 0.0 }
-    var target = Point { x: 3.0, y: 4.0 }
-    var dist = distance(origin, target)
+    var origin := Point { x: 0.0, y: 0.0 }
+    var target := Point { x: 3.0, y: 4.0 }
+    var dist := distance(origin, target)
     put dist
 end fn
 "#;
@@ -108,7 +108,7 @@ end fn
         b.iter(|| {
             let mut parser = Parser::new(black_box(&tokens));
             let result = parser.parse();
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 }
@@ -127,7 +127,7 @@ fn bench_parser_large(c: &mut Criterion) {
         b.iter(|| {
             let mut parser = Parser::new(black_box(&tokens));
             let result = parser.parse();
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 }
@@ -137,13 +137,13 @@ fn bench_parser_large(c: &mut Criterion) {
 // =============================================================================
 
 fn bench_transpiler_simple(c: &mut Criterion) {
-    let source = "var x: i32 = 42\nput x";
+    let source = "var x i32 := 42\nput x";
 
     c.bench_function("transpiler_simple", |b| {
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(source));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 }
@@ -161,15 +161,15 @@ fn area(shape: Shape): f32
         Circle(r) => 3.14 * r * r
         Rectangle(w, h) => w * h
         Triangle(a, b, c) =>
-            let s = (a + b + c) / 2.0
+            let s := (a + b + c) / 2.0
             return (s * (s - a) * (s - b) * (s - c))
     end match
 end fn
 
 fn main()
-    var circle = Circle(5.0)
-    var rect = Rectangle(4.0, 6.0)
-    var tri = Triangle(3.0, 4.0, 5.0)
+    var circle := Circle(5.0)
+    var rect := Rectangle(4.0, 6.0)
+    var tri := Triangle(3.0, 4.0, 5.0)
     
     put "Circle area: "
     put area(circle)
@@ -185,7 +185,7 @@ end fn
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(source));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 }
@@ -201,9 +201,9 @@ fn bench_transpiler_large(c: &mut Criterion) {
 end enum
 
 fn process_{}(x: i32): i32
-    if x > 0
+    if x > 0,
         return x * {}
-    else
+    else,
         return 0
     end if
 end fn
@@ -217,7 +217,97 @@ end fn
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(&source));
-            black_box(result);
+            let _ = black_box(result);
+        })
+    });
+}
+
+// =============================================================================
+// INTERMEDIATE REPRESENTATION PIPELINE BENCHMARKS
+// =============================================================================
+
+const INTERMEDIATE_REPRESENTATION_SOURCE: &str = r#"
+enum Shape
+    Circle(f32)
+    Rectangle(f32, f32)
+    Triangle(f32, f32, f32)
+end enum
+
+fn area(shape: Shape): f32
+    match shape
+        Circle(r) => 3.14 * r * r
+        Rectangle(w, h) => w * h
+        Triangle(a, b, c) =>
+            let s := (a + b + c) / 2.0
+            return (s * (s - a) * (s - b) * (s - c))
+    end match
+end fn
+
+fn main()
+    var circle := Circle(5.0)
+    var rect := Rectangle(4.0, 6.0)
+    var tri := Triangle(3.0, 4.0, 5.0)
+    put "Circle area: "
+    put area(circle)
+    put "Rectangle area: "
+    put area(rect)
+    put "Triangle area: "
+    put area(tri)
+end fn
+"#;
+
+fn bench_intermediate_representation_unoptimized(c: &mut Criterion) {
+    c.bench_function("intermediate_representation_pipeline_unoptimized", |b| {
+        b.iter(|| {
+            let t = Transpiler::new();
+            let result = t.transpile_with_intermediate_representation_unoptimized(black_box(
+                INTERMEDIATE_REPRESENTATION_SOURCE,
+            ));
+            let _ = black_box(result);
+        })
+    });
+}
+
+fn bench_intermediate_representation_optimized(c: &mut Criterion) {
+    c.bench_function("intermediate_representation_pipeline_optimized", |b| {
+        b.iter(|| {
+            let t = Transpiler::new();
+            let result = t.transpile_with_intermediate_representation(black_box(
+                INTERMEDIATE_REPRESENTATION_SOURCE,
+            ));
+            let _ = black_box(result);
+        })
+    });
+}
+
+fn bench_intermediate_representation_optimizer_passes(c: &mut Criterion) {
+    let (tokens, _) = Lexer::lex(INTERMEDIATE_REPRESENTATION_SOURCE);
+    let mut parser = Parser::new(&tokens);
+    let program = parser.parse().expect("benchmark source must parse");
+    let intermediate_representation = poly_intermediate_representation::generate(&program);
+
+    c.bench_function("intermediate_representation_optimizer_passes", |b| {
+        b.iter(|| {
+            let mut copy = black_box(intermediate_representation.clone());
+            poly_intermediate_representation::optimize(&mut copy);
+            let _ = black_box(copy);
+        })
+    });
+}
+
+fn bench_intermediate_representation_large(c: &mut Criterion) {
+    let mut source = String::new();
+    for i in 0..50 {
+        source.push_str(&format!(
+            "fn helper_{}(x: i32): i32\n    var doubled := x * 2\n    return doubled + {}\nend fn\n",
+            i, i
+        ));
+    }
+    c.bench_function("intermediate_representation_pipeline_large_50_fns", |b| {
+        b.iter(|| {
+            let t = Transpiler::new();
+            let result = t.transpile_with_intermediate_representation(black_box(&source));
+            let _ = black_box(result);
         })
     });
 }
@@ -230,33 +320,33 @@ fn bench_memory_usage(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_usage");
 
     // Small program
-    let small = "var x: i32 = 42";
+    let small = "var x i32 := 42";
     group.bench_function("small_program", |b| {
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(small));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 
     // Medium program
     let medium = r#"
 fn fibonacci(n: i32): i32
-    if n <= 1
+    if n <= 1,
         return n
     end if
     return fibonacci(n - 1) + fibonacci(n - 2)
 end fn
 
 fn factorial(n: i32): i32
-    if n <= 1
+    if n <= 1,
         return 1
     end if
     return n * factorial(n - 1)
 end fn
 
-var fib10 = fibonacci(10)
-var fact10 = factorial(10)
+var fib10 := fibonacci(10)
+var fact10 := factorial(10)
 put fib10
 put fact10
 "#;
@@ -264,7 +354,7 @@ put fact10
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(medium));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 
@@ -280,7 +370,7 @@ put fact10
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(&large));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 
@@ -295,23 +385,23 @@ fn bench_throughput(c: &mut Criterion) {
     let mut group = c.benchmark_group("throughput");
 
     // Measure bytes per second
-    let small = "var x: i32 = 42";
+    let small = "var x i32 := 42";
     group.throughput(criterion::Throughput::Bytes(small.len() as u64));
     group.bench_function("small_throughput", |b| {
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(small));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 
-    let medium = "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nvar x = add(1, 2)";
+    let medium = "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nvar x := add(1, 2)";
     group.throughput(criterion::Throughput::Bytes(medium.len() as u64));
     group.bench_function("medium_throughput", |b| {
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(medium));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 
@@ -330,7 +420,7 @@ fn bench_regression_patterns(c: &mut Criterion) {
 fn nested_loop()
     for i in 0..100
         for j in 0..100
-            var x = i * j
+            var x := i * j
         end for
     end for
 end fn
@@ -339,7 +429,7 @@ end fn
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(nested_loops));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 
@@ -363,7 +453,7 @@ end fn
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(pattern_matching));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 
@@ -382,7 +472,7 @@ end fn
         b.iter(|| {
             let t = Transpiler::new();
             let result = t.transpile(black_box(&deep_nesting));
-            black_box(result);
+            let _ = black_box(result);
         })
     });
 
@@ -400,6 +490,10 @@ criterion_group!(
     bench_transpiler_simple,
     bench_transpiler_complex,
     bench_transpiler_large,
+    bench_intermediate_representation_unoptimized,
+    bench_intermediate_representation_optimized,
+    bench_intermediate_representation_optimizer_passes,
+    bench_intermediate_representation_large,
     bench_memory_usage,
     bench_throughput,
     bench_regression_patterns,

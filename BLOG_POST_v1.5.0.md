@@ -9,30 +9,30 @@ We're excited to announce the release of Poly v1.5.0! This release brings signif
 ### `--format` Flag
 Format your generated Rust code with rustfmt automatically:
 
-```bash
+~~~bash
 poly --format examples/prime_numbers.poly
-```
+~~~
 
 ### `--diff` Flag
 See the difference between unformatted and formatted code:
 
-```bash
+~~~bash
 poly --diff examples/prime_numbers.poly
-```
+~~~
 
 ### `--watch` Flag
 Watch a file for changes and re-transpile automatically:
 
-```bash
+~~~bash
 poly --watch examples/prime_numbers.poly
-```
+~~~
 
 ### `--check` Flag
 Validate your code and verify that the generated Rust compiles:
 
-```bash
+~~~bash
 poly --check examples/prime_numbers.poly
-```
+~~~
 
 ## Transpiler Improvements
 
@@ -49,56 +49,56 @@ Poly types now map correctly to Rust types:
 ### File Operations
 File write and append operations now generate correct Rust code:
 
-```poly
+~~~poly
 # Write to file
 put "Hello, World!" > "output.txt"
 
 # Append to file
 put "More content" >> "output.txt"
-```
+~~~
 
 Generates:
 
-```rust
+~~~rust
 std::fs::write("output.txt", format!("{}", "Hello, World!")).unwrap();
 { let mut f = std::fs::OpenOptions::new().append(true).create(true).open("output.txt").unwrap(); writeln!(f, "{}", "More content").unwrap(); }
-```
+~~~
 
 ### Match Expressions
 Fixed codegen for match arms (removed extra semicolons):
 
-```poly
+~~~poly
 match x
     1 => put "One"
     _ => put "Other"
 end match
-```
+~~~
 
 Now generates valid Rust:
 
-```rust
+~~~rust
 match x {
     1 => println!("{}", "One"),
     _ => println!("{}", "Other"),
 }
-```
+~~~
 
 ### Loop Variables
 Loop variables now work correctly for collection iteration:
 
-```poly
+~~~poly
 loop: records
     put record
 end loop
-```
+~~~
 
 Generates:
 
-```rust
+~~~rust
 for record in records {
     println!("{}", record);
 }
-```
+~~~
 
 ## New Examples
 
@@ -136,7 +136,7 @@ In future releases, we plan to:
 
 ## Getting Started
 
-```bash
+~~~bash
 # Build the compiler
 cd compiler
 cargo build --release
@@ -146,7 +146,7 @@ cargo build --release
 
 # Check your code
 ../target/release/poly --check ../examples/prime_numbers.poly
-```
+~~~
 
 ## Feedback
 

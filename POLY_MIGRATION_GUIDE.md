@@ -9,54 +9,54 @@ This guide helps you migrate from the old Poly syntax to the new syntax with fla
 ## Output Commands
 
 ### Old Syntax
-```poly
-put u\"Hello, World!\"           # Output with newline
-putn u\"Enter value: \"          # Output without newline
-pute u\"Error message\"          # Output to stderr
-```
+~~~poly fragment
+put unicode "Hello, World!"           # Output with newline
+putn unicode "Enter value: "          # Output without newline
+pute unicode "Error message"          # Output to stderr
+~~~
 
 ### New Syntax
-```poly
-put \"Hello, World!\"            # Output with newline
-put -n \"Enter value: \"         # Output without newline
-error \"Error message\"          # Error message to stderr
-warn \"Warning message\"         # Warning message to stderr
-info \"Debug information\"       # Debug info to stderr
-```
+~~~poly fragment
+put "Hello, World!"            # Output with newline
+put -n "Enter value: "         # Output without newline
+error "Error message"          # Error message to stderr
+warn "Warning message"         # Warning message to stderr
+info "Debug information"       # Debug info to stderr
+~~~
 
 ### Changes Summary
 | Old | New | Description |
 |-----|-----|-------------|
 | `putn` | `put -n` | Use `-n` flag for no newline |
 | `pute` | `error`/`warn`/`info` | Use separate commands for different output levels |
-| `u\"...\"` | `\"...\"` | Unicode strings are now auto-detected |
+| `unicode "..."` | `"..."` | Unicode strings are now auto-detected |
 
 ---
 
 ## Input Commands
 
 ### Old Syntax
-```poly
-var x: ustring = get with timeout 5000
-var x: i32 = get with validate |x| x > 0
-var x: ustring = get with default u\"value\"
-var x: ustring = get with mask u\"*\"
-var x: ustring = get with complete [u\"a\", u\"b\"]
-var x: Person = get as Person
-var x: ustring = get until u\",\" 
-```
+~~~poly fragment
+var x ustring := get with timeout 5000
+var x i32 := get with validate |x| x > 0
+var x ustring := get with default unicode "value"
+var x ustring := get with mask unicode "*"
+var x ustring := get with complete [unicode "a", unicode "b"]
+var x Person := get as Person
+var x ustring := get until unicode ","
+~~~
 
 ### New Syntax
-```poly
-var x: ustring = get --timeout 5000
-var x: i32 = get with validate |x| x > 0
-var x: ustring = get --default u"value"
-var x: ustring = get --mask u"*"
-var x: ustring = get with complete [u"a", u"b"]
-var x: Person = get --as Person
-var x: ustring = get --until u","
-var x: bytes = get < "file" --bytes 8
-```
+~~~poly
+var x ustring := get --timeout 5000
+var x i32 := get with validate |x| x > 0
+var x ustring := get --default unicode "value"
+var x ustring := get --mask unicode "*"
+var x ustring := get with complete [unicode "a", unicode "b"]
+var x Person := get --as Person
+var x ustring := get --until unicode ","
+var x bytes := get < "file" --bytes 8
+~~~
 
 ### Changes Summary
 | Old | New | Description |
@@ -75,7 +75,7 @@ var x: bytes = get < "file" --bytes 8
 ## Error Handling
 
 ### Old Syntax
-```poly
+~~~poly fragment
 enum Result<T, E>
     Ok(T)
     Err(E)
@@ -85,10 +85,10 @@ match result
     Ok(value) => process(value)
     Err(e) => handle_error(e)
 end match
-```
+~~~
 
 ### New Syntax
-```poly
+~~~poly fragment
 enum Result<T, E>
     Ok(T)
     Error(E)
@@ -98,7 +98,7 @@ match result
     Ok(value) => process(value)
     Error(e) => handle_error(e)
 end match
-```
+~~~
 
 ### Changes Summary
 | Old | New | Description |
@@ -110,24 +110,24 @@ end match
 ## String Literals
 
 ### Old Syntax
-```poly
-var name: ustring = u\"Alice\"
-put u\"Hello, \" + name
-var greeting: ustring = u\"你好\"
-```
+~~~poly fragment
+var name ustring := unicode "Alice"
+put unicode "Hello, " + name
+var greeting ustring := unicode "你好"
+~~~
 
 ### New Syntax
-```poly
-var name: ustring = u\"Alice\"   # Still works
-put \"Hello, \" + name           # Auto-detected as Unicode
-var greeting: ustring = u\"你好\"  # Explicit Unicode still works
-```
+~~~poly fragment
+var name ustring := unicode "Alice"
+put unicode "Hello, " + name
+var greeting ustring := unicode "你好"
+~~~
 
 ### Changes Summary
 | Old | New | Description |
 |-----|-----|-------------|
-| `u\"...\"` required for Unicode | Auto-detected | Unicode is now inferred from content |
-| `u\"...\"` still works | Optional | Explicit Unicode annotation still supported |
+| `unicode "..."` | `unicode "..."` | The old prefix is replaced by an explicit keyword |
+| Ordinary `"..."` | Ordinary `"..."` | Plain strings remain available for normal text |
 
 ---
 
@@ -136,119 +136,119 @@ var greeting: ustring = u\"你好\"  # Explicit Unicode still works
 ### Example 1: Interactive Menu
 
 **Old Syntax:**
-```poly
+~~~poly fragment
 loop
-    put u\"Menu:\"
-    put u\"1. Start\"
-    put u\"2. Stop\"
-    put u\"3. Exit\"
-    putn u\"Choose: \"
-    var choice: i32 = get
+    put unicode "Menu:"
+    put unicode "1. Start"
+    put unicode "2. Stop"
+    put unicode "3. Exit"
+    putn unicode "Choose: "
+    var choice i32 := get
     match choice
         1 => start_process()
         2 => stop_process()
         3 => break
-        _ => put u\"Invalid choice\"
+        _ => put unicode "Invalid choice"
     end match
 end loop
-```
+~~~
 
 **New Syntax:**
-```poly
+~~~poly fragment
 loop
-    put \"Menu:\"
-    put \"1. Start\"
-    put \"2. Stop\"
-    put \"3. Exit\"
-    put -n \"Choose: \"
-    var choice: i32 = get
+    put "Menu:"
+    put "1. Start"
+    put "2. Stop"
+    put "3. Exit"
+    put -n "Choose: "
+    var choice i32 := get
     match choice
         1 => start_process()
         2 => stop_process()
         3 => break
-        _ => put \"Invalid choice\"
+        _ => put "Invalid choice"
     end match
 end loop
-```
+~~~
 
 ### Example 2: Input Validation
 
 **Old Syntax:**
-```poly
-put u\"Enter age: \"
-var age: i32 = get with validate |x| x > 0 && x < 150
-put u\"Age: \" + age
+~~~poly fragment
+put unicode "Enter age: "
+var age i32 := get with validate |x| x > 0 && x < 150
+put unicode "Age: " + age
 
-put u\"Enter color: \"
-var color: ustring = get with default u\"blue\"
-put u\"Color: \" + color
-```
+put unicode "Enter color: "
+var color ustring := get with default unicode "blue"
+put unicode "Color: " + color
+~~~
 
 **New Syntax:**
-```poly
-put -n \"Enter age: \"
-var age: i32 = get with validate |x| x > 0 && x < 150
-put \"Age: \" + age
+~~~poly fragment
+put -n "Enter age: "
+var age i32 := get with validate |x| x > 0 && x < 150
+put "Age: " + age
 
-put -n \"Enter color: \"
-var color: ustring = get --default u\"blue\"
-put \"Color: \" + color
-```
+put -n "Enter color: "
+var color ustring := get --default unicode "blue"
+put "Color: " + color
+~~~
 
 ### Example 3: Error Handling
 
 **Old Syntax:**
-```poly
+~~~poly fragment
 fn read_file(path: ustring): Result<ustring, FileError>
-    var file = try open_file(path)
+    var file := try open_file(path)
     return Ok(file.read_all())
 end fn
 
-match read_file(u\"config.txt\")
+match read_file(unicode "config.txt")
     Ok(content) => process(content)
-    Err(e) => print_err(u\"Error: \" + e)
+    Err(e) => print_err(unicode "Error: " + e)
 end match
-```
+~~~
 
 **New Syntax:**
-```poly
+~~~poly fragment
 fn read_file(path: ustring): Result<ustring, FileError>
-    var file = try open_file(path)
+    var file := try open_file(path)
     return Ok(file.read_all())
 end fn
 
-match read_file(u\"config.txt\")
+match read_file(unicode "config.txt")
     Ok(content) => process(content)
-    Error(e) => error \"Error: \" + e
+    Error(e) => error "Error: " + e
 end match
-```
+~~~
 
 ### Example 4: File Operations
 
 **Old Syntax:**
-```poly
-put u\"Line 1\\nLine 2\" > \"output.txt\"
-put u\"Appended line\" >> \"output.txt\"
+~~~poly fragment
+put unicode "Line 1\nLine 2" > "output.txt"
+put unicode "Appended line" >> "output.txt"
 
-var content: ustring = get < \"input.txt\"
-var data: bytes = get < \"binary.bin\"
-```
+var content ustring := get < "input.txt"
+var data bytes := get < "binary.bin"
+~~~
 
 **New Syntax:**
-```poly
-put \"Line 1\\nLine 2\" > \"output.txt\"
-put \"Appended line\" >> \"output.txt\"
+~~~poly fragment
+put "Line 1\nLine 2" > "output.txt"
+put "Appended line" >> "output.txt"
 
-var content: ustring = get < \"input.txt\"
-var data: bytes = get < \"binary.bin\"
-```
+var content ustring := get < "input.txt"
+var data bytes := get < "binary.bin"
+~~~
 
 ---
 
 ## Loop Syntax (New)
 
 ### Old Syntax (if applicable)
-```poly
+~~~poly
 for i in 0..10
     put i
 end for
@@ -256,10 +256,10 @@ end for
 for item in items
     put item
 end for
-```
+~~~
 
 ### New Syntax
-```poly
+~~~poly
 # Simple range
 loop: 0..10
     put i
@@ -289,7 +289,7 @@ end loop
 loop: (index, item) in items.enumerate()
     put index.to_string() + ": " + item
 end loop
-```
+~~~
 
 ### Changes Summary
 | Old | New | Description |
@@ -309,24 +309,24 @@ end loop
 ### Output
 | Old | New |
 |-----|-----|
-| `put u\"text\"` | `put \"text\"` |
-| `putn u\"text\"` | `put -n \"text\"` |
-| `pute u\"text\"` | `error \"text\"` |
+| `put unicode "text"` | `put "text"` |
+| `putn unicode "text"` | `put -n "text"` |
+| `pute unicode "text"` | `error "text"` |
 
 ### Input
 | Old | New |
 |-----|-----|
 | `get with timeout 5000` | `get --timeout 5000` |
-| `get with default u\"val\"` | `get --default u\"val\"` |
-| `get with mask u\"*\"` | `get --mask u\"*\"` |
+| `get with default unicode "val"` | `get --default unicode "val"` |
+| `get with mask unicode "*"` | `get --mask unicode "*"` |
 | `get as Type` | `get --as Type` |
-| `get until u\",\"` | `get --until u\",\"` |
+| `get until unicode ","` | `get --until unicode ","` |
 
 ### Error Handling
 | Old | New |
 |-----|-----|
 | `Err(e)` | `Error(e)` |
-| `print_err(u\"msg\")` | `error \"msg\"` |
+| `print_err(unicode "msg")` | `error "msg"` |
 
 ---
 
@@ -334,7 +334,7 @@ end loop
 
 1. **More Readable**: `Error(e)` is clearer than `Err(e)`
 2. **Consistent Flags**: `--timeout`, `--default`, `--mask` follow CLI conventions
-3. **Unicode Inference**: No need for `u\"...\"` prefix in most cases
+3. **Unicode Inference**: No need for `unicode "..."` prefix in most cases
 4. **Better Error Levels**: `error`, `warn`, `info` for different severity levels
 5. **Simpler Flags**: `-n` for no newline is intuitive
 
@@ -350,5 +350,5 @@ end loop
 - [ ] Replace `as Type` with `--as Type`
 - [ ] Replace `until` with `--until`
 - [ ] Replace `Err(e)` with `Error(e)`
-- [ ] Remove unnecessary `u\"...\"` prefixes (optional)
+- [ ] Remove unnecessary `unicode "..."` prefixes (optional)
 - [ ] Update transpilation tables if needed

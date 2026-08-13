@@ -10,18 +10,45 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Unix/Linux
 
-```poly
-// Good: Unix-compatible output\nput \"Hello, World!\"  // LF line ending\n\n// Unix file paths\nvar path: ustring = \"/home/user/file.txt\"\nvar content: ustring = get < path\n\n// Unix permissions\nset_file_permissions(\"file.txt\", 0o644)\n```
+~~~poly
+// Good: Unix-compatible output
+put "Hello, World!"  // LF line ending
+
+// Unix file paths
+var path ustring := "/home/user/file.txt"
+var content ustring := get < path
+
+// Unix permissions
+set_file_permissions("file.txt", 0o644)
+~~~
 
 ### Windows
 
-```poly
-// Good: Windows-compatible output\nput \"Hello, World!\"  // CRLF line ending handled by OS\n\n// Windows file paths\nvar path: ustring = \"C:\\\\Users\\\\user\\\\file.txt\"\nvar content: ustring = get < path\n\n// Windows permissions\nset_file_permissions(\"file.txt\", 0o644)  // Mapped to Windows ACLs\n```
+~~~poly
+// Good: Windows-compatible output
+put "Hello, World!"  // CRLF line ending handled by OS
+
+// Windows file paths
+var path ustring := "C:\\Users\\user\\file.txt"
+var content ustring := get < path
+
+// Windows permissions
+set_file_permissions("file.txt", 0o644)  // Mapped to Windows ACLs
+~~~
 
 ### macOS
 
-```poly
-// Good: macOS-compatible output\nput \"Hello, World!\"  // LF line ending\n\n// macOS file paths\nvar path: ustring = \"/Users/user/file.txt\"\nvar content: ustring = get < path\n\n// macOS permissions\nset_file_permissions(\"file.txt\", 0o644)\n```
+~~~poly
+// Good: macOS-compatible output
+put "Hello, World!"  // LF line ending
+
+// macOS file paths
+var path ustring := "/Users/user/file.txt"
+var content ustring := get < path
+
+// macOS permissions
+set_file_permissions("file.txt", 0o644)
+~~~
 
 ---
 
@@ -29,18 +56,36 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### UTF-8
 
-```poly
-// Good: UTF-8 encoding\nvar text: ustring = u\"Hello, World!\"\nput text\n\n// UTF-8 file reading\nvar content: ustring = get < \"utf8.txt\" with encoding u\"utf-8\"\n```
+~~~poly
+// Good: UTF-8 encoding
+var text ustring := unicode "Hello, World!"
+put text
+
+// UTF-8 file reading
+var content ustring := get < "utf8.txt" with encoding unicode "utf-8"
+~~~
 
 ### ASCII
 
-```poly
-// Good: ASCII encoding\nvar text: ustring = \"Hello, World!\"  // ASCII subset\nput text\n\n// ASCII file reading\nvar content: ustring = get < \"ascii.txt\" with encoding u\"ascii\"\n```
+~~~poly
+// Good: ASCII encoding
+var text ustring := "Hello, World!"  // ASCII subset
+put text
+
+// ASCII file reading
+var content ustring := get < "ascii.txt" with encoding unicode "ascii"
+~~~
 
 ### Latin-1
 
-```poly
-// Good: Latin-1 encoding\nvar text: ustring = u\"café\"  // Latin-1 characters\nput text\n\n// Latin-1 file reading\nvar content: ustring = get < \"latin1.txt\" with encoding u\"latin-1\"\n```
+~~~poly
+// Good: Latin-1 encoding
+var text ustring := unicode "café"  // Latin-1 characters
+put text
+
+// Latin-1 file reading
+var content ustring := get < "latin1.txt" with encoding unicode "latin-1"
+~~~
 
 ---
 
@@ -48,18 +93,37 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Unix (LF)
 
-```poly
-// Good: Unix line endings\nput \"Line 1\\nLine 2\"  // LF\n\n// Read Unix file\nvar content: ustring = get < \"unix.txt\"\nvar lines: Vec<ustring> = content.split(\"\\n\")\n```
+~~~poly
+// Good: Unix line endings
+put "Line 1\nLine 2"  // LF
+
+// Read Unix file
+var content ustring := get < "unix.txt"
+var lines Vec<ustring> := content.split("\n")
+~~~
 
 ### Windows (CRLF)
 
-```poly
-// Good: Windows line endings\nput \"Line 1\\r\\nLine 2\"  // CRLF\n\n// Read Windows file\nvar content: ustring = get < \"windows.txt\"\nvar lines: Vec<ustring> = content.split(\"\\r\\n\")\n```
+~~~poly
+// Good: Windows line endings
+put "Line 1\r\nLine 2"  // CRLF
+
+// Read Windows file
+var content ustring := get < "windows.txt"
+var lines Vec<ustring> := content.split("\r\n")
+~~~
 
 ### Cross-Platform
 
-```poly
-// Good: Cross-platform line endings\nvar newline: ustring = if is_windows(),\"\\r\\n\" else \"\\n\" end if\nput \"Line 1\" + newline + \"Line 2\"\n\n// Read any file\nvar content: ustring = get < \"any.txt\"\nvar lines: Vec<ustring> = content.split(\"\\r?\\n\")  // Match either\n```
+~~~poly
+// Good: Cross-platform line endings
+var newline ustring := if is_windows(),"\r\n" else "\n" end if
+put "Line 1" + newline + "Line 2"
+
+// Read any file
+var content ustring := get < "any.txt"
+var lines Vec<ustring> := content.split("\r?\n")  // Match either
+~~~
 
 ---
 
@@ -67,18 +131,33 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Absolute Paths
 
-```poly
-// Good: Absolute paths\nvar path: ustring = if is_windows(),\n    \"C:\\\\Users\\\\user\\\\file.txt\"\nelse\n    \"/home/user/file.txt\"\nend if\nvar content: ustring = get < path\n```
+~~~poly
+// Good: Absolute paths
+var path ustring := if is_windows(),
+    "C:\\Users\\user\\file.txt"
+else
+    "/home/user/file.txt"
+end if
+var content ustring := get < path
+~~~
 
 ### Relative Paths
 
-```poly
-// Good: Relative paths\nvar path: ustring = \"./data/file.txt\"\nvar content: ustring = get < path\n```
+~~~poly
+// Good: Relative paths
+var path ustring := "./data/file.txt"
+var content ustring := get < path
+~~~
 
 ### Path Separators
 
-```poly
-// Good: Cross-platform path separators\nvar path: ustring = join_path([\"data\", \"file.txt\"])\n// Returns \"/data/file.txt\" on Unix\n// Returns \"\\\\data\\\\file.txt\" on Windows\nvar content: ustring = get < path\n```
+~~~poly
+// Good: Cross-platform path separators
+var path ustring := join_path(["data", "file.txt"])
+// Returns "/data/file.txt" on Unix
+// Returns "\\data\\file.txt" on Windows
+var content ustring := get < path
+~~~
 
 ---
 
@@ -86,13 +165,43 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Platform-Specific Errors
 
-```poly
-// Good: Handle platform-specific errors\nenum FileError\n    NotFound\n    PermissionDenied\n    AccessDenied  // Windows-specific\n    TooManyOpenFiles  // Unix-specific\nend enum\n\nfn read_file(path: ustring): Result<ustring, FileError>\n    match platform_read(path)\n        Ok(content) => return Ok(content)\n        Error(e) =>\n            if is_windows() && e.code == 5,\n                return Error(FileError::AccessDenied)\n            else if is_unix() && e.code == 24,\n                return Error(FileError::TooManyOpenFiles)\n            else\n                return Error(e.to_file_error())\n            end if\n    end match\nend fn\n```
+~~~poly
+// Good: Handle platform-specific errors
+enum FileError
+    NotFound
+    PermissionDenied
+    AccessDenied  // Windows-specific
+    TooManyOpenFiles  // Unix-specific
+end enum
+
+fn read_file(path: ustring): Result<ustring, FileError>
+    match platform_read(path)
+        Ok(content) => return Ok(content)
+        Error(e) =>
+            if is_windows() && e.code == 5,
+                return Error(FileError::AccessDenied)
+            else if is_unix() && e.code == 24,
+                return Error(FileError::TooManyOpenFiles)
+            else
+                return Error(e.to_file_error())
+            end if
+    end match
+end fn
+~~~
 
 ### Cross-Platform Error Messages
 
-```poly
-// Good: Cross-platform error messages\nfn get_error_message(error: FileError): ustring\n    match error\n        NotFound => return u\"File not found\"\n        PermissionDenied => return u\"Permission denied\"\n        AccessDenied => return u\"Access denied\"  // Windows\n        TooManyOpenFiles => return u\"Too many open files\"  // Unix\n    end match\nend fn\n```
+~~~poly fragment
+// Good: Cross-platform error messages
+fn get_error_message(error: FileError): ustring
+    match error
+        NotFound => return unicode "File not found"
+        PermissionDenied => return unicode "Permission denied"
+        AccessDenied => return unicode "Access denied"  // Windows
+        TooManyOpenFiles => return unicode "Too many open files"  // Unix
+    end match
+end fn
+~~~
 
 ---
 
@@ -100,18 +209,48 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Terminal Output
 
-```poly
-// Good: Cross-platform terminal output\nput \"Hello, World!\"  // Works on all platforms\nput -n \"Progress: \"  // Works on all platforms\n\n// Platform-specific formatting\nif is_windows(),\n    put \"Windows-style output\"\nelse\n    put \"Unix-style output\"\nend if\n```
+~~~poly
+// Good: Cross-platform terminal output
+put "Hello, World!"  // Works on all platforms
+put -n "Progress: "  // Works on all platforms
+
+// Platform-specific formatting
+if is_windows(),
+    put "Windows-style output"
+else
+    put "Unix-style output"
+end if
+~~~
 
 ### Terminal Input
 
-```poly
-// Good: Cross-platform input\nput -n \"Enter your name: \"\nvar name: ustring = get  // Works on all platforms\n\n// Platform-specific input handling\nif is_windows(),\n    // Windows-specific input handling\nelse\n    // Unix-specific input handling\nend if\n```
+~~~poly
+// Good: Cross-platform input
+put -n "Enter your name: "
+var name ustring := get  // Works on all platforms
+
+// Platform-specific input handling
+if is_windows(),
+    // Windows-specific input handling
+else
+    // Unix-specific input handling
+end if
+~~~
 
 ### File I/O
 
-```poly
-// Good: Cross-platform file I/O\nvar content: ustring = get < \"file.txt\"  // Works on all platforms\nput \"data\" > \"output.txt\"  // Works on all platforms\n\n// Platform-specific file operations\nif is_windows(),\n    // Windows-specific file operations\nelse\n    // Unix-specific file operations\nend if\n```
+~~~poly
+// Good: Cross-platform file I/O
+var content ustring := get < "file.txt"  // Works on all platforms
+put "data" > "output.txt"  // Works on all platforms
+
+// Platform-specific file operations
+if is_windows(),
+    // Windows-specific file operations
+else
+    // Unix-specific file operations
+end if
+~~~
 
 ---
 
@@ -119,13 +258,31 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Cross-Platform Networking
 
-```poly
-// Good: Cross-platform networking\nvar response = get --timeout 5000 < \"https://api.example.com\"\n\n// Platform-specific networking\nif is_windows(),\n    // Windows-specific networking\nelse\n    // Unix-specific networking\nend if\n```
+~~~poly
+// Good: Cross-platform networking
+var response := get --timeout 5000 < "https://api.example.com"
+
+// Platform-specific networking
+if is_windows(),
+    // Windows-specific networking
+else
+    // Unix-specific networking
+end if
+~~~
 
 ### SSL/TLS
 
-```poly
-// Good: Cross-platform SSL/TLS\nvar response = get < \"https://api.example.com\" with verify_certificate(true)\n\n// Platform-specific SSL/TLS\nif is_windows(),\n    // Windows-specific SSL/TLS\nelse\n    // Unix-specific SSL/TLS\nend if\n```
+~~~poly
+// Good: Cross-platform SSL/TLS
+var response := get < "https://api.example.com" with verify_certificate(true)
+
+// Platform-specific SSL/TLS
+if is_windows(),
+    // Windows-specific SSL/TLS
+else
+    // Unix-specific SSL/TLS
+end if
+~~~
 
 ---
 
@@ -133,13 +290,35 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Cross-Platform Performance
 
-```poly
-// Good: Cross-platform performance\nvar start = time_now()\n// Performance-critical code\nvar duration = time_now() - start\nput \"Duration: \" + duration.to_string() + \"ms\"\n\n// Platform-specific optimizations\nif is_windows(),\n    // Windows-specific optimizations\nelse\n    // Unix-specific optimizations\nend if\n```
+~~~poly
+// Good: Cross-platform performance
+var start := time_now()
+// Performance-critical code
+var duration := time_now() - start
+put "Duration: " + duration.to_string() + "ms"
+
+// Platform-specific optimizations
+if is_windows(),
+    // Windows-specific optimizations
+else
+    // Unix-specific optimizations
+end if
+~~~
 
 ### Memory Management
 
-```poly
-// Good: Cross-platform memory management\nvar data: Vec<ustring> = []\ndata.reserve(1000)  // Pre-allocate\n\n// Platform-specific memory management\nif is_windows(),\n    // Windows-specific memory management\nelse\n    // Unix-specific memory management\nend if\n```
+~~~poly
+// Good: Cross-platform memory management
+var data Vec<ustring> := []
+data.reserve(1000)  // Pre-allocate
+
+// Platform-specific memory management
+if is_windows(),
+    // Windows-specific memory management
+else
+    // Unix-specific memory management
+end if
+~~~
 
 ---
 
@@ -147,8 +326,30 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Cross-Platform Testing
 
-```poly
-// Good: Cross-platform tests\nfn test_file_operations()\n    var test_file: ustring = if is_windows(),\n        \"test_windows.txt\"\n    else\n        \"test_unix.txt\"\n    end if\n    \n    put \"Test content\" > test_file\n    var content: ustring = get < test_file\n    assert(content == u\"Test content\")\n    delete_file(test_file)\nend fn\n\n// Platform-specific tests\nfn test_platform_specific()\n    if is_windows(),\n        test_windows_specific()\n    else\n        test_unix_specific()\n    end if\nend fn\n```
+~~~poly
+// Good: Cross-platform tests
+fn test_file_operations()
+    var test_file ustring := if is_windows(),
+        "test_windows.txt"
+    else
+        "test_unix.txt"
+    end if
+
+    put "Test content" > test_file
+    var content ustring := get < test_file
+    assert(content == unicode "Test content")
+    delete_file(test_file)
+end fn
+
+// Platform-specific tests
+fn test_platform_specific()
+    if is_windows(),
+        test_windows_specific()
+    else
+        test_unix_specific()
+    end if
+end fn
+~~~
 
 ---
 
@@ -156,18 +357,50 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Use Platform Detection
 
-```poly
-// Good: Platform detection\nif is_windows(),\n    // Windows-specific code\nelse if is_macos(),\n    // macOS-specific code\nelse if is_linux(),\n    // Linux-specific code\nelse\n    // Fallback code\nend if\n```
+~~~poly
+// Good: Platform detection
+if is_windows(),
+    // Windows-specific code
+else if is_macos(),
+    // macOS-specific code
+else if is_linux(),
+    // Linux-specific code
+else
+    // Fallback code
+end if
+~~~
 
 ### Use Abstractions
 
-```poly
-// Good: Use abstractions\nfn read_file(path: ustring): Result<ustring, FileError>\n    return platform_read(path)  // Platform-specific implementation\nend fn\n\n// Bad: Platform-specific code everywhere\nfn read_file(path: ustring): Result<ustring, FileError>\n    if is_windows(),\n        // Windows-specific code\n    else\n        // Unix-specific code\n    end if\nend fn\n```
+~~~poly
+// Good: Use abstractions
+fn read_file(path: ustring): Result<ustring, FileError>
+    return platform_read(path)  // Platform-specific implementation
+end fn
+
+// Bad: Platform-specific code everywhere
+fn read_file(path: ustring): Result<ustring, FileError>
+    if is_windows(),
+        // Windows-specific code
+    else
+        // Unix-specific code
+    end if
+end fn
+~~~
 
 ### Test on Multiple Platforms
 
-```poly
-// Good: Cross-platform testing\nfn test_cross_platform()\n    // Test on current platform\n    test_file_operations()\n    test_network_operations()\n    test_error_handling()\n    \n    // Note: Full cross-platform testing requires CI/CD\nend fn\n```
+~~~poly
+// Good: Cross-platform testing
+fn test_cross_platform()
+    // Test on current platform
+    test_file_operations()
+    test_network_operations()
+    test_error_handling()
+
+    // Note: Full cross-platform testing requires CI/CD
+end fn
+~~~
 
 ---
 

@@ -2,6 +2,6 @@
 
 fn main()
     put "Closures Demo"
-    var square = |x: i32| x * x
+    var square := |x: i32| x * x
     put "Closure created"
 end fn

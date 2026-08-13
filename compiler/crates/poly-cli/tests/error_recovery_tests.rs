@@ -5,7 +5,7 @@ use poly_parser::Parser;
 
 #[test]
 fn test_error_recovery_collects_multiple_errors() {
-    let source = "var x: i32 = 42\nvar y = \nvar z = 100";
+    let source = "var x i32 := 42\nvar y := \nvar z := 100";
     let (tokens, _errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let (program, errors) = parser.parse_with_recovery();
@@ -17,13 +17,13 @@ fn test_error_recovery_collects_multiple_errors() {
 
 #[test]
 fn test_error_recovery_skips_bad_statement() {
-    // Use truly invalid syntax: missing value after `=` at end of file
-    let source = "var x = 1\nvar y = \nvar z = 2";
+    // Use truly invalid syntax: missing value after `:=` at end of file
+    let source = "var x := 1\nvar y := \nvar z := 2";
     let (tokens, _errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let (program, errors) = parser.parse_with_recovery();
 
-    // Should have at least one error for the incomplete `var y = `
+    // Should have at least one error for the incomplete `var y := `
     assert!(!errors.is_empty());
     // x and z should be parsed
     assert!(program.statements.len() >= 2);
@@ -31,7 +31,7 @@ fn test_error_recovery_skips_bad_statement() {
 
 #[test]
 fn test_parse_with_recovery_returns_program() {
-    let source = "var x = 1\nvar y = 2";
+    let source = "var x := 1\nvar y := 2";
     let (tokens, _errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let (program, errors) = parser.parse_with_recovery();
@@ -42,7 +42,7 @@ fn test_parse_with_recovery_returns_program() {
 
 #[test]
 fn test_error_recovery_multiple_errors() {
-    let source = "var x = \nvar y = \nvar z = 100";
+    let source = "var x := \nvar y := \nvar z := 100";
     let (tokens, _errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let (program, errors) = parser.parse_with_recovery();
@@ -67,7 +67,7 @@ fn test_error_recovery_empty_source() {
 #[test]
 fn test_error_recovery_lexer_errors() {
     // Source with unterminated strings should produce lexer errors
-    let source = "var x = \"unterminated";
+    let source = "var x := \"unterminated";
     let (_tokens, lexer_errors) = Lexer::lex(source);
 
     // Lexer should catch unterminated strings
@@ -81,7 +81,7 @@ fn sum(a: i32, b: i32): i32
     return a + b
 end fn
 
-var x = sum(1, 2)
+var x := sum(1, 2)
 put x
 "#;
     let (tokens, _errors) = Lexer::lex(source);

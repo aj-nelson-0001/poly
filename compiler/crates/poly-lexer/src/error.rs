@@ -13,6 +13,7 @@ pub struct LexerError {
 }
 
 impl LexerError {
+    /// Construct a diagnostic while keeping the offending source span attached.
     pub fn new(kind: LexerErrorKind, span: Span, message: impl Into<String>) -> Self {
         Self {
             kind,
@@ -23,6 +24,8 @@ impl LexerError {
 }
 
 impl fmt::Display for LexerError {
+    // Keep formatting compact because CLI callers often print several lexer
+    // diagnostics in one pass during error recovery.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

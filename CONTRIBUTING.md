@@ -48,7 +48,7 @@ Please be respectful and inclusive in all interactions. We are committed to prov
 
 ### Building the Project
 
-```bash
+~~~bash
 # Clone the repository
 git clone https://github.com/aj-nelson-0001/poly.git
 cd poly
@@ -59,11 +59,11 @@ cargo build
 
 # Run tests
 cargo test --workspace
-```
+~~~
 
 ### Project Structure
 
-```
+~~~
 poly/
 ├── compiler/
 │   ├── crates/
@@ -75,7 +75,7 @@ poly/
 ├── examples/                # Example Poly programs
 ├── tests/                   # Integration tests
 └── docs/                    # Documentation
-```
+~~~
 
 ## Making Changes
 
@@ -95,7 +95,7 @@ Write clear, concise commit messages:
 - Reference issues when applicable
 
 Example:
-```
+~~~
 Add pattern matching support
 
 - Implement match expression parsing
@@ -103,7 +103,7 @@ Add pattern matching support
 - Add comprehensive tests
 
 Closes #123
-```
+~~~
 
 ### Code Style
 
@@ -117,7 +117,7 @@ Closes #123
 
 ### Running Tests
 
-```bash
+~~~bash
 # Run all tests
 cargo test --workspace
 
@@ -127,7 +127,7 @@ cargo test -p poly-transpiler
 
 # Run with output
 cargo test -- --nocapture
-```
+~~~
 
 ### Writing Tests
 
@@ -137,14 +137,14 @@ cargo test -- --nocapture
 - Use descriptive test names
 
 Example:
-```rust
+~~~rust
 #[test]
 fn test_parse_if_else_if() {
     let source = "if x > 0, put x else if x < 0, put \"neg\" end if";
     let result = parse_source(source);
     assert!(result.is_ok());
 }
-```
+~~~
 
 ### Test Coverage
 
@@ -167,7 +167,7 @@ Aim for high test coverage, especially for:
 
 ### PR Template
 
-```markdown
+~~~markdown
 ## Description
 
 Brief description of changes
@@ -192,7 +192,7 @@ Brief description of changes
 - [ ] Self-review completed
 - [ ] Documentation updated
 - [ ] No breaking changes (or documented)
-```
+~~~
 
 ### Review Process
 
@@ -224,7 +224,11 @@ Brief description of changes
 - Use clear, concise language
 - Include code examples
 - Keep formatting consistent
+- Use tilde fences for code blocks: write three tilde characters followed by an optional language label, such as `poly`, and close with three tilde characters
+- Leave single backticks available for inline code references
+- Use the current Poly declaration syntax: `var name Type := value` or `var name := value`
 - Update table of contents
+- Run `python3 scripts/check_markdown.py` and `python3 scripts/check_poly_examples.py` before submitting documentation changes
 
 ## Reporting Issues
 

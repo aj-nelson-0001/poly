@@ -2,26 +2,35 @@
 //!
 //! Command-line interface for the Poly compiler/transpiler.
 
-use std::path::PathBuf;
+mod repl;
+
+use std::path::{Path, PathBuf};
 use std::process;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 
 fn main() -> Result<()> {
+    // Keep argument parsing dependency-free: the CLI is also used as a small
+    // standalone binary in generated-project and integration-test workflows.
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
         eprintln!("Poly Language Compiler v{}", env!("CARGO_PKG_VERSION"));
         eprintln!();
-        eprintln!("Usage: poly <file.poly> [options]");
+        eprintln!("Usage: poly <file.poly>");
         eprintln!();
         eprintln!("Options:");
         eprintln!("  --tokens    Print tokens and exit");
         eprintln!("  --ast       Print AST and exit");
         eprintln!("  --check     Validate code and verify Rust compilation");
+        eprintln!("  --emit-rust  Print transpiled Rust instead of compiling");
+        eprintln!("  --intermediate-representation  Print the intermediate representation pipeline output (optimized Rust)");
+        eprintln!("  --ir                           Alias for --intermediate-representation");
+        eprintln!("  --source-map  Print the generated source map");
         eprintln!("  --format    Format output with rustfmt");
         eprintln!("  --diff      Show diff between unformatted and formatted");
         eprintln!("  --watch     Watch file and re-transpile on changes");
+        eprintln!("  --project   Generate a Cargo project (usage: --project <dir> <file.poly>)");
         eprintln!("  --repl      Start interactive REPL");
         eprintln!("  --help      Show this help message");
         eprintln!("  --version   Show version information");
@@ -32,13 +41,18 @@ fn main() -> Result<()> {
         "--help" | "-h" => {
             println!("Poly Language Compiler v{}", env!("CARGO_PKG_VERSION"));
             println!();
-            println!("Usage: poly <file.poly> [options]");
+            println!("Usage: poly <file.poly>");
             println!();
             println!("Options:");
             println!("  --tokens    Print tokens and exit");
             println!("  --ast       Print AST and exit");
             println!("  --check     Validate code and verify Rust compilation");
+            println!("  --emit-rust  Print transpiled Rust instead of compiling");
+            println!("  --intermediate-representation  Print the intermediate representation pipeline output (optimized Rust)");
+            println!("  --ir                           Alias for --intermediate-representation");
+            println!("  --source-map  Print the generated source map");
             println!("  --format    Format output with rustfmt");
+            println!("  --project   Generate a Cargo project (usage: --project <dir> <file.poly>)");
             println!("  --repl      Start interactive REPL");
             println!("  --help      Show this help message");
             println!("  --version   Show version information");
@@ -61,8 +75,13 @@ fn main() -> Result<()> {
 
             if !errors.is_empty() {
                 eprintln!("Lexer errors:");
+                let label = path.display().to_string();
                 for error in &errors {
-                    eprintln!("  {}", error);
+                    eprintln!(
+                        "{}",
+                        poly_lexer::render_error(&source, error.span, &label, &error.message)
+                    );
+                    eprintln!();
                 }
                 process::exit(1);
             }
@@ -80,13 +99,18 @@ fn main() -> Result<()> {
             let path = PathBuf::from(&args[2]);
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
+            let label = path.display().to_string();
 
             let (tokens, errors) = poly_lexer::Lexer::lex(&source);
 
             if !errors.is_empty() {
                 eprintln!("Lexer errors:");
                 for error in &errors {
-                    eprintln!("  {}", error);
+                    eprintln!(
+                        "{}",
+                        poly_lexer::render_error(&source, error.span, &label, &error.message)
+                    );
+                    eprintln!();
                 }
                 process::exit(1);
             }
@@ -97,13 +121,20 @@ fn main() -> Result<()> {
                     println!("{:#?}", program);
                 }
                 Err(e) => {
-                    eprintln!("Parse error: {}", e);
+                    let rendered = poly_lexer::render_error(&source, e.span, &label, &e.message);
+                    eprintln!("{}", rendered);
+                    if let Some(suggestion) = &e.suggestion {
+                        eprintln!("  note: {}", suggestion);
+                    }
                     process::exit(1);
                 }
             }
             Ok(())
         }
         "--check" => {
+            // `--check` intentionally runs every compiler phase, including
+            // rustc, so success means the source is semantically and
+            // code-generation-wise buildable rather than merely parseable.
             if args.len() < 3 {
                 eprintln!("Error: --check requires a file argument");
                 process::exit(1);
@@ -111,15 +142,22 @@ fn main() -> Result<()> {
             let path = PathBuf::from(&args[2]);
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
+            let label = path.display().to_string();
 
-            // Run lexer
+            // The CLI keeps phase boundaries visible in its diagnostics: lexer
+            // errors stop meaningful parsing, while parser recovery can expose
+            // several independent syntax errors in one invocation.
             let (tokens, lexer_errors) = poly_lexer::Lexer::lex(&source);
             let mut has_errors = false;
 
             if !lexer_errors.is_empty() {
                 eprintln!("Lexer errors:");
                 for error in &lexer_errors {
-                    eprintln!("  {}", error);
+                    eprintln!(
+                        "{}",
+                        poly_lexer::render_error(&source, error.span, &label, &error.message)
+                    );
+                    eprintln!();
                 }
                 has_errors = true;
             }
@@ -132,9 +170,27 @@ fn main() -> Result<()> {
                 if !parse_errors.is_empty() {
                     eprintln!("Parse errors:");
                     for error in &parse_errors {
-                        eprintln!("  {}", error);
+                        eprintln!(
+                            "{}",
+                            poly_lexer::render_error(&source, error.span, &label, &error.message)
+                        );
+                        if let Some(suggestion) = &error.suggestion {
+                            eprintln!("  note: {}", suggestion);
+                        }
+                        eprintln!();
                     }
                     has_errors = true;
+                }
+
+                // Run semantic type checking before transpilation.
+                if !has_errors {
+                    if let Err(type_errors) = poly_transpiler::check_program(&program) {
+                        eprintln!("Type errors:");
+                        for error in type_errors {
+                            eprintln!("  {}", error);
+                        }
+                        has_errors = true;
+                    }
                 }
 
                 // Run transpiler to check for transpilation errors
@@ -170,6 +226,56 @@ fn main() -> Result<()> {
 
             Ok(())
         }
+        "--emit-rust" => {
+            if args.len() < 3 {
+                eprintln!("Error: --emit-rust requires a file argument");
+                process::exit(1);
+            }
+            let path = PathBuf::from(&args[2]);
+            let source = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read file: {}", path.display()))?;
+
+            let transpiler = poly_transpiler::Transpiler::new();
+            let rust_code = transpiler
+                .transpile(&source)
+                .map_err(|e| anyhow::anyhow!(e))?;
+            let formatted = format_with_rustfmt(&rust_code).unwrap_or(rust_code);
+            println!("{}", formatted);
+            Ok(())
+        }
+        "--intermediate-representation" | "--ir" => {
+            if args.len() < 3 {
+                eprintln!("Error: --intermediate-representation requires a file argument");
+                process::exit(1);
+            }
+            let path = PathBuf::from(&args[2]);
+            let source = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read file: {}", path.display()))?;
+
+            let transpiler = poly_transpiler::Transpiler::new();
+            let rust_code = transpiler
+                .transpile_with_intermediate_representation(&source)
+                .map_err(|e| anyhow::anyhow!(e))?;
+            let formatted = format_with_rustfmt(&rust_code).unwrap_or(rust_code);
+            println!("{}", formatted);
+            Ok(())
+        }
+        "--source-map" => {
+            if args.len() < 3 {
+                eprintln!("Error: --source-map requires a file argument");
+                process::exit(1);
+            }
+            let path = PathBuf::from(&args[2]);
+            let source = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read file: {}", path.display()))?;
+
+            let mut transpiler = poly_transpiler::Transpiler::with_source_map();
+            let (_rust_code, source_map) = transpiler
+                .transpile_with_source_map(&source)
+                .map_err(|e| anyhow::anyhow!(e))?;
+            println!("{}", source_map.summary());
+            Ok(())
+        }
         "--watch" => {
             if args.len() < 3 {
                 eprintln!("Error: --watch requires a file argument");
@@ -177,6 +283,23 @@ fn main() -> Result<()> {
             }
             let path = PathBuf::from(&args[2]);
             watch_file(&path)?;
+            Ok(())
+        }
+        "--project" => {
+            if args.len() < 4 {
+                eprintln!("Error: --project requires an output directory and a .poly file");
+                eprintln!("Usage: poly --project <dir> <file.poly>");
+                process::exit(1);
+            }
+
+            let output_dir = PathBuf::from(&args[2]);
+            let source_path = PathBuf::from(&args[3]);
+            generate_cargo_project(&source_path, &output_dir)?;
+            println!(
+                "Generated Cargo project at {} (source: {})",
+                output_dir.display(),
+                source_path.display()
+            );
             Ok(())
         }
         "--diff" => {
@@ -232,22 +355,22 @@ fn main() -> Result<()> {
             Ok(())
         }
         "--repl" => {
-            run_repl();
+            repl::run();
             Ok(())
         }
         file if file.ends_with(".poly") => {
             let path = PathBuf::from(file);
-            let source = std::fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read file: {}", path.display()))?;
+            let output_dir = default_cargo_output_dir(&path);
 
-            let transpiler = poly_transpiler::Transpiler::new();
-            let rust_code = transpiler
-                .transpile(&source)
-                .map_err(|e| anyhow::anyhow!(e))?;
+            generate_cargo_project_inner(&path, &output_dir, false)?;
+            build_cargo_project(&output_dir)?;
 
-            // Try to format with rustfmt
-            let formatted = format_with_rustfmt(&rust_code).unwrap_or(rust_code);
-            println!("{}", formatted);
+            let binary_path = cargo_binary_path(&output_dir, &path);
+            println!(
+                "Generated and built {} -> {}",
+                path.display(),
+                binary_path.display()
+            );
             Ok(())
         }
         other => {
@@ -258,363 +381,220 @@ fn main() -> Result<()> {
     }
 }
 
-/// Run the interactive REPL with syntax highlighting
-fn run_repl() {
-    use std::io::{self, Write};
-
-    // Color codes for syntax highlighting
-    const RESET: &str = "\x1b[0m";
-    const BOLD: &str = "\x1b[1m";
-    const DIM: &str = "\x1b[2m";
-    const RED: &str = "\x1b[31m";
-    const GREEN: &str = "\x1b[32m";
-    const YELLOW: &str = "\x1b[33m";
-    const BLUE: &str = "\x1b[34m";
-    const MAGENTA: &str = "\x1b[35m";
-    const CYAN: &str = "\x1b[36m";
-
-    println!(
-        "{}{}Poly Language REPL{} v{}",
-        BOLD,
-        CYAN,
-        RESET,
-        env!("CARGO_PKG_VERSION")
-    );
-    println!(
-        "{}Type Poly code and press Enter to transpile to Rust.{}",
-        DIM, RESET
-    );
-    println!(
-        "{}Commands: :help, :tokens, :ast, :history, :clear, :quit{}",
-        DIM, RESET
-    );
-    println!();
-
-    // Load command history
-    let history_path = dirs_and_history_path();
-    let mut history: Vec<String> = load_history(&history_path);
-    let mut _history_index: Option<usize> = None;
-    let mut buffer = String::new();
-    let mut line_number = 0;
-
-    loop {
-        // Show prompt
-        if buffer.is_empty() {
-            print!("{}poly{}>{} ", GREEN, BOLD, RESET);
-        } else {
-            print!("  {}...{} ", YELLOW, RESET);
-        }
-        io::stdout().flush().unwrap();
-
-        // Read input
-        let mut input = String::new();
-        match io::stdin().read_line(&mut input) {
-            Ok(0) => break, // EOF
-            Ok(_) => {
-                let input = input.trim();
-                line_number += 1;
-
-                // Handle commands
-                if input == ":quit" || input == ":q" || input == ":exit" {
-                    save_history(&history_path, &history);
-                    println!("{}Goodbye!{}", GREEN, RESET);
-                    break;
-                }
-
-                if input == ":help" {
-                    println!();
-                    println!("{}REPL Commands:{}", BOLD, RESET);
-                    println!("  {}:{}    Show this help message", CYAN, RESET);
-                    println!("  {}:{}    Show tokens for buffered input", CYAN, RESET);
-                    println!("  {}:{}     Show AST for buffered input", CYAN, RESET);
-                    println!("  {}:{}     Show command history", CYAN, RESET);
-                    println!("  {}:{}    Clear the buffer", CYAN, RESET);
-                    println!("  {}:{}      Clear history", CYAN, RESET);
-                    println!("  {}:{}    Exit the REPL", CYAN, RESET);
-                    println!();
-                    println!("{}Poly Syntax:{}", BOLD, RESET);
-                    println!(
-                        "  {}var{} x: {}i32{} = {}",
-                        MAGENTA, RESET, BLUE, RESET, GREEN
-                    );
-                    println!(
-                        "  {}put{} \"{}Hello, World!{}\"",
-                        MAGENTA, RESET, YELLOW, RESET
-                    );
-                    println!(
-                        "  {}fn{} {}add{}(a: {}i32{}, b: {}i32{}): {}i32{}",
-                        MAGENTA, RESET, CYAN, RESET, BLUE, RESET, BLUE, RESET, BLUE, RESET
-                    );
-                    println!("      {}return{} a {}+{} b", MAGENTA, RESET, RED, RESET);
-                    println!("  {}end{} {}fn{}", MAGENTA, RESET, MAGENTA, RESET);
-                    println!();
-                    println!("{}Tips:{}", BOLD, RESET);
-                    println!("{}  - Use ↑/↓ arrows to navigate history{}", DIM, RESET);
-                    println!(
-                        "{}  - Multi-line: continue on next line for blocks{}",
-                        DIM, RESET
-                    );
-                    println!(
-                        "{}  - Use :tokens or :ast to inspect buffered input{}",
-                        DIM, RESET
-                    );
-                    println!();
-                    continue;
-                }
-
-                if input == ":clear" {
-                    buffer.clear();
-                    line_number = 0;
-                    println!("{}Buffer cleared.{}", GREEN, RESET);
-                    continue;
-                }
-
-                if input == ":history" {
-                    println!("{}Command History:{}", BOLD, RESET);
-                    for (i, cmd) in history.iter().enumerate() {
-                        println!("  {}{}: {}{}", DIM, i + 1, cmd, RESET);
-                    }
-                    if history.is_empty() {
-                        println!("  {}(empty){}", DIM, RESET);
-                    }
-                    continue;
-                }
-
-                if input == ":clear-history" {
-                    history.clear();
-                    save_history(&history_path, &history);
-                    println!("{}History cleared.{}", GREEN, RESET);
-                    continue;
-                }
-
-                if input == ":tokens" {
-                    if buffer.is_empty() {
-                        println!("{}No input buffered.{}", YELLOW, RESET);
-                        continue;
-                    }
-                    let (tokens, errors) = poly_lexer::Lexer::lex(&buffer);
-                    if !errors.is_empty() {
-                        println!("{}Lexer errors:{}", RED, RESET);
-                        for error in &errors {
-                            println!("  {}{}{}", RED, error, RESET);
-                        }
-                    } else {
-                        println!("{}Tokens:{}", BOLD, RESET);
-                        for token in &tokens {
-                            // Syntax highlight tokens
-                            let token_str = format!("{:?}", token);
-                            let highlighted = highlight_token(&token_str);
-                            println!("  {}", highlighted);
-                        }
-                    }
-                    continue;
-                }
-
-                if input == ":ast" {
-                    if buffer.is_empty() {
-                        println!("{}No input buffered.{}", YELLOW, RESET);
-                        continue;
-                    }
-                    let (tokens, errors) = poly_lexer::Lexer::lex(&buffer);
-                    if !errors.is_empty() {
-                        println!("{}Lexer errors:{}", RED, RESET);
-                        for error in &errors {
-                            println!("  {}{}{}", RED, error, RESET);
-                        }
-                    } else {
-                        let mut parser = poly_parser::Parser::new(&tokens);
-                        match parser.parse() {
-                            Ok(program) => {
-                                println!("{:#?}", program);
-                            }
-                            Err(e) => {
-                                println!("{}Parse error: {}{}", RED, e, RESET);
-                            }
-                        }
-                    }
-                    continue;
-                }
-
-                // Add to history if not empty
-                if !input.is_empty() {
-                    // Avoid adding duplicates consecutively
-                    if history.last().is_none_or(|last| last != input) {
-                        history.push(input.to_string());
-                        // Keep history reasonable size
-                        if history.len() > 1000 {
-                            history.drain(0..500);
-                        }
-                    }
-                }
-                _history_index = None;
-
-                // Accumulate input (multi-line support)
-                if !buffer.is_empty() {
-                    buffer.push('\n');
-                }
-                buffer.push_str(input);
-
-                // Check if we have a complete statement
-                let trimmed = buffer.trim();
-                let is_complete = trimmed.ends_with("end fn")
-                    || trimmed.ends_with("end if")
-                    || trimmed.ends_with("end while")
-                    || trimmed.ends_with("end struct")
-                    || trimmed.ends_with("end enum")
-                    || trimmed.ends_with("end match")
-                    || trimmed.ends_with("end loop")
-                    || trimmed.ends_with("end trait")
-                    || trimmed.ends_with("end impl")
-                    || trimmed.ends_with("end unsafe")
-                    || (line_number > 0 && !input.is_empty() && !input.trim().ends_with('\\'));
-
-                if is_complete {
-                    // Transpile
-                    let transpiler = poly_transpiler::Transpiler::new();
-                    match transpiler.transpile(&buffer) {
-                        Ok(rust_code) => {
-                            println!();
-                            println!("{}// Generated Rust code:{}", DIM, RESET);
-                            // Syntax highlight the Rust output
-                            for line in rust_code.lines() {
-                                println!("  {}", highlight_rust(line));
-                            }
-                        }
-                        Err(e) => {
-                            println!("{}Error: {}{}", RED, e, RESET);
-                            // Show helpful suggestions based on error
-                            show_error_suggestions(&e);
-                        }
-                    }
-                    buffer.clear();
-                    line_number = 0;
-                    println!();
-                }
-            }
-            Err(e) => {
-                eprintln!("{}Error reading input: {}{}", RED, e, RESET);
-                break;
-            }
-        }
-    }
+/// Generate a standalone Cargo project from a Poly source file.
+fn generate_cargo_project(source_path: &Path, output_dir: &Path) -> Result<()> {
+    generate_cargo_project_inner(source_path, output_dir, true)
 }
 
-/// Get the path to the history file
-fn dirs_and_history_path() -> std::path::PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    std::path::PathBuf::from(home).join(".poly_repl_history")
-}
-
-/// Load command history from file
-fn load_history(path: &std::path::Path) -> Vec<String> {
-    std::fs::read_to_string(path)
-        .map(|content| content.lines().map(String::from).collect())
-        .unwrap_or_default()
-}
-
-/// Save command history to file
-fn save_history(path: &std::path::Path, history: &[String]) {
-    let _ = std::fs::write(path, history.join("\n"));
-}
-
-/// Show helpful suggestions based on error message
-fn show_error_suggestions(error: &str) {
-    const DIM: &str = "\x1b[2m";
-    #[allow(dead_code)]
-    const CYAN: &str = "\x1b[36m";
-    const RESET: &str = "\x1b[0m";
-    const YELLOW: &str = "\x1b[33m";
-
-    if error.contains("Expected") && error.contains("end") {
-        println!(
-            "{}  💡 Tip: Blocks must end with 'end <keyword>' (e.g., end fn, end if){}",
-            YELLOW, RESET
-        );
-    } else if error.contains("Unexpected token") {
-        println!(
-            "{}  💡 Tip: Check for missing semicolons or keywords{}
-{}     Poly uses 'put' for output and 'get' for input{}
-{}     Function calls use: fn_name(args){}
-{}     Strings use double quotes: \"hello\"{}",
-            YELLOW, RESET, DIM, RESET, DIM, RESET, DIM, RESET
-        );
-    } else if error.contains("type") {
-        println!(
-            "{}  💡 Tip: Valid types: i32, f64, string, bool, char, u8, etc.{}
-{}     Or use custom types: MyStruct, MyEnum{}
-{}     Containers: Vec<T>, Option<T>, Result<T, E>{}",
-            YELLOW, RESET, DIM, RESET, DIM, RESET
-        );
-    } else if error.contains("assignment") || error.contains("= ") {
-        println!(
-            "{}  💡 Tip: Use '=' for assignment, '==' for comparison{}
-{}     var x = 42  # declaration{}
-{}     x = 10     # reassignment{}",
-            YELLOW, RESET, DIM, RESET, DIM, RESET
-        );
-    }
-}
-
-/// Poly keywords for tab completion
-#[allow(dead_code)]
-const POLY_KEYWORDS: &[&str] = &[
-    "var", "let", "const", "fn", "return", "if", "else", "end", "while", "for", "in", "loop",
-    "struct", "enum", "match", "trait", "impl", "async", "await", "unsafe", "pub", "module", "use",
-    "type", "as", "try", "spawn", "move", "break", "continue", // Types
-    "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "f32", "f64", "bool",
-    "char", "string", "usize", "isize", "byte", "bytes", // Builtins
-    "put", "get", "error", "warn", "info",
-];
-
-/// Complete a partial input with keyword suggestions
-#[allow(dead_code)]
-fn complete_input(partial: &str) -> Vec<String> {
-    let partial_lower = partial.to_lowercase();
-    POLY_KEYWORDS
-        .iter()
-        .filter(|kw| kw.starts_with(&partial_lower))
-        .map(|s| s.to_string())
-        .collect()
-}
-
-/// Highlight a Poly token for REPL output
-fn highlight_token(token_str: &str) -> String {
-    const RESET: &str = "\x1b[0m";
-    const GREEN: &str = "\x1b[32m";
-    const YELLOW: &str = "\x1b[33m";
-    const BLUE: &str = "\x1b[34m";
-    const MAGENTA: &str = "\x1b[35m";
-    const CYAN: &str = "\x1b[36m";
-
-    if token_str.contains("StringLiteral") || token_str.contains("UnicodeStringLiteral") {
-        format!("{}{}{}", YELLOW, token_str, RESET)
-    } else if token_str.contains("IntLiteral") || token_str.contains("FloatLiteral") {
-        format!("{}{}{}", BLUE, token_str, RESET)
-    } else if token_str.contains("Fn")
-        || token_str.contains("Let")
-        || token_str.contains("Var")
-        || token_str.contains("Return")
-        || token_str.contains("If")
-        || token_str.contains("Else")
-        || token_str.contains("While")
-        || token_str.contains("For")
-        || token_str.contains("Match")
-        || token_str.contains("End")
-        || token_str.contains("Struct")
-        || token_str.contains("Enum")
-        || token_str.contains("Break")
-        || token_str.contains("Continue")
+/// Generate a Cargo project, optionally replacing files generated by Poly before.
+fn generate_cargo_project_inner(
+    source_path: &Path,
+    output_dir: &Path,
+    refuse_overwrite: bool,
+) -> Result<()> {
+    // Validate the source suffix before reading or creating anything so a typo
+    // cannot accidentally turn an arbitrary file into a generated project.
+    if source_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        != Some("poly")
     {
-        format!("{}{}{}", MAGENTA, token_str, RESET)
-    } else if token_str.contains("Identifier") {
-        format!("{}{}{}", CYAN, token_str, RESET)
+        bail!(
+            "Source file must have a .poly extension: {}",
+            source_path.display()
+        );
+    }
+
+    let source = std::fs::read_to_string(source_path)
+        .with_context(|| format!("Failed to read file: {}", source_path.display()))?;
+
+    let transpiler = poly_transpiler::Transpiler::new();
+    let rust_code = transpiler
+        .transpile_checked(&source)
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let rust_code = format_with_rustfmt(&rust_code).unwrap_or(rust_code);
+
+    let src_dir = output_dir.join("src");
+    let manifest_path = output_dir.join("Cargo.toml");
+    let main_rs_path = src_dir.join("main.rs");
+    let generated_marker = output_dir.join(".poly-generated");
+    // Explicit `--project` is conservative, while the default command may
+    // refresh only directories that it previously marked as Poly-generated.
+    if refuse_overwrite && (manifest_path.exists() || main_rs_path.exists()) {
+        bail!(
+            "Refusing to overwrite existing generated files in {}",
+            output_dir.display()
+        );
+    }
+    let source_identity = source_path
+        .canonicalize()
+        .unwrap_or_else(|_| source_path.to_path_buf());
+    let marker_contents = format!("source={}\n", source_identity.display());
+    if !refuse_overwrite && (manifest_path.exists() || main_rs_path.exists()) {
+        if !generated_marker.is_file() {
+            bail!(
+                "Refusing to overwrite a non-Poly Cargo project in {}",
+                output_dir.display()
+            );
+        }
+        let existing_marker = std::fs::read_to_string(&generated_marker).with_context(|| {
+            format!(
+                "Failed to read generated-project marker: {}",
+                generated_marker.display()
+            )
+        })?;
+        if existing_marker != marker_contents {
+            bail!(
+                "Generated output directory {} belongs to a different source file",
+                output_dir.display()
+            );
+        }
+    }
+
+    std::fs::create_dir_all(&src_dir)
+        .with_context(|| format!("Failed to create project directory: {}", src_dir.display()))?;
+
+    let package_name = cargo_package_name(output_dir, source_path);
+    let manifest = cargo_manifest(&package_name, rust_code.contains("#[tokio::main]"));
+
+    std::fs::write(&manifest_path, manifest)
+        .with_context(|| format!("Failed to write {}", manifest_path.display()))?;
+    std::fs::write(&main_rs_path, rust_code)
+        .with_context(|| format!("Failed to write {}", main_rs_path.display()))?;
+    std::fs::write(&generated_marker, marker_contents)
+        .with_context(|| format!("Failed to write {}", generated_marker.display()))?;
+
+    Ok(())
+}
+
+/// Return the Cargo project directory used by the default compiler command.
+fn default_cargo_output_dir(source_path: &Path) -> PathBuf {
+    let stem = source_path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("poly-program");
+    PathBuf::from("rust_output").join(sanitize_output_directory_name(stem))
+}
+
+/// Make a source stem safe and readable as a generated directory name.
+fn sanitize_output_directory_name(stem: &str) -> String {
+    let name: String = stem
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || character == '_' || character == '-' {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect();
+
+    if name.is_empty() {
+        "poly-program".to_string()
     } else {
-        format!("{}{}{}", GREEN, token_str, RESET)
+        name
     }
 }
 
+/// Build a generated Cargo project with its own dependency and target directory.
+fn build_cargo_project(output_dir: &Path) -> Result<()> {
+    use std::process::Command;
+
+    // Build in the generated project itself so Cargo owns dependency and target
+    // isolation; the user's workspace is never used as the build directory.
+
+    let output = Command::new("cargo")
+        .arg("build")
+        .current_dir(output_dir)
+        .output()
+        .with_context(|| {
+            format!(
+                "Failed to run cargo in {}. Is Cargo installed?",
+                output_dir.display()
+            )
+        })?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let message = if output.stderr.is_empty() {
+        String::from_utf8_lossy(&output.stdout).to_string()
+    } else {
+        String::from_utf8_lossy(&output.stderr).to_string()
+    };
+    bail!(
+        "Cargo build failed in {}:\n{}",
+        output_dir.display(),
+        message
+    )
+}
+
+/// Return the debug binary path produced by Cargo for a generated project.
+fn cargo_binary_path(output_dir: &Path, source_path: &Path) -> PathBuf {
+    let package_name = cargo_package_name(output_dir, source_path);
+    output_dir.join("target").join("debug").join(format!(
+        "{}{}",
+        package_name,
+        std::env::consts::EXE_SUFFIX
+    ))
+}
+
+/// Derive a safe Cargo package name from the output directory.
+fn cargo_package_name(output_dir: &Path, source_path: &Path) -> String {
+    let candidate = output_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty() && *name != "." && *name != "..")
+        .or_else(|| source_path.file_stem().and_then(|name| name.to_str()))
+        .unwrap_or("poly-project");
+
+    let mut name: String = candidate
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || character == '_' || character == '-' {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect();
+
+    if name.is_empty()
+        || !name
+            .chars()
+            .any(|character| character.is_ascii_alphanumeric())
+    {
+        name = "poly-project".to_string();
+    }
+    if name.starts_with(|character: char| character.is_ascii_digit()) {
+        name.insert_str(0, "poly-");
+    }
+
+    name
+}
+
+/// Build the manifest for a generated Cargo project.
+fn cargo_manifest(package_name: &str, needs_tokio: bool) -> String {
+    let dependencies = if needs_tokio {
+        "tokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }\n"
+    } else {
+        ""
+    };
+
+    format!(
+        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"2021\"\n\n[dependencies]\n{}\n[workspace]\n",
+        package_name,
+        env!("CARGO_PKG_VERSION"),
+        dependencies
+    )
+}
+
+/// Run the interactive REPL with syntax highlighting
 /// Format Rust code with rustfmt
 fn format_with_rustfmt(code: &str) -> Option<String> {
+    // Formatting is best-effort: all callers retain valid unformatted output
+    // when rustfmt is unavailable or rejects incomplete generated code.
     use std::io::Write;
     use std::process::Command;
 
@@ -639,30 +619,183 @@ fn format_with_rustfmt(code: &str) -> Option<String> {
     }
 }
 
-/// Verify that Rust code compiles by running rustc --edition 2021 --crate-type lib
-fn verify_rust_compiles(code: &str) -> Result<()> {
+/// Return the executable path produced for a Poly source file.
+#[allow(dead_code)]
+fn executable_path(source_path: &Path) -> PathBuf {
+    let mut output_path = source_path.to_path_buf();
+    output_path.set_extension(std::env::consts::EXE_EXTENSION);
+    output_path
+}
+
+/// Compile generated Rust into an executable with rustc.
+#[allow(dead_code)]
+fn compile_rust_binary(code: &str, output_path: &Path) -> Result<()> {
     use std::process::Command;
 
-    // Write code to a temporary file
+    let unique_id = format!(
+        "{}-{}",
+        process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
+    let temp_source = std::env::temp_dir().join(format!("poly-{}.rs", unique_id));
+    let output_name = output_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("poly-output");
+    let temp_output = output_path.with_file_name(format!(".{}.tmp-{}", output_name, unique_id));
+
+    std::fs::write(&temp_source, code).context("Failed to write temporary Rust source")?;
+
+    let rustc_result = Command::new("rustc")
+        .arg("--edition")
+        .arg("2021")
+        .arg("--crate-name")
+        .arg("poly_program")
+        .arg(&temp_source)
+        .arg("-o")
+        .arg(&temp_output)
+        .output();
+
+    let _ = std::fs::remove_file(&temp_source);
+    let output = match rustc_result {
+        Ok(output) => output,
+        Err(error) => {
+            let _ = std::fs::remove_file(&temp_output);
+            return Err(anyhow::anyhow!(
+                "Failed to run rustc. Is Rust installed? ({})",
+                error
+            ));
+        }
+    };
+
+    if !output.status.success() {
+        let _ = std::fs::remove_file(&temp_output);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let message = if stderr.trim().is_empty() {
+            String::from_utf8_lossy(&output.stdout).to_string()
+        } else {
+            stderr.to_string()
+        };
+        return Err(anyhow::anyhow!(message));
+    }
+
+    if let Err(error) = install_compiled_binary(&temp_output, output_path) {
+        let _ = std::fs::remove_file(&temp_output);
+        return Err(error);
+    }
+    Ok(())
+}
+
+/// Move a successfully compiled temporary binary into its final location.
+#[allow(dead_code)]
+fn install_compiled_binary(temp_output: &Path, output_path: &Path) -> Result<()> {
+    if std::env::consts::FAMILY != "windows" || !output_path.exists() {
+        return std::fs::rename(temp_output, output_path).with_context(|| {
+            format!(
+                "Failed to install compiled executable at {}",
+                output_path.display()
+            )
+        });
+    }
+
+    // Windows cannot rename over an existing executable. Keep a backup until
+    // the new binary has been installed so an installation error is recoverable.
+    let unique_id = format!(
+        "{}-{}",
+        process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
+    let output_name = output_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("poly-output");
+    let backup_path = output_path.with_file_name(format!(".{}.backup-{}", output_name, unique_id));
+
+    std::fs::rename(output_path, &backup_path).with_context(|| {
+        format!(
+            "Failed to move existing executable {}",
+            output_path.display()
+        )
+    })?;
+
+    match std::fs::rename(temp_output, output_path) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(backup_path);
+            Ok(())
+        }
+        Err(error) => {
+            let _ = std::fs::rename(&backup_path, output_path);
+            Err(anyhow::anyhow!(
+                "Failed to install compiled executable at {}: {}",
+                output_path.display(),
+                error
+            ))
+        }
+    }
+}
+
+/// Verify generated Rust without running LLVM code generation.
+///
+/// Metadata emission preserves the compiler checks needed by `--check` while
+/// avoiding an unnecessary object file. The unique source and output names
+/// also make concurrent CLI checks safe.
+///
+/// Async programs emit `#[tokio::main]`, which a bare `rustc` invocation
+/// cannot resolve, so those are verified in a temporary Cargo project that
+/// declares tokio as a dependency.
+fn verify_rust_compiles(code: &str) -> Result<()> {
+    use std::process::Command;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static RUSTC_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let _rustc_guard = RUSTC_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .map_err(|_| anyhow::anyhow!("rustc verification lock was poisoned"))?;
+
+    let unique_id = format!(
+        "{}-{}",
+        process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
+
+    if code.contains("#[tokio::main]") {
+        return verify_async_rust_compiles(code, &unique_id);
+    }
+
     let temp_dir = std::env::temp_dir();
-    let temp_file = temp_dir.join("poly_check.rs");
+    let stem = format!("poly_check_{unique_id}").replace('-', "_");
+    let temp_file = temp_dir.join(format!("{stem}.rs"));
+    let output_file = temp_dir.join(format!("lib{stem}.rmeta"));
     std::fs::write(&temp_file, code).context("Failed to write temp file")?;
 
-    // Run rustc to check compilation
     let output = Command::new("rustc")
         .arg("--edition")
         .arg("2021")
         .arg("--crate-type")
         .arg("lib")
+        .arg("--crate-name")
+        .arg(&stem)
+        .arg("--emit=metadata")
         .arg("--out-dir")
         .arg(&temp_dir)
         .arg(&temp_file)
         .output()
-        .context("Failed to run rustc. Is Rust installed?")?;
+        .context("Failed to run rustc. Is Rust installed?");
 
-    // Clean up
     let _ = std::fs::remove_file(&temp_file);
-    let _ = std::fs::remove_file(temp_dir.join("libpoly_check.rlib"));
+    let _ = std::fs::remove_file(output_file);
+    let output = output?;
 
     if output.status.success() {
         Ok(())
@@ -672,64 +805,46 @@ fn verify_rust_compiles(code: &str) -> Result<()> {
     }
 }
 
-/// Highlight Rust code for REPL output
-fn highlight_rust(line: &str) -> String {
-    const RESET: &str = "\x1b[0m";
-    const DIM: &str = "\x1b[2m";
-    const YELLOW: &str = "\x1b[33m";
-    const MAGENTA: &str = "\x1b[35m";
+/// Verify async generated Rust by running `cargo check` in a temporary Cargo
+/// project that provides the tokio dependency `#[tokio::main]` requires.
+fn verify_async_rust_compiles(code: &str, unique_id: &str) -> Result<()> {
+    use std::process::Command;
 
-    // Simple Rust syntax highlighting
-    let trimmed = line.trim();
+    let temp_dir = std::env::temp_dir();
+    let project_dir = temp_dir.join(format!("poly_check_async_{unique_id}"));
+    let src_dir = project_dir.join("src");
+    std::fs::create_dir_all(&src_dir).context("Failed to create temp Cargo project")?;
+    let manifest = "[package]\nname = \"poly_check_async\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }\n[workspace]\n";
+    std::fs::write(project_dir.join("Cargo.toml"), manifest)
+        .context("Failed to write temp Cargo.toml")?;
+    std::fs::write(src_dir.join("main.rs"), code).context("Failed to write temp main.rs")?;
 
-    // Comments
-    if trimmed.starts_with("//") {
-        return format!("{}{}{}", DIM, line, RESET);
+    let output = Command::new("cargo")
+        .arg("check")
+        .arg("--quiet")
+        .current_dir(&project_dir)
+        .output()
+        .context("Failed to run cargo. Is Cargo installed?");
+
+    let _ = std::fs::remove_dir_all(&project_dir);
+    let output = output?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let message = if output.stderr.is_empty() {
+            String::from_utf8_lossy(&output.stdout).to_string()
+        } else {
+            String::from_utf8_lossy(&output.stderr).to_string()
+        };
+        Err(anyhow::anyhow!(message))
     }
-
-    // Keywords
-    let mut result = line.to_string();
-
-    // Apply highlighting to common patterns
-    let keywords = [
-        "fn", "let", "mut", "return", "if", "else", "while", "for", "loop", "struct", "enum",
-        "impl", "use", "pub", "const", "break", "continue", "match", "self", "Self", "true",
-        "false",
-    ];
-
-    for keyword in keywords {
-        // Color keywords
-        result = result.replace(keyword, &format!("{}{}{}", MAGENTA, keyword, RESET));
-    }
-
-    // Highlight strings
-    if result.contains('"') {
-        let parts: Vec<&str> = result.split('"').collect();
-        if parts.len() >= 3 {
-            let mut highlighted = String::new();
-            for (i, part) in parts.iter().enumerate() {
-                if i % 2 == 0 {
-                    highlighted.push_str(part);
-                } else {
-                    highlighted.push_str(&format!("{}\"{}\"{}", YELLOW, part, RESET));
-                }
-            }
-            result = highlighted;
-        }
-    }
-
-    // Highlight numbers
-    for c in result.chars() {
-        if c.is_numeric() {
-            // This is a simplified approach - in production, use a proper tokenizer
-        }
-    }
-
-    result
 }
 
 /// Show diff between original and formatted code
 fn show_diff(original: &str, formatted: &str) {
+    // This is a small line-oriented diff intended for readable CLI output, not
+    // a replacement for a patch algorithm or machine-readable diff format.
     let original_lines: Vec<&str> = original.lines().collect();
     let formatted_lines: Vec<&str> = formatted.lines().collect();
 
@@ -763,6 +878,9 @@ fn show_diff(original: &str, formatted: &str) {
 /// Watch a file for changes and re-transpile
 fn watch_file(path: &std::path::Path) -> anyhow::Result<()> {
     use std::time::Duration;
+
+    // Polling keeps watch mode portable and avoids adding a filesystem-notify
+    // dependency to the compiler's small CLI binary.
 
     println!(
         "Watching {} for changes... (Ctrl+C to stop)",
@@ -815,4 +933,124 @@ fn chrono_free_timestamp() -> String {
         .unwrap_or_default()
         .as_secs();
     format!("{}", secs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_directory() -> PathBuf {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("poly-cli-test-{}-{}", process::id(), timestamp))
+    }
+
+    #[test]
+    fn cargo_manifest_adds_tokio_only_for_async_programs() {
+        let synchronous = cargo_manifest("demo", false);
+        assert!(synchronous.contains("name = \"demo\""));
+        assert!(!synchronous.contains("tokio"));
+        assert!(synchronous.contains("[workspace]"));
+
+        let asynchronous = cargo_manifest("demo", true);
+        assert!(asynchronous.contains("tokio = { version = \"1\""));
+    }
+
+    #[test]
+    fn cargo_package_name_is_safe_for_cargo() {
+        assert_eq!(
+            cargo_package_name(Path::new("my demo"), Path::new("source.poly")),
+            "my-demo"
+        );
+        assert_eq!(
+            cargo_package_name(Path::new("123"), Path::new("source.poly")),
+            "poly-123"
+        );
+        assert_eq!(
+            cargo_package_name(Path::new("---"), Path::new("source.poly")),
+            "poly-project"
+        );
+    }
+
+    #[test]
+    fn default_output_dir_is_per_program() {
+        assert_eq!(
+            default_cargo_output_dir(Path::new("examples/prime_numbers.poly")),
+            PathBuf::from("rust_output/prime_numbers")
+        );
+        assert_eq!(
+            default_cargo_output_dir(Path::new("examples/my program.poly")),
+            PathBuf::from("rust_output/my-program")
+        );
+    }
+
+    #[test]
+    fn project_generation_writes_manifest_and_main_rs() {
+        let root = test_directory();
+        let source_path = root.join("hello.poly");
+        let output_dir = root.join("generated");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(&source_path, "put \"Hello\"").unwrap();
+
+        generate_cargo_project(&source_path, &output_dir).unwrap();
+
+        let manifest = std::fs::read_to_string(output_dir.join("Cargo.toml")).unwrap();
+        let rust_code = std::fs::read_to_string(output_dir.join("src/main.rs")).unwrap();
+        assert!(manifest.contains("[package]"));
+        assert!(manifest.contains("name = \"generated\""));
+        assert!(rust_code.contains("println!"));
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn project_generation_rejects_non_poly_sources() {
+        let root = test_directory();
+        std::fs::create_dir_all(&root).unwrap();
+        let source_path = root.join("hello.txt");
+
+        std::fs::write(&source_path, "put \"Hello\"").unwrap();
+        assert!(generate_cargo_project(&source_path, &root.join("generated")).is_err());
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn executable_path_replaces_poly_extension() {
+        assert_eq!(
+            executable_path(Path::new("examples/hello.poly")),
+            PathBuf::from("examples/hello")
+        );
+    }
+
+    #[test]
+    fn compile_rust_binary_writes_executable() {
+        let root = test_directory();
+        std::fs::create_dir_all(&root).unwrap();
+        let output_path = root.join("hello");
+
+        compile_rust_binary("fn main() { println!(\"hello\"); }", &output_path).unwrap();
+        assert!(output_path.is_file());
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn failed_compilation_preserves_existing_executable() {
+        let root = test_directory();
+        std::fs::create_dir_all(&root).unwrap();
+        let output_path = root.join("hello");
+        std::fs::write(&output_path, "existing binary placeholder").unwrap();
+
+        assert!(compile_rust_binary("fn main( {", &output_path).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&output_path).unwrap(),
+            "existing binary placeholder"
+        );
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

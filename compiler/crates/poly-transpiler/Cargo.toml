@@ -9,4 +9,5 @@ description = "Rust code generator for the Poly programming language"
 poly-lexer.workspace = true
 poly-parser.workspace = true
 poly-types.workspace = true
+poly-intermediate-representation.workspace = true
 thiserror.workspace = true

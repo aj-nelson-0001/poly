@@ -3,7 +3,7 @@
 
 **Target Backend:** Rust (Cargo Workspace)  
 **Status:** Active Definition - Major Expansion  
-**Latest Addition:** Updated I/O syntax with flags (`put -n`, `get --timeout`, etc.) and separate error/warning commands
+**Latest Addition:** Generic type parameters, compile-time macros, and standard library math/string functions
 
 ---
 
@@ -51,36 +51,36 @@ Poly is designed as a minimalist, low-overhead system programming language with 
 
 ### Declaration Syntax
 
-```poly
+~~~poly
 // Variable declaration (requires 'var' and explicit type)
-var name: Type = value
+var name Type := value
 
-// Reassignment ('var' is optional once declared)
-name = new_value
+// Explicit reassignment
+set name to new_value
 
 // Constants (immutable, compile-time)
-const NAME = value
-```
+const NAME := value
+~~~
 
 ### Mutability Rules
 
 | Declaration | Mutable | Scope |
 |-------------|---------|-------|
-| `var x: i32 = 0` | Yes | Block |
+| `var x i32 := 0` | Yes | Block |
 | `const MAX = 100` | No | Module |
 | `let x: i32 = 0` | No | Block |
 
 ### Examples
 
-```poly
-var count: i32 = 0
-var status: bool = true
-const MAX_BUFFER = 1024
+~~~poly fragment
+var count i32 := 0
+var status bool := true
+const MAX_BUFFER := 1024
 
 // Reassignment
-count = 5
-count = count * 2
-```
+set count to 5
+set count to count * 2
+~~~
 
 ---
 
@@ -97,34 +97,31 @@ count = count * 2
 | `inc counter` | Alias for `add` | `counter += 1;` |
 | `dec counter` | Alias for `sub` | `counter -= 1;` |
 
-### Compound Assignment Operators
+### Mutation Commands
 
-```poly
-x += 5      // Addition assignment
-x -= 3      // Subtraction assignment
-x *= 2      // Multiplication assignment
-x /= 4      // Division assignment
-x %= 3      // Modulo assignment
-x &= 0xFF   // Bitwise AND assignment
-x |= 0x01   // Bitwise OR assignment
-x ^= 0x10   // Bitwise XOR assignment
-x <<= 2     // Left shift assignment
-x >>= 1     // Right shift assignment
-```
+~~~poly
+add x          // x += 1
+add x, 5       // x += 5
+sub x          // x -= 1
+sub x, 2       // x -= 2
+inc x          // x += 1
+dec x          // x -= 1
+set x to y     // replace x with y; self-reference is rejected
+~~~
 
 ### Bitwise Operations
 
-```poly
-var a: i32 = 0b1010
-var b: i32 = 0b1100
+~~~poly
+var a i32 := 0b1010
+var b i32 := 0b1100
 
-var result = a & b    // Bitwise AND: 0b1000
-var result = a | b    // Bitwise OR: 0b1110
-var result = a ^ b    // Bitwise XOR: 0b0110
-var result = ~a       // Bitwise NOT
-var result = a << 2   // Left shift
-var result = a >> 1   // Right shift
-```
+var result := a & b    // Bitwise AND: 0b1000
+var result := a | b    // Bitwise OR: 0b1110
+var result := a ^ b    // Bitwise XOR: 0b0110
+var result := ~a       // Bitwise NOT
+var result := a << 2   // Left shift
+var result := a >> 1   // Right shift
+~~~
 
 ---
 
@@ -143,31 +140,31 @@ var result = a >> 1   // Right shift
 
 ### String Operations
 
-```poly
+~~~poly fragment
 // ASCII string
-var header: string = "HTTP/1.1 200 OK"
-var len: i32 = header.len()        // Get length
-var first: char = header[0]        // Index access
-var sub: string = header[0:4]      // Slicing
+var header string := "HTTP/1.1 200 OK"
+var len i32 := header.len()        // Get length
+var first char := header[0]        // Index access
+var sub string := header[0:4]      // Slicing
 
 // Unicode string
-var greeting: ustring = u"Hello, 世界! 🚀"
-var char_count: i32 = greeting.len()  // Character count
-var byte_count: i32 = greeting.byte_len()  // Byte count
-```
+var greeting ustring := unicode "Hello, 世界! 🚀"
+var char_count i32 := greeting.len()  // Character count
+var byte_count i32 := greeting.byte_len()  // Byte count
+~~~
 
 ### String Manipulation
 
-```poly
-var s: ustring = u"hello"
-s.append(u" world")           // Concatenation
+~~~poly
+var s ustring := unicode "hello"
+s.append(unicode " world")           // Concatenation
 s.to_upper()                  // In-place uppercase
 s.to_lower()                  // In-place lowercase
 s.trim()                      // Remove whitespace
-s.contains(u"ell")            // Check substring
-s.replace(u"l", u"r")         // Replace all occurrences
-var parts: Vec<ustring> = s.split(u" ")  // Split by delimiter
-```
+s.contains(unicode "ell")            // Check substring
+s.replace(unicode "l", unicode "r")         // Replace all occurrences
+var parts Vec<ustring> := s.split(unicode " ")  // Split by delimiter
+~~~
 
 ---
 
@@ -189,28 +186,28 @@ var parts: Vec<ustring> = s.split(u" ")  // Split by delimiter
 
 ### Compound Types
 
-```poly
+~~~poly fragment
 // Arrays (fixed-size)
-var arr: [i32; 5] = [1, 2, 3, 4, 5]
-var first: i32 = arr[0]
+var arr [i32; 5] := [1, 2, 3, 4, 5]
+var first i32 := arr[0]
 
 // Tuples
-var point: (i32, i32) = (10, 20)
-var (x, y) = point  // Destructuring
+var point (i32, i32) := (10, 20)
+var (x, y) := point  // Destructuring
 
 // Vectors (dynamic arrays)
-var vec: Vec<i32> = [1, 2, 3]
+var vec Vec<i32> := [1, 2, 3]
 vec.push(4)
-var last: i32 = vec.pop()
+var last i32 := vec.pop()
 
 // Option type (Rust-compatible)
-var maybe: Option<i32> = Some(42)
-var empty: Option<i32> = None
+var maybe Option<i32> := Some(42)
+var empty Option<i32> := None
 
 // Result type (for error handling)
-var result: Result<i32, Error> = Ok(42)
-var error: Result<i32, Error> = Error(Error.InvalidInput)
-```
+var result Result<i32, Error> := Ok(42)
+var error Result<i32, Error> := Error(Error.InvalidInput)
+~~~
 
 ---
 
@@ -218,7 +215,7 @@ var error: Result<i32, Error> = Error(Error.InvalidInput)
 
 ### Basic Struct Definition
 
-```poly
+~~~poly
 struct Point
 var x: f32
 var y: f32
@@ -229,11 +226,11 @@ struct Point
 x: f32
 y: f32
 end struct
-```
+~~~
 
 ### Struct with Methods
 
-```poly
+~~~poly
 struct Point
 var x: f32
 var y: f32
@@ -244,8 +241,8 @@ fn new(x: f32, y: f32): Point
 end fn
 
 fn distance_to(self, other: Point): f32
-    var dx = self.x - other.x
-    var dy = self.y - other.y
+    var dx := self.x - other.x
+    var dy := self.y - other.y
     return sqrt(dx * dx + dy * dy)
 end fn
 
@@ -254,39 +251,39 @@ fn translate(self, dx: f32, dy: f32): Point
 end fn
 
 end struct
-```
+~~~
 
 ### Struct with Default Values
 
-```poly
+~~~poly fragment
 struct Config
-var width: i32 = 800
-var height: i32 = 600
-var title: ustring = u"Window"
-var fullscreen: bool = false
+var width i32 := 800
+var height i32 := 600
+var title ustring := unicode "Window"
+var fullscreen bool := false
 end struct
 
 // Usage with defaults
-var config: Config = Config { }
-var custom: Config = Config { width: 1920, height: 1080 }
-```
+var config Config := Config { }
+var custom Config := Config { width: 1920, height: 1080 }
+~~~
 
 ### Tuple Structs
 
-```poly
+~~~poly fragment
 struct Color(u8, u8, u8)  // RGB
 struct Meters(f64)        // Newtype pattern
 
-var red: Color = Color(255, 0, 0)
-var distance: Meters = Meters(42.5)
-```
+var red Color := Color(255, 0, 0)
+var distance Meters := Meters(42.5)
+~~~
 
 ### Unit Structs
 
-```poly
+~~~poly
 struct Marker  // No fields - used for type-level programming
 end struct
-```
+~~~
 
 ---
 
@@ -294,18 +291,18 @@ end struct
 
 ### Basic Enums
 
-```poly
+~~~poly
 enum Direction
     North
     South
     East
     West
 end enum
-```
+~~~
 
 ### Enums with Data (Algebraic Data Types)
 
-```poly
+~~~poly fragment
 enum Shape
     Circle(f32)                           // Tuple variant
     Rectangle { width: f32, height: f32 } // Struct variant
@@ -313,13 +310,13 @@ enum Shape
 end enum
 
 // Usage
-var circle: Shape = Shape::Circle(5.0)
-var rect: Shape = Shape::Rectangle { width: 10.0, height: 20.0 }
-```
+var circle Shape := Shape::Circle(5.0)
+var rect Shape := Shape::Rectangle { width: 10.0, height: 20.0 }
+~~~
 
 ### Enums with Methods
 
-```poly
+~~~poly
 enum TrafficLight
     Red
     Yellow
@@ -342,11 +339,11 @@ fn next(self): TrafficLight
 end fn
 
 end enum
-```
+~~~
 
 ### Option and Result Enums (Built-in)
 
-```poly
+~~~poly fragment
 // Built-in Option enum
 enum Option<T>
     Some(T)
@@ -358,7 +355,7 @@ enum Result<T, E>
     Ok(T)
     Error(E)
 end enum
-```
+~~~
 
 ---
 
@@ -366,30 +363,30 @@ end enum
 
 ### Trait Definition
 
-```poly
+~~~poly
 trait Drawable
     fn draw(self)
     fn bounding_box(self): Rect
 end trait
-```
+~~~
 
 ### Traits with Default Implementations
 
-```poly
+~~~poly fragment
 trait Logger
     fn log(self, message: ustring)
     fn log_error(self, message: ustring)
     
     // Default implementation
     fn log_warning(self, message: ustring)
-        self.log(u"[WARNING] " + message)
+        self.log(unicode "[WARNING] " + message)
     end fn
 end trait
-```
+~~~
 
 ### Implementing Traits
 
-```poly
+~~~poly
 struct Circle
     var x: f32
     var y: f32
@@ -411,11 +408,11 @@ impl Drawable for Circle
         }
     end fn
 end impl
-```
+~~~
 
 ### Trait Bounds (Generics)
 
-```poly
+~~~poly fragment
 // Function with trait bound
 fn draw_all<T: Drawable>(items: Vec<T>)
     loop: items
@@ -436,20 +433,20 @@ where
     U: Debug + Clone
     // Implementation
 end fn
-```
+~~~
 
 ### Trait Objects (Dynamic Dispatch)
 
-```poly
+~~~poly fragment
 // Trait object with dynamic dispatch
-var shapes: Vec<Box<dyn Drawable>> = []
+var shapes Vec<Box<dyn Drawable>> := []
 shapes.push(Box::new(Circle::new(0.0, 0.0, 5.0)))
 shapes.push(Box::new(Rectangle::new(0.0, 0.0, 10.0, 20.0)))
 
 loop: shapes
     shape.draw()
 end loop
-```
+~~~
 
 ---
 
@@ -457,7 +454,7 @@ end loop
 
 ### Module Definition
 
-```poly
+~~~poly fragment
 // math.mod (file: math.mod)
 module math
 
@@ -474,57 +471,57 @@ end fn
 // Nested module
 pub module advanced
     pub fn power(base: f64, exp: i32): f64
-        var result = 1.0
+        var result := 1.0
         loop: 0..exp
-            result = result * base
+            set result to result * base
         end loop
         return result
     end fn
 end module
 
 end module
-```
+~~~
 
 ### Using Modules
 
-```poly
+~~~poly fragment
 // Import entire module
 use math
 
-var result = math::add(1.0, 2.0)
-var pi = math::PI
+var result := math::add(1.0, 2.0)
+var pi := math::PI
 
 // Import specific items
 use math::add
 use math::PI
 
-var result = add(1.0, 2.0)
+var result := add(1.0, 2.0)
 
 // Import with alias
 use math::advanced::power as pow
 
-var result = pow(2.0, 10)
+var result := pow(2.0, 10)
 
 // Import all from module
 use math::*
 
-var result = add(1.0, 2.0)
-var result = multiply(3.0, 4.0)
-```
+var result := add(1.0, 2.0)
+var result := multiply(3.0, 4.0)
+~~~
 
 ### Module Visibility
 
-```poly
+~~~poly fragment
 module mymodule
     pub fn public_function() { }     // Public
     fn private_function() { }        // Private
     pub const PUBLIC_CONST = 1       // Public
-    const PRIVATE_CONST = 2          // Private
+    const PRIVATE_CONST := 2          // Private
     
     pub struct PublicStruct { }      // Public struct
     struct PrivateStruct { }         // Private struct
 end module
-```
+~~~
 
 ---
 
@@ -540,39 +537,39 @@ Poly implements a simplified ownership system that transpiles to Rust's ownershi
 
 ### Ownership Transfer (Move Semantics)
 
-```poly
-var s1: ustring = u"hello"
-var s2 = s1      // s1 is MOVED to s2
+~~~poly
+var s1 ustring := unicode "hello"
+var s2 := s1      // s1 is MOVED to s2
 // s1 is no longer valid here
 
-var s3 = s2.clone()  // Explicit clone - s2 remains valid
-```
+var s3 := s2.clone()  // Explicit clone - s2 remains valid
+~~~
 
 ### Borrowing (References)
 
-```poly
+~~~poly fragment
 // Immutable borrow (shared reference)
 fn print_string(s: &ustring)
     print(s)
 end fn
 
-var name: ustring = u"Alice"
+var name ustring := unicode "Alice"
 print_string(&name)  // Borrow name
 print_string(&name)  // Can borrow again
 
 // Mutable borrow (exclusive reference)
 fn append_greeting(s: &mut ustring)
-    s.append(u", World!")
+    s.append(unicode ", World!")
 end fn
 
-var greeting: ustring = u"Hello"
+var greeting ustring := unicode "Hello"
 append_greeting(&mut greeting)  // Mutable borrow
 // Only one mutable borrow at a time
-```
+~~~
 
 ### Lifetimes (Explicit)
 
-```poly
+~~~poly fragment
 // Lifetime annotation
 fn longest<'a>(x: &'a ustring, y: &'a ustring): &'a ustring
     if x.len() > y.len()
@@ -593,30 +590,30 @@ impl<'a> TextBuffer<'a>
         return TextBuffer { data: data, position: 0 }
     end fn
 end impl
-```
+~~~
 
 ### Smart Pointers
 
-```poly
+~~~poly fragment
 // Box - heap allocation
-var boxed: Box<i32> = Box::new(42)
-var value: i32 = *boxed  // Dereference
+var boxed Box<i32> := Box::new(42)
+var value i32 := *boxed  // Dereference
 
 // Rc - reference counting (shared ownership)
-var shared: Rc<ustring> = Rc::new(u"shared data")
-var clone1 = Rc::clone(&shared)
-var clone2 = Rc::clone(&shared)
+var shared Rc<ustring> := Rc::new(unicode "shared data")
+var clone1 := Rc::clone(&shared)
+var clone2 := Rc::clone(&shared)
 
 // Arc - atomic reference counting (thread-safe)
-var thread_safe: Arc<Mutex<Vec<i32>>> = Arc::new(Mutex::new([]))
-```
+var thread_safe Arc<Mutex<Vec<i32>>> := Arc::new(Mutex::new([]))
+~~~
 
 ### Transpilation Rules
 
 | Poly Syntax | Rust Output |
 |-------------|-------------|
-| `var s = s1` | `let s = s1;` (move) |
-| `var s = s1.clone()` | `let s = s1.clone();` |
+| `var s := s1` | `let s = s1;` (move) |
+| `var s := s1.clone()` | `let s = s1.clone();` |
 | `fn foo(x: &i32)` | `fn foo(x: &i32)` |
 | `fn foo(x: &mut i32)` | `fn foo(x: &mut i32)` |
 | `&value` | `&value` |
@@ -630,29 +627,29 @@ var thread_safe: Arc<Mutex<Vec<i32>>> = Arc::new(Mutex::new([]))
 
 ### Raw Pointer Syntax
 
-```poly
+~~~poly fragment
 // Raw pointer declaration
-var ptr: ptr i32 = null
+var ptr ptr i32 := null
 
 // Taking address (unsafe)
-var value: i32 = 42
-var ptr: ptr i32 = addr value
+var value i32 := 42
+var ptr ptr i32 := addr value
 
 // Dereferencing (unsafe)
-var dereferenced: i32 = deref ptr
+var dereferenced i32 := deref ptr
 
 // Pointer arithmetic
-var ptr2: ptr i32 = ptr + 1  // Next i32
-var ptr3: ptr i32 = ptr - 1  // Previous i32
-```
+var ptr2 ptr i32 := ptr + 1  // Next i32
+var ptr3 ptr i32 := ptr - 1  // Previous i32
+~~~
 
 ### Unsafe Blocks
 
-```poly
+~~~poly fragment
 // Explicit unsafe block
 unsafe
-    var value: i32 = deref ptr
-    ptr = addr some_var
+    var value i32 := deref ptr
+    set ptr to addr some_var
 end unsafe
 
 // Function with unsafe operations
@@ -661,26 +658,26 @@ fn readHardwareRegister(address: ptr u32): u32
 end fn
 
 fn writeHardwareRegister(address: ptr u32, value: u32)
-    address = value
+    set address to value
 end fn
-```
+~~~
 
 ### Null Pointer Safety
 
-```poly
+~~~poly fragment
 // Nullable pointers (safe alternative to raw pointers)
-var maybe_ptr: ?ptr i32 = null
+var maybe_ptr ?ptr i32 := null
 
 if maybe_ptr != null,
-    var value: i32 = deref maybe_ptr
+    var value i32 := deref maybe_ptr
 end if
 
 // Or with pattern matching
 match maybe_ptr
-    Some(ptr) => var value = deref ptr
-    None => print(u"Null pointer")
+    Some(ptr) => var value := deref ptr
+    None => print(unicode "Null pointer")
 end match
-```
+~~~
 
 ---
 
@@ -688,7 +685,7 @@ end match
 
 ### Function Syntax
 
-```poly
+~~~poly fragment
 // Basic function
 fn add(a: i32, b: i32): i32
     return a + b
@@ -696,14 +693,14 @@ end fn
 
 // Function with no return
 fn print_hello()
-    print(u"Hello!")
+    print(unicode "Hello!")
 end fn
 
 // Function with default parameters
-fn greet(name: ustring, greeting: ustring = u"Hello"): ustring
-    return greeting + u", " + name + u"!"
+fn greet(name: ustring, greeting: ustring = unicode "Hello"): ustring
+    return greeting + unicode ", " + name + unicode "!"
 end fn
-```
+~~~
 
 ### Error Handling
 
@@ -717,7 +714,7 @@ end fn
 
 #### Basic Error Handling
 
-```poly
+~~~poly fragment
 // Result type for error handling
 enum FileError
     NotFound
@@ -727,10 +724,10 @@ end enum
 
 fn read_file(path: ustring): Result<ustring, FileError>
     // 'try' handles error propagation (like Rust's ?)
-    var file = try open_file(path)
+    var file := try open_file(path)
     
     if file.is_valid
-        var content = try file.read_all()
+        var content := try file.read_all()
         return Ok(content)
     else
         return Error(FileError::NotFound)
@@ -739,19 +736,19 @@ end fn
 
 // Using functions with error handling
 fn process_config()
-    match read_file(u"config.txt")
+    match read_file(unicode "config.txt")
         Ok(content) => parse_config(content)
         Error(e) => 
-            print(u"Error: " + e.to_string())
+            print(unicode "Error: " + e.to_string())
             exit(1)
         end
     end match
 end fn
-```
+~~~
 
 #### Advanced Error Handling Patterns
 
-```poly
+~~~poly
 // Custom error types with messages
 enum ValidationError
     EmptyInput
@@ -762,7 +759,7 @@ end enum
 
 // Function that returns custom errors
 fn validate_name(name: ustring): Result<ustring, ValidationError>
-    if name.len() == 0,
+    if name.len() = 0,
         return Error(ValidationError::EmptyInput)
     end if
     
@@ -779,7 +776,7 @@ end fn
 
 // Handling errors with match
 fn process_name()
-    match validate_name(u"John")
+    match validate_name(unicode "John")
         Ok(valid_name) => put "Valid name: " + valid_name
         Error(EmptyInput) => error "Name cannot be empty"
         Error(TooShort(min)) => error "Name too short, minimum " + min.to_string() + " characters"
@@ -798,32 +795,32 @@ end fn
 
 // Error propagation with try
 fn process_user()
-    var name = try validate_name(input)  // Propagates error if validation fails
-    var email = try validate_email(input)  // Propagates error if validation fails
+    var name := try validate_name(input)  // Propagates error if validation fails
+    var email := try validate_email(input)  // Propagates error if validation fails
     // ... process valid data
 end fn
-```
+~~~
 
 ### Panic and Unwrap
 
-```poly
+~~~poly fragment
 // Panic (immediate termination)
 fn critical_error()
-    panic(u"Critical system failure!")
+    panic(unicode "Critical system failure!")
 end fn
 
 // Unwrap (panics on None/Err)
-var value: i32 = optional_value.unwrap()  // Panics if None
+var value i32 := optional_value.unwrap()  // Panics if None
 
 // Expect (panics with custom message)
-var value: i32 = optional_value.expect(u"Value must exist")
+var value i32 := optional_value.expect(unicode "Value must exist")
 
 // Safe alternatives
 match optional_value
     Some(v) => use(v)
     None => handle_missing()
 end match
-```
+~~~
 
 ### Transpilation Rules
 
@@ -840,7 +837,7 @@ end match
 
 ### If/Else Expressions
 
-```poly
+~~~poly
 // Basic if/else
 if condition,
     do_something()
@@ -849,58 +846,58 @@ else,
 end if
 
 // If as expression
-var result = if x > 0, x else -x end if
+var result := if x > 0, x else -x end if
 
 // Chained conditions
 if score >= 90,
-    grade = u"A"
+    set grade to unicode "A"
 else if score >= 80,
-    grade = u"B"
+    set grade to unicode "B"
 else if score >= 70,
-    grade = u"C"
+    set grade to unicode "C"
 else,
-    grade = u"F"
+    set grade to unicode "F"
 end if
-```
+~~~
 
 ### While Loops
 
-```poly
+~~~poly
 // Basic while loop
-var i: i32 = 0
+var i i32 := 0
 while i < 10
     print(i)
     add i
 end while
 
 // While with break/continue
-var sum: i32 = 0
-var i: i32 = 1
+var sum i32 := 0
+var i i32 := 1
 while true
     if i > 100
         break
     end if
-    if i % 2 == 0
+    if i % 2 = 0
         add i
         continue
     end if
-    sum = sum + i
+    add sum, i
     add i
 end while
-```
+~~~
 
 ### Loop (Infinite Loop)
 
-```poly
+~~~poly
 // Infinite loop
 loop
-    var input = read_input()
-    if input == u"quit"
+    var input := read_input()
+    if input = unicode "quit"
         break
     end if
     process(input)
 end loop
-```
+~~~
 
 ### Loop Ranges (Inspired by Sinclair QL SuperBASIC)
 
@@ -908,7 +905,7 @@ Poly's `loop` command with colon syntax supports multiple ranges and specific va
 
 #### Syntax Variants
 
-```poly
+~~~poly
 // Simple range
 loop: 0..10
     print(i)
@@ -948,13 +945,13 @@ end loop
 loop: 1..5, 10, 20..25 step 2, 100
     print(i)  // Iterates: 1, 2, 3, 4, 5, 10, 20, 22, 24, 100
 end loop
-```
+~~~
 
 #### Iterate Over Collections
 
-```poly
+~~~poly fragment
 // Iterate over collection
-var items: Vec<i32> = [1, 2, 3, 4, 5]
+var items Vec<i32> := [1, 2, 3, 4, 5]
 loop: items
     print(item)
 end loop
@@ -965,27 +962,27 @@ loop: (index, item) in items.enumerate()
 end loop
 
 // Iterate over string characters
-var text: ustring = u"Hello"
+var text ustring := unicode "Hello"
 loop: text.chars()
     print(ch)
 end loop
 
 // Iterate over bytes
-var data: string = "binary"
+var data string := "binary"
 loop: data.bytes()
     print(byte)
 end loop
 
 // Iterate over map entries
-var map: Map<ustring, i32> = [u"one": 1, u"two": 2]
+var map Map<ustring, i32> := [unicode "one": 1, unicode "two": 2]
 loop: map
     print(key, value)
 end loop
-```
+~~~
 
 #### Reverse Ranges
 
-```poly
+~~~poly fragment
 // Reverse using negative step
 loop: 10..1 step -1
     print(i)  // Iterates: 10, 9, 8, ..., 1
@@ -995,7 +992,7 @@ end loop
 loop: (0..10).rev()
     print(i)  // Iterates: 9, 8, 7, ..., 0
 end loop
-```
+~~~
 
 #### Transpilation Examples
 
@@ -1011,38 +1008,38 @@ end loop
 
 ### Match Expressions
 
-```poly
+~~~poly fragment
 // Basic match
 match command
-    u"start" => start_process()
-    u"stop" => stop_process()
-    u"pause" => pause_process()
+    unicode "start" => start_process()
+    unicode "stop" => stop_process()
+    unicode "pause" => pause_process()
     _ => unknown_command()  // Wildcard/default
 end match
 
 // Match with variables
 match message
-    u"quit" => exit(0)
-    u"help" => show_help()
-    other => print(u"Unknown: " + other)
+    unicode "quit" => exit(0)
+    unicode "help" => show_help()
+    other => print(unicode "Unknown: " + other)
 end match
 
 // Match on enum
 match shape
     Shape::Circle(r) => 
-        var area = PI * r * r
+        var area := PI * r * r
         print(area)
     Shape::Rectangle { width, height } => 
-        var area = width * height
+        var area := width * height
         print(area)
-    _ => print(u"Unknown shape")
+    _ => print(unicode "Unknown shape")
 end match
 
 // Match with guards
 match number
-    n if n < 0 => print(u"Negative")
-    n if n == 0 => print(u"Zero")
-    n if n > 0 => print(u"Positive")
+    n if n < 0 => print(unicode "Negative")
+    n if n = 0 => print(unicode "Zero")
+    n if n > 0 => print(unicode "Positive")
 end match
 
 // Exhaustive match
@@ -1051,7 +1048,7 @@ match option_value
     None => handle_none()
     // No wildcard needed - all cases covered
 end match
-```
+~~~
 
 ### Transpilation Rules
 
@@ -1078,94 +1075,94 @@ end match
 
 ### Closure Syntax
 
-```poly
+~~~poly fragment
 // Basic closure
-var add = |a: i32, b: i32| -> i32
+var add := |a: i32, b: i32| -> i32
     return a + b
 end
 
 // Closure with single expression
-var square = |x: i32| x * x
+var square := |x: i32| x * x
 
 // Closure capturing environment
-var multiplier: i32 = 5
-var multiply = |x: i32| x * multiplier
+var multiplier i32 := 5
+var multiply := |x: i32| x * multiplier
 
 // Mutable capture
-var counter: i32 = 0
-var increment = || 
-    counter = counter + 1
+var counter i32 := 0
+var increment := ||
+    add counter, 1
 end
-```
+~~~
 
 ### Closure Types
 
-```poly
+~~~poly fragment
 // Immutable borrow (default)
-var print_value = |x: i32|
+var print_value := |x: i32|
     print(x)
 end
 
 // Mutable borrow
-var accumulate = |total: &mut i32, value: i32|
+var accumulate := |total: &mut i32, value: i32|
     *total = *total + value
 end
 
 // Move closure (takes ownership)
-var data: Vec<i32> = [1, 2, 3]
-var process = move ||
+var data Vec<i32> := [1, 2, 3]
+var process := move ||
     loop: data
         print(item)
     end loop
 end
 // data is no longer accessible
-```
+~~~
 
 ### Higher-Order Functions
 
-```poly
+~~~poly
 // Map
-var doubled = [1, 2, 3].map(|x| x * 2)
+var doubled := [1, 2, 3].map(|x| x * 2)
 
 // Filter
-var evens = [1, 2, 3, 4, 5].filter(|x| x % 2 == 0)
+var evens := [1, 2, 3, 4, 5].filter(|x| x % 2 == 0)
 
 // Reduce/Fold
-var sum = [1, 2, 3, 4, 5].reduce(0, |acc, x| acc + x)
+var sum := [1, 2, 3, 4, 5].reduce(0, |acc, x| acc + x)
 
 // Find
-var first_even = [1, 3, 4, 5].find(|x| x % 2 == 0)
+var first_even := [1, 3, 4, 5].find(|x| x % 2 == 0)
 
 // Any/All
-var has_negative = [-1, 2, 3].any(|x| x < 0)
-var all_positive = [1, 2, 3].all(|x| x > 0)
+var has_negative := [-1, 2, 3].any(|x| x < 0)
+var all_positive := [1, 2, 3].all(|x| x > 0)
 
 // Sort with custom comparator
-var sorted = [3, 1, 4, 1, 5].sort_by(|a, b| a.compare(b))
+var sorted := [3, 1, 4, 1, 5].sort_by(|a, b| a.compare(b))
 
 // Chained operations
-var result = [1, 2, 3, 4, 5]
-    .filter(|x| x % 2 == 0)
+var result := [1, 2, 3, 4, 5]
+    .filter(|x| x % 2 = 0)
     .map(|x| x * x)
     .reduce(0, |acc, x| acc + x)
-```
+~~~
 
 ### Function Pointers
 
-```poly
+~~~poly fragment
 // Function type
-type MathOp = fn(i32, i32) -> i32
+type MathOp := fn(i32, i32) -> i32
 
-var add: MathOp = |a, b| a + b
-var subtract: MathOp = |a, b| a - b
+var add MathOp := |a, b| a + b
+var subtract MathOp := |a, b| a - b
 
 // Passing functions as arguments
 fn apply_operation(a: i32, b: i32, op: MathOp): i32
     return op(a, b)
 end fn
 
-var result = apply_operation(5, 3, add)
-```
+var result := apply_operation(5, 3, add)
+~~~
 
 ### Transpilation Rules
 
@@ -1195,10 +1192,10 @@ Poly supports asynchronous programming through `async fn` and `.await` syntax, w
 
 ### Async Function Declaration
 
-```poly
+~~~poly
 // Basic async function
 async fn fetch_data(url: ustring): ustring
-    var response = http_get(url).await
+    var response := http_get(url).await
     return response
 end fn
 
@@ -1206,34 +1203,34 @@ end fn
 async fn fetch_json(url: ustring): Result<ustring, ustring>
     match http_get(url).await
         Ok(response) => return Ok(response)
-        Error(e) => return Error(u"Network error: " + e)
+        Error(e) => return Error(unicode "Network error: " + e)
     end match
 end fn
 
 // Async function with no return value
 async fn log_message(message: ustring)
-    put u"Logging: " + message
+    put unicode "Logging: " + message
     // Simulate async I/O
     timer_sleep(100).await
 end fn
-```
+~~~
 
 ### Await Expressions
 
 The `.await` syntax is postfix, meaning it comes after the async expression:
 
-```poly
+~~~poly fragment
 // Wait for async function result
-var data = fetch_data(u"https://api.example.com").await
+var data := fetch_data(unicode "https://api.example.com").await
 
 // Chain async calls
-var result = process_data(
-    fetch_data(u"https://api.example.com").await
+var result := process_data(
+    fetch_data(unicode "https://api.example.com").await
 ).await
 
 // Await in variable assignment
-var user = db.get_user(user_id).await
-var posts = db.get_posts(user.id).await
+var user := db.get_user(user_id).await
+var posts := db.get_posts(user.id).await
 
 // Await in match expression
 match http_get(url).await
@@ -1242,15 +1239,15 @@ match http_get(url).await
 end match
 
 // Await in function arguments
-var data = transform(
+var data := transform(
     fetch_data(url).await,
     validate(input).await
 )
-```
+~~~
 
 ### Async with Structs and Enums
 
-```poly
+~~~poly fragment
 // Struct with async methods
 struct HttpClient
     var base_url: ustring
@@ -1259,26 +1256,26 @@ end struct
 
 impl HttpClient
     async fn get(self, path: ustring): Result<ustring, ustring>
-        var url = self.base_url + path
-        var response = http_get(url).await
+        var url := self.base_url + path
+        var response := http_get(url).await
         return Ok(response)
     end fn
     
     async fn post(self, path: ustring, body: ustring): Result<ustring, ustring>
-        var url = self.base_url + path
-        var response = http_post(url, body).await
+        var url := self.base_url + path
+        var response := http_post(url, body).await
         return Ok(response)
     end fn
 end impl
 
 // Usage
-var client = HttpClient { base_url: u"https://api.example.com", timeout: 5000 }
-var data = client.get(u"/users").await
-```
+var client := HttpClient { base_url: unicode "https://api.example.com", timeout: 5000 }
+var data := client.get(unicode "/users").await
+~~~
 
 ### Traits with Async Methods
 
-```poly
+~~~poly fragment
 // Trait with async method
 trait DataFetcher
     async fn fetch(self, key: ustring): Result<ustring, ustring>
@@ -1287,7 +1284,7 @@ end trait
 // Implementation
 impl DataFetcher for Database
     async fn fetch(self, key: ustring): Result<ustring, ustring>
-        var result = self.query(key).await
+        var result := self.query(key).await
         return Ok(result)
     end fn
 end impl
@@ -1298,34 +1295,34 @@ async fn process_fetcher<T: DataFetcher>(fetcher: T, key: ustring): ustring
         Ok(data) => return data
         Error(e) => 
             error e
-            return u""
+            return unicode ""
     end match
 end fn
-```
+~~~
 
 ### Concurrency Patterns
 
-```poly
+~~~poly
 // Spawn concurrent tasks
 async fn main()
     // Run multiple async operations concurrently
-    var task1 = fetch_data(u"url1")
-    var task2 = fetch_data(u"url2")
-    var task3 = fetch_data(u"url3")
+    var task1 := fetch_data(unicode "url1")
+    var task2 := fetch_data(unicode "url2")
+    var task3 := fetch_data(unicode "url3")
     
     // Await all results
-    var result1 = task1.await
-    var result2 = task2.await
-    var result3 = task3.await
+    var result1 := task1.await
+    var result2 := task2.await
+    var result3 := task3.await
     
-    put u"All data fetched!"
+    put unicode "All data fetched!"
 end fn
 
 // Async iteration
 async fn process_items(items: Vec<ustring>): Vec<ustring>
-    var results: Vec<ustring> = []
+    var results Vec<ustring> := []
     loop: items
-        var result = process_item(item).await
+        var result := process_item(item).await
         results.push(result)
     end loop
     return results
@@ -1336,14 +1333,14 @@ async fn safe_fetch(url: ustring): Option<ustring>
     match fetch_with_timeout(url, 5000).await
         Ok(data) => return Some(data)
         Error(TimeoutError) => 
-            warn u"Request timed out"
+            warn unicode "Request timed out"
             return None
         Error(e) => 
             error e
             return None
     end match
 end fn
-```
+~~~
 
 ### Transpilation Rules
 
@@ -1357,7 +1354,7 @@ end fn
 
 ### Example: Complete Async Program
 
-```poly
+~~~poly
 # HTTP client example
 
 struct ApiClient
@@ -1366,7 +1363,7 @@ end struct
 
 impl ApiClient
     async fn get_users(self): Result<Vec<ustring>, ustring>
-        var response = http_get(self.base_url + u"/users").await
+        var response := http_get(self.base_url + unicode "/users").await
         match response
             Ok(data) => return Ok(parse_json(data))
             Error(e) => return Error(e)
@@ -1374,20 +1371,20 @@ impl ApiClient
     end fn
     
     async fn create_user(self, name: ustring): Result<ustring, ustring>
-        var body = u"{\"name\": \"" + name + u"\"}"
-        var response = http_post(self.base_url + u"/users", body).await
+        var body := unicode "{\"name\": \"" + name + unicode "\"}"
+        var response := http_post(self.base_url + unicode "/users", body).await
         return response
     end fn
 end impl
 
 # Main async function
 async fn main_task()
-    var client = ApiClient { base_url: u"https://api.example.com" }
+    var client := ApiClient { base_url: unicode "https://api.example.com" }
     
     # Fetch users
     match client.get_users().await
         Ok(users) => 
-            put u"Found " + users.len().to_string() + u" users"
+            put unicode "Found " + users.len().to_string() + unicode " users"
             loop: users
                 put user
             end loop
@@ -1395,15 +1392,15 @@ async fn main_task()
     end match
     
     # Create new user
-    var result = client.create_user(u"Alice").await
-    put u"User created: " + result
+    var result := client.create_user(unicode "Alice").await
+    put unicode "User created: " + result
 end fn
 
 # Entry point (auto-generates #[tokio::main])
 fn main()
     main_task().await
 end fn
-```
+~~~
 
 ---
 
@@ -1411,100 +1408,100 @@ end fn
 
 ### Basic Patterns
 
-```poly
+~~~poly
 // Literal matching
 match x
-    0 => print(u"zero")
-    1 => print(u"one")
-    2 => print(u"two")
-    _ => print(u"other")
+    0 => print(unicode "zero")
+    1 => print(unicode "one")
+    2 => print(unicode "two")
+    _ => print(unicode "other")
 end match
 
 // String matching
 match command
-    u"start" => start()
-    u"stop" => stop()
+    unicode "start" => start()
+    unicode "stop" => stop()
     _ => unknown()
 end match
-```
+~~~
 
 ### Variable Binding
 
-```poly
+~~~poly
 // Bind matched value to variable
 match message
-    u"quit" => exit(0)
-    cmd => print(u"Unknown command: " + cmd)
+    unicode "quit" => exit(0)
+    cmd => print(unicode "Unknown command: " + cmd)
 end match
 
 // Ignore value
 match data
     _ => process_any()
 end match
-```
+~~~
 
 ### Destructuring
 
-```poly
+~~~poly fragment
 // Tuple destructuring
 match point
-    (0, 0) => print(u"origin")
-    (x, 0) => print(u"on x-axis at " + x)
-    (0, y) => print(u"on y-axis at " + y)
-    (x, y) => print(u"at " + x + u", " + y)
+    (0, 0) => print(unicode "origin")
+    (x, 0) => print(unicode "on x-axis at " + x)
+    (0, y) => print(unicode "on y-axis at " + y)
+    (x, y) => print(unicode "at " + x + unicode ", " + y)
 end match
 
 // Struct destructuring
 match person
-    Person { name: u"Alice", age } => print(u"Alice is " + age)
-    Person { name, age: n if n > 60 } => print(name + u" is a senior")
-    Person { name, age } => print(name + u" is " + age)
+    Person { name: unicode "Alice", age } => print(unicode "Alice is " + age)
+    Person { name, age: n if n > 60 } => print(name + unicode " is a senior")
+    Person { name, age } => print(name + unicode " is " + age)
 end match
 
 // Enum destructuring
 match shape
     Shape::Circle(r) => 
-        print(u"Circle with radius " + r)
+        print(unicode "Circle with radius " + r)
     Shape::Rectangle { width, height } => 
-        print(u"Rectangle " + width + u"x" + height)
-    _ => print(u"Unknown shape")
+        print(unicode "Rectangle " + width + unicode "x" + height)
+    _ => print(unicode "Unknown shape")
 end match
-```
+~~~
 
 ### Nested Patterns
 
-```poly
+~~~poly fragment
 // Nested matching
 match data
-    Some((x, y)) if x > 0 && y > 0 => print(u"Positive point")
-    Some((x, _)) if x < 0 => print(u"Negative x")
-    Some(_) => print(u"Other point")
-    None => print(u"No point")
+    Some((x, y)) if x > 0 && y > 0 => print(unicode "Positive point")
+    Some((x, _)) if x < 0 => print(unicode "Negative x")
+    Some(_) => print(unicode "Other point")
+    None => print(unicode "No point")
 end match
-```
+~~~
 
 ### Match Guards
 
-```poly
+~~~poly fragment
 match number
-    n if n < 0 => print(u"Negative")
-    n if n == 0 => print(u"Zero")
-    n if n > 0 && n < 100 => print(u"Small positive")
-    n if n >= 100 => print(u"Large positive")
+    n if n < 0 => print(unicode "Negative")
+    n if n = 0 => print(unicode "Zero")
+    n if n > 0 && n < 100 => print(unicode "Small positive")
+    n if n >= 100 => print(unicode "Large positive")
 end match
-```
+~~~
 
 ### Binding Modes
 
-```poly
+~~~poly fragment
 // @ binding (bind while matching)
 match age
-    n @ 0..12 => print(u"Child: " + n)
-    n @ 13..17 => print(u"Teenager: " + n)
-    n @ 18..64 => print(u"Adult: " + n)
-    n @ 65.. => print(u"Senior: " + n)
+    n @ 0..12 => print(unicode "Child: " + n)
+    n @ 13..17 => print(unicode "Teenager: " + n)
+    n @ 18..64 => print(unicode "Adult: " + n)
+    n @ 65.. => print(unicode "Senior: " + n)
 end match
-```
+~~~
 
 ---
 
@@ -1523,9 +1520,10 @@ The `put` command is Poly's primary output mechanism, providing a simple syntax 
 
 ### Syntax Variants
 
-```poly
+~~~poly fragment
 // Output to stdout (with newline, default)
-// A newline is a line feed (\n), not a carriage return (\r)
+// A newline is a line feed (
+), not a carriage return (\r)
 put expression
 
 // Output without newline (use -n flag)
@@ -1545,30 +1543,30 @@ warn expression
 
 // Debug/diagnostic info (to stderr)
 info expression
-```
+~~~
 
 ### Basic Examples
 
-```poly
+~~~poly
 // Simple string output
 put "Hello, World!"
 
 // Variable output
-var name: ustring = u"Alice"
-var age: i32 = 30
+var name ustring := unicode "Alice"
+var age i32 := 30
 put "Name: " + name + ", Age: " + age
 
 // Numeric output
-var pi: f64 = 3.14159
+var pi f64 := 3.14159
 put pi
 
 // Boolean output
-var active: bool = true
+var active bool := true
 put active
 
 // Multiple values (concatenated)
-var x: i32 = 10
-var y: i32 = 20
+var x i32 := 10
+var y i32 := 20
 put "x = " + x + ", y = " + y + ", sum = " + (x + y)
 
 // Output without newline (progress indicator)
@@ -1584,7 +1582,7 @@ info "DEBUG: Request took 42ms"
 
 // Interactive prompts
 put -n "Enter your name: "
-var user_name: ustring = get
+var user_name ustring := get
 put "Hello, " + user_name + "!"
 
 // Menu display
@@ -1593,60 +1591,62 @@ put "1. Start"
 put "2. Stop"
 put "3. Exit"
 put -n "Choose: "
-var choice: i32 = get
-```
+var choice i32 := get
+~~~
 
 ### Formatting Output
 
-```poly
+~~~poly
 // Format string with placeholders
-var name: ustring = u"World"
-var count: i32 = 42
-put u"Hello, {name}! Count: {count}"
+var name ustring := unicode "World"
+var count i32 := 42
+put unicode "Hello, {name}! Count: {count}"
 
 // Format with expressions
-put u"Result: {10 * 5 + 3}"
-put u"Pi rounded: {3.14159:.2f}"
+put unicode "Result: {10 * 5 + 3}"
+put unicode "Pi rounded: {3.14159:.2f}"
 
 // Format with width and alignment
-put u"{'left':<10}{'right':>10}{'center':^10}"
+put unicode "{'left':<10}{'right':>10}{'center':^10}"
 // Output: left      right     center   
 
 // Format with padding
-put u"{'5':0>5}"    // 00005
-put u"{'hello':.10}" // hello*****
-```
+put unicode "{'5':0>5}"    // 00005
+put unicode "{'hello':.10}" // hello*****
+~~~
 
 ### File Output
 
-```poly
+~~~poly
 // Write to file (creates or overwrites)
-put u"Line 1\nLine 2\nLine 3" > "output.txt"
+put unicode "Line 1
+Line 2
+Line 3" > "output.txt"
 
 // Append to file
-put u"Appended line" >> "log.txt"
+put unicode "Appended line" >> "log.txt"
 
 // Append with newline
-put u"New log entry" >> "app.log"
+put unicode "New log entry" >> "app.log"
 
 // Write without newline (useful for progress indicators)
-put -n u"Writing... " > "output.txt"
-put u"done!" >> "output.txt"  // This adds a newline
+put -n unicode "Writing... " > "output.txt"
+put unicode "done!" >> "output.txt"  // This adds a newline
 
 // Write binary data
-var data: bytes = [0x48, 0x65, 0x6C, 0x6C, 0x6F]
+var data bytes := [0x48, 0x65, 0x6C, 0x6C, 0x6F]
 data > "binary.bin"
 
 // Write formatted data to file
-var records: Vec<ustring> = [u"Alice,30", u"Bob,25"]
+var records Vec<ustring> := [unicode "Alice,30", unicode "Bob,25"]
 loop: records
     put record >> "contacts.csv"
 end loop
-```
+~~~
 
 ### Error/Warning Output
 
-```poly
+~~~poly
 // Error messages (to stderr)
 error "Error: File not found"
 error "Error: Cannot divide by zero"
@@ -1660,37 +1660,37 @@ info "DEBUG: Request took 42ms"
 info "DEBUG: Memory usage: 128MB"
 
 // Error with formatting
-var error_code: i32 = 404
+var error_code i32 := 404
 error "HTTP Error {error_code}: Resource not found"
 
 // Warning with conditional check
 if is_deprecated,
     warn "Warning: This function is deprecated"
 end if
-```
+~~~
 
 ### Advanced Output Features
 
-```poly
+~~~poly fragment
 // Output with explicit type conversion
-var value: f64 = 42.5
+var value f64 := 42.5
 put value.to_string()
 put value as i32  // Truncate to integer
 
 // Conditional output
 if verbose,
-    put u"Processing item: " + item.name
+    put unicode "Processing item: " + item.name
 end if
 
 // Output in loop
 loop: 0..10
-    put u"Step {i + 1} of 10"
+    put unicode "Step {i + 1} of 10"
 end loop
 
 // Capture output to variable
-var output: ustring = capture put u"Computed: " + (2 + 2)
-// output now contains u"Computed: 4"
-```
+var output ustring := capture put unicode "Computed: " + (2 + 2)
+// output now contains unicode "Computed: 4"
+~~~
 
 ### Transpilation Rules
 
@@ -1722,17 +1722,17 @@ var output: ustring = capture put u"Computed: " + (2 + 2)
 
 **Note:** These examples use standard library functions like `sleep()`, `pad_right()`, `repeat()`, and `to_string()`. See the Standard Library section for details.
 
-```poly
+~~~poly fragment
 // Complex output patterns
 fn display_progress(current: i32, total: i32)
-    var percent: f64 = (current as f64) / (total as f64) * 100.0
+    var percent f64 := (current as f64) / (total as f64) * 100.0
     put -n "\rProgress: "
     put -n percent.to_string() + "% "
     
     // Build progress bar
-    var bar_width: i32 = 30
-    var filled: i32 = (percent / 100.0 * bar_width as f64) as i32
-    var empty: i32 = bar_width - filled
+    var bar_width i32 := 30
+    var filled i32 := (percent / 100.0 * bar_width as f64) as i32
+    var empty i32 := bar_width - filled
     
     put -n "["
     loop: 0..filled
@@ -1746,17 +1746,17 @@ end fn
 
 // Structured logging
 fn log_request(method: ustring, path: ustring, status: i32, duration_ms: i32)
-    var level: ustring = if status >= 500,u"ERROR"
-        else if status >= 400,u"WARN"
-        else u"INFO"
+    var level ustring := if status >= 500,unicode "ERROR"
+        else if status >= 400,unicode "WARN"
+        else unicode "INFO"
     end if
     
-    var message: ustring = "{method} {path} -> {status} ({duration_ms}ms)"
+    var message ustring := "{method} {path} -> {status} ({duration_ms}ms)"
     
     match level
-        u"ERROR" => error message
-        u"WARN" => warn message
-        u"INFO" => info message
+        unicode "ERROR" => error message
+        unicode "WARN" => warn message
+        unicode "INFO" => info message
     end match
 end fn
 
@@ -1789,19 +1789,19 @@ fn report_error(context: ustring, error: ustring, suggestion: ustring)
     warn "Suggestion: " + suggestion
     info "Stack trace available with --verbose flag"
 end fn
-```
+~~~
 
 ### Edge Cases
 
-```poly
+~~~poly
 // Empty string output
 put ""  // Outputs empty line
 
 // Empty file read
-var content: ustring = get < "empty.txt"  // Returns empty string
+var content ustring := get < "empty.txt"  // Returns empty string
 
 // Very large numbers
-var big: i64 = 9223372036854775807  // Max i64
+var big i64 := 9223372036854775807  // Max i64
 put big
 
 // Unicode characters
@@ -1810,11 +1810,12 @@ put "🌍"     // Emoji
 put "café"   // Accented characters
 
 // Special characters
-put "Line1\nLine2\tTab"  // Escape characters
+put "Line1
+Line2\tTab"  // Escape characters
 put "Quote: \"Hello\""   // Quotes
 
 // Null bytes in binary
-var data: bytes = [0x00, 0xFF, 0x00]
+var data bytes := [0x00, 0xFF, 0x00]
 data > "null_bytes.bin"
 
 // Timeout edge cases
@@ -1825,23 +1826,23 @@ match get --timeout 0  // Immediate timeout
 end match
 
 // Validation edge cases
-var age: i32 = get with validate |x| x > 0  // Rejects 0 and negative
-var name: ustring = get with validate |n| n.len() >= 1  // Rejects empty
+var age i32 := get with validate |x| x > 0  // Rejects 0 and negative
+var name ustring := get with validate |n| n.len() >= 1  // Rejects empty
 
 // File operations edge cases
 put "" > "empty.txt"  // Create empty file
 put "data" > ""  // Error: empty filename
-var content: ustring = get < "nonexistent.txt"  // Error: file not found
+var content ustring := get < "nonexistent.txt"  // Error: file not found
 
 // --bytes flag edge cases
 put "Hello, World!" > "bytes_test.txt"
-var zero_bytes: bytes = get < "bytes_test.txt" --bytes 0  // Empty read
-var exact_bytes: bytes = get < "bytes_test.txt" --bytes 5  // Exactly 5 bytes
-var too_many: bytes = get < "bytes_test.txt" --bytes 1000  // More than file size
+var zero_bytes bytes := get < "bytes_test.txt" --bytes 0  // Empty read
+var exact_bytes bytes := get < "bytes_test.txt" --bytes 5  // Exactly 5 bytes
+var too_many bytes := get < "bytes_test.txt" --bytes 1000  // More than file size
 
 // Error handling edge cases
 fn risky(): Result<ustring, ustring>
-    return Error(u"")  // Empty error message
+    return Error(unicode "")  // Empty error message
 end fn
 
 match risky()
@@ -1849,14 +1850,14 @@ match risky()
     Error("") => warn "Empty error"
     Error(e) => error e
 end match
-```
+~~~
 
 ### Accessibility
 
-```poly
+~~~poly
 // Screen reader friendly output
 put "Enter your name: "  // Clear, descriptive prompt
-var name: ustring = get
+var name ustring := get
 
 // Provide text alternatives for visual elements
 put "Progress: 50% complete"  // Text alternative to progress bar
@@ -1867,11 +1868,11 @@ put "]"
 
 // Use consistent naming conventions
 put "Enter your email address: "  // Clear, consistent
-var email: ustring = get
+var email ustring := get
 
 // Provide clear error messages
 put -n "Enter your age: "
-var age: i32 = get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 && x < 150
 // Error message: "Please enter a valid age between 1 and 150"
 
 // Use semantic output
@@ -1893,18 +1894,18 @@ put "Success!"  // Would display in green
 error "[ERROR] File not found"  // Text prefix for color-blind users
 warn "[WARN] Deprecated feature"  // Text prefix for color-blind users
 put "[SUCCESS] Operation complete"  // Text prefix for color-blind users
-```
+~~~
 
 ### Debugging
 
-```poly
+~~~poly fragment
 // Debug output with info command
 info "Entering function process_data"
 info "Parameter x = " + x.to_string()
 info "Parameter y = " + y.to_string()
 
 // Variable inspection
-var debug_var: ustring = u"test"
+var debug_var ustring := unicode "test"
 info "debug_var = " + debug_var
 info "debug_var.len() = " + debug_var.len().to_string()
 
@@ -1926,19 +1927,19 @@ match result
 end match
 
 // Performance debugging
-var start = time_now()
+var start := time_now()
 // ... code to measure
-var duration = time_now() - start
+var duration := time_now() - start
 info "Duration: " + duration.to_string() + "ms"
 
 // Memory debugging
-var mem_before = get_memory_usage()
+var mem_before := get_memory_usage()
 // ... code to measure
-var mem_after = get_memory_usage()
+var mem_after := get_memory_usage()
 info "Memory used: " + (mem_after - mem_before).to_string() + " bytes"
 
 // Conditional debugging
-var debug_mode: bool = get_env("DEBUG") or u"false" == u"true"
+var debug_mode bool := get_env("DEBUG") or unicode "false" = unicode "true"
 if debug_mode,
     info "Debug mode enabled"
     info "Detailed output here"
@@ -1953,27 +1954,27 @@ end macro
 debug(x)
 debug(y)
 debug(x + y)
-```
+~~~
 
 ### Internationalization
 
-```poly
+~~~poly fragment
 // Locale detection
-var locale: ustring = get_locale()  // e.g., "en-US", "ja-JP", "zh-CN"
-var language: ustring = locale.split(u"-")[0]  // e.g., "en", "ja", "zh"
+var locale ustring := get_locale()  // e.g., "en-US", "ja-JP", "zh-CN"
+var language ustring := locale.split(unicode "-")[0]  // e.g., "en", "ja", "zh"
 
 // Translation function
 fn translate(key: ustring, locale: ustring): ustring
-    var translations: Map<ustring, Map<ustring, ustring>> = {
-        u"greeting": {
-            u"en": u"Hello",
-            u"ja": u"こんにちは",
-            u"zh": u"你好"
+    var translations Map<ustring, Map<ustring, ustring>> := {
+        unicode "greeting": {
+            unicode "en": unicode "Hello",
+            unicode "ja": unicode "こんにちは",
+            unicode "zh": unicode "你好"
         },
-        u"farewell": {
-            u"en": u"Goodbye",
-            u"ja": u"さようなら",
-            u"zh": u"再见"
+        unicode "farewell": {
+            unicode "en": unicode "Goodbye",
+            unicode "ja": unicode "さようなら",
+            unicode "zh": unicode "再见"
         }
     }
     
@@ -1981,65 +1982,65 @@ fn translate(key: ustring, locale: ustring): ustring
 end fn
 
 // Usage
-var greeting: ustring = translate(u"greeting", locale)
+var greeting ustring := translate(unicode "greeting", locale)
 put greeting + ", World!"
 
 // Pluralization
 fn pluralize(count: i32, singular: ustring, plural: ustring): ustring
-    return if count == 1,singular else plural end if
+    return if count = 1,singular else plural end if
 end fn
 
 // Usage
-var item_count: i32 = 5
-put item_count.to_string() + " " + pluralize(item_count, u"item", u"items")
+var item_count i32 := 5
+put item_count.to_string() + " " + pluralize(item_count, unicode "item", unicode "items")
 
 // Date formatting
 fn format_date(date: Date, locale: ustring): ustring
     match locale
-        u"en-US" => return date.format(u"MM/DD/YYYY")
-        u"en-GB" => return date.format(u"DD/MM/YYYY")
-        u"ja-JP" => return date.format(u"YYYY年MM月DD日")
-        u"zh-CN" => return date.format(u"YYYY年MM月DD日")
-        _ => return date.format(u"YYYY-MM-DD")
+        unicode "en-US" => return date.format(unicode "MM/DD/YYYY")
+        unicode "en-GB" => return date.format(unicode "DD/MM/YYYY")
+        unicode "ja-JP" => return date.format(unicode "YYYY年MM月DD日")
+        unicode "zh-CN" => return date.format(unicode "YYYY年MM月DD日")
+        _ => return date.format(unicode "YYYY-MM-DD")
     end match
 end fn
 
 // Number formatting
 fn format_number(number: f64, locale: ustring): ustring
     match locale
-        u"en-US" => return number.format(u"#,##0.00")  // 1,234.56
-        u"de-DE" => return number.format(u"#.##0,00")  // 1.234,56
-        u"ja-JP" => return number.format(u"#,##0.00")  // 1,234.56
+        unicode "en-US" => return number.format(unicode "#,##0.00")  // 1,234.56
+        unicode "de-DE" => return number.format(unicode "#.##0,00")  // 1.234,56
+        unicode "ja-JP" => return number.format(unicode "#,##0.00")  // 1,234.56
         _ => return number.to_string()
     end match
 end fn
 
 // Currency formatting
 fn format_currency(amount: f64, currency: ustring, locale: ustring): ustring
-    var formatted_amount = format_number(amount, locale)
+    var formatted_amount := format_number(amount, locale)
     
     match currency
-        u"USD" => return u"$" + formatted_amount
-        u"EUR" => return u"€" + formatted_amount
-        u"JPY" => return u"¥" + formatted_amount
-        u"CNY" => return u"¥" + formatted_amount
-        _ => return currency + u" " + formatted_amount
+        unicode "USD" => return unicode "$" + formatted_amount
+        unicode "EUR" => return unicode "€" + formatted_amount
+        unicode "JPY" => return unicode "¥" + formatted_amount
+        unicode "CNY" => return unicode "¥" + formatted_amount
+        _ => return currency + unicode " " + formatted_amount
     end match
 end fn
 
 // RTL (Right-to-Left) support
 fn is_rtl(locale: ustring): bool
-    var rtl_locales: Vec<ustring> = [u"ar", u"he", u"fa", u"ur"]
-    return rtl_locales.contains(&locale.split(u"-")[0])
+    var rtl_locales Vec<ustring> := [unicode "ar", unicode "he", unicode "fa", unicode "ur"]
+    return rtl_locales.contains(&locale.split(unicode "-")[0])
 end fn
 
 // Usage
-var text_alignment = if is_rtl(locale),u"right" else u"left" end if
-```
+var text_alignment := if is_rtl(locale),unicode "right" else unicode "left" end if
+~~~
 
 ### Concurrency
 
-```poly
+~~~poly fragment
 // Thread spawning
 spawn(|| {
     // Background task
@@ -2050,19 +2051,19 @@ spawn(|| {
 
 // Async/await
 async fn fetch_data(url: ustring): Result<ustring, ustring>
-    var response = await get --timeout 5000 < url
+    var response := await get --timeout 5000 < url
     return Ok(response)
 end fn
 
 // Usage
-var data = await fetch_data(u"https://api.example.com")
+var data := await fetch_data(unicode "https://api.example.com")
 
 // Mutex for thread-safe access
-var counter: Mutex<i32> = Mutex::new(0)
+var counter Mutex<i32> := Mutex::new(0)
 
 fn increment_counter()
     counter.lock()
-    counter.value = counter.value + 1
+    add counter.value, 1
     counter.unlock()
 end fn
 
@@ -2071,30 +2072,30 @@ end fn
     end loop
 
 // Channel for communication
-var channel: Channel<ustring> = Channel::new()
+var channel Channel<ustring> := Channel::new()
 
 // Producer
 spawn(|| {
     loop: 0..10
-        channel.send(u"Message " + i.to_string())
+        channel.send(unicode "Message " + i.to_string())
     end loop
     channel.close()
 })
 
 // Consumer
-while var message = channel.recv()
+while var message := channel.recv()
     info "Received: " + message
 end while
 
 // Async I/O
 async fn process_files(filenames: Vec<ustring>): Vec<Result<ustring, ustring>>
-    var futures: Vec<Future<Result<ustring, ustring>>> = []
+    var futures Vec<Future<Result<ustring, ustring>>> := []
     
     loop: filenames
         futures.push(async read_file(filename))
     end loop
     
-    var results: Vec<Result<ustring, ustring>> = []
+    var results Vec<Result<ustring, ustring>> := []
     loop: futures
         results.push(await future)
     end loop
@@ -2104,15 +2105,15 @@ end fn
 
 // Parallel processing
 fn parallel_process(data: Vec<T>): Vec<R>
-    var chunk_size = data.len() / num_cpus()
-    var chunks = data.chunks(chunk_size)
+    var chunk_size := data.len() / num_cpus()
+    var chunks := data.chunks(chunk_size)
     
-    var futures: Vec<Future<Vec<R>>> = []
+    var futures Vec<Future<Vec<R>>> := []
     loop: chunks
         futures.push(async process_chunk(chunk))
     end loop
     
-    var results: Vec<R> = []
+    var results Vec<R> := []
     loop: futures
         results.extend(await future)
     end loop
@@ -2121,7 +2122,7 @@ fn parallel_process(data: Vec<T>): Vec<R>
 end fn
 
 // Race condition handling
-var shared_data: Arc<Mutex<Vec<ustring>>> = Arc::new(Mutex::new([]))
+var shared_data Arc<Mutex<Vec<ustring>>> := Arc::new(Mutex::new([]))
 
 fn concurrent_append(data: ustring)
     shared_data.lock()
@@ -2137,7 +2138,7 @@ async fn fetch_with_timeout(url: ustring, timeout_ms: i32): Result<ustring, Time
         Error(e) => return Error(TimeoutError::NetworkError(e))
     end match
 end fn
-```
+~~~
 
 ### Best Practices
 
@@ -2149,7 +2150,7 @@ end fn
 
 ### Grammar Addition
 
-```bnf
+~~~bnf
 <put_stmt> ::= "put" <flag>* <expr> (redir)?
              | "error" <expr>
              | "warn" <expr>
@@ -2160,7 +2161,7 @@ end fn
 
 <redir> ::= ">" <string>
           | ">>" <string>
-```
+~~~
 
 **Note:** The `-n` flag suppresses the trailing newline. The `error`, `warn`, and `info` commands always output to stderr with a newline.
 
@@ -2181,84 +2182,84 @@ The `get` command is Poly's primary input mechanism, providing a simple syntax f
 
 ### Syntax Variants
 
-```poly
+~~~poly
 // Read a line from stdin (returns ustring)
-var line: ustring = get
+var line ustring := get
 
 // Read with prompt (output prompt before reading)
-var name: ustring = get u"Enter name: "
+var name ustring := get unicode "Enter name: "
 
 // Read typed value from stdin (auto-parse)
-var age: i32 = get
-var pi: f64 = get
-var active: bool = get
+var age i32 := get
+var pi f64 := get
+var active bool := get
 
 // Read from file (entire file as ustring)
-var content: ustring = get < "filename.txt"
+var content ustring := get < "filename.txt"
 
 // Read from file (line by line)
-var line: ustring = get < "data.txt"
+var line ustring := get < "data.txt"
 
 // Read binary data from file (as bytes)
-var data: bytes = get < "binary.bin"
+var data bytes := get < "binary.bin"
 
 // Read with timeout (in milliseconds)
-var input: ustring = get --timeout 5000
+var input ustring := get --timeout 5000
 
 // Read with default value
-var input: ustring = get --default u"value"
+var input ustring := get --default unicode "value"
 
 // Read with mask (password input)
-var input: ustring = get --mask u"*"
+var input ustring := get --mask unicode "*"
 
 // Read specific number of bytes
-var header: bytes = get < "image.png" --bytes 8
+var header bytes := get < "image.png" --bytes 8
 
 // Read and convert to type
-var input: i32 = get --as i32
+var input i32 := get --as i32
 
 // Read until delimiter
-var input: ustring = get --until u"," 
+var input ustring := get --until unicode ","
 
 // Read with validation (uses 'with' syntax for closures)
-var input: i32 = get with validate |x| x > 0
+var input i32 := get with validate |x| x > 0
 
 // Read with completion (uses 'with' syntax for arrays)
-var input: ustring = get with complete [u"start", u"stop"]
-```
+var input ustring := get with complete [unicode "start", unicode "stop"]
+~~~
 
 ### Basic Examples
 
-```poly
+~~~poly
 // Simple input
-var line: ustring = get
+var line ustring := get
 put "You entered: " + line
 
 // Input with prompt
-var name: ustring = get "What is your name? "
+var name ustring := get unicode "What is your name? "
 put "Hello, " + name + "!"
 
 // Typed input (auto-parsing)
 put "Enter your age: "
-var age: i32 = get
+var age i32 := get
 put "In 10 years you will be: " + (age + 10)
 
 // Multiple inputs
 put "Enter first number: "
-var a: f64 = get
+var a f64 := get
 put "Enter second number: "
-var b: f64 = get
+var b f64 := get
 put "Sum: " + (a + b)
 
 // Boolean input
 put "Enable debug mode? (true/false): "
-var debug: bool = get
+var debug bool := get
 if debug,
     put "Debug mode enabled"
 end if
 
 // Input with default value
-var color: ustring = get --default u"blue"
+var color ustring := get --default unicode "blue"
 put "Color: " + color
 
 // Input with timeout
@@ -2269,48 +2270,48 @@ match get --timeout 3000
 end match
 
 // Input with validation
-var age: i32 = get with validate |x| x >= 1 && x <= 100
+var age i32 := get with validate |x| x >= 1 && x <= 100
 put "Valid age: " + age
-```
+~~~
 
 ### File Input
 
-```poly
+~~~poly fragment
 // Read entire file
-var config: ustring = get < "config.txt"
-put u"Config length: " + config.len()
+var config ustring := get < "config.txt"
+put unicode "Config length: " + config.len()
 
 // Read file line by line
-var file = open("data.txt")
+var file := open("data.txt")
 while !file.eof()
-    var line: ustring = file.get_line()
-    put u"Line: " + line
+    var line ustring := file.get_line()
+    put unicode "Line: " + line
 end while
 
 // Read specific number of bytes
-var header: bytes = get < "image.png" with bytes 8
+var header bytes := get < "image.png" with bytes 8
 
 // Read with encoding specification
-var text: ustring = get < "utf8.txt" with encoding u"utf-8"
-```
+var text ustring := get < "utf8.txt" with encoding unicode "utf-8"
+~~~
 
 ### Advanced Input Features
 
-```poly
+~~~poly
 // Input with validation
-var age: i32 = get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 && x < 150
 
 // Input with default value (on empty input)
-var name: ustring = get --default u"Anonymous"
+var name ustring := get --default unicode "Anonymous"
 
 // Input with mask (for passwords)
-var password: ustring = get --mask u"*"
+var password ustring := get --mask unicode "*"
 
 // Input with completion (for interactive shells)
-var command: ustring = get with complete [u"start", u"stop", u"pause"]
+var command ustring := get with complete [unicode "start", unicode "stop", unicode "pause"]
 
 // Read until delimiter
-var csv_line: ustring = get --until u"," 
+var csv_line ustring := get --until unicode ","
 
 // Read with timeout
 match get --timeout 5000
@@ -2325,74 +2326,74 @@ struct Person
     var age: i32
 end struct
 
-var person: Person = get as Person
+var person Person := get as Person
 
 // Input in loop with break condition
-var inputs: Vec<ustring> = []
+var inputs Vec<ustring> := []
 loop
-    var input: ustring = get
-    if input == u"quit",
+    var input ustring := get
+    if input = unicode "quit",
         break
     end if
     inputs.push(input)
 end loop
-```
+~~~
 
 ### Error Handling
 
-```poly
+~~~poly
 // Input can fail (returns Result)
 match get
     Ok(line) => process(line)
-    Error(e) => put u"Error reading input: " + e
+    Error(e) => put unicode "Error reading input: " + e
 end match
 
 // Using try for error propagation
 fn read_config(): Result<Config, Error>
-    var line = try get  // Propagate error
-    var config = try parse_config(line)
+    var line := try get  // Propagate error
+    var config := try parse_config(line)
     return Ok(config)
 end fn
 
 // Timeout handling
 match get --timeout 1000
     Ok(input) => process(input)
-    Timeout => put u"Input timeout"
-    Error(e) => put u"Error: " + e
+    Timeout => put unicode "Input timeout"
+    Error(e) => put unicode "Error: " + e
 end match
-```
+~~~
 
 ### Additional Examples
 
-```poly
+~~~poly fragment
 // Input with tuple parsing
-put u"Enter coordinates (x,y): "
-var coords: (i32, i32) = get as (i32, i32)
-var (x, y) = coords
-put u"X: " + x + u", Y: " + y
+put unicode "Enter coordinates (x,y): "
+var coords (i32, i32) := get as (i32, i32)
+var (x, y) := coords
+put unicode "X: " + x + unicode ", Y: " + y
 
 // Input with list parsing
-put u"Enter numbers separated by spaces: "
-var numbers: Vec<i32> = get as Vec<i32>
-var sum: i32 = numbers.reduce(0, |acc, n| acc + n)
-put u"Sum: " + sum
+put unicode "Enter numbers separated by spaces: "
+var numbers Vec<i32> := get as Vec<i32>
+var sum i32 := numbers.reduce(0, |acc, n| acc + n)
+put unicode "Sum: " + sum
 
 // Custom validation function
 fn is_valid_email(email: ustring): bool
-    return email.contains(u"@") && email.ends_with(u".com")
+    return email.contains(unicode "@") && email.ends_with(unicode ".com")
 end fn
 
-var email: ustring = get with validate |email| is_valid_email(email)
+var email ustring := get with validate |email| is_valid_email(email)
 
 // Timeout with default fallback
-var input: ustring = match get --timeout 5000
+var input ustring := match get --timeout 5000
     Ok(input) => input
-    Timeout => u"default"
-    Error(e) => u"default"
+    Timeout => unicode "default"
+    Error(e) => unicode "default"
 end match
 
 // Masked input with validation
-var password: ustring = get --mask u"*" with validate |p| p.len() >= 8
+var password ustring := get --mask unicode "*" with validate |p| p.len() >= 8
 
 // Structured input parsing (JSON-like)
 struct Config
@@ -2401,51 +2402,51 @@ struct Config
     var title: ustring
 end struct
 
-put u"Enter config as 'width,height,title': "
-var config: Config = get as Config
+put unicode "Enter config as 'width,height,title': "
+var config Config := get as Config
 
 // Error recovery with retry
-var valid_input: i32 = loop
-    put u"Enter a positive number: "
+var valid_input i32 := loop
+    put unicode "Enter a positive number: "
     match get
         Ok(input) =>
-            var num: i32 = input.parse::<i32>()
+            var num i32 := input.parse::<i32>()
             if num > 0,
                 break num
             else
-                put u"Please enter a positive number"
+                put unicode "Please enter a positive number"
             end if
-        Error(e) => put u"Invalid input: " + e
+        Error(e) => put unicode "Invalid input: " + e
     end match
 end loop
 
 // Input from file with encoding and validation
-var data: ustring = get < "data.csv" with encoding u"utf-8" with validate |content| content.len() > 0
+var data ustring := get < "data.csv" with encoding unicode "utf-8" with validate |content| content.len() > 0
 
 // Completion with default value
-var action: ustring = get with complete [u"start", u"stop", u"pause"] --default u"stop"
+var action ustring := get with complete [unicode "start", unicode "stop", unicode "pause"] --default unicode "stop"
 
 // Multiple inputs with validation
-put u"Enter start date (YYYY-MM-DD): "
-var start: ustring = get with validate |d| d.len() == 10 && d[4] == u'-' && d[7] == u'-'
-put u"Enter end date (YYYY-MM-DD): "
-var end: ustring = get with validate |d| d.len() == 10 && d[4] == u'-' && d[7] == u'-' && d > start
-```
+put unicode "Enter start date (YYYY-MM-DD): "
+var start ustring := get with validate |d| d.len() = 10 && d[4] = unicode '-' && d[7] = unicode '-'
+put unicode "Enter end date (YYYY-MM-DD): "
+var end ustring := get with validate |d| d.len() = 10 && d[4] = unicode '-' && d[7] = unicode '-' && d > start
+~~~
 
 ### Transpilation Rules
 
 | Poly Syntax | Rust Output |
 |-------------|-------------|
-| `var x = get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
-| `var x: i32 = get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); let x: i32 = input.trim().parse().unwrap();` |
-| `var x = get u"prompt"` | `print!("prompt"); std::io::stdout().flush().unwrap(); let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
-| `var x = get < "file"` | `let x = std::fs::read_to_string("file").unwrap();` |
-| `var x: bytes = get < "file"` | `let x = std::fs::read("file").unwrap();` |
+| `var x := get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
+| `var x i32 := get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); let x: i32 = input.trim().parse().unwrap();` |
+| `var x := get unicode "prompt"` | `print!("prompt"); std::io::stdout().flush().unwrap(); let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
+| `var x := get < "file"` | `let x = std::fs::read_to_string("file").unwrap();` |
+| `var x bytes := get < "file"` | `let x = std::fs::read("file").unwrap();` |
 | `get --timeout 5000` | `// Uses std::thread::spawn with timer and channel to implement timeout. See standard library.` |
-| `get --default u"val"` | `// If input empty, returns default value. See standard library.` |
-| `get --mask u"*"` | `// Uses terminal raw mode to mask input characters. See standard library.` |
+| `get --default unicode "val"` | `// If input empty, returns default value. See standard library.` |
+| `get --mask unicode "*"` | `// Uses terminal raw mode to mask input characters. See standard library.` |
 | `get --as i32` | `// Parse as specified type. See standard library.` |
-| `get --until u","` | `// Reads until delimiter found in input stream. See standard library.` |
+| `get --until unicode ","` | `// Reads until delimiter found in input stream. See standard library.` |
 | `get with validate \|x\| ...` | `// Loops until validation closure returns true. See standard library.` |
 | `get with complete [...]` | `// Uses line editor library for completion. See standard library.` |
 
@@ -2453,9 +2454,9 @@ var end: ustring = get with validate |d| d.len() == 10 && d[4] == u'-' && d[7] =
 
 | Feature | Poly `get` | Rust | Python | Go |
 |---------|------------|------|--------|----|
-| Basic input | `var x = get` | `stdin().read_line()` | `input()` | `bufio.NewReader()` |
-| With prompt | `get u"prompt"` | `print! + read_line` | `input("prompt")` | `fmt.Print + ReadString` |
-| Typed input | `var x: i32 = get` | `read_line + parse` | `int(input())` | `Scanf("%d", &x)` |
+| Basic input | `var x := get` | `stdin().read_line()` | `input()` | `bufio.NewReader()` |
+| With prompt | `get unicode "prompt"` | `print! + read_line` | `input("prompt")` | `fmt.Print + ReadString` |
+| Typed input | `var x i32 := get` | `read_line + parse` | `int(input())` | `Scanf("%d", &x)` |
 | File input | `get < "file"` | `fs::read_to_string` | `open().read()` | `os.ReadFile` |
 | Binary input | `get < "file"` (bytes) | `fs::read` | `open().read()` | `os.ReadFile` |
 | Validation | `get with validate` | Built-in | (manual) | (manual) |
@@ -2474,7 +2475,7 @@ var end: ustring = get with validate |d| d.len() == 10 && d[4] == u'-' && d[7] =
 
 ### Grammar Addition
 
-```bnf
+~~~bnf
 <get_expr> ::= "get" (<prompt>)? (<flag>)* (<modifier>)*
 
 <prompt> ::= <ustring>
@@ -2490,7 +2491,7 @@ var end: ustring = get with validate |d| d.len() == 10 && d[4] == u'-' && d[7] =
              | "with" "validate" <closure> // Validation (complex)
              | "with" "complete" <array_expr>  // Completion (complex)
              | "with" "encoding" <ustring> // Encoding
-```
+~~~
 
 **Note:** Simple options use flags (`--timeout`, `--default`, etc.). Complex options like validation closures and completion arrays use `with` syntax for readability.
 
@@ -2500,7 +2501,7 @@ var end: ustring = get with validate |d| d.len() == 10 && d[4] == u'-' && d[7] =
 
 ### Platform Detection
 
-```poly
+~~~poly
 // Platform detection functions
 fn is_windows(): bool
     // Returns true if running on Windows
@@ -2527,11 +2528,11 @@ end fn
 fn line_ending(): ustring
     return if is_windows(),"\r\n" else "\n" end if
 end fn
-```
+~~~
 
 ### Debugging Utilities
 
-```poly
+~~~poly
 // Debugging utility functions
 fn stringify(expr: any): ustring
     // Converts any expression to string representation
@@ -2564,11 +2565,11 @@ end fn
 fn set_env(name: ustring, value: ustring)
     // Sets an environment variable
 end fn
-```
+~~~
 
 ### Internationalization
 
-```poly
+~~~poly
 // Internationalization utility functions
 fn get_locale(): ustring
     // Returns current locale (e.g., "en-US", "ja-JP")
@@ -2597,13 +2598,13 @@ end fn
 fn is_rtl(locale: ustring): bool
     // Returns true if locale is right-to-left
 end fn
-```
+~~~
 
 ### Collections
 
-```poly
+~~~poly fragment
 // Vec<T> - Dynamic array
-var vec: Vec<i32> = [1, 2, 3]
+var vec Vec<i32> := [1, 2, 3]
 vec.push(4)
 vec.pop()
 vec.len()
@@ -2614,101 +2615,101 @@ vec.iter_mut()
 vec.into_iter()
 
 // Map<K, V> - Hash map
-var map: Map<ustring, i32> = []
-map.insert(u"key", 42)
-map.get(u"key")
-map.remove(u"key")
-map.contains_key(u"key")
+var map Map<ustring, i32> := []
+map.insert(unicode "key", 42)
+map.get(unicode "key")
+map.remove(unicode "key")
+map.contains_key(unicode "key")
 map.len()
 map.iter()
 
 // Set<T> - Hash set
-var set: Set<i32> = []
+var set Set<i32> := []
 set.insert(1)
 set.remove(&1)
 set.contains(&1)
 set.len()
 
 // Deque<T> - Double-ended queue
-var deque: Deque<i32> = []
+var deque Deque<i32> := []
 deque.push_front(1)
 deque.push_back(2)
 deque.pop_front()
 deque.pop_back()
 
 // Stack<T> - LIFO stack
-var stack: Stack<i32> = []
+var stack Stack<i32> := []
 stack.push(1)
 stack.pop()
 stack.peek()
 
 // Queue<T> - FIFO queue
-var queue: Queue<i32> = []
+var queue Queue<i32> := []
 queue.enqueue(1)
 queue.dequeue()
 queue.peek()
-```
+~~~
 
 ### I/O
 
-```poly
+~~~poly fragment
 // Standard I/O (preferred: use 'put' for output, 'get' for input)
-put u"Hello, World!"     // Output to stdout
-put -n u"Enter value: "  // No newline
-error u"Error message"   // Error message to stderr
-warn u"Warning"          // Warning to stderr
-info u"Debug info"       // Debug info to stderr
+put unicode "Hello, World!"     // Output to stdout
+put -n unicode "Enter value: "  // No newline
+error unicode "Error message"   // Error message to stderr
+warn unicode "Warning"          // Warning to stderr
+info unicode "Debug info"       // Debug info to stderr
 
 // Input with get
-var name: ustring = get u"Enter name: "  // Input with prompt
-var age: i32 = get                        // Typed input
-var line: ustring = get                   // Simple line input
+var name ustring := get unicode "Enter name: "  // Input with prompt
+var age i32 := get                        // Typed input
+var line ustring := get                   // Simple line input
 
 // Legacy syntax (still supported)
-print(u"Hello, World!")
-print_err(u"Error message")
+print(unicode "Hello, World!")
+print_err(unicode "Error message")
 
 // File I/O
-var file = File::open(u"test.txt")?
-var content = file.read_to_string()?
-file.write(u"Hello")?
+var file := File::open(unicode "test.txt")?
+var content := file.read_to_string()?
+file.write(unicode "Hello")?
 file.close()
 
 // Buffered I/O
-var reader = BufReader::new(file)
-var line = reader.read_line()?
+var reader := BufReader::new(file)
+var line := reader.read_line()?
 
 // Path operations
-var path = Path::new(u"/home/user/file.txt")
-var exists = path.exists()
-var parent = path.parent()
-var filename = path.filename()
-```
+var path := Path::new(unicode "/home/user/file.txt")
+var exists := path.exists()
+var parent := path.parent()
+var filename := path.filename()
+~~~
 
 ### String Operations
 
-```poly
+~~~poly fragment
 // String manipulation
-var s: ustring = u"Hello, World!"
+var s ustring := unicode "Hello, World!"
 s.len()              // Length
 s.is_empty()         // Check empty
-s.contains(u"World") // Substring check
-s.starts_with(u"Hello")
-s.ends_with(u"World!")
+s.contains(unicode "World") // Substring check
+s.starts_with(unicode "Hello")
+s.ends_with(unicode "World!")
 s.to_upper()         // Uppercase
 s.to_lower()         // Lowercase
 s.trim()             // Trim whitespace
-s.split(u",")        // Split
-s.replace(u"World", u"Poly")
-s.find(u"World")     // Find index
+s.split(unicode ",")        // Split
+s.replace(unicode "World", unicode "Poly")
+s.find(unicode "World")     // Find index
 s.chars()            // Character iterator
 s.bytes()            // Byte iterator
 s.parse::<i32>()     // Parse to integer
-```
+~~~
 
 ### Math Operations
 
-```poly
+~~~poly fragment
 // Basic math
 abs(x)
 sqrt(x)
@@ -2732,13 +2733,13 @@ clamp(value, min, max)
 // Random
 random::<i32>()     // Random integer
 random_range(1, 10) // Random in range
-```
+~~~
 
 ### Iterators
 
-```poly
+~~~poly
 // Iterator methods
-var iter = vec.iter()
+var iter := vec.iter()
 iter.next()          // Next element
 iter.count()         // Count elements
 iter.sum()           // Sum elements
@@ -2753,51 +2754,51 @@ iter.collect()       // Collect to collection
 (0..10).iter()       // 0 to 9
 (0..=10).iter()      // 0 to 10
 (0..10).rev().iter() // 10 down to 0
-```
+~~~
 
 ### Concurrency
 
-```poly
+~~~poly fragment
 // Threads
-var handle = thread::spawn(|| 
-    print(u"Hello from thread!")
+var handle := thread::spawn(||
+    print(unicode "Hello from thread!")
 end)
 handle.join()
 
 // Channels (message passing)
-var (tx, rx) = channel()
+var (tx, rx) := channel()
 thread::spawn(move ||
-    tx.send(u"Hello!")
+    tx.send(unicode "Hello!")
 end)
-var msg = rx.recv()
+var msg := rx.recv()
 
 // Mutex (shared state)
-var data: Mutex<Vec<i32>> = Mutex::new([])
+var data Mutex<Vec<i32>> := Mutex::new([])
 {
-    var guard = data.lock()
+    var guard := data.lock()
     guard.push(1)
 } // Guard dropped here
 
 // Arc (atomic reference counting)
-var shared: Arc<Mutex<i32>> = Arc::new(Mutex::new(0))
-var clone = Arc::clone(&shared)
+var shared Arc<Mutex<i32>> := Arc::new(Mutex::new(0))
+var clone := Arc::clone(&shared)
 thread::spawn(move ||
-    var guard = clone.lock()
+    var guard := clone.lock()
     *guard += 1
 end)
 
 // Async/Await
 async fn fetch_data(url: ustring): Result<ustring, ustring>
-    var response = await get --timeout 5000 < url
+    var response := await get --timeout 5000 < url
     return Ok(response)
 end fn
 
-var data = await fetch_data(u"https://api.example.com")
+var data := await fetch_data(unicode "https://api.example.com")
 
 // Futures
-var future = async long_running_task()
+var future := async long_running_task()
 // Do other work...
-var result = await future
+var result := await future
 
 // Channels (detailed)
 struct Channel<T>
@@ -2851,7 +2852,7 @@ fn ThreadPool::execute<F>(&self, job: F)
     where F: FnOnce() + Send + 'static
     // Executes a job in the thread pool
 end fn
-```
+~~~
 
 ---
 
@@ -2859,7 +2860,7 @@ end fn
 
 ### Project Structure
 
-```
+~~~
 my_poly_project/
 ├── Cargo.toml
 ├── poly.toml           # Poly project configuration
@@ -2875,7 +2876,7 @@ my_poly_project/
 │       └── structs.rs  # Struct definitions
 ├── tests/              # Integration tests
 └── benches/            # Benchmarks
-```
+~~~
 
 ### Complete Transpilation Mapping
 
@@ -2899,16 +2900,16 @@ my_poly_project/
 
 | Poly Syntax | Rust Output |
 |-------------|-------------|
-| `var x = get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
-| `var x: i32 = get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); let x: i32 = input.trim().parse().unwrap();` |
-| `var x = get u"prompt"` | `print!("prompt"); std::io::stdout().flush().unwrap(); let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
-| `var x = get < "file"` | `let x = std::fs::read_to_string("file").unwrap();` |
-| `var x: bytes = get < "file"` | `let x = std::fs::read("file").unwrap();` |
+| `var x := get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
+| `var x i32 := get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); let x: i32 = input.trim().parse().unwrap();` |
+| `var x := get unicode "prompt"` | `print!("prompt"); std::io::stdout().flush().unwrap(); let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
+| `var x := get < "file"` | `let x = std::fs::read_to_string("file").unwrap();` |
+| `var x bytes := get < "file"` | `let x = std::fs::read("file").unwrap();` |
 | `get --timeout 5000` | `// Uses std::thread::spawn with timer and channel to implement timeout. See standard library.` |
-| `get --default u"val"` | `// If input empty, returns default value. See standard library.` |
-| `get --mask u"*"` | `// Uses terminal raw mode to mask input characters. See standard library.` |
+| `get --default unicode "val"` | `// If input empty, returns default value. See standard library.` |
+| `get --mask unicode "*"` | `// Uses terminal raw mode to mask input characters. See standard library.` |
 | `get --as i32` | `// Parse as specified type. See standard library.` |
-| `get --until u","` | `// Reads until delimiter found in input stream. See standard library.` |
+| `get --until unicode ","` | `// Reads until delimiter found in input stream. See standard library.` |
 | `get --bytes 8` | `// Read specified number of bytes. See standard library.` |
 | `get with validate \|x\| ...` | `// Loops until validation closure returns true. See standard library.` |
 | `get with complete [...]` | `// Uses line editor library for completion. See standard library.` |
@@ -2918,7 +2919,7 @@ my_poly_project/
 | Poly Construct | Rust Output |
 |----------------|-------------|
 | **Variables & Constants** | |
-| `var x: i32 = 10` | `let mut x: i32 = 10;` |
+| `var x i32 := 10` | `let mut x: i32 = 10;` |
 | `let x: i32 = 10` | `let x: i32 = 10;` |
 | `const MAX = 100` | `const MAX: i32 = 100;` |
 | **Arithmetic** | |
@@ -3022,26 +3023,26 @@ my_poly_project/
 
 ### Phase 3: Type System Enhancement
 
-- [ ] Traits and trait bounds
-- [ ] Generics
-- [ ] Closures
+- [x] Traits and trait bounds
+- [x] Generics (generic functions, structs, and type annotations)
+- [x] Closures
 - [ ] Lifetime annotations
-- [ ] Smart pointers (Box, Rc, Arc)
+- [x] Smart pointers (Box, Rc, Arc)
 
 ### Phase 4: Advanced Features
 
-- [ ] Pattern matching (guards, destructuring)
+- [x] Pattern matching (guards, destructuring)
 - [ ] Iterator methods
-- [ ] Async/await
-- [ ] Macros
+- [x] Async/await
+- [x] Macros
 - [ ] Const generics
 
 ### Phase 5: Standard Library
 
-- [ ] Collections (Vec, Map, Set)
-- [ ] I/O operations
-- [ ] String manipulation
-- [ ] Math operations
+- [ ] Collections (Vec, Map, Set) — `Map<K, V>` and `Set<T>` type mappings
+- [x] I/O operations
+- [x] String manipulation
+- [x] Math operations (`abs`, `sqrt`, `pow`, `min`, `max`)
 - [ ] Concurrency primitives
 
 ### Phase 6: Tooling & Ecosystem
@@ -3078,7 +3079,7 @@ my_poly_project/
 
 ## Appendix B: Grammar Summary (BNF)
 
-```bnf
+~~~bnf
 <program> ::= <module>*
 
 <module> ::= "module" <identifier> <declaration>* "end" "module"
@@ -3092,8 +3093,8 @@ my_poly_project/
                | <impl_decl>
                | <use_decl>
 
-<variable_decl> ::= "var" <identifier> ":" <type> "=" <expr>
-                  | "let" <identifier> ":" <type> "=" <expr>
+<variable_decl> ::= "var" <identifier> [<type>] ":=" <expr>
+                  | "let" <identifier> [":" <type>] "=" <expr>
 
 <constant_decl> ::= "const" <identifier> "=" <expr>
 
@@ -3121,7 +3122,7 @@ my_poly_project/
              | <match_stmt>
              | <return_stmt>
 
-<if_stmt> ::= "if" <expr> "then" <block> ("else" "if" <expr> "then" <block>)* ("else" <block>)? "end" "if"
+<if_stmt> ::= "if" <expr> <block> ("else" "if" <expr> <block>)* ("else" <block>)? "end" "if"
 
 <while_stmt> ::= "while" <expr> <block> "end" "while"
 
@@ -3163,7 +3164,7 @@ my_poly_project/
          | "ptr" <type>
          | "&" <type>
          | "&mut" <type>
-```
+~~~
 
 ---
 

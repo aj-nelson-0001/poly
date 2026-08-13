@@ -38,6 +38,8 @@ impl<'a> Lexer<'a> {
 
     /// Tokenize the source code.
     pub fn tokenize(&mut self) {
+        // Scan until the sentinel; individual scanners are responsible for
+        // consuming the complete token and advancing `pos`.
         while !self.is_at_end() {
             self.scan_token();
         }
@@ -97,6 +99,8 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) {
+        // Newlines are discarded here because Poly block termination is
+        // expressed with `end <keyword>`, not line-sensitive indentation.
         while !self.is_at_end() {
             match self.current() {
                 ' ' | '\r' | '\t' => {
@@ -110,7 +114,7 @@ impl<'a> Lexer<'a> {
                 '#' => {
                     self.skip_comment();
                 }
-                '/' if self.peek_next() == '*' => {
+                '/' if self.peek_next() == '*' || self.peek_next() == '/' => {
                     self.skip_comment();
                 }
                 _ => break,
@@ -121,6 +125,13 @@ impl<'a> Lexer<'a> {
     fn skip_comment(&mut self) {
         if self.current() == '#' {
             // Single-line comment: skip the #
+            self.advance();
+            while !self.is_at_end() && self.current() != '\n' {
+                self.advance();
+            }
+        } else if self.current() == '/' && self.peek_next() == '/' {
+            // C++-style single-line comment: skip the //
+            self.advance();
             self.advance();
             while !self.is_at_end() && self.current() != '\n' {
                 self.advance();
@@ -149,6 +160,8 @@ impl<'a> Lexer<'a> {
     // === Token scanning ===
 
     fn scan_token(&mut self) {
+        // Whitespace/comments may consume the rest of the input, so always
+        // re-check EOF before recording the next token's starting offset.
         self.skip_whitespace();
         if self.is_at_end() {
             return;
@@ -170,6 +183,8 @@ impl<'a> Lexer<'a> {
             ':' => {
                 if self.match_char(':') {
                     self.add_token(TokenKind::ColonColon, start);
+                } else if self.match_char('=') {
+                    self.add_token(TokenKind::ColonEq, start);
                 } else {
                     self.add_token(TokenKind::Colon, start);
                 }
@@ -187,26 +202,13 @@ impl<'a> Lexer<'a> {
             }
             '~' => self.add_token(TokenKind::Tilde, start),
 
-            // String literals
+            // String and character literals
             '"' => self.scan_string(start),
+            '\'' => self.scan_unicode_char(start),
             'u' => {
                 if self.peek() == '"' {
-                    self.advance(); // consume the "
+                    self.advance(); // consume the legacy prefix quote
                     self.scan_unicode_string(start);
-                } else if self.peek() == 0x27 as char {
-                    // Unicode character literal: u'X'
-                    self.advance(); // consume the '
-                    let ch = self.advance();
-                    if self.peek() == 0x27 as char {
-                        self.advance(); // consume closing '
-                        self.add_token(TokenKind::UnicodeStringLiteral(ch.to_string()), start);
-                    } else {
-                        self.errors.push(LexerError::new(
-                            LexerErrorKind::UnterminatedString,
-                            Span::new(start, self.pos),
-                            "Unterminated Unicode character literal",
-                        ));
-                    }
                 } else {
                     self.scan_identifier_or_keyword(start);
                 }
@@ -342,11 +344,17 @@ impl<'a> Lexer<'a> {
                     Span::new(start, self.pos),
                     format!("Unexpected character: '{}'", ch),
                 ));
+                // Preserve an invalid character in the token stream so the
+                // parser cannot silently accept the remainder of malformed
+                // source after the lexer reports an error.
+                self.add_token(TokenKind::Error, start);
             }
         }
     }
 
     fn add_token(&mut self, kind: TokenKind, start: usize) {
+        // All scanners use one constructor so spans consistently cover the
+        // source from the first character through the final consumed character.
         self.tokens
             .push(Token::new(kind, Span::new(start, self.pos)));
     }
@@ -354,6 +362,8 @@ impl<'a> Lexer<'a> {
     // === Scanners ===
 
     fn scan_string(&mut self, start: usize) {
+        // Store decoded characters in the AST-facing value; the source span
+        // still retains the original spelling for diagnostics.
         let mut value = String::new();
         while !self.is_at_end() && self.current() != '"' {
             if self.current() == '\\' {
@@ -394,6 +404,80 @@ impl<'a> Lexer<'a> {
 
         self.advance(); // closing "
         self.add_token(TokenKind::StringLiteral(value), start);
+    }
+
+    fn scan_unicode_char(&mut self, start: usize) {
+        // The opening quote has already been consumed by the dispatcher.
+        let value = if self.is_at_end() || self.current() == '\n' {
+            self.errors.push(LexerError::new(
+                LexerErrorKind::InvalidToken,
+                Span::new(start, self.pos),
+                "Unicode character literal must contain exactly one character",
+            ));
+            return;
+        } else if self.current() == '\'' {
+            self.advance(); // consume the empty literal's closing quote
+            self.errors.push(LexerError::new(
+                LexerErrorKind::InvalidToken,
+                Span::new(start, self.pos),
+                "Unicode character literal must contain exactly one character",
+            ));
+            return;
+        } else if self.current() == '\\' {
+            self.advance();
+            if self.is_at_end() {
+                self.errors.push(LexerError::new(
+                    LexerErrorKind::UnterminatedString,
+                    Span::new(start, self.pos),
+                    "Unterminated Unicode character literal",
+                ));
+                return;
+            }
+            let escaped = self.advance();
+            match escaped {
+                'n' => '\n',
+                't' => '\t',
+                'r' => '\r',
+                '\\' => '\\',
+                '\'' => '\'',
+                '"' => '"',
+                '0' => '\0',
+                _ => {
+                    self.errors.push(LexerError::new(
+                        LexerErrorKind::InvalidEscape,
+                        Span::new(self.pos - 2, self.pos),
+                        format!("Invalid escape sequence: \\{}", escaped),
+                    ));
+                    while !self.is_at_end() && self.current() != '\'' && self.current() != '\n' {
+                        self.advance();
+                    }
+                    if self.peek() == '\'' {
+                        self.advance();
+                    }
+                    return;
+                }
+            }
+        } else {
+            self.advance()
+        };
+
+        if self.peek() != '\'' {
+            while !self.is_at_end() && self.current() != '\'' && self.current() != '\n' {
+                self.advance();
+            }
+            if self.peek() == '\'' {
+                self.advance();
+            }
+            self.errors.push(LexerError::new(
+                LexerErrorKind::InvalidToken,
+                Span::new(start, self.pos),
+                "Unicode character literal must contain exactly one character",
+            ));
+            return;
+        }
+
+        self.advance(); // closing '
+        self.add_token(TokenKind::UnicodeCharLiteral(value.to_string()), start);
     }
 
     fn scan_unicode_string(&mut self, start: usize) {
@@ -440,6 +524,8 @@ impl<'a> Lexer<'a> {
     }
 
     fn scan_number(&mut self, start: usize) {
+        // Numeric text is preserved rather than parsed here. The semantic phase
+        // can then apply the surrounding declaration's target type.
         while !self.is_at_end() && self.current().is_ascii_digit() {
             self.advance();
         }
@@ -457,9 +543,37 @@ impl<'a> Lexer<'a> {
                 if self.peek() == '+' || self.peek() == '-' {
                     self.advance();
                 }
+                let exponent_start = self.pos;
                 while !self.is_at_end() && self.current().is_ascii_digit() {
                     self.advance();
                 }
+                if self.pos == exponent_start {
+                    self.errors.push(LexerError::new(
+                        LexerErrorKind::InvalidNumber,
+                        Span::new(start, self.pos),
+                        "Exponent must contain at least one digit",
+                    ));
+                }
+            }
+
+            // A second decimal point followed by digits cannot begin a new
+            // token; report the complete input as one malformed number.
+            if self.peek() == '.' && self.peek_next().is_ascii_digit() {
+                while !self.is_at_end()
+                    && (self.current().is_ascii_digit()
+                        || self.current() == '.'
+                        || self.current() == 'e'
+                        || self.current() == 'E'
+                        || self.current() == '+'
+                        || self.current() == '-')
+                {
+                    self.advance();
+                }
+                self.errors.push(LexerError::new(
+                    LexerErrorKind::InvalidNumber,
+                    Span::new(start, self.pos),
+                    "Number contains multiple decimal points",
+                ));
             }
 
             let text: String = self.chars[start..self.pos].iter().collect();
@@ -472,8 +586,23 @@ impl<'a> Lexer<'a> {
 
     fn scan_hex_number(&mut self, start: usize) {
         self.advance(); // consume 'x'
+        let digit_start = self.pos;
         while !self.is_at_end() && self.current().is_ascii_hexdigit() {
             self.advance();
+        }
+        let invalid_digit =
+            !self.is_at_end() && (self.current().is_ascii_alphanumeric() || self.current() == '_');
+        if self.pos == digit_start || invalid_digit {
+            while !self.is_at_end()
+                && (self.current().is_ascii_alphanumeric() || self.current() == '_')
+            {
+                self.advance();
+            }
+            self.errors.push(LexerError::new(
+                LexerErrorKind::InvalidNumber,
+                Span::new(start, self.pos),
+                "Invalid hexadecimal literal",
+            ));
         }
         let text: String = self.chars[start..self.pos].iter().collect();
         self.add_token(TokenKind::IntLiteral(text), start);
@@ -498,6 +627,8 @@ impl<'a> Lexer<'a> {
     }
 
     fn scan_identifier_or_keyword(&mut self, start: usize) {
+        // Read the complete word before classification; prefixes such as `u`
+        // need this to distinguish an identifier from a legacy literal.
         while !self.is_at_end() && (self.current().is_alphanumeric() || self.current() == '_') {
             self.advance();
         }
@@ -518,7 +649,12 @@ impl<'a> Lexer<'a> {
             "for" => TokenKind::For,
             "in" => TokenKind::In,
             "match" => TokenKind::Match,
+            "set" => TokenKind::Set,
+            "to" => TokenKind::To,
             "add" => TokenKind::Add,
+            "sub" => TokenKind::Sub,
+            "inc" => TokenKind::Inc,
+            "dec" => TokenKind::Dec,
             "break" => TokenKind::Break,
             "continue" => TokenKind::Continue,
             "return" => TokenKind::Return,
@@ -546,6 +682,7 @@ impl<'a> Lexer<'a> {
             "deref" => TokenKind::Deref,
             "step" => TokenKind::Step,
             "capture" => TokenKind::Capture,
+            "unicode" => TokenKind::Unicode,
 
             // Assembly ops are only keywords in specific contexts,
             // so we treat them as identifiers for now.
@@ -610,17 +747,24 @@ mod tests {
 
     #[test]
     fn test_simple_tokens() {
-        let source = "var x: i32 = 42";
+        let source = "var x i32 := 42";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
-        assert_eq!(tokens.len(), 7); // var, x, :, i32, =, 42, Eof
+        assert_eq!(tokens.len(), 6); // var, x, i32, :=, 42, Eof
         assert_eq!(tokens[0].kind, TokenKind::Var);
         assert_eq!(tokens[1].kind, TokenKind::Identifier("x".to_string()));
-        assert_eq!(tokens[2].kind, TokenKind::Colon);
-        assert_eq!(tokens[3].kind, TokenKind::I32);
-        assert_eq!(tokens[4].kind, TokenKind::Eq);
-        assert_eq!(tokens[5].kind, TokenKind::IntLiteral("42".to_string()));
-        assert_eq!(tokens[6].kind, TokenKind::Eof);
+        assert_eq!(tokens[2].kind, TokenKind::I32);
+        assert_eq!(tokens[3].kind, TokenKind::ColonEq);
+        assert_eq!(tokens[4].kind, TokenKind::IntLiteral("42".to_string()));
+        assert_eq!(tokens[5].kind, TokenKind::Eof);
+    }
+
+    #[test]
+    fn test_equality_and_initialization_tokens() {
+        let (tokens, errors) = Lexer::lex("var x := 1\nif x = 1,");
+        assert!(errors.is_empty());
+        assert!(tokens.iter().any(|token| token.kind == TokenKind::ColonEq));
+        assert!(tokens.iter().any(|token| token.kind == TokenKind::Eq));
     }
 
     #[test]
@@ -636,15 +780,51 @@ mod tests {
     }
 
     #[test]
-    fn test_unicode_string() {
-        let source = r#"put u"Hello, 世界! 🚀""#;
+    fn test_unicode_string_prefix() {
+        let source = r#"put unicode "Hello, 世界! 🚀""#;
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Put);
+        assert_eq!(tokens[1].kind, TokenKind::Unicode);
+        assert_eq!(
+            tokens[2].kind,
+            TokenKind::StringLiteral("Hello, 世界! 🚀".to_string())
+        );
+    }
+
+    #[test]
+    fn test_unicode_character_literals() {
+        let (tokens, errors) = Lexer::lex("unicode '世' unicode '\\n' unicode '\\\\'");
+        assert!(errors.is_empty());
+        assert_eq!(tokens[0].kind, TokenKind::Unicode);
         assert_eq!(
             tokens[1].kind,
-            TokenKind::UnicodeStringLiteral("Hello, 世界! 🚀".to_string())
+            TokenKind::UnicodeCharLiteral("世".to_string())
         );
+        assert_eq!(tokens[2].kind, TokenKind::Unicode);
+        assert_eq!(
+            tokens[3].kind,
+            TokenKind::UnicodeCharLiteral("\n".to_string())
+        );
+        assert_eq!(tokens[4].kind, TokenKind::Unicode);
+        assert_eq!(
+            tokens[5].kind,
+            TokenKind::UnicodeCharLiteral("\\".to_string())
+        );
+    }
+
+    #[test]
+    fn test_invalid_unicode_character_literals() {
+        let (_tokens, errors) = Lexer::lex("'ab'");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].kind, LexerErrorKind::InvalidToken);
+    }
+
+    #[test]
+    fn test_invalid_unicode_character_escape_has_one_diagnostic() {
+        let (_tokens, errors) = Lexer::lex("'\\q'");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].kind, LexerErrorKind::InvalidEscape);
     }
 
     #[test]
@@ -675,7 +855,7 @@ mod tests {
     }
 
     #[test]
-    fn test_assignment_operators() {
+    fn test_compound_mutation_operators_are_lexed_for_diagnostics() {
         let source = "x += 5 -= 3 *= 2 /= 4 %= 3";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -739,27 +919,27 @@ mod tests {
 
     #[test]
     fn test_hex_number() {
-        let source = "var x: i32 = 0xFF";
+        let source = "var x i32 := 0xFF";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
-        assert_eq!(tokens[5].kind, TokenKind::IntLiteral("0xFF".to_string()));
+        assert_eq!(tokens[4].kind, TokenKind::IntLiteral("0xFF".to_string()));
     }
 
     #[test]
     fn test_binary_number() {
-        let source = "var x: i32 = 0b1010";
+        let source = "var x i32 := 0b1010";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
-        assert_eq!(tokens[5].kind, TokenKind::IntLiteral("0b1010".to_string()));
+        assert_eq!(tokens[4].kind, TokenKind::IntLiteral("0b1010".to_string()));
     }
 
     #[test]
     fn test_float_number() {
-        let source = "var pi: f64 = 3.14159";
+        let source = "var pi f64 := 3.14159";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(
-            tokens[5].kind,
+            tokens[4].kind,
             TokenKind::FloatLiteral("3.14159".to_string())
         );
     }
@@ -796,12 +976,12 @@ mod tests {
 
     #[test]
     fn test_closure() {
-        let source = "var square = |x: i32| x * x";
+        let source = "var square := |x: i32| x * x";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Var);
         assert_eq!(tokens[1].kind, TokenKind::Identifier("square".to_string()));
-        assert_eq!(tokens[2].kind, TokenKind::Eq);
+        assert_eq!(tokens[2].kind, TokenKind::ColonEq);
         assert_eq!(tokens[3].kind, TokenKind::Pipe);
     }
 
@@ -826,7 +1006,7 @@ mod tests {
 
     #[test]
     fn test_comments() {
-        let source = "# This is a comment\nvar x = 1";
+        let source = "# This is a comment\nvar x := 1";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Var);
@@ -834,7 +1014,7 @@ mod tests {
 
     #[test]
     fn test_block_comment() {
-        let source = "/* block comment */ var x = 1";
+        let source = "/* block comment */ var x := 1";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Var);
@@ -850,7 +1030,7 @@ mod tests {
 
     #[test]
     fn test_error_unexpected_character() {
-        let source = "var x = @";
+        let source = "var x := @";
         let (_tokens, errors) = Lexer::lex(source);
         assert!(!errors.is_empty());
         assert_eq!(errors[0].kind, LexerErrorKind::UnexpectedCharacter);

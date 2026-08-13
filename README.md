@@ -24,12 +24,11 @@ Poly is designed as a minimalist, low-overhead system programming language with 
 
 ## What's New in v1.6.0
 
-🎉 **New If Statement Syntax!** We've simplified if statements to use commas instead of `then`:
+🎉 **Clear, explicit expressions!** Poly uses `:=` for variable initialization, `=` for assignment, `==` for equality, and `+=`/`-=` for mutation.
 
-**Before:** `if x > 0 then ... end if`
-**After:** `if x > 0, ... end if`
+If blocks use a readable delimiter-free form: `if x > 0 ... end if`. A comma remains accepted for compatibility.
 
-This change makes Poly code more concise and familiar to developers from other languages.
+**Syntax note:** Use `var name Type := value` or `var name := value` for declarations. Use `=` for later assignment, `==` for comparisons, and `+=`/`-=` for mutation.
 
 [Read the full blog post](BLOG_POST_if_syntax.md)
 
@@ -39,49 +38,49 @@ This change makes Poly code more concise and familiar to developers from other l
 
 ### Hello, World!
 
-```poly
+~~~poly
 put "Hello, World!"
-```
+~~~
 
 ### Variables & Output
 
-```poly
-var name: ustring = u"Poly"
-var version: i32 = 1
+~~~poly
+var name ustring := unicode "Poly"
+var version i32 := 1
 put "Language: " + name + ", Version: " + version
-```
+~~~
 
 ### Input with Validation
 
-```poly
+~~~poly
 put -n "Enter your age: "
-var age: i32 = get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 && x < 150
 put "You are " + age + " years old."
-```
+~~~
 
 ### Error Handling
 
-```poly
+~~~poly
 enum FileError
     NotFound
     PermissionDenied
 end enum
 
 fn read_config(path: ustring): Result<ustring, FileError>
-    var content = try open_file(path)
+    var content := try open_file(path)
     return Ok(content)
 end fn
 
-match read_config(u"config.txt")
+match read_config(unicode "config.txt")
     Ok(content) => put "Config loaded: " + content
     Error(NotFound) => error "Config file not found"
     Error(PermissionDenied) => error "Permission denied"
 end match
-```
+~~~
 
 ### Loop Ranges (SuperBASIC-inspired)
 
-```poly
+~~~poly
 # Simple range
 loop: 0..10
     put i
@@ -96,7 +95,7 @@ end loop
 loop: 0..10 step 2
     put i  # Iterates: 0, 2, 4, 6, 8
 end loop
-```
+~~~
 
 ---
 
@@ -113,15 +112,15 @@ end loop
 | Error output | `error expr` | Print to stderr with `[ERROR]` |
 | Warning output | `warn expr` | Print to stderr with `[WARN]` |
 | Debug output | `info expr` | Print to stderr with `[INFO]` |
-| Basic input | `var x: Type = get` | Read from stdin |
-| Input with prompt | `var x: Type = get "prompt"` | Prompt,read |
-| Default value | `get --default u"value"` | Fallback on empty input |
-| Masked input | `get --mask u"*"` | Hide password input |
+| Basic input | `var x := get` | Read from stdin |
+| Input with prompt | `var x ustring := get unicode "Prompt:"` | Display a Unicode prompt, then read |
+| Default value | `get --default unicode "value"` | Fallback on empty input |
+| Masked input | `get --mask unicode "*"` | Hide password input |
 | Timeout | `get --timeout 3000` | Timeout in milliseconds |
 | Validation | `get with validate \|x\| x > 0` | Validate with closure |
-| Completion | `get with complete [u"a", u"b"]` | Autocomplete options |
-| File input | `var x = get < "file"` | Read from file |
-| Binary input | `var x: bytes = get < "file"` | Read as bytes |
+| Completion | `get with complete [unicode "a", unicode "b"]` | Autocomplete options |
+| File input | `var x := get < "file"` | Read from file |
+| Binary input | `var x bytes := get < "file"` | Read as bytes |
 
 ### Types
 
@@ -145,28 +144,32 @@ end loop
 
 ### Language Constructs
 
-- **Variables**: `var name: Type = value` (mutable), `let name: Type = value` (immutable)
+- **Variables**: `var name Type := value` (mutable; type optional), `let name: Type = value` (immutable)
 - **Constants**: `const NAME = value`
-- **Functions**: `fn name(params): ReturnType ... end fn`
-- **Structs**: `struct Name ... end struct`
+- **Operators**: `==` compares values; assignment uses `name = value`; mutation uses `+=` and `-=`
+- **Functions**: `fn name(params): ReturnType ... end fn`, with generic parameters: `fn identity<T>(value: T): T`
+- **Structs**: `struct Name ... end struct`, with generic parameters: `struct Wrapper<T>`
 - **Enums**: `enum Name ... end enum`
 - **Traits**: `trait Name ... end trait`
 - **Impls**: `impl Trait for Type ... end impl`
 - **Modules**: `module name ... end module`
+- **Macros**: `macro name(params) ... end macro` (compile-time text expansion with substitution)
 - **Closures**: `|params| expr` or `|params| ... end`
-- **If/Else**: `if cond,... else ... end if`
+- **If/Else**: `if cond ... else ... end if`
 - **While**: `while cond ... end while`
 - **Loop**: `loop ... end loop` (infinite), `loop: range ... end loop` (range)
 - **Match**: `match expr ... pattern => expr ... end match`
 - **Error handling**: `Result<T, E>` with `Ok(val)` / `Error(err)`, `try` for propagation
+- **Math functions**: `abs`, `sqrt`, `pow`, `min`, `max`
+- **Generic containers**: `Vec<T>`, `Map<K, V>`, `Set<T>`, `Box<T>`, `Rc<T>`, `Arc<T>`
 - **Unsafe**: `unsafe ... end unsafe`
-- **Assembly ops**: `add var`, `sub var`, `inc var`, `dec var`
+- **Mutation**: `count += 1`, `total -= amount`
 
 ---
 
 ## Project Structure
 
-```
+~~~
 Poly/
 ├── README.md                          # This file
 ├── POLY_LANGUAGE_SPECIFICATION_EXPANDED.md  # Full language specification
@@ -186,6 +189,7 @@ Poly/
 ├── POLY_TROUBLESHOOTING_GUIDE.md      # Common issues
 ├── POLY_MIGRATION_GUIDE.md            # Migration paths
 ├── POLY_FUTURE_MIGRATION_GUIDE.md     # Future migration plans
+├── POLY_DOCUMENTATION_STYLE_GUIDE.md  # Documentation and example conventions
 ├── POLY_GRAMMAR.md                    # Formal BNF grammar
 ├── examples/
 │   ├── prime_numbers.poly             # Loop ranges, basic functions
@@ -197,17 +201,21 @@ Poly/
 │   ├── output_tests.poly              # put command tests
 │   ├── input_tests.poly               # get command tests
 │   └── comprehensive_io_tests.poly    # Combined I/O tests
+├── vscode/                            # VS Code extension (grammar + LSP client)
 └── compiler/                          # Rust transpiler (in progress)
     ├── Cargo.toml                     # Workspace root
     ├── crates/
     │   ├── poly-lexer/                # Tokenizer
-    │   ├── poly-parser/               # AST builder
+    │   ├── poly-parser/               # AST builder with source spans
     │   ├── poly-types/                # Type system
-    │   ├── poly-transpiler/           # Rust code generator
+    │   ├── poly-intermediate-representation/  # Intermediate representation + optimizer
+    │   ├── poly-transpiler/           # Rust code generator (routes through the shared IR pipeline)
+    │   ├── poly-wasm/                 # WebAssembly bindings for the playground
+    │   ├── poly-lsp/                  # Dependency-free JSON-RPC language server
     │   └── poly-cli/                  # Command-line interface
     └── grammar/
         └── poly.bnf                   # Formal grammar
-```
+~~~
 
 ---
 
@@ -224,6 +232,7 @@ Poly/
 | [Testing Guide](POLY_TESTING_GUIDE.md) | How to test Poly programs |
 | [Performance Guide](POLY_PERFORMANCE_GUIDE.md) | Optimization techniques |
 | [Security Guide](POLY_SECURITY_GUIDE.md) | Security considerations |
+| [Documentation Style Guide](POLY_DOCUMENTATION_STYLE_GUIDE.md) | Documentation and example conventions |
 | [Grammar](POLY_GRAMMAR.md) | Formal BNF grammar |
 
 ---
@@ -234,11 +243,13 @@ Poly transpiles to Rust. Every Poly construct has a direct Rust equivalent:
 
 | Poly | Rust |
 |------|------|
-| `var x: i32 = 0` | `let mut x: i32 = 0;` |
+| `var x i32 := 0` | `let mut x: i32 = 0;` |
 | `const MAX = 100` | `const MAX: i32 = 100;` |
+| `x = value` | `x = value;` |
+| `x += 1` | `x += 1;` |
 | `put "hello"` | `println!("{}", "hello");` |
 | `get` | Standard input reading |
-| `if x > 0,` | `if x > 0 {` |
+| `if x > 0` | `if x > 0 {` |
 | `loop: 0..10` | `for i in 0..10 {` |
 | `fn add(a: i32, b: i32): i32` | `fn add(a: i32, b: i32) -> i32` |
 | `struct Point` | `struct Point` |
@@ -252,45 +263,45 @@ Poly transpiles to Rust. Every Poly construct has a direct Rust equivalent:
 
 ### Prime Numbers
 
-```poly
+~~~poly
 fn is_prime(n: i32): bool
     if n <= 1,
         return false
     end if
-    var i: i32 = 2
+    var i i32 := 2
     while i * i <= n
-        if n % i == 0,
+        if n % i == 0
             return false
         end if
-        add i
+        i += 1
     end while
     return true
 end fn
 
-put u"First 20 prime numbers:"
-var count: i32 = 0
+put unicode "First 20 prime numbers:"
+var count i32 := 0
 loop: 2..200
-    if is_prime(num),
+    if is_prime(num)
         put num
-        add count
-        if count >= 20,
+        count += 1
+        if count >= 20
             break
         end if
     end if
 end loop
-```
+~~~
 
 ### Interactive Menu
 
-```poly
+~~~poly
 fn main()
-    var running: bool = true
+    var running bool := true
     while running
         put "Menu:"
         put "1. Greet user"
         put "2. Exit"
         put -n "Choose: "
-        var choice: i32 = get
+        var choice i32 := get
         match choice
             1 => greet_user()
             2 => running = false
@@ -298,7 +309,7 @@ fn main()
         end match
     end while
 end fn
-```
+~~~
 
 ---
 
@@ -306,24 +317,40 @@ end fn
 
 The transpiler is implemented in Rust as a Cargo workspace:
 
-```bash
+~~~bash
 cd compiler
 cargo build
 cargo test
-./target/debug/poly-cli ../examples/prime_numbers.poly
-```
+./target/debug/poly ../examples/prime_numbers.poly
+~~~
+
+The default command creates and builds an isolated Cargo project at `rust_output/<program>/`, containing `Cargo.toml`, `src/main.rs`, and its own `target/` directory. It does not run the program. Use `cargo run --manifest-path rust_output/prime_numbers/Cargo.toml` to run it.
+
+To choose another Cargo project directory, use `--project`:
+
+~~~bash
+./target/debug/poly --project ./prime_numbers ../examples/prime_numbers.poly
+cd prime_numbers
+cargo run
+~~~
+
+Use `poly --emit-rust file.poly` when you want the generated Rust on stdout. Async Poly programs automatically receive the Tokio dependency in their generated Cargo project.
 
 ### CLI Options
 
 | Option | Description |
 |--------|-------------|
-| `poly <file.poly>` | Transpile a Poly file to Rust |
+| `poly <file.poly>` | Generate and build `rust_output/<program>/` with Cargo |
 | `poly --tokens <file>` | Print tokens and exit |
 | `poly --ast <file>` | Print AST and exit |
-| `poly --check <file>` | Validate code and verify Rust compilation |
+| `poly --check <file>` | Validate code and verify generated Rust compilation |
+| `poly --emit-rust <file>` | Print generated Rust to stdout |
+| `poly --intermediate-representation <file>` | Print the intermediate representation pipeline output (optimized Rust); `--ir` is an alias |
+| `poly --source-map <file>` | Print the generated Poly→Rust source map |
 | `poly --format <file>` | Format output with rustfmt |
 | `poly --diff <file>` | Show diff between unformatted and formatted |
 | `poly --watch <file>` | Watch file and re-transpile on changes |
+| `poly --project <dir> <file>` | Generate `<dir>/Cargo.toml` and `<dir>/src/main.rs` |
 | `poly --repl` | Start interactive REPL |
 | `poly --help` | Show help message |
 | `poly --version` | Show version information |

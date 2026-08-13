@@ -2,13 +2,13 @@
 
 # Traffic light state machine
 fn get_traffic_light_action(state: i32): string
-    if state == 0,
+    if state = 0,
         return "Stop"
-    else if state == 1,
+    else if state = 1,
         return "Prepare to go"
-    else if state == 2,
+    else if state = 2,
         return "Go"
-    else if state == 3,
+    else if state = 3,
         return "Prepare to stop"
     else,
         return "Invalid state"
@@ -17,9 +17,9 @@ end fn
 
 # Game state machine
 fn get_game_status(state: i32, score: i32): string
-    if state == 0,
-        return "Menu"
-    else if state == 1,
+    if state = 0,
+        return "Menunicode "
+    else if state = 1,
         if score < 100,
             return "Playing - Low Score"
         else if score < 500,
@@ -29,9 +29,9 @@ fn get_game_status(state: i32, score: i32): string
         else,
             return "Playing - Expert"
         end if
-    else if state == 2,
+    else if state = 2,
         return "Paused"
-    else if state == 3,
+    else if state = 3,
         if score > 1000,
             return "Game Over - Winner!"
         else,
@@ -44,11 +44,11 @@ end fn
 
 # Order status classifier
 fn get_order_status(status: i32, days: i32): string
-    if status == 0,
+    if status = 0,
         return "Pending"
-    else if status == 1,
+    else if status = 1,
         return "Processing"
-    else if status == 2,
+    else if status = 2,
         if days > 7,
             return "Shipped - Delayed"
         else if days > 3,
@@ -56,9 +56,9 @@ fn get_order_status(status: i32, days: i32): string
         else,
             return "Shipped - Early"
         end if
-    else if status == 3,
+    else if status = 3,
         return "Delivered"
-    else if status == 4,
+    else if status = 4,
         return "Cancelled"
     else,
         return "Unknown Status"
@@ -67,23 +67,23 @@ end fn
 
 # User permission checker
 fn check_permission(role: i32, resource: i32): string
-    if role == 0,
+    if role = 0,
         return "No Access"
-    else if role == 1,
-        if resource == 0,
+    else if role = 1,
+        if resource = 0,
             return "Read Access"
         else,
             return "No Access"
         end if
-    else if role == 2,
-        if resource == 0,
+    else if role = 2,
+        if resource = 0,
             return "Read Access"
-        else if resource == 1,
+        else if resource = 1,
             return "Write Access"
         else,
             return "No Access"
         end if
-    else if role == 3,
+    else if role = 3,
         return "Full Access"
     else,
         return "Invalid Role"

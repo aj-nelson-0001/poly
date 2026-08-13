@@ -11,9 +11,9 @@ end enum
 
 # Enum with tuple variants
 enum Shape
-    Circle(f32)
-    Rectangle(f32, f32)
-    Triangle(f32, f32, f32)
+    Circle(f64)
+    Rectangle(f64, f64)
+    Triangle(f64, f64, f64)
 end enum
 
 # Enum with tuple variants
@@ -38,12 +38,12 @@ fn describe_color(color: Color): String
     end match
 end fn
 
-fn area(shape: Shape): f32
+fn area(shape: Shape): f64
     match shape
         Circle(r) => 3.14 * r * r
         Rectangle(w, h) => w * h
         Triangle(a, b, c) =>
-            let s = (a + b + c) / 2.0
+            let s := (a + b + c) / 2.0
             return (s * (s - a) * (s - b) * (s - c))
     end match
 end fn
@@ -65,7 +65,7 @@ fn classify_number(x: i32): String
     if x < 0,
         return "Negative"
     end if
-    if x == 0,
+    if x = 0,
         return "Zero"
     end if
     if x > 0 && x <= 10,
@@ -171,7 +171,7 @@ fn tree_insert(tree: Tree, val: i32): Tree
             if val > n,
                 return Node(n, left, tree_insert(right, val))
             end if
-            return tree
+            return Node(n, left, right)
         Leaf => Node(val, Leaf, Leaf)
     end match
 end fn
@@ -182,13 +182,13 @@ end fn
 
 fn main()
     # Test color matching
-    var color = Red
+    var color := Red
     put describe_color(color)
     
     # Test shape matching
-    var circle = Circle(5.0)
-    var rect = Rectangle(4.0, 6.0)
-    var tri = Triangle(3.0, 4.0, 5.0)
+    var circle := Circle(5.0)
+    var rect := Rectangle(4.0, 6.0)
+    var tri := Triangle(3.0, 4.0, 5.0)
     
     put "Circle area: "
     put area(circle)
@@ -224,13 +224,13 @@ fn main()
     put "\n"
     
     # Test expression evaluation
-    var expr = Add(Num(2.0), Mul(Num(3.0), Num(4.0)))
+    var expr := Add(Num(2.0), Mul(Num(3.0), Num(4.0)))
     put "Expression result: "
     put evaluate(expr)
     put "\n"
     
     # Test list operations
-    var my_list = Cons(1, Cons(2, Cons(3, Cons(4, Cons(5, Nil)))))
+    var my_list := Cons(1, Cons(2, Cons(3, Cons(4, Cons(5, Nil)))))
     put "List length: "
     put length(my_list)
     put "\n"
@@ -240,12 +240,17 @@ fn main()
     put "\n"
     
     # Test tree operations
-    var tree = Leaf
-    tree = tree_insert(tree, 5)
-    tree = tree_insert(tree, 3)
-    tree = tree_insert(tree, 7)
-    tree = tree_insert(tree, 1)
-    tree = tree_insert(tree, 4)
+    var tree := Leaf
+    var next_tree_5 := tree_insert(tree, 5)
+    set tree to next_tree_5
+    var next_tree_3 := tree_insert(tree, 3)
+    set tree to next_tree_3
+    var next_tree_7 := tree_insert(tree, 7)
+    set tree to next_tree_7
+    var next_tree_1 := tree_insert(tree, 1)
+    set tree to next_tree_1
+    var next_tree_4 := tree_insert(tree, 4)
+    set tree to next_tree_4
     
     put "Tree sum: "
     put tree_sum(tree)

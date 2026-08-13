@@ -10,14 +10,17 @@ pub struct Span {
 }
 
 impl Span {
+    /// Create a half-open source range: `start` is included, `end` is not.
     pub fn new(start: usize, end: usize) -> Self {
         Self { start, end }
     }
 
+    /// Return the number of source characters covered by this span.
     pub fn len(&self) -> usize {
         self.end - self.start
     }
 
+    /// Empty spans are used for zero-width locations such as EOF.
     pub fn is_empty(&self) -> bool {
         self.start == self.end
     }
@@ -31,6 +34,7 @@ pub struct Token {
 }
 
 impl Token {
+    /// Pair a token classification with the exact source range that produced it.
     pub fn new(kind: TokenKind, span: Span) -> Self {
         Self { kind, span }
     }
@@ -46,8 +50,12 @@ pub enum TokenKind {
     FloatLiteral(String),
     /// ASCII string literal ("hello")
     StringLiteral(String),
-    /// Unicode string literal (u"hello")
+    /// Legacy Unicode string literal (`u"hello"`), retained for diagnostics
     UnicodeStringLiteral(String),
+    /// Unicode character literal (`unicode 'c'`)
+    UnicodeCharLiteral(String),
+    /// Explicit Unicode keyword
+    Unicode,
     /// Byte literal ([0x48, 0x65])
     ByteLiteral(Vec<u8>),
     /// Boolean literal (true, false)
@@ -57,7 +65,8 @@ pub enum TokenKind {
     /// User-defined identifier
     Identifier(String),
 
-    // Keywords
+    // Keywords are represented as dedicated variants so the parser can make
+    // structural decisions without repeatedly comparing identifier text.
     Var,
     Let,
     Const,
@@ -97,6 +106,8 @@ pub enum TokenKind {
     Deref,
     Step,
     Capture,
+    Set,
+    To,
 
     // Assembly-style operations
     Add,
@@ -154,7 +165,8 @@ pub enum TokenKind {
     Percent, // %
 
     // Comparison
-    EqEq,  // ==
+    Eq,    // =
+    EqEq,  // == (legacy syntax, rejected by the parser)
     NotEq, // !=
     Lt,    // <
     Gt,    // >
@@ -174,8 +186,7 @@ pub enum TokenKind {
     LtLt,  // <<
     GtGt,  // >>
 
-    // Assignment
-    Eq,        // =
+    // Compound mutation operators (legacy syntax, rejected by the parser)
     PlusEq,    // +=
     MinusEq,   // -=
     StarEq,    // *=
@@ -197,6 +208,7 @@ pub enum TokenKind {
 
     // Path separator
     ColonColon, // ::
+    ColonEq,    // :=
 
     // === Delimiters ===
     LParen,    // (
@@ -221,6 +233,8 @@ pub enum TokenKind {
 }
 
 impl fmt::Display for TokenKind {
+    // Display is intentionally source-like: diagnostics can show the token
+    // without exposing the Rust enum's internal variant names.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             // Literals
@@ -228,6 +242,8 @@ impl fmt::Display for TokenKind {
             TokenKind::FloatLiteral(s) => write!(f, "{}", s),
             TokenKind::StringLiteral(s) => write!(f, "\"{}\"", s),
             TokenKind::UnicodeStringLiteral(s) => write!(f, "u\"{}\"", s),
+            TokenKind::UnicodeCharLiteral(s) => write!(f, "unicode '{}'", s),
+            TokenKind::Unicode => write!(f, "unicode"),
             TokenKind::ByteLiteral(bytes) => {
                 write!(f, "[")?;
                 for (i, b) in bytes.iter().enumerate() {
@@ -283,6 +299,8 @@ impl fmt::Display for TokenKind {
             TokenKind::Deref => write!(f, "deref"),
             TokenKind::Step => write!(f, "step"),
             TokenKind::Capture => write!(f, "capture"),
+            TokenKind::Set => write!(f, "set"),
+            TokenKind::To => write!(f, "to"),
 
             // Assembly ops
             TokenKind::Add => write!(f, "add"),
@@ -337,6 +355,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Star => write!(f, "*"),
             TokenKind::Slash => write!(f, "/"),
             TokenKind::Percent => write!(f, "%"),
+            TokenKind::Eq => write!(f, "="),
             TokenKind::EqEq => write!(f, "=="),
             TokenKind::NotEq => write!(f, "!="),
             TokenKind::Lt => write!(f, "<"),
@@ -352,7 +371,6 @@ impl fmt::Display for TokenKind {
             TokenKind::Tilde => write!(f, "~"),
             TokenKind::LtLt => write!(f, "<<"),
             TokenKind::GtGt => write!(f, ">>"),
-            TokenKind::Eq => write!(f, "="),
             TokenKind::PlusEq => write!(f, "+="),
             TokenKind::MinusEq => write!(f, "-="),
             TokenKind::StarEq => write!(f, "*="),
@@ -379,6 +397,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Comma => write!(f, ","),
             TokenKind::Semicolon => write!(f, ";"),
             TokenKind::Colon => write!(f, ":"),
+            TokenKind::ColonEq => write!(f, ":="),
             TokenKind::Dot => write!(f, "."),
 
             // Special
@@ -432,6 +451,9 @@ impl TokenKind {
                 | TokenKind::Deref
                 | TokenKind::Step
                 | TokenKind::Capture
+                | TokenKind::Set
+                | TokenKind::To
+                | TokenKind::Unicode
         )
     }
 
@@ -472,17 +494,17 @@ impl TokenKind {
                 | TokenKind::FloatLiteral(_)
                 | TokenKind::StringLiteral(_)
                 | TokenKind::UnicodeStringLiteral(_)
+                | TokenKind::UnicodeCharLiteral(_)
                 | TokenKind::ByteLiteral(_)
                 | TokenKind::BoolLiteral(_)
         )
     }
 
-    /// Check if this token is an assignment operator.
-    pub fn is_assignment_op(&self) -> bool {
+    /// Check if this token is a legacy compound mutation operator.
+    pub fn is_compound_mutation_op(&self) -> bool {
         matches!(
             self,
-            TokenKind::Eq
-                | TokenKind::PlusEq
+            TokenKind::PlusEq
                 | TokenKind::MinusEq
                 | TokenKind::StarEq
                 | TokenKind::SlashEq

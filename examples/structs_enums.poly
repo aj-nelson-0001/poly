@@ -13,8 +13,8 @@ end enum
 
 fn main()
     put "Structs and Enums Demo"
-    var p = Point { x: 3.0, y: 4.0 }
+    var p := Point { x: 3.0, y: 4.0 }
     put "Point created"
-    var color = Color::Red
+    var color := Color::Red
     put "Color created"
 end fn

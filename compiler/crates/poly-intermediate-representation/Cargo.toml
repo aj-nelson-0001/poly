@@ -1,0 +1,14 @@
+[package]
+name = "poly-intermediate-representation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Intermediate representation and optimization passes for the Poly compiler"
+
+[dependencies]
+poly-lexer = { workspace = true }
+poly-parser = { workspace = true }
+
+[dev-dependencies]
+poly-transpiler = { workspace = true }

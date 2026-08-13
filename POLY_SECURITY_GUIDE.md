@@ -12,46 +12,46 @@ This guide covers security best practices for the new Poly I/O and error handlin
 
 ### Always Validate User Input
 
-```poly
+~~~poly
 // Good: Validate all input
-var age: i32 = get with validate |x| x > 0 && x < 150
-var email: ustring = get with validate |e| e.contains(u"@") && e.len() < 255
-var name: ustring = get with validate |n| n.len() >= 1 && n.len() <= 100
+var age i32 := get with validate |x| x > 0 && x < 150
+var email ustring := get with validate |e| e.contains(unicode "@") && e.len() < 255
+var name ustring := get with validate |n| n.len() >= 1 && n.len() <= 100
 
 // Bad: Trust input
-var age: i32 = get  // Could be negative or huge
-var email: ustring = get  // Could be invalid
-var name: ustring = get  // Could be empty or malicious
-```
+var age i32 := get  // Could be negative or huge
+var email ustring := get  // Could be invalid
+var name ustring := get  // Could be empty or malicious
+~~~
 
 ### Sanitize Input
 
-```poly
+~~~poly fragment
 // Good: Sanitize input
 fn sanitize(input: ustring): ustring
     // Remove potentially dangerous characters
-    var sanitized: ustring = input.replace(u"<", u"&lt;")
-    sanitized = sanitized.replace(u">", u"&gt;")
-    sanitized = sanitized.replace(u"\"", u"&quot;")
+    var sanitized ustring := input.replace(unicode "<", unicode "&lt;")
+    set sanitized to sanitized.replace(unicode ">", unicode "&gt;")
+    set sanitized to sanitized.replace(unicode "\"", unicode "&quot;")
     return sanitized
 end fn
 
-var name: ustring = get with validate |n| n.len() > 0
-var safe_name: ustring = sanitize(name)
-```
+var name ustring := get with validate |n| n.len() > 0
+var safe_name ustring := sanitize(name)
+~~~
 
 ### Use Whitelisting
 
-```poly
+~~~poly fragment
 // Good: Whitelist allowed characters
-var username: ustring = get with validate |u|
+var username ustring := get with validate |u|
     u.len() >= 3 && u.len() <= 20 &&
-    u.all(|c| c.is_alphanumeric() || c == u'_' || c == u'-')
+    u.all(|c| c.is_alphanumeric() || c = unicode '_' || c = unicode '-')
 end
 
 // Bad: Blacklist characters
-var username: ustring = get  // No validation
-```
+var username ustring := get  // No validation
+~~~
 
 ---
 
@@ -59,21 +59,21 @@ var username: ustring = get  // No validation
 
 ### Always Mask Password Input
 
-```poly
+~~~poly
 // Good: Mask passwords
 put -n "Enter password: "
-var password: ustring = get --mask u"*"
+var password ustring := get --mask unicode "*"
 
 // Bad: Expose passwords
 put -n "Enter password: "
-var password: ustring = get  // Visible on screen
-```
+var password ustring := get  // Visible on screen
+~~~
 
 ### Validate Password Strength
 
-```poly
+~~~poly fragment
 // Good: Validate password strength
-var password: ustring = get --mask u"*" with validate |p|
+var password ustring := get --mask unicode "*" with validate |p|
     p.len() >= 8 &&
     p.any(|c| c.is_uppercase()) &&
     p.any(|c| c.is_lowercase()) &&
@@ -82,26 +82,26 @@ var password: ustring = get --mask u"*" with validate |p|
 end
 
 // Bad: No password validation
-var password: ustring = get --mask u"*"  // Weak password allowed
-```
+var password ustring := get --mask unicode "*"  // Weak password allowed
+~~~
 
 ### Never Store Plain Text Passwords
 
-```poly
+~~~poly
 // Good: Hash passwords
 fn hash_password(password: ustring): ustring
     // Use proper hashing algorithm (e.g., bcrypt, argon2)
     return bcrypt_hash(password)
 end fn
 
-var password: ustring = get --mask u"*"
-var hashed: ustring = hash_password(password)
+var password ustring := get --mask unicode "*"
+var hashed ustring := hash_password(password)
 store_user(username, hashed)
 
 // Bad: Store plain text
-var password: ustring = get --mask u"*"
+var password ustring := get --mask unicode "*"
 store_user(username, password)  // Insecure!
-```
+~~~
 
 ---
 
@@ -109,54 +109,54 @@ store_user(username, password)  // Insecure!
 
 ### Validate File Paths
 
-```poly
+~~~poly
 // Good: Validate file paths
 fn is_valid_path(path: ustring): bool
     // Check for path traversal
-    if path.contains(u".."),
+    if path.contains(unicode ".."),
         return false
     end if
     
     // Check for absolute paths (if not allowed)
-    if path.starts_with(u"/"),
+    if path.starts_with(unicode "/"),
         return false
     end if
     
     return true
 end fn
 
-var filename: ustring = get with validate |f| is_valid_path(f)
-var content: ustring = get < filename
+var filename ustring := get with validate |f| is_valid_path(f)
+var content ustring := get < filename
 
 // Bad: No path validation
-var filename: ustring = get
-var content: ustring = get < filename  // Could access any file
-```
+var filename ustring := get
+var content ustring := get < filename  // Could access any file
+~~~
 
 ### Use Safe File Permissions
 
-```poly
+~~~poly
 // Good: Set restrictive permissions
 put "sensitive data" > "secret.txt"
 set_file_permissions("secret.txt", 0o600)  // Owner read/write only
 
 // Bad: Default permissions
 put "sensitive data" > "secret.txt"  // World-readable by default
-```
+~~~
 
 ### Validate File Content
 
-```poly
+~~~poly fragment
 // Good: Validate file content
-var content: ustring = get < "config.txt" with validate |c|
+var content ustring := get < "config.txt" with validate |c|
     c.len() < 1000000 &&  // Limit file size
-    not c.contains(u"<script") &&  // Basic XSS prevention
-    not c.contains(u"javascript:")  // Basic XSS prevention
+    not c.contains(unicode "<script") &&  // Basic XSS prevention
+    not c.contains(unicode "javascript:")  // Basic XSS prevention
 end
 
 // Bad: No content validation
-var content: ustring = get < "config.txt"  // Could be malicious
-```
+var content ustring := get < "config.txt"  // Could be malicious
+~~~
 
 ---
 
@@ -164,27 +164,27 @@ var content: ustring = get < "config.txt"  // Could be malicious
 
 ### Don't Expose Sensitive Information
 
-```poly
+~~~poly
 // Good: Generic error messages
-match read_file(u"config.txt")
+match read_file(unicode "config.txt")
     Ok(content) => process(content)
     Error(_) => error "Failed to load configuration"  // Generic message
 end match
 
 // Bad: Expose sensitive information
-match read_file(u"config.txt")
+match read_file(unicode "config.txt")
     Ok(content) => process(content)
     Error(e) => error "Error: " + e.to_string()  // Could expose file paths, etc.
 end match
-```
+~~~
 
 ### Log Errors Securely
 
-```poly
+~~~poly fragment
 // Good: Log to secure location
 fn log_error(error: ustring, context: ustring)
-    var timestamp: ustring = get_timestamp()
-    var log_entry: ustring = timestamp + " | " + context + " | " + error
+    var timestamp ustring := get_timestamp()
+    var log_entry ustring := timestamp + " | " + context + " | " + error
     put log_entry >> "app.log"
     set_file_permissions("app.log", 0o640)
 end fn
@@ -193,15 +193,15 @@ end fn
 fn log_error(error: ustring)
     put error >> "/tmp/error.log"  // World-readable
 end fn
-```
+~~~
 
 ### Handle Errors Gracefully
 
-```poly
+~~~poly fragment
 // Good: Graceful error handling
 fn process_data(): Result<ustring, ustring>
-    var data = try read_file(u"data.txt")
-    var validated = try validate_data(data)
+    var data := try read_file(unicode "data.txt")
+    var validated := try validate_data(data)
     return Ok(validated)
 end fn
 
@@ -215,10 +215,10 @@ end match
 
 // Bad: Panic on errors
 fn process_data(): Result<ustring, ustring>
-    var data = read_file(u"data.txt").unwrap()  // Panics on error
+    var data := read_file(unicode "data.txt").unwrap()  // Panics on error
     return Ok(data)
 end fn
-```
+~~~
 
 ---
 
@@ -226,7 +226,7 @@ end fn
 
 ### Use Timeouts
 
-```poly
+~~~poly
 // Good: Prevent DoS attacks
 match get --timeout 5000
     Ok(input) => process(input)
@@ -235,38 +235,38 @@ match get --timeout 5000
 end match
 
 // Bad: No timeout
-var input: ustring = get  // Can hang forever, allowing DoS
-```
+var input ustring := get  // Can hang forever, allowing DoS
+~~~
 
 ### Limit Input Size
 
-```poly
+~~~poly
 // Good: Limit input size
-var input: ustring = get with validate |i| i.len() <= 10000
+var input ustring := get with validate |i| i.len() <= 10000
 
 // Bad: No size limit
-var input: ustring = get  // Could be huge, causing memory issues
-```
+var input ustring := get  // Could be huge, causing memory issues
+~~~
 
 ### Sanitize Output
 
-```poly
+~~~poly fragment
 // Good: Sanitize output for HTML
 fn html_escape(input: ustring): ustring
-    var output: ustring = input.replace(u"&", u"&amp;")
-    output = output.replace(u"<", u"&lt;")
-    output = output.replace(u">", u"&gt;")
-    output = output.replace(u"\"", u"&quot;")
+    var output ustring := input.replace(unicode "&", unicode "&amp;")
+    set output to output.replace(unicode "<", unicode "&lt;")
+    set output to output.replace(unicode ">", unicode "&gt;")
+    set output to output.replace(unicode "\"", unicode "&quot;")
     return output
 end fn
 
-var user_input: ustring = get
+var user_input ustring := get
 put html_escape(user_input)  // Safe for HTML
 
 // Bad: No output sanitization
-var user_input: ustring = get
+var user_input ustring := get
 put user_input  // Could contain malicious HTML
-```
+~~~
 
 ---
 
@@ -274,11 +274,11 @@ put user_input  // Could contain malicious HTML
 
 ### Validate Credentials
 
-```poly
+~~~poly
 // Good: Validate credentials
 fn authenticate(username: ustring, password: ustring): Result<User, AuthError>
-    var user = try get_user(username)
-    var hashed_password = try get_password_hash(username)
+    var user := try get_user(username)
+    var hashed_password := try get_password_hash(username)
     
     if not verify_password(password, hashed_password),
         return Error(AuthError::InvalidCredentials)
@@ -289,18 +289,18 @@ end fn
 
 // Bad: No validation
 fn authenticate(username: ustring, password: ustring): Result<User, AuthError>
-    var user = get_user(username).unwrap()  // Panics if user not found
+    var user := get_user(username).unwrap()  // Panics if user not found
     return Ok(user)  // No password check
 end fn
-```
+~~~
 
 ### Use Secure Session Management
 
-```poly
+~~~poly fragment
 // Good: Secure session handling
 fn create_session(user: User): Session
-    var session_id = generate_secure_token()
-    var expiry = get_timestamp() + 3600  // 1 hour
+    var session_id := generate_secure_token()
+    var expiry := get_timestamp() + 3600  // 1 hour
     
     store_session(session_id, user.id, expiry)
     return Session(id: session_id, expiry: expiry)
@@ -308,10 +308,10 @@ end fn
 
 // Bad: Insecure session handling
 fn create_session(user: User): Session
-    var session_id = user.id.to_string()  // Predictable
+    var session_id := user.id.to_string()  // Predictable
     return Session(id: session_id)
 end fn
-```
+~~~
 
 ---
 
@@ -319,31 +319,31 @@ end fn
 
 ### Encrypt Sensitive Data
 
-```poly
+~~~poly
 // Good: Encrypt sensitive data
 fn encrypt_data(data: ustring, key: ustring): ustring
     // Use proper encryption (e.g., AES-256)
     return aes_encrypt(data, key)
 end fn
 
-var sensitive_data: ustring = get
-var encrypted: ustring = encrypt_data(sensitive_data, encryption_key)
+var sensitive_data ustring := get
+var encrypted ustring := encrypt_data(sensitive_data, encryption_key)
 store_encrypted(encrypted)
 
 // Bad: Store plain text
-var sensitive_data: ustring = get
+var sensitive_data ustring := get
 store_plain(sensitive_data)  // Insecure!
-```
+~~~
 
 ### Use Secure Random Generation
 
-```poly
+~~~poly
 // Good: Secure random tokens
 fn generate_token(length: i32): ustring
-    var chars: ustring = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    var token: ustring = ""
+    var chars ustring := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    var token ustring := ""
     loop: 0..length
-        token = token + chars[random(chars.len())]
+        add token, chars[random(chars.len())]
     end loop
     return token
 end fn
@@ -352,7 +352,7 @@ end fn
 fn generate_token(length: i32): ustring
     return get_timestamp().to_string()  // Predictable
 end fn
-```
+~~~
 
 ---
 
@@ -360,25 +360,25 @@ end fn
 
 ### Use HTTPS
 
-```poly
+~~~poly
 // Good: Use HTTPS
-var url: ustring = "https://api.example.com/data"
-var response = get --timeout 5000 < url
+var url ustring := "https://api.example.com/data"
+var response := get --timeout 5000 < url
 
 // Bad: Use HTTP
-var url: ustring = "http://api.example.com/data"  // Insecure
-var response = get < url
-```
+var url ustring := "http://api.example.com/data"  // Insecure
+var response := get < url
+~~~
 
 ### Validate Certificates
 
-```poly
+~~~poly
 // Good: Validate SSL certificates
-var response = get < "https://api.example.com" with verify_certificate(true)
+var response := get < "https://api.example.com" with verify_certificate(true)
 
 // Bad: Skip certificate validation
-var response = get < "https://api.example.com" with verify_certificate(false)  // Insecure
-```
+var response := get < "https://api.example.com" with verify_certificate(false)  // Insecure
+~~~
 
 ---
 
@@ -386,39 +386,39 @@ var response = get < "https://api.example.com" with verify_certificate(false)  /
 
 ### Avoid Code Injection
 
-```poly
+~~~poly
 // Good: Use parameterized queries
 fn get_user(username: ustring): Result<User, DBError>
-    var query: ustring = "SELECT * FROM users WHERE username = ?"
+    var query ustring := "SELECT * FROM users WHERE username = ?"
     return db.query(query, [username])
 end fn
 
 // Bad: String concatenation
 fn get_user(username: ustring): Result<User, DBError>
-    var query: ustring = "SELECT * FROM users WHERE username = '" + username + "'"  // SQL injection!
+    var query ustring := "SELECT * FROM users WHERE username = '" + username + "'"  // SQL injection!
     return db.query(query)
 end fn
-```
+~~~
 
 ### Validate External Data
 
-```poly
+~~~poly
 // Good: Validate external data
 fn process_external_data(data: ustring): Result<ustring, ustring>
     // Validate data format
     if not data.is_valid_json(),
-        return Error(u"Invalid JSON format")
+        return Error(unicode "Invalid JSON format")
     end if
     
     // Validate data size
     if data.len() > 1000000,
-        return Error(u"Data too large")
+        return Error(unicode "Data too large")
     end if
     
     // Validate data content
-    var parsed = try parse_json(data)
+    var parsed := try parse_json(data)
     if not validate_schema(parsed),
-        return Error(u"Data doesn't match schema")
+        return Error(unicode "Data doesn't match schema")
     end if
     
     return Ok(data)
@@ -428,7 +428,7 @@ end fn
 fn process_external_data(data: ustring): Result<ustring, ustring>
     return Ok(data)  // No validation
 end fn
-```
+~~~
 
 ---
 

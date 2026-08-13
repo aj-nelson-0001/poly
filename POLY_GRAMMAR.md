@@ -23,28 +23,28 @@ This document defines the formal grammar for the Poly programming language using
 
 ### Comments
 
-```
+~~~
 comment         ::= single_line_comment
                    | multi_line_comment
 
 single_line_comment ::= "//" <any characters except newline> newline
 multi_line_comment  ::= "/*" <any characters> "*/"
-```
+~~~
 
 ### Identifiers
 
-```
+~~~
 identifier      ::= <ident_start> { <ident_continue> }
 ident_start     ::= "_" | <letter>
 ident_continue  ::= "_" | <letter> | <digit>
 
 letter          ::= "a".."z" | "A".."Z"
 digit           ::= "0".."9"
-```
+~~~
 
 ### Literals
 
-```
+~~~
 literal         ::= <int_literal>
                    | <float_literal>
                    | <string_literal>
@@ -73,9 +73,8 @@ string_literal  ::= '"' { <string_char> } '"'
 string_char     ::= <any character except '"' and newline>
                    | <escape_sequence>
 
-unicode_string_literal ::= 'u' '"' { <unicode_char> } '"'
-unicode_char    ::= <any character except '"' and newline>
-                   | <escape_sequence>
+unicode_string_literal ::= "unicode" <string_literal>
+                           // Unicode string literals use a visible prefix for readability.
 
 byte_literal    ::= <hex_byte> { <hex_byte> }
 hex_byte        ::= <hex_digit> <hex_digit>
@@ -83,40 +82,43 @@ hex_byte        ::= <hex_digit> <hex_digit>
 bool_literal    ::= "true" | "false"
 
 escape_sequence ::= "\\" ("n" | "t" | "r" | "\\" | '"' | "'" | "0")
-```
+~~~
 
 ### Operators
 
-```
+~~~
 operator        ::= <arithmetic_op>
                    | <comparison_op>
                    | <logical_op>
                    | <bitwise_op>
-                   | <assignment_op>
 
 arithmetic_op   ::= "+" | "-" | "*" | "/" | "%"
 comparison_op   ::= "==" | "!=" | "<" | ">" | "<=" | ">="
 logical_op      ::= "&&" | "||" | "!"
 bitwise_op      ::= "&" | "|" | "^" | "~" | "<<" | ">>"
 
-assignment_op   ::= "=" | "+=" | "-=" | "*=" | "/=" | "%="
-                   | "&=" | "|=" | "^=" | "<<=" | ">>="
-```
+mutation_command ::= "set" <expression> "to" <expression>
+                   | "add" <expression> ["," <expression>]
+                   | "sub" <expression> ["," <expression>]
+                   | "inc" <expression>
+                   | "dec" <expression>
+~~~
 
 ### Delimiters
 
-```
+~~~
 delimiter       ::= "(" | ")" | "[" | "]" | "{" | "}"
                    | "," | ";" | ":" | "." | "::"
                    | "->" | "=>" | ".." | "..="
                    | "<" | ">"  // for file I/O
                    | ">>"       // for file append
-```
+~~~
 
 ### Keywords
 
-```
+~~~
 keyword         ::= "var" | "let" | "const" | "fn" | "end"
+                   | "unicode"
                    | "if" | "else" | "while" | "loop"
                    | "for" | "in" | "match" | "case" | "break"
                    | "continue" | "return" | "struct" | "enum"
@@ -129,7 +131,7 @@ keyword         ::= "var" | "let" | "const" | "fn" | "end"
                    | "with" | "validate" | "complete" | "encoding"
                    | "timeout" | "default" | "mask" | "bytes"
                    | "step" | "capture"
-```
+~~~
 
 ---
 
@@ -137,7 +139,7 @@ keyword         ::= "var" | "let" | "const" | "fn" | "end"
 
 ### Program Structure
 
-```
+~~~
 program         ::= { <statement> } EOF
 
 statement       ::= <var_declaration>
@@ -169,25 +171,24 @@ statement       ::= <var_declaration>
                    | <unsafe_block>
                    | <async_block>
                    | <expression>
-```
+~~~
 
 ### Variable Declarations
 
-```
-var_declaration ::= "var" <identifier> ":" <type> "=" <expression>
+~~~
+var_declaration ::= "var" <identifier> [<type>] ":=" <expression>
+                   // Type is optional and inferred when omitted; no colon is used.
 
-let_declaration ::= "let" <identifier> ":" <type> "=" <expression>
+let_declaration ::= "let" <identifier> [":" <type>] "=" <expression>
 
 const_declaration ::= "const" <identifier> "=" <expression>
 
-assignment      ::= <identifier> "=" <expression>
-                   | <identifier> <assignment_op> <expression>
-                   | <identifier> "." <identifier> "=" <expression>
-```
+assignment      ::= <mutation_command>
+~~~
 
 ### Types
 
-```
+~~~
 type            ::= <primitive_type>
                    | <string_type>
                    | <pointer_type>
@@ -229,11 +230,11 @@ result_type     ::= "Result" "<" <type> "," <type> ">"
 function_type   ::= "fn" "(" [<type> { "," <type> }] ")" "->" <type>
 
 generic_type    ::= <identifier> "<" <type> { "," <type> } ">"
-```
+~~~
 
 ### Expressions
 
-```
+~~~
 expression      ::= <literal>
                    | <identifier>
                    | <binary_expression>
@@ -284,14 +285,17 @@ enum_expression ::= <identifier> "::" <identifier> ["(" <arguments> ")"]
 array_expression ::= "[" [<expression> { "," <expression> }] "]"
 
 tuple_expression ::= "(" <expression> { "," <expression> } ")"
-```
+~~~
 
 ### Functions
 
-```
-function_declaration ::= "fn" <identifier> "(" [<parameters>] ")" [":" <type>]
+~~~
+function_declaration ::= "fn" <identifier> [<type_params>] "(" [<parameters>] ")" [":" <type>]
                          [<where_clause>]
                          <block>
+
+type_params      ::= "<" <type_param> { "," <type_param> } ">"
+type_param       ::= <identifier> [":" <trait_bound> { "+" <trait_bound> }]
 
 parameters      ::= <parameter> { "," <parameter> }
 parameter       ::= <identifier> ":" <type> ["=" <expression>]
@@ -301,13 +305,13 @@ where_item      ::= <type> ":" <trait_bound> { "+" <trait_bound> }
 trait_bound     ::= <identifier>
 
 block           ::= { <statement> }
-```
+~~~
 
 ### Control Flow
 
-```
-if_expression   ::= "if" <expression> "," <block>
-                    {"else" "if" <expression> "," <block>}
+~~~
+if_expression   ::= "if" <expression> <block>
+                    {"else" "if" <expression> <block>}
                     ["else" <block>]
                     "end" "if"
 
@@ -327,11 +331,11 @@ range           ::= <expression> ".." <expression>
                    | <expression> "..=" <expression>
 
 step_clause     ::= "step" <expression>
-```
+~~~
 
 ### Match Expression
 
-```
+~~~
 match_expression ::= "match" <expression> { <match_arm> } "end" "match"
 
 match_arm       ::= <pattern> ["if" <expression>] "=>" <expression>
@@ -365,11 +369,11 @@ range_pattern   ::= <expression> ".." <expression>
                    | <expression> "..=" <expression>
 
 or_pattern      ::= <pattern> "|" <pattern>
-```
+~~~
 
 ### Closures
 
-```
+~~~
 closure_expression ::= <closure_start> <closure_params> [":" <type>] ["->" <type>]
                        (<closure_body> | <block>)
 
@@ -378,11 +382,11 @@ closure_start   ::= ["move"] "|"
 closure_params  ::= [<parameter> { "," <parameter> }]
 
 closure_body    ::= <expression>
-```
+~~~
 
 ### Struct Declarations
 
-```
+~~~
 struct_declaration ::= "struct" <identifier> [<type_params>]
                        [<struct_body> | <tuple_struct_body>]
 
@@ -391,11 +395,11 @@ struct_body     ::= { <struct_field> } "end" "struct"
 struct_field    ::= ["var"] <identifier> ":" <type> ["=" <expression>]
 
 tuple_struct_body ::= "(" <type> { "," <type> } ")"
-```
+~~~
 
 ### Enum Declarations
 
-```
+~~~
 enum_declaration ::= "enum" <identifier> [<type_params>]
                      { <enum_variant> } "end" "enum"
 
@@ -403,21 +407,21 @@ enum_variant    ::= <identifier> ["(" <type> { "," <type> } ")"]
                    | <identifier> "{" <enum_field> { "," <enum_field> } "}"
 
 enum_field      ::= <identifier> ":" <type>
-```
+~~~
 
 ### Trait Declarations
 
-```
+~~~
 trait_declaration ::= "trait" <identifier> [<type_params>]
                       { <trait_method> } "end" "trait"
 
 trait_method    ::= "fn" <identifier> "(" [<parameters>] ")" [":" <type>]
                     [<block>]
-```
+~~~
 
 ### Impl Declarations
 
-```
+~~~
 impl_declaration ::= "impl" [<type_params>] <trait_bound> "for" <type>
                      { <impl_method> } "end" "impl"
 
@@ -425,39 +429,39 @@ impl_method     ::= "fn" <identifier> "(" [<parameters>] ")" [":" <type>]
                     <block>
 
 trait_bound     ::= <identifier> ["+" <identifier>]
-```
+~~~
 
 ### Module Declarations
 
-```
+~~~
 module_declaration ::= "module" <identifier>
                        { <statement> } "end" "module"
-```
+~~~
 
 ### Use Declarations
 
-```
+~~~
 use_declaration ::= "use" <use_path> ["as" <identifier>]
 
 use_path        ::= <identifier> { "::" <identifier> | "::" "*" }
-```
+~~~
 
 ### Type Declarations
 
-```
+~~~
 type_declaration ::= "type" <identifier> "=" <type>
-```
+~~~
 
 ### Macro Declarations
 
-```
+~~~
 macro_declaration ::= "macro" <identifier> "(" [<parameters>] ")"
                       <block> "end" "macro"
-```
+~~~
 
 ### I/O Statements
 
-```
+~~~
 put_statement   ::= "put" ["-n"] <expression> [<redirect>]
 
 redirect        ::= ">" <expression>
@@ -469,9 +473,9 @@ warn_statement  ::= "warn" <expression>
 
 info_statement  ::= "info" <expression>
 
-get_expression  ::= "get" [<get_prompt>] [<get_flags>] [<get_with>]
+get_expression  ::= "get" ["unicode" <string_literal>] [<get_flags>] [<get_with>]
 
-get_prompt      ::= <expression>
+get_prompt      ::= "unicode" <string_literal>
 
 get_flags       ::= { <get_flag> }
 
@@ -485,11 +489,11 @@ get_flag        ::= "--timeout" <expression>
 get_with        ::= "with" ("validate" <closure_expression>
                    | "complete" <expression>
                    | "encoding" <expression>)
-```
+~~~
 
 ### Special Expressions
 
-```
+~~~
 try_expression  ::= "try" <expression>
 
 panic_expression ::= "panic" "(" <expression> ")"
@@ -497,7 +501,7 @@ panic_expression ::= "panic" "(" <expression> ")"
 unsafe_block    ::= "unsafe" <block> "end" "unsafe"
 
 async_block     ::= "async" <block> "end" "async"
-```
+~~~
 
 ---
 
@@ -505,7 +509,7 @@ async_block     ::= "async" <block> "end" "async"
 
 1. `||` — Logical OR
 2. `&&` — Logical AND
-3. `==`, `!=`, `<`, `>`, `<=`, `>=` — Comparison
+3. `=`, `!=`, `<`, `>`, `<=`, `>=` — Comparison
 4. `|` — Bitwise OR
 5. `^` — Bitwise XOR
 6. `&` — Bitwise AND

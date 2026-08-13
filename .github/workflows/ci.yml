@@ -8,6 +8,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Keep Cargo/rustc from creating a process burst on small CI runners.
+  CARGO_BUILD_JOBS: 2
+  RUST_TEST_THREADS: 1
 
 jobs:
   test:
@@ -35,7 +38,7 @@ jobs:
         run: cd compiler && cargo build --release
 
       - name: Run tests
-        run: cd compiler && cargo test --workspace
+        run: cd compiler && cargo test --workspace -- --test-threads=1
 
   lint:
     name: Lint
@@ -54,6 +57,12 @@ jobs:
 
       - name: Run clippy
         run: cd compiler && cargo clippy --workspace -- -D warnings
+
+      - name: Check Markdown conventions
+        run: python3 scripts/check_markdown.py
+
+      - name: Check Poly documentation examples
+        run: python3 scripts/check_poly_examples.py
 
   transpile-examples:
     name: Transpile Examples

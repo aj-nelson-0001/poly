@@ -13,7 +13,7 @@ use poly_transpiler::Transpiler;
 
 #[test]
 fn test_lexer_unterminated_string_literal() {
-    let source = r#"var x = "unterminated string"#;
+    let source = r#"var x := "unterminated string"#;
     let (_tokens, errors) = Lexer::lex(source);
     assert!(!errors.is_empty(), "Should detect unterminated string");
     // Should still produce some tokens for error recovery
@@ -22,7 +22,7 @@ fn test_lexer_unterminated_string_literal() {
 
 #[test]
 fn test_lexer_unterminated_multiline_string() {
-    let source = r#"var x = "line1
+    let source = r#"var x := "line1
 line2
 line3"#;
     let (_tokens, errors) = Lexer::lex(source);
@@ -34,28 +34,28 @@ line3"#;
 
 #[test]
 fn test_lexer_invalid_character() {
-    let source = "var x = @invalid";
+    let source = "var x := @invalid";
     let (_tokens, errors) = Lexer::lex(source);
     assert!(!errors.is_empty(), "Should detect invalid character '@'");
 }
 
 #[test]
 fn test_lexer_invalid_number_format() {
-    let source = "var x = 123.456.789";
+    let source = "var x := 123.456.789";
     let (_tokens, errors) = Lexer::lex(source);
     assert!(!errors.is_empty(), "Should detect invalid number format");
 }
 
 #[test]
 fn test_lexer_invalid_hex_literal() {
-    let source = "var x = 0xGG";
+    let source = "var x := 0xGG";
     let (_tokens, errors) = Lexer::lex(source);
     assert!(!errors.is_empty(), "Should detect invalid hex literal");
 }
 
 #[test]
 fn test_lexer_unterminated_block_comment() {
-    let source = "/* This comment never ends\nvar x = 1";
+    let source = "/* This comment never ends\nvar x := 1";
     let (_tokens, errors) = Lexer::lex(source);
     assert!(
         !errors.is_empty(),
@@ -65,7 +65,7 @@ fn test_lexer_unterminated_block_comment() {
 
 #[test]
 fn test_lexer_unterminated_line_comment_at_eof() {
-    let source = "var x = 1 // comment";
+    let source = "var x := 1 // comment";
     let (_tokens, errors) = Lexer::lex(source);
     // Line comments should be fine at EOF
     assert!(errors.is_empty(), "Line comment at EOF should be valid");
@@ -113,21 +113,21 @@ fn test_lexer_nested_block_comments() {
 #[test]
 fn test_lexer_very_long_string() {
     let long_string = "a".repeat(10000);
-    let source = format!("var x = \"{}\"", long_string);
+    let source = format!("var x := \"{}\"", long_string);
     let (_tokens, errors) = Lexer::lex(&source);
     assert!(errors.is_empty(), "Very long string should be valid");
 }
 
 #[test]
 fn test_lexer_unicode_escape_sequences() {
-    let source = r#"var x = "\u{0041}""#;
+    let source = r#"var x := "\u{0041}""#;
     let (_tokens, _errors) = Lexer::lex(source);
     // Should handle unicode escapes
 }
 
 #[test]
 fn test_lexer_multiple_consecutive_operators() {
-    let source = "var x = a ++ b";
+    let source = "var x := a ++ b";
     let (tokens, errors) = Lexer::lex(source);
     // '++' is not a valid operator in Poly
     assert!(
@@ -145,7 +145,7 @@ fn test_lexer_multiple_consecutive_operators() {
 
 #[test]
 fn test_parser_missing_value_in_var_declaration() {
-    let source = "var x =";
+    let source = "var x :=";
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
@@ -154,7 +154,7 @@ fn test_parser_missing_value_in_var_declaration() {
 
 #[test]
 fn test_parser_missing_identifier_in_var_declaration() {
-    let source = "var = 42";
+    let source = "var := 42";
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
@@ -236,7 +236,7 @@ fn test_parser_missing_while_condition() {
 
 #[test]
 fn test_parser_unmatched_parentheses() {
-    let source = "var x = (1 + 2";
+    let source = "var x := (1 + 2";
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
@@ -265,20 +265,17 @@ fn test_parser_invalid_assignment_target() {
 }
 
 #[test]
-fn test_parser_missing_colon_in_type_annotation() {
-    let source = "var x i32 = 42";
+fn test_parser_accepts_type_without_colon() {
+    let source = "var x i32 := 42";
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
-    assert!(
-        result.is_err(),
-        "Should fail without colon in type annotation"
-    );
+    assert!(result.is_ok(), "The canonical form omits the type colon");
 }
 
 #[test]
 fn test_parser_invalid_type_annotation() {
-    let source = "var x: @invalid = 42";
+    let source = "var x @invalid := 42";
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
@@ -287,7 +284,7 @@ fn test_parser_invalid_type_annotation() {
 
 #[test]
 fn test_parser_duplicate_variable_declaration() {
-    let source = "var x = 1\nvar x = 2";
+    let source = "var x := 1\nvar x := 2";
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
@@ -297,7 +294,7 @@ fn test_parser_duplicate_variable_declaration() {
 
 #[test]
 fn test_parser_deeply_nested_expressions() {
-    let source = "var x = (((((((1 + 2) + 3) + 4) + 5) + 6) + 7) + 8)";
+    let source = "var x := (((((((1 + 2) + 3) + 4) + 5) + 6) + 7) + 8)";
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
@@ -315,7 +312,7 @@ fn test_parser_empty_block() {
 
 #[test]
 fn test_parser_multiple_statements_on_one_line() {
-    let source = "var x = 1 var y = 2";
+    let source = "var x := 1 var y := 2";
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
     let _result = parser.parse();
@@ -377,7 +374,7 @@ fn test_transpiler_invalid_utf8_sequence() {
 #[test]
 fn test_transpiler_extremely_long_identifier() {
     let long_name = "a".repeat(10000);
-    let source = format!("var {} = 42", long_name);
+    let source = format!("var {} := 42", long_name);
     let t = Transpiler::new();
     let _result = t.transpile(&source);
     // Should either succeed or fail gracefully
@@ -418,14 +415,14 @@ end fn
 fn test_transpiler_mutual_recursion() {
     let source = r#"
 fn is_even(n: i32): bool
-    if n == 0,
+    if n = 0,
         return true
     end if
     return is_odd(n - 1)
 end fn
 
 fn is_odd(n: i32): bool
-    if n == 0,
+    if n = 0,
         return false
     end if
     return is_even(n - 1)
@@ -450,7 +447,7 @@ fn area(shape: Shape): f32
         Circle(r) => 3.14 * r * r
         Rectangle(w, h) => w * h
         Triangle(a, b, c) =>
-            let s = (a + b + c) / 2.0
+            let s := (a + b + c) / 2.0
             return (s * (s - a) * (s - b) * (s - c))
     end match
 end fn
@@ -491,9 +488,9 @@ end fn
 #[test]
 fn test_transpiler_complex_expressions() {
     let source = r#"
-var x = (1 + 2) * (3 + 4) / (5 - 6)
-var y = if x > 0, x else -x
-var z = [1, 2, 3, 4, 5]
+var x := (1 + 2) * (3 + 4) / (5 - 6)
+var y := if x > 0, x else -x
+var z := [1, 2, 3, 4, 5]
 "#;
     let t = Transpiler::new();
     let result = t.transpile(source);
@@ -507,11 +504,11 @@ var z = [1, 2, 3, 4, 5]
 #[test]
 fn test_error_recovery_multiple_errors() {
     let source = r#"
-var x: i32 = 42
-var y = 
-var z = 100
+var x i32 := 42
+var y :=
+var z := 100
 fn broken(
-var w = "hello"
+var w := "hello"
 "#;
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
@@ -533,8 +530,8 @@ fn valid_function()
     return 42
 end fn
 
-var broken =
-another_valid_var = 100
+var broken :=
+var another_valid_var := 100
 "#;
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
@@ -562,8 +559,8 @@ enum Color
     Blue
 end enum
 
-var broken =
-var p = Point { x: 1.0, y: 2.0 }
+var broken :=
+var p := Point { x: 1.0, y: 2.0 }
 "#;
     let (tokens, _lexer_errors) = Lexer::lex(source);
     let mut parser = Parser::new(&tokens);
@@ -583,7 +580,10 @@ var p = Point { x: 1.0, y: 2.0 }
 #[test]
 fn test_full_pipeline_with_errors() {
     let t = Transpiler::new();
-    let result = t.transpile("var x: i32 = 42\nvar y = \nvar z = 100");
+    let result = t.transpile(
+        "var x i32 := 42\nvar y :=
+var z := 100",
+    );
 
     // Should either succeed with partial output or fail gracefully
     match result {
@@ -601,7 +601,7 @@ fn test_full_pipeline_with_errors() {
 #[test]
 fn test_transpiler_handles_lexer_errors() {
     let t = Transpiler::new();
-    let result = t.transpile(r#"var x = "unterminated"#);
+    let result = t.transpile(r#"var x := "unterminated"#);
 
     assert!(result.is_err(), "Should fail on lexer errors");
     let err = result.unwrap_err();
@@ -632,7 +632,7 @@ fn test_transpiler_handles_parser_errors() {
 fn test_large_program_transpilation() {
     let mut source = String::new();
     for i in 0..100 {
-        source.push_str(&format!("var x_{}: i32 = {}\n", i, i));
+        source.push_str(&format!("var x_{} i32 := {}\n", i, i));
     }
 
     let t = Transpiler::new();
@@ -644,7 +644,7 @@ fn test_large_program_transpilation() {
 }
 
 #[test]
-fn test_deeply_nested_blocks() {
+fn test_deeply_nested_blocks_fail_gracefully() {
     let mut source = String::from("fn deeply_nested()\n");
     for _ in 0..50 {
         source.push_str("    if true\n");
@@ -656,8 +656,15 @@ fn test_deeply_nested_blocks() {
     source.push_str("end fn\n");
 
     let t = Transpiler::new();
-    let _result = t.transpile(&source);
-    // Should handle deep nesting without stack overflow
+    let result = t.transpile(&source);
+    assert!(
+        result.is_err(),
+        "excessive nesting should produce a controlled parser error"
+    );
+    assert!(
+        result.unwrap_err().contains("Maximum nested if depth"),
+        "the error should explain the nesting limit"
+    );
 }
 
 #[test]

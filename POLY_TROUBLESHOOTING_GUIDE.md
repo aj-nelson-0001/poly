@@ -13,30 +13,71 @@ This guide covers common issues and solutions for the new Poly I/O and error han
 ### Issue: Output Not Showing
 
 **Symptoms:**
-```poly
-put \"Hello, World!\"  // Nothing appears
-```
+~~~poly fragment
+put "Hello, World!"  // Nothing appears
+~~~
 
 **Solutions:**
-```poly
-// Solution 1: Check for buffering\nput \"Hello, World!\" + \"\\n\"  // Force flush\n\n// Solution 2: Use error output (always shows)\nerror \"Hello, World!\"\n\n// Solution 3: Check if output is being captured\nvar output = capture put \"Hello, World!\"\ninfo \"Output: \" + output  // Check captured output\n```
+~~~poly fragment
+// Solution 1: Check for buffering
+put "Hello, World!" + "\n"  // Force flush
+
+// Solution 2: Use error output (always shows)
+error "Hello, World!"
+
+// Solution 3: Check if output is being captured
+var output := capture put "Hello, World!"
+info "Output: " + output  // Check captured output
+~~~
 
 ### Issue: Extra Newlines
 
 **Symptoms:**
-```poly
-put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
+~~~poly
+put "Line 1"
+put "Line 2"
+// Output:
+// Line 1
+//
+// Line 2
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Use -n flag\nput -n \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1Line 2\n\n// Solution 2: Manual newline control\nput \"Line 1\\nLine 2\"\n// Output:\n// Line 1\n// Line 2\n```
+~~~poly
+// Solution 1: Use -n flag
+put -n "Line 1"
+put "Line 2"
+// Output:
+// Line 1Line 2
+
+// Solution 2: Manual newline control
+put "Line 1\nLine 2"
+// Output:
+// Line 1
+// Line 2
+~~~
 
 ### Issue: File Output Not Working
 
 **Symptoms:**
-```poly\nput \"data\" > \"output.txt\"  // File not created\n```
+~~~poly
+put "data" > "output.txt"  // File not created
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Check file permissions\nput \"data\" > \"output.txt\"\nvar permissions = get_file_permissions(\"output.txt\")\ninfo \"Permissions: \" + permissions.to_string()\n\n// Solution 2: Check disk space\nvar free_space = get_disk_free_space(\".\")\ninfo \"Free space: \" + free_space.to_string() + \" bytes\"\n\n// Solution 3: Use absolute path\nput \"data\" > \"/absolute/path/to/output.txt\"\n```
+~~~poly
+// Solution 1: Check file permissions
+put "data" > "output.txt"
+var permissions := get_file_permissions("output.txt")
+info "Permissions: " + permissions.to_string()
+
+// Solution 2: Check disk space
+var free_space := get_disk_free_space(".")
+info "Free space: " + free_space.to_string() + " bytes"
+
+// Solution 3: Use absolute path
+put "data" > "/absolute/path/to/output.txt"
+~~~
 
 ---
 
@@ -45,26 +86,76 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ### Issue: Input Not Reading
 
 **Symptoms:**
-```poly\nvar input: ustring = get  // Program hangs\n```
+~~~poly
+var input ustring := get  // Program hangs
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Use timeout\nmatch get --timeout 5000\n    Ok(input) => process(input)\n    Timeout => warn \"Input timeout\"\n    Error(e) => error \"Input error: \" + e\nend match\n\n// Solution 2: Check if input is available\nif is_input_available(),\n    var input: ustring = get\nelse\n    warn \"No input available\"\nend if\n\n// Solution 3: Use default value\nvar input: ustring = get --default u\"default\"\n```
+~~~poly
+// Solution 1: Use timeout
+match get --timeout 5000
+    Ok(input) => process(input)
+    Timeout => warn "Input timeout"
+    Error(e) => error "Input error: " + e
+end match
+
+// Solution 2: Check if input is available
+if is_input_available(),
+    var input ustring := get
+else
+    warn "No input available"
+end if
+
+// Solution 3: Use default value
+var input ustring := get --default unicode "default"
+~~~
 
 ### Issue: Type Conversion Fails
 
 **Symptoms:**
-```poly\nvar age: i32 = get  // Input: \"abc\"\n// Error: type conversion failed\n```
+~~~poly
+var age i32 := get  // Input: "abc"
+// Error: type conversion failed
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Validate before conversion\nvar input: ustring = get\nif input.parse::<i32>().is_ok(),\n    var age: i32 = input.parse::<i32>().unwrap()\nelse\n    error \"Please enter a valid number\"\nend if\n\n// Solution 2: Use validation closure\nvar age: i32 = get with validate |x| x.parse::<i32>().is_ok()\n\n// Solution 3: Use default value\nvar age: i32 = get --as i32 --default 0\n```
+~~~poly fragment
+// Solution 1: Validate before conversion
+var input ustring := get
+if input.parse::<i32>().is_ok(),
+    var age i32 := input.parse::<i32>().unwrap()
+else
+    error "Please enter a valid number"
+end if
+
+// Solution 2: Use validation closure
+var age i32 := get with validate |x| x.parse::<i32>().is_ok()
+
+// Solution 3: Use default value
+var age i32 := get --as i32 --default 0
+~~~
 
 ### Issue: Default Value Not Working
 
 **Symptoms:**
-```poly\nvar input: ustring = get --default u\"default\"  // Still prompts for input\n```
+~~~poly
+var input ustring := get --default unicode "default"  // Still prompts for input
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Check if input is empty\nvar input: ustring = get\nif input.len() == 0,\n    input = u\"default\"\nend if\n\n// Solution 2: Use validation with default\nvar input: ustring = get with validate |i| i.len() > 0 --default u\"default\"\n\n// Solution 3: Use environment variable\nvar input: ustring = get_env(\"INPUT\") or u\"default\"\n```
+~~~poly fragment
+// Solution 1: Check if input is empty
+var input ustring := get
+if input.len() == 0,
+    input = unicode "default"
+end if
+
+// Solution 2: Use validation with default
+var input ustring := get with validate |i| i.len() > 0 --default unicode "default"
+
+// Solution 3: Use environment variable
+var input ustring := get_env("INPUT") or unicode "default"
+~~~
 
 ---
 
@@ -73,26 +164,96 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ### Issue: Error Not Caught
 
 **Symptoms:**
-```poly\nmatch result\n    Ok(value) => process(value)\n    Error(e) => handle_error(e)  // Error not caught\nend match\n```
+~~~poly
+match result
+    Ok(value) => process(value)
+    Error(e) => handle_error(e)  // Error not caught
+end match
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Check error type\nmatch result\n    Ok(value) => process(value)\n    Error(FileError::NotFound) => error \"File not found\"\n    Error(FileError::PermissionDenied) => error \"Permission denied\"\n    Error(e) => error \"Unknown error: \" + e.to_string()\nend match\n\n// Solution 2: Use wildcard pattern\nmatch result\n    Ok(value) => process(value)\n    Error(_) => error \"An error occurred\"\nend match\n\n// Solution 3: Log error details\nmatch result\n    Ok(value) => process(value)\n    Error(e) => \n        error \"Error: \" + e.to_string()\n        info \"Error type: \" + type_of(e)\n        info \"Stack trace: \" + get_stack_trace()\nend match\n```
+~~~poly
+// Solution 1: Check error type
+match result
+    Ok(value) => process(value)
+    Error(FileError::NotFound) => error "File not found"
+    Error(FileError::PermissionDenied) => error "Permission denied"
+    Error(e) => error "Unknown error: " + e.to_string()
+end match
+
+// Solution 2: Use wildcard pattern
+match result
+    Ok(value) => process(value)
+    Error(_) => error "An error occurred"
+end match
+
+// Solution 3: Log error details
+match result
+    Ok(value) => process(value)
+    Error(e) =>
+        error "Error: " + e.to_string()
+        info "Error type: " + type_of(e)
+        info "Stack trace: " + get_stack_trace()
+end match
+~~~
 
 ### Issue: Error Propagation Not Working
 
 **Symptoms:**
-```poly\nfn risky_operation(): Result<ustring, ustring>\n    var result = try other_operation()  // Error not propagated\n    return Ok(result)\nend fn\n```
+~~~poly
+fn risky_operation(): Result<ustring, ustring>
+    var result := try other_operation()  // Error not propagated
+    return Ok(result)
+end fn
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Check return type\nfn risky_operation(): Result<ustring, ustring>  // Must return Result\n    var result = try other_operation()\n    return Ok(result)\nend fn\n\n// Solution 2: Use match instead of try\nfn risky_operation(): Result<ustring, ustring>\n    match other_operation()\n        Ok(result) => return Ok(result)\n        Error(e) => return Error(e)\n    end match\nend fn\n\n// Solution 3: Explicit error handling\nfn risky_operation(): Result<ustring, ustring>\n    var result = other_operation()\n    if result.is_err(),\n        return Error(result.error())\n    end if\n    return Ok(result.unwrap())\nend fn\n```
+~~~poly fragment
+// Solution 1: Check return type
+fn risky_operation(): Result<ustring, ustring>  // Must return Result
+    var result := try other_operation()
+    return Ok(result)
+end fn
+
+// Solution 2: Use match instead of try
+fn risky_operation(): Result<ustring, ustring>
+    match other_operation()
+        Ok(result) => return Ok(result)
+        Error(e) => return Error(e)
+    end match
+end fn
+
+// Solution 3: Explicit error handling
+fn risky_operation(): Result<ustring, ustring>
+    var result := other_operation()
+    if result.is_err(),
+        return Error(result.error())
+    end if
+    return Ok(result.unwrap())
+end fn
+~~~
 
 ### Issue: Panic on Unwrap
 
 **Symptoms:**
-```poly\nvar value = result.unwrap()  // Panics if error\n```
+~~~poly
+var value := result.unwrap()  // Panics if error
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Use match\nmatch result\n    Ok(value) => process(value)\n    Error(e) => handle_error(e)\nend match\n\n// Solution 2: Use unwrap_or\nvar value = result.unwrap_or(default_value)\n\n// Solution 3: Use unwrap_or_else\nvar value = result.unwrap_or_else(|| compute_default())\n```
+~~~poly fragment
+// Solution 1: Use match
+match result
+    Ok(value) => process(value)
+    Error(e) => handle_error(e)
+end match
+
+// Solution 2: Use unwrap_or
+var value := result.unwrap_or(default_value)
+
+// Solution 3: Use unwrap_or_else
+var value := result.unwrap_or_else(|| compute_default())
+~~~
 
 ---
 
@@ -101,26 +262,74 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ### Issue: File Not Found
 
 **Symptoms:**
-```poly\nvar content: ustring = get < \"file.txt\"  // Error: file not found\n```
+~~~poly
+var content ustring := get < "file.txt"  // Error: file not found
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Check if file exists\nif file_exists(\"file.txt\"),\n    var content: ustring = get < \"file.txt\"\nelse\n    error \"File not found\"\nend if\n\n// Solution 2: Use error handling\nmatch get < \"file.txt\"\n    Ok(content) => process(content)\n    Error(e) => error \"File error: \" + e\nend match\n\n// Solution 3: Use default value\nvar content: ustring = get < \"file.txt\" --default u\"\"\n```
+~~~poly
+// Solution 1: Check if file exists
+if file_exists("file.txt"),
+    var content ustring := get < "file.txt"
+else
+    error "File not found"
+end if
+
+// Solution 2: Use error handling
+match get < "file.txt"
+    Ok(content) => process(content)
+    Error(e) => error "File error: " + e
+end match
+
+// Solution 3: Use default value
+var content ustring := get < "file.txt" --default unicode ""
+~~~
 
 ### Issue: Permission Denied
 
 **Symptoms:**
-```poly\nput \"data\" > \"output.txt\"  // Error: permission denied\n```
+~~~poly
+put "data" > "output.txt"  // Error: permission denied
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Check permissions\nvar permissions = get_file_permissions(\"output.txt\")\ninfo \"Permissions: \" + permissions.to_string()\n\n// Solution 2: Change permissions\nset_file_permissions(\"output.txt\", 0o644)\n\n// Solution 3: Use different file location\nput \"data\" > \"/tmp/output.txt\"  // Use temp directory\n```
+~~~poly
+// Solution 1: Check permissions
+var permissions := get_file_permissions("output.txt")
+info "Permissions: " + permissions.to_string()
+
+// Solution 2: Change permissions
+set_file_permissions("output.txt", 0o644)
+
+// Solution 3: Use different file location
+put "data" > "/tmp/output.txt"  // Use temp directory
+~~~
 
 ### Issue: File Too Large
 
 **Symptoms:**
-```poly\nvar content: ustring = get < \"large_file.txt\"  // Error: out of memory\n```
+~~~poly
+var content ustring := get < "large_file.txt"  // Error: out of memory
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Read in chunks\nvar file = open(\"large_file.txt\")\nwhile !file.eof()\n    var chunk: ustring = file.read_chunk(1024)\n    process(chunk)\nend while\n\n// Solution 2: Use streaming\nvar stream = open_stream(\"large_file.txt\")\nloop: stream\n    process(line)\nend loop\n\n// Solution 3: Use binary mode for large files\nvar data: bytes = get < \"large_file.bin\" --bytes 1024\n```
+~~~poly
+// Solution 1: Read in chunks
+var file := open("large_file.txt")
+while !file.eof()
+    var chunk ustring := file.read_chunk(1024)
+    process(chunk)
+end while
+
+// Solution 2: Use streaming
+var stream := open_stream("large_file.txt")
+loop: stream
+    process(line)
+end loop
+
+// Solution 3: Use binary mode for large files
+var data bytes := get < "large_file.bin" --bytes 1024
+~~~
 
 ---
 
@@ -129,26 +338,88 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ### Issue: Slow Output
 
 **Symptoms:**
-```poly\nloop: 0..10000\n    put \"Line \" + i.to_string()  // Very slow\nend loop\n```
+~~~poly
+loop: 0..10000
+    put "Line " + i.to_string()  // Very slow
+end loop
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Buffer output\nvar buffer: Vec<ustring> = []\nloop: 0..10000\n    buffer.push(\"Line \" + i.to_string())\nend loop\nput buffer.join(\"\\n\")\n\n// Solution 2: Use -n for progress\nloop: 0..10000\n    put -n \"\\rProgress: \" + i.to_string()\nend loop\nput \"\"\n\n// Solution 3: Write to file\nloop: 0..10000\n    put \"Line \" + i.to_string() >> \"output.txt\"\nend loop\n```
+~~~poly
+// Solution 1: Buffer output
+var buffer Vec<ustring> := []
+loop: 0..10000
+    buffer.push("Line " + i.to_string())
+end loop
+put buffer.join("\n")
+
+// Solution 2: Use -n for progress
+loop: 0..10000
+    put -n "\rProgress: " + i.to_string()
+end loop
+put ""
+
+// Solution 3: Write to file
+loop: 0..10000
+    put "Line " + i.to_string() >> "output.txt"
+end loop
+~~~
 
 ### Issue: Slow Input
 
 **Symptoms:**
-```poly\nvar input: ustring = get  // Very slow\n```
+~~~poly
+var input ustring := get  // Very slow
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Use timeout\nmatch get --timeout 5000\n    Ok(input) => process(input)\n    Timeout => warn \"Timeout\"\n    Error(e) => error e\nend match\n\n// Solution 2: Use default value\nvar input: ustring = get --default u\"\"\n\n// Solution 3: Use validation\nvar input: ustring = get with validate |i| i.len() > 0\n```
+~~~poly
+// Solution 1: Use timeout
+match get --timeout 5000
+    Ok(input) => process(input)
+    Timeout => warn "Timeout"
+    Error(e) => error e
+end match
+
+// Solution 2: Use default value
+var input ustring := get --default unicode ""
+
+// Solution 3: Use validation
+var input ustring := get with validate |i| i.len() > 0
+~~~
 
 ### Issue: Memory Usage
 
 **Symptoms:**
-```poly\nvar large_string: ustring = \"a\".repeat(1000000)  // High memory usage\n```
+~~~poly
+var large_string ustring := "a".repeat(1000000)  // High memory usage
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Use streaming\nvar stream = open_stream(\"large_file.txt\")\nloop: stream\n    process(line)  // Process line by line\nend loop\n\n// Solution 2: Use chunks\nvar chunks = large_string.chunks(1024)\nloop: chunks\n    process(chunk)\nend loop\n\n// Solution 3: Use generators\nfn generate_data(): Iterator<ustring>\n    loop: 0..1000000\n        yield \"Line \" + i.to_string()\n    end loop\nend fn\n\nloop: generate_data()\n    process(line)\nend loop\n```
+~~~poly
+// Solution 1: Use streaming
+var stream := open_stream("large_file.txt")
+loop: stream
+    process(line)  // Process line by line
+end loop
+
+// Solution 2: Use chunks
+var chunks := large_string.chunks(1024)
+loop: chunks
+    process(chunk)
+end loop
+
+// Solution 3: Use generators
+fn generate_data(): Iterator<ustring>
+    loop: 0..1000000
+        yield "Line " + i.to_string()
+    end loop
+end fn
+
+loop: generate_data()
+    process(line)
+end loop
+~~~
 
 ---
 
@@ -157,18 +428,46 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 ### Issue: Connection Timeout
 
 **Symptoms:**
-```poly\nvar response = get < \"https://api.example.com\"  // Timeout\n```
+~~~poly
+var response := get < "https://api.example.com"  // Timeout
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Use timeout\nmatch get --timeout 5000 < \"https://api.example.com\"\n    Ok(response) => process(response)\n    Timeout => warn \"Connection timeout\"\n    Error(e) => error \"Connection error: \" + e\nend match\n\n// Solution 2: Use retry logic\nvar response = retry(3, || get < \"https://api.example.com\")\n\n// Solution 3: Use async\nvar response = async get < \"https://api.example.com\"\n// Do other work\nvar result = await response\n```
+~~~poly fragment
+// Solution 1: Use timeout
+match get --timeout 5000 < "https://api.example.com"
+    Ok(response) => process(response)
+    Timeout => warn "Connection timeout"
+    Error(e) => error "Connection error: " + e
+end match
+
+// Solution 2: Use retry logic
+var response := retry(3, || get < "https://api.example.com")
+
+// Solution 3: Use async
+var response := async get < "https://api.example.com"
+// Do other work
+var result := await response
+~~~
 
 ### Issue: SSL Certificate Error
 
 **Symptoms:**
-```poly\nvar response = get < \"https://api.example.com\"  // SSL error\n```
+~~~poly
+var response := get < "https://api.example.com"  // SSL error
+~~~
 
 **Solutions:**
-```poly\n// Solution 1: Verify certificate\nvar response = get < \"https://api.example.com\" with verify_certificate(true)\n\n// Solution 2: Use trusted CA\nvar response = get < \"https://api.example.com\" with ca_certificate(\"ca.pem\")\n\n// Solution 3: Skip verification (insecure)\nvar response = get < \"https://api.example.com\" with verify_certificate(false)  // Not recommended\n```
+~~~poly
+// Solution 1: Verify certificate
+var response := get < "https://api.example.com" with verify_certificate(true)
+
+// Solution 2: Use trusted CA
+var response := get < "https://api.example.com" with ca_certificate("ca.pem")
+
+// Solution 3: Skip verification (insecure)
+var response := get < "https://api.example.com" with verify_certificate(false)  // Not recommended
+~~~
 
 ---
 
@@ -176,15 +475,50 @@ put \"Line 1\"\nput \"Line 2\"\n// Output:\n// Line 1\n//\n// Line 2\n```
 
 ### Enable Debug Mode
 
-```poly\n// Set debug environment variable\nset_env(\"DEBUG\", \"true\")\n\n// Check debug mode\nvar debug_mode: bool = get_env(\"DEBUG\") or u\"false\" == u\"true\"\nif debug_mode,\n    info \"Debug mode enabled\"\n    // Debug output\nend if\n```
+~~~poly
+// Set debug environment variable
+set_env("DEBUG", "true")
+
+// Check debug mode
+var debug_mode bool := get_env("DEBUG") or unicode "false" == unicode "true"
+if debug_mode,
+    info "Debug mode enabled"
+    // Debug output
+end if
+~~~
 
 ### Use Logging
 
-```poly\n// Log function entry/exit\nfn process_data()\n    info \"Entering process_data\"\n    // ... function body\n    info \"Exiting process_data\"\nend fn\n\n// Log variable values\nvar x: i32 = 42\ninfo \"x = \" + x.to_string()\n\n// Log function results\nvar result = risky_operation()\nmatch result\n    Ok(value) => info \"Success: \" + value.to_string()\n    Error(e) => error \"Error: \" + e.to_string()\nend match\n```
+~~~poly
+// Log function entry/exit
+fn process_data()
+    info "Entering process_data"
+    // ... function body
+    info "Exiting process_data"
+end fn
+
+// Log variable values
+var x i32 := 42
+info "x = " + x.to_string()
+
+// Log function results
+var result := risky_operation()
+match result
+    Ok(value) => info "Success: " + value.to_string()
+    Error(e) => error "Error: " + e.to_string()
+end match
+~~~
 
 ### Use Breakpoints
 
-```poly\n// Pseudo-code for debugging\nfn complex_function()\n    // ... code before breakpoint\n    debug_break()  // Pause execution\n    // ... code after breakpoint\nend fn\n```
+~~~poly
+// Pseudo-code for debugging
+fn complex_function()
+    // ... code before breakpoint
+    debug_break()  // Pause execution
+    // ... code after breakpoint
+end fn
+~~~
 
 ---
 

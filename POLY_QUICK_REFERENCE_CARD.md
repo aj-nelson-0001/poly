@@ -2,12 +2,12 @@
 
 ## Variables & Constants
 
-```poly
-var x = 10              // Mutable variable
-let y = 20              // Immutable variable
-const PI = 3.14159      // Constant
-var name: String = "hi" // With type annotation
-```
+~~~poly
+var x := 10              // Mutable variable
+let y := 20              // Immutable variable
+const PI := 3.14159      // Constant
+var name String := "hi" // With type annotation
+~~~
 
 ## Basic Types
 
@@ -25,17 +25,17 @@ var name: String = "hi" // With type annotation
 
 ## Operators
 
-```poly
+~~~poly
 // Arithmetic: + - * / %
 // Comparison: == != < > <= >=
 // Logical: && || !
 // Bitwise: & | ^ << >>
-// Assignment: = += -= *= /= %=
-```
+// Equality: =    Initialization: :=
+~~~
 
 ## Control Flow
 
-```poly
+~~~poly fragment
 // If/Else
 if condition
     // ...
@@ -58,11 +58,11 @@ end for
 for i in 0..=10      // Inclusive
 for i in (0..100).step_by(2)
 for item in collection
-```
+~~~
 
 ## Functions
 
-```poly
+~~~poly
 fn name(param: Type): ReturnType
     // ...
     return value
@@ -71,11 +71,11 @@ end fn
 fn greet(name: String = "World"): String
     return "Hello, " + name + "!"
 end fn
-```
+~~~
 
 ## Data Structures
 
-```poly
+~~~poly
 // Struct
 struct Point
     var x: f64
@@ -94,45 +94,45 @@ enum Shape
     Circle(f32)
     Rectangle(f32, f32)
 end enum
-```
+~~~
 
 ## Pattern Matching
 
-```poly
+~~~poly fragment
 match value
     pattern1 => expression1
     pattern2 if guard => expression2
     _ => default
 end match
-```
+~~~
 
 ## Error Handling
 
-```poly
+~~~poly
 error "Error message"     // Print error
 warn "Warning message"    // Print warning
 info "Info message"       // Print info
-```
+~~~
 
 ## File I/O
 
-```poly
-var content = get < "file.txt"     // Read file
+~~~poly
+var content := get < "file.txt"     // Read file
 put "text" > "file.txt"            // Write file
 put "text" >> "file.txt"           // Append file
-var input = get                     // Read stdin
-```
+var input := get                     // Read stdin
+~~~
 
 ## Closures
 
-```poly
-var add = |x, y| x + y
-var square = |x| x * x
-```
+~~~poly fragment
+var add := |x, y| x + y
+var square := |x| x * x
+~~~
 
 ## Modules
 
-```poly
+~~~poly fragment
 module Math
     fn add(a, b): i32
         return a + b
@@ -141,31 +141,31 @@ end module
 
 use Math
 Math.add(2, 3)
-```
+~~~
 
 ## Common Patterns
 
-```poly
+~~~poly
 // List processing
-var doubled = map(list, |x| x * 2)
-var evens = filter(list, |x| x % 2 == 0)
-var sum = reduce(list, |a, b| a + b, 0)
+var doubled := map(list, |x| x * 2)
+var evens := filter(list, |x| x % 2 == 0)
+var sum := reduce(list, |a, b| a + b, 0)
 
 // String operations
-var upper = str.to_uppercase()
-var parts = str.split(",")
-var joined = parts.join("-")
+var upper := str.to_uppercase()
+var parts := str.split(",")
+var joined := parts.join("-")
 
 // Collections
 vec.push(item)
 vec.pop()
 vec.length
 vec.contains(item)
-```
+~~~
 
 ## Built-in Functions
 
-```poly
+~~~poly
 put "text"              // Print with newline
 put -n "text"           // Print without newline
 error "msg"             // Print error
@@ -173,22 +173,22 @@ warn "msg"              // Print warning
 info "msg"              // Print info
 get                     // Read from stdin
 get < "file"            // Read from file
-```
+~~~
 
 ## Comments
 
-```poly
+~~~poly
 // Single line comment
 /* Multi
    line
    comment */
-```
+~~~
 
 ---
 
 ## Complete Example
 
-```poly
+~~~poly
 // Fibonacci with pattern matching
 fn fibonacci(n: i32): i32
     match n
@@ -203,7 +203,7 @@ fn main()
         put "fib(" + i + ") = " + fibonacci(i)
     end for
 end fn
-```
+~~~
 
 ---
 

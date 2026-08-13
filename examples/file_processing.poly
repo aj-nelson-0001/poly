@@ -15,16 +15,16 @@ fn main()
     
     # Read entire file
     put "Reading entire file:"
-    var content: ustring = get < "sample.txt"
+    var content ustring := get < "sample.txt"
     put content
     put ""
     
     # Read file line by line
     put "Reading line by line:"
-    var file = open("sample.txt")
-    var line_num: i32 = 1
+    var file := open("sample.txt")
+    var line_num i32 := 1
     while !file.eof()
-        var line: ustring = file.get_line()
+        var line ustring := file.get_line()
         put "Line " + line_num.to_string() + ": " + line
         add line_num
     end while
@@ -32,11 +32,11 @@ fn main()
     
     # Write formatted data
     put "Writing CSV data..."
-    var records: Vec<ustring> = [
-        u"Name,Age,Email",
-        u"Alice,30,alice@example.com",
-        u"Bob,25,bob@example.com",
-        u"Charlie,35,charlie@example.com"
+    var records Vec<ustring> := [
+        unicode "Name,Age,Email",
+        unicode "Alice,30,alice@example.com",
+        unicode "Bob,25,bob@example.com",
+        unicode "Charlie,35,charlie@example.com"
     ]
     
     loop: records
@@ -47,13 +47,13 @@ fn main()
     
     # Read and process CSV
     put "Processing CSV file:"
-    var csv_content: ustring = get < "contacts.csv"
-    var lines: Vec<ustring> = csv_content.split(u"\n")
+    var csv_content ustring := get < "contacts.csv"
+    var lines Vec<ustring> := csv_content.split(unicode "\n")
     
-    var i: i32 = 0
+    var i i32 := 0
     loop: lines
         if i > 0, # Skip header
-            var fields: Vec<ustring> = line.split(u",")
+            var fields Vec<ustring> := line.split(unicode ",")
             if fields.len() >= 2,
                 put "Name: " + fields[0] + ", Age: " + fields[1]
             end if
@@ -64,14 +64,14 @@ fn main()
     
     # Binary file example
     put "Writing binary file..."
-    var data: bytes = [0x48, 0x65, 0x6C, 0x6C, 0x6F]  # "Hello" in bytes
+    var data bytes := [0x48, 0x65, 0x6C, 0x6C, 0x6F]  # "Hello" in bytes
     data > "binary.bin"
     put "Binary file created."
     put ""
     
     # Read binary file
     put "Reading binary file:"
-    var binary_data: bytes = get < "binary.bin"
+    var binary_data bytes := get < "binary.bin"
     put "Binary size: " + binary_data.len().to_string() + " bytes"
     put ""
     

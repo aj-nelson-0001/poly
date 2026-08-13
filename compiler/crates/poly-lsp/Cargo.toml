@@ -1,0 +1,20 @@
+[package]
+name = "poly-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Language server for the Poly programming language"
+
+[[bin]]
+name = "poly-lsp"
+path = "src/main.rs"
+
+[dependencies]
+poly-lexer.workspace = true
+poly-parser.workspace = true
+poly-transpiler.workspace = true
+
+[dev-dependencies]
+poly-lexer.workspace = true
+poly-parser.workspace = true
+poly-transpiler.workspace = true

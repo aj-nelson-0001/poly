@@ -16,29 +16,29 @@ We're excited to announce that **async/await support** is now available in the P
 
 Declare asynchronous functions using the `async fn` keyword:
 
-```poly
+~~~poly
 async fn fetch_data(url: ustring): Result<ustring, ustring>
-    var response = http_get(url).await
+    var response := http_get(url).await
     return Ok(response)
 end fn
-```
+~~~
 
 This transpiles to idiomatic Rust async code:
 
-```rust
+~~~rust
 async fn fetch_data(url: String) -> Result<String, String> {
     let response = http_get(url).await;
     return Ok(response);
 }
-```
+~~~
 
 ### Await Expressions
 
 Use the `.await` postfix syntax to wait for async operations:
 
-```poly
-var data = fetch_data(u"https://api.example.com").await
-```
+~~~poly
+var data := fetch_data(unicode "https://api.example.com").await
+~~~
 
 The postfix notation makes the code read naturally: "fetch data,,await the result."
 
@@ -46,24 +46,24 @@ The postfix notation makes the code read naturally: "fetch data,,await the resul
 
 Traits can now have async method signatures:
 
-```poly
+~~~poly
 trait DataFetcher
     async fn fetch(self, key: ustring): Result<ustring, ustring>
 end trait
 
 impl DataFetcher for HttpClient
     async fn fetch(self, key: ustring): Result<ustring, ustring>
-        var response = self.http_get(key).await
+        var response := self.http_get(key).await
         return Ok(response)
     end fn
 end impl
-```
+~~~
 
 ## Complete Example
 
 Here's a complete example demonstrating the new features:
 
-```poly
+~~~poly fragment
 # Define an async trait
 trait DataFetcher
     async fn fetch(self, url: ustring): Result<ustring, ustring>
@@ -76,12 +76,12 @@ end struct
 
 impl DataFetcher for HttpClient
     async fn fetch(self, url: ustring): Result<ustring, ustring>
-        var full_url = self.base_url + url
-        var response = http_get(full_url).await
+        var full_url := self.base_url + url
+        var response := http_get(full_url).await
         
         match response
             Ok(data) => return Ok(data)
-            Error(e) => return Error(u"HTTP Error: " + e)
+            Error(e) => return Error(unicode "HTTP Error: " + e)
         end match
     end fn
 end impl
@@ -92,10 +92,10 @@ async fn process_data<T: DataFetcher>(fetcher: T, url: ustring): ustring
         Ok(data) => return data
         Error(e) => 
             error e
-            return u""
+            return unicode ""
     end match
 end fn
-```
+~~~
 
 ## How It Transpiles
 
@@ -132,13 +132,13 @@ With async/await support, we're planning to add:
 
 Update your Poly compiler to the latest version and try the new features:
 
-```bash
+~~~bash
 cd compiler
 cargo build --release
 
 # Try the async example
 ./target/release/poly ../examples/async_await.poly
-```
+~~~
 
 ## Conclusion
 

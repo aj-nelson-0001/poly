@@ -1,16 +1,16 @@
-# Transpiler IR Refactoring Plan
+# Transpiler Intermediate Representation Refactoring Plan
 
 ## Overview
 
-This document outlines the plan to refactor the Poly transpiler to use a more modular Intermediate Representation (IR), improving maintainability, extensibility, and enabling future optimizations.
+This document outlines the plan to refactor the Poly transpiler to use a more modular intermediate representation, improving maintainability, extensibility, and enabling future optimizations.
 
 ## Current State
 
 The current transpiler directly walks the Poly AST and generates Rust code:
 
-```
+~~~
 Poly Source → Lexer → Tokens → Parser → AST → CodeGen → Rust Code
-```
+~~~
 
 ### Issues with Current Approach
 
@@ -22,27 +22,27 @@ Poly Source → Lexer → Tokens → Parser → AST → CodeGen → Rust Code
 
 ## Proposed Architecture
 
-```
-Poly Source → Lexer → Tokens → Parser → AST → IR → Optimizer → CodeGen → Rust Code
+~~~
+Poly Source → Lexer → Tokens → Parser → AST → intermediate representation → Optimizer → CodeGen → Rust Code
                                       ↓
                               Source Map Generation
-```
+~~~
 
 ### New Components
 
-1. **IR Module** (`poly-ir`): Defines the intermediate representation
-2. **IR Generator** (`ast_to_ir`): Converts AST to IR
-3. **Optimizer** (`optimizer`): Performs IR transformations
-4. **Enhanced CodeGen**: Generates Rust from optimized IR
+1. **intermediate representation Module** (`poly-intermediate-representation`): Defines the intermediate representation
+2. **intermediate representation Generator** (`ast_to_intermediate_representation`): Converts AST to intermediate representation
+3. **Optimizer** (`optimizer`): Performs intermediate representation transformations
+4. **Enhanced CodeGen**: Generates Rust from optimized intermediate representation
 
-## IR Design
+## intermediate representation Design
 
-### Core IR Types
+### Core intermediate representation Types
 
-```rust
+~~~rust
 /// The Poly intermediate representation
 pub mod ir {
-    /// IR Program - top level container
+    /// intermediate representation Program - top level container
     pub struct Program {
         pub functions: Vec<Function>,
         pub structs: Vec<Struct>,
@@ -53,7 +53,7 @@ pub mod ir {
         pub main_body: Vec<Statement>,
     }
 
-    /// IR Function
+    /// intermediate representation Function
     pub struct Function {
         pub name: String,
         pub params: Vec<Parameter>,
@@ -62,7 +62,7 @@ pub mod ir {
         pub source_location: Option<SourceLocation>,
     }
 
-    /// IR Statement
+    /// intermediate representation Statement
     pub enum Statement {
         VarDecl(VarDecl),
         LetDecl(LetDecl),
@@ -82,7 +82,7 @@ pub mod ir {
         Block(Vec<Statement>),
     }
 
-    /// IR Expression
+    /// intermediate representation Expression
     pub enum Expr {
         Literal(Literal),
         Identifier(String),
@@ -104,7 +104,7 @@ pub mod ir {
         As(AsExpr),
     }
 
-    /// IR Type
+    /// intermediate representation Type
     pub enum Type {
         Named(String),
         Array(Box<Type>, usize),
@@ -119,71 +119,71 @@ pub mod ir {
 
     // ... more types
 }
-```
+~~~
 
-### IR Generator
+### intermediate representation Generator
 
-```rust
-/// Converts Poly AST to IR
-pub struct IRGenerator {
+~~~rust
+/// Converts Poly AST to intermediate representation
+pub struct IntermediateRepresentationGenerator {
     source_map: SourceMap,
 }
 
-impl IRGenerator {
+impl IntermediateRepresentationGenerator {
     pub fn new() -> Self {
         Self {
             source_map: SourceMap::new(),
         }
     }
 
-    pub fn generate(&mut self, ast: &Program) -> ir::Program {
-        let mut ir_program = ir::Program::new();
+    pub fn generate(&mut self, ast: &Program) -> intermediate_representation::Program {
+        let mut intermediate_representation_program = intermediate_representation::Program::new();
 
         for stmt in &ast.statements {
             match stmt {
                 Statement::FunctionDeclaration(func) => {
-                    ir_program.functions.push(self.gen_function(func));
+                    intermediate_representation_program.functions.push(self.gen_function(func));
                 }
                 Statement::StructDeclaration(struct_decl) => {
-                    ir_program.structs.push(self.gen_struct(struct_decl));
+                    intermediate_representation_program.structs.push(self.gen_struct(struct_decl));
                 }
                 Statement::EnumDeclaration(enum_decl) => {
-                    ir_program.enums.push(self.gen_enum(enum_decl));
+                    intermediate_representation_program.enums.push(self.gen_enum(enum_decl));
                 }
                 _ => {
-                    ir_program.main_body.push(self.gen_statement(stmt));
+                    intermediate_representation_program.main_body.push(self.gen_statement(stmt));
                 }
             }
         }
 
-        ir_program
+        intermediate_representation_program
     }
 
-    fn gen_function(&mut self, func: &FunctionDecl) -> ir::Function {
-        // Convert function declaration to IR
+    fn gen_function(&mut self, func: &FunctionDecl) -> intermediate_representation::Function {
+        // Convert function declaration to intermediate representation
     }
 
-    fn gen_statement(&mut self, stmt: &Statement) -> ir::Statement {
-        // Convert statement to IR
+    fn gen_statement(&mut self, stmt: &Statement) -> intermediate_representation::Statement {
+        // Convert statement to intermediate representation
     }
 
-    fn gen_expression(&mut self, expr: &Expression) -> ir::Expr {
-        // Convert expression to IR
+    fn gen_expression(&mut self, expr: &Expression) -> intermediate_representation::Expr {
+        // Convert expression to intermediate representation
     }
 }
-```
+~~~
 
 ### Optimizer
 
-```rust
-/// IR Optimizer - performs transformations on IR
+~~~rust
+/// intermediate representation Optimizer - performs transformations on intermediate representation
 pub struct Optimizer {
     passes: Vec<Box<dyn OptimizationPass>>,
 }
 
 pub trait OptimizationPass {
     fn name(&self) -> &str;
-    fn run(&self, program: &mut ir::Program) -> bool;
+    fn run(&self, program: &mut intermediate_representation::Program) -> bool;
 }
 
 /// Constant folding optimization
@@ -194,7 +194,7 @@ impl OptimizationPass for ConstantFolding {
         "constant_folding"
     }
 
-    fn run(&self, program: &mut ir::Program) -> bool {
+    fn run(&self, program: &mut intermediate_representation::Program) -> bool {
         let mut changed = false;
         for func in &mut program.functions {
             changed |= self.fold_constants(&mut func.body);
@@ -211,7 +211,7 @@ impl OptimizationPass for DeadCodeElimination {
         "dead_code_elimination"
     }
 
-    fn run(&self, program: &mut ir::Program) -> bool {
+    fn run(&self, program: &mut intermediate_representation::Program) -> bool {
         // Remove unreachable code
     }
 }
@@ -226,16 +226,16 @@ impl OptimizationPass for Inlining {
         "inlining"
     }
 
-    fn run(&self, program: &mut ir::Program) -> bool {
+    fn run(&self, program: &mut intermediate_representation::Program) -> bool {
         // Inline small functions
     }
 }
-```
+~~~
 
 ### Enhanced CodeGen
 
-```rust
-/// Enhanced code generator using IR
+~~~rust
+/// Enhanced code generator using intermediate representation
 pub struct EnhancedCodeGen {
     source_map: SourceMap,
     indentation: usize,
@@ -249,7 +249,7 @@ impl EnhancedCodeGen {
         }
     }
 
-    pub fn generate(&mut self, ir_program: &ir::Program) -> (String, SourceMap) {
+    pub fn generate(&mut self, intermediate_representation_program: &intermediate_representation::Program) -> (String, SourceMap) {
         let mut output = String::new();
 
         // Generate header
@@ -257,28 +257,28 @@ impl EnhancedCodeGen {
         output.push_str("#![allow(unused_variables, unused_mut, unused_imports, dead_code)]\n\n");
 
         // Generate functions
-        for func in &ir_program.functions {
+        for func in &intermediate_representation_program.functions {
             output.push_str(&self.gen_function(func));
             output.push('\n');
         }
 
         // Generate structs
-        for struct_decl in &ir_program.structs {
+        for struct_decl in &intermediate_representation_program.structs {
             output.push_str(&self.gen_struct(struct_decl));
             output.push('\n');
         }
 
         // Generate enums
-        for enum_decl in &ir_program.enums {
+        for enum_decl in &intermediate_representation_program.enums {
             output.push_str(&self.gen_enum(enum_decl));
             output.push('\n');
         }
 
         // Generate main function
-        if !ir_program.main_body.is_empty() {
+        if !intermediate_representation_program.main_body.is_empty() {
             output.push_str("fn main() {\n");
             self.indentation += 1;
-            for stmt in &ir_program.main_body {
+            for stmt in &intermediate_representation_program.main_body {
                 output.push_str(&self.gen_statement(stmt));
             }
             self.indentation -= 1;
@@ -288,28 +288,28 @@ impl EnhancedCodeGen {
         (output, self.source_map.clone())
     }
 
-    fn gen_function(&mut self, func: &ir::Function) -> String {
-        // Generate Rust function from IR
+    fn gen_function(&mut self, func: &intermediate_representation::Function) -> String {
+        // Generate Rust function from intermediate representation
     }
 
-    fn gen_statement(&mut self, stmt: &ir::Statement) -> String {
-        // Generate Rust statement from IR
+    fn gen_statement(&mut self, stmt: &intermediate_representation::Statement) -> String {
+        // Generate Rust statement from intermediate representation
     }
 
-    fn gen_expression(&self, expr: &ir::Expr) -> String {
-        // Generate Rust expression from IR
+    fn gen_expression(&self, expr: &intermediate_representation::Expr) -> String {
+        // Generate Rust expression from intermediate representation
     }
 }
-```
+~~~
 
 ## Migration Strategy
 
-### Phase 1: Create IR Module (Week 1-2)
+### Phase 1: Create intermediate representation Module (Week 1-2)
 
-1. Create `poly-ir` crate with IR types
-2. Implement IR generator from AST
+1. Create `poly-intermediate-representation` crate with intermediate representation types
+2. Implement intermediate representation generator from AST
 3. Add source map tracking
-4. Write unit tests for IR generation
+4. Write unit tests for intermediate representation generation
 
 ### Phase 2: Implement Basic Optimizer (Week 3-4)
 
@@ -320,7 +320,7 @@ impl EnhancedCodeGen {
 
 ### Phase 3: Enhanced CodeGen (Week 5-6)
 
-1. Refactor CodeGen to use IR
+1. Refactor CodeGen to use intermediate representation
 2. Add source map generation
 3. Improve error reporting
 4. Update integration tests
@@ -377,7 +377,7 @@ impl EnhancedCodeGen {
 
 ### Unit Tests
 
-```rust
+~~~rust
 #[test]
 fn test_ir_generation() {
     let source = "var x: i32 = 42";
@@ -385,7 +385,7 @@ fn test_ir_generation() {
     let ir = generate_ir(&ast);
     
     assert_eq!(ir.statements.len(), 1);
-    assert!(matches!(ir.statements[0], ir::Statement::VarDecl(_)));
+    assert!(matches!(ir.statements[0], intermediate_representation::Statement::VarDecl(_)));
 }
 
 #[test]
@@ -398,13 +398,13 @@ fn test_constant_folding() {
     optimizer.run(&mut ir);
     
     // Should be folded to 5
-    assert_eq!(ir.statements[0].value, ir::Expr::Literal(ir::Literal::Int(5)));
+    assert_eq!(ir.statements[0].value, intermediate_representation::Expr::Literal(intermediate_representation::Literal::Int(5)));
 }
-```
+~~~
 
 ### Integration Tests
 
-```rust
+~~~rust
 #[test]
 fn test_end_to_end_optimization() {
     let source = r#"
@@ -418,11 +418,11 @@ fn test_end_to_end_optimization() {
     let rust_code = transpile_with_optimization(source);
     assert!(rust_code.contains("5")); // Constant folded
 }
-```
+~~~
 
 ### Performance Benchmarks
 
-```rust
+~~~rust
 #[bench]
 fn bench_ir_generation(b: &mut Bencher) {
     let source = generate_large_program(1000);
@@ -431,20 +431,20 @@ fn bench_ir_generation(b: &mut Bencher) {
         generate_ir(&ast)
     });
 }
-```
+~~~
 
 ## Migration Checklist
 
-- [ ] Create `poly-ir` crate
-- [ ] Define IR types
-- [ ] Implement IR generator
+- [ ] Create `poly-intermediate-representation` crate
+- [ ] Define intermediate representation types
+- [ ] Implement intermediate representation generator
 - [ ] Add source map tracking
-- [ ] Write IR tests
+- [ ] Write intermediate representation tests
 - [ ] Create optimizer framework
 - [ ] Implement constant folding
 - [ ] Implement dead code elimination
 - [ ] Add optimizer tests
-- [ ] Refactor CodeGen to use IR
+- [ ] Refactor CodeGen to use intermediate representation
 - [ ] Add source map generation
 - [ ] Update integration tests
 - [ ] Implement inlining
@@ -460,7 +460,7 @@ fn bench_ir_generation(b: &mut Bencher) {
 
 **Mitigation**: 
 - Keep old codegen as fallback
-- Feature flag for new IR
+- Feature flag for new intermediate representation
 - Comprehensive test coverage
 
 ### Risk 2: Performance Regression
@@ -479,9 +479,9 @@ fn bench_ir_generation(b: &mut Bencher) {
 
 ## Conclusion
 
-Refactoring the transpiler to use an IR will significantly improve the Poly compiler's maintainability, extensibility, and performance. The phased approach minimizes risk while delivering incremental value.
+Refactoring the transpiler to use an intermediate representation will significantly improve the Poly compiler's maintainability, extensibility, and performance. The phased approach minimizes risk while delivering incremental value.
 
-The IR will enable:
+The intermediate representation will enable:
 - Better optimizations
 - Improved debugging
 - Easier feature additions

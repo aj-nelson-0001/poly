@@ -32,8 +32,8 @@ info "This is debug info"
 # Test 4: Output Formatting
 # ============================================================
 put "\n=== Test 4: Output Formatting ==="
-var name: ustring = u"Poly"
-var version: i32 = 1
+var name ustring := unicode "Poly"
+var version i32 := 1
 put "Language: {name}, Version: {version}"
 put "Pi: {3.14159:.2f}"
 
@@ -51,7 +51,7 @@ put "Done."
 # Test 6: Capture Output
 # ============================================================
 put "\n=== Test 6: Capture Output ==="
-var output: ustring = capture put "Computed: " + (2 + 2)
+var output ustring := capture put "Computed: " + (2 + 2)
 put "Captured: " + output
 
 # ============================================================

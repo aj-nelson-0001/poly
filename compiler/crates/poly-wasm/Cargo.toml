@@ -1,0 +1,14 @@
+[package]
+name = "poly-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "WASM bindings for the Poly compiler, used by the web playground"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+poly-lexer.workspace = true
+poly-parser.workspace = true
+poly-transpiler.workspace = true

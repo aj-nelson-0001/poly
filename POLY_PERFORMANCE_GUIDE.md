@@ -10,7 +10,7 @@ This guide covers performance optimization techniques for the new Poly I/O and e
 
 ### Use `-n` for Frequent Output
 
-```poly
+~~~poly
 // Good: Efficient progress updates
 loop: 0..10000
     put -n "\\rProcessing: " + i.to_string()
@@ -21,15 +21,15 @@ put ""
 loop: 0..10000
     put "Processing: " + i.to_string()  // Creates 10000 lines
 end loop
-```
+~~~
 
 ### Buffer Output When Possible
 
-```poly
+~~~poly
 // Good: Buffer output
-var output: ustring = ""
+var output ustring := ""
 loop: items
-    output = output + item.to_string() + "\\n"
+    add output, item.to_string() + "\n"
 end loop
 put output
 
@@ -37,35 +37,35 @@ put output
 loop: items
     put item.to_string()  // Multiple system calls
 end loop
-```
+~~~
 
 ### Use String Concatenation Efficiently
 
-```poly
+~~~poly
 // Good: Build string efficiently
-var parts: Vec<ustring> = []
+var parts Vec<ustring> := []
 loop: 0..1000
     parts.push(i.to_string())
 end loop
-var result: ustring = parts.join(", ")
+var result ustring := parts.join(", ")
 put result
 
 // Bad: String concatenation in loop
-var result: ustring = ""
+var result ustring := ""
 loop: 0..1000
-    result = result + i.to_string() + ", "  // O(n²) complexity
+    add result, i.to_string() + ", "// O(n²) complexity
 end loop
-```
+~~~
 
 ### Avoid Unnecessary Formatting
 
-```poly
+~~~poly
 // Good: Simple output
 put age.to_string()
 
 // Bad: Unnecessary formatting
 put "{age}"  // Slower than direct to_string()
-```
+~~~
 
 ---
 
@@ -73,33 +73,33 @@ put "{age}"  // Slower than direct to_string()
 
 ### Use Appropriate Data Types
 
-```poly
+~~~poly
 // Good: Use appropriate types
-var count: i32 = get --as i32
-var price: f64 = get --as f64
+var count i32 := get --as i32
+var price f64 := get --as f64
 
 // Bad: Wrong types
-var count: ustring = get  // Then parse later
-var price: ustring = get  // Then convert later
-```
+var count ustring := get  // Then parse later
+var price ustring := get  // Then convert later
+~~~
 
 ### Validate Early
 
-```poly
+~~~poly
 // Good: Validate immediately
-var age: i32 = get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 && x < 150
 
 // Bad: Validate late
-var age: i32 = get
+var age i32 := get
 if age < 0 || age > 150,
     error "Invalid age"
     // ... more code before handling
 end if
-```
+~~~
 
 ### Use Timeouts
 
-```poly
+~~~poly
 // Good: Prevent hanging
 match get --timeout 5000
     Ok(input) => process(input)
@@ -108,26 +108,26 @@ match get --timeout 5000
 end match
 
 // Bad: No timeout
-var input: ustring = get  // Can hang forever
-```
+var input ustring := get  // Can hang forever
+~~~
 
 ### Batch Input Operations
 
-```poly
+~~~poly
 // Good: Batch reads
-var lines: Vec<ustring> = []
-var file = open("data.txt")
+var lines Vec<ustring> := []
+var file := open("data.txt")
 while !file.eof()
     lines.push(file.get_line())
 end while
 
 // Bad: Frequent reads
-var file = open("data.txt")
+var file := open("data.txt")
 while !file.eof()
-    var line: ustring = file.get_line()
+    var line ustring := file.get_line()
     process(line)  // Process each line immediately
 end while
-```
+~~~
 
 ---
 
@@ -135,44 +135,44 @@ end while
 
 ### Use Buffering
 
-```poly
+~~~poly
 // Good: Buffered writes
-var buffer: Vec<ustring> = []
+var buffer Vec<ustring> := []
 loop: 0..10000
     buffer.push("Line " + i.to_string())
 end loop
-put buffer.join("\\n") > "output.txt"
+put buffer.join("\n") > "output.txt"
 
 // Bad: Unbuffered writes
 loop: 0..10000
     put "Line " + i.to_string() >> "output.txt"  // 10000 file operations
 end loop
-```
+~~~
 
 ### Read Files Efficiently
 
-```poly
+~~~poly
 // Good: Read entire file
-var content: ustring = get < "large_file.txt"
-var lines: Vec<ustring> = content.split("\\n")
+var content ustring := get < "large_file.txt"
+var lines Vec<ustring> := content.split("\n")
 
 // Bad: Read line by line
-var file = open("large_file.txt")
+var file := open("large_file.txt")
 while !file.eof()
-    var line: ustring = file.get_line()
+    var line ustring := file.get_line()
     // Process each line
 end while
-```
+~~~
 
 ### Use Binary Mode When Appropriate
 
-```poly
+~~~poly
 // Good: Binary read for binary files
-var data: bytes = get < "image.png"
+var data bytes := get < "image.png"
 
 // Bad: Text read for binary files
-var data: ustring = get < "image.png"  // May corrupt data
-```
+var data ustring := get < "image.png"  // May corrupt data
+~~~
 
 ---
 
@@ -180,11 +180,11 @@ var data: ustring = get < "image.png"  // May corrupt data
 
 ### Use `try` for Error Propagation
 
-```poly
+~~~poly fragment
 // Good: Propagate errors
 fn process(): Result<ustring, Error>
-    var data = try read_file("config.txt")
-    var validated = try validate(data)
+    var data := try read_file("config.txt")
+    var validated := try validate(data)
     return Ok(validated)
 end fn
 
@@ -199,11 +199,11 @@ fn process(): Result<ustring, Error>
         Error(e) => return Error(e)
     end match
 end fn
-```
+~~~
 
 ### Use Pattern Matching
 
-```poly
+~~~poly fragment
 // Good: Pattern matching
 match result
     Ok(value) => process(value)
@@ -216,28 +216,28 @@ if result.is_ok(),
 else
     handle_error(result.error())
 end if
-```
+~~~
 
 ### Avoid Unnecessary Error Creation
 
-```poly
+~~~poly fragment
 // Good: Create errors only when needed
 fn validate(input: ustring): Result<ustring, ustring>
-    if input.len() == 0,
-        return Error(u"Empty input")
+    if input.len() = 0,
+        return Error(unicode "Empty input")
     end if
     return Ok(input)
 end fn
 
 // Bad: Create errors unnecessarily
 fn validate(input: ustring): Result<ustring, ustring>
-    if input.len() == 0,
-        var error: ustring = u"Empty input"
+    if input.len() = 0,
+        var error ustring := unicode "Empty input"
         return Error(error)
     end if
     return Ok(input)
 end fn
-```
+~~~
 
 ---
 
@@ -245,7 +245,7 @@ end fn
 
 ### Use References When Possible
 
-```poly
+~~~poly
 // Good: Pass by reference
 fn process(data: &ustring)
     // Use data without copying
@@ -255,13 +255,13 @@ end fn
 fn process(data: ustring)
     // Copies data
 end fn
-```
+~~~
 
 ### Reuse Buffers
 
-```poly
+~~~poly
 // Good: Reuse buffer
-var buffer: Vec<ustring> = []
+var buffer Vec<ustring> := []
 loop: 0..1000
     buffer.clear()  // Reuse buffer
     buffer.push(i.to_string())
@@ -270,22 +270,22 @@ end loop
 
 // Bad: Create new buffer each time
 loop: 0..1000
-    var buffer: Vec<ustring> = [i.to_string()]  // New allocation
+    var buffer Vec<ustring> := [i.to_string()]  // New allocation
     process(buffer)
 end loop
-```
+~~~
 
 ### Use Primitive Types
 
-```poly
+~~~poly
 // Good: Use primitive types
-var count: i32 = 42
-var flag: bool = true
+var count i32 := 42
+var flag bool := true
 
 // Bad: Use wrapper types
-var count: Box<i32> = Box::new(42)  // Unnecessary boxing
-var flag: Box<bool> = Box::new(true)
-```
+var count Box<i32> := Box::new(42)  // Unnecessary boxing
+var flag Box<bool> := Box::new(true)
+~~~
 
 ---
 
@@ -293,33 +293,33 @@ var flag: Box<bool> = Box::new(true)
 
 ### Use String Interpolation
 
-```poly
+~~~poly
 // Good: String interpolation
-var name: ustring = "Alice"
-var age: i32 = 30
+var name ustring := "Alice"
+var age i32 := 30
 put "Name: {name}, Age: {age}"
 
 // Bad: String concatenation
 put "Name: " + name + ", Age: " + age.to_string()
-```
+~~~
 
 ### Pre-allocate Strings
 
-```poly
+~~~poly
 // Good: Pre-allocate
-var result: ustring = "".repeat(1000)
+var result ustring := "".repeat(1000)
 // Fill result...
 
 // Bad: Dynamic growth
-var result: ustring = ""
+var result ustring := ""
 loop: 0..1000
-    result = result + "a"  // Multiple reallocations
+    add result, "a"// Multiple reallocations
 end loop
-```
+~~~
 
 ### Use String Views
 
-```poly
+~~~poly
 // Good: Use string views
 fn process(data: &ustring)
     // Use data without copying
@@ -329,7 +329,7 @@ end fn
 fn process(data: ustring)
     // Copies data
 end fn
-```
+~~~
 
 ---
 
@@ -337,46 +337,46 @@ end fn
 
 ### Use Appropriate Collection Types
 
-```poly
+~~~poly fragment
 // Good: Use appropriate types
-var list: Vec<i32> = [1, 2, 3]  // Dynamic array
-var map: Map<ustring, i32> = []  // Hash map
-var set: Set<ustring> = []  // Hash set
+var list Vec<i32> := [1, 2, 3]  // Dynamic array
+var map Map<ustring, i32> := []  // Hash map
+var set Set<ustring> := []  // Hash set
 
 // Bad: Wrong types
-var list: Vec<ustring> = ["1", "2", "3"]  // Strings for numbers
-var map: Vec<(ustring, i32)> = []  // Vector for map
-```
+var list Vec<ustring> := ["1", "2", "3"]  // Strings for numbers
+var map Vec<(ustring, i32)> := []  // Vector for map
+~~~
 
 ### Pre-allocate Collections
 
-```poly
+~~~poly
 // Good: Pre-allocate
-var list: Vec<i32> = []
+var list Vec<i32> := []
 list.reserve(1000)  // Pre-allocate space
 loop: 0..1000
     list.push(i)
 end loop
 
 // Bad: Dynamic growth
-var list: Vec<i32> = []
+var list Vec<i32> := []
 loop: 0..1000
     list.push(i)  // Multiple reallocations
 end loop
-```
+~~~
 
 ### Use Iterators
 
-```poly
+~~~poly
 // Good: Use iterators
-var sum: i32 = list.iter().sum()
+var sum i32 := list.iter().sum()
 
 // Bad: Manual iteration
-var sum: i32 = 0
+var sum i32 := 0
 loop: list
-    sum = sum + item
+    add sum, item
 end loop
-```
+~~~
 
 ---
 
@@ -384,30 +384,30 @@ end loop
 
 ### Use Parallel Iterators
 
-```poly
+~~~poly
 // Good: Parallel processing
-var results: Vec<i32> = list.par_iter().map(|x| x * 2).collect()
+var results Vec<i32> := list.par_iter().map(|x| x * 2).collect()
 
 // Bad: Sequential processing
-var results: Vec<i32> = []
+var results Vec<i32> := []
 loop: list
     results.push(item * 2)
 end loop
-```
+~~~
 
 ### Use Async I/O
 
-```poly
+~~~poly fragment
 // Good: Async file operations
-var content = async read_file("large_file.txt")
+var content := async read_file("large_file.txt")
 // Do other work while reading
 process_other_data()
 // Wait for read to complete
-var data = await content
+var data := await content
 
 // Bad: Synchronous file operations
-var data = read_file("large_file.txt")  // Blocks execution
-```
+var data := read_file("large_file.txt")  // Blocks execution
+~~~
 
 ---
 
@@ -415,29 +415,29 @@ var data = read_file("large_file.txt")  // Blocks execution
 
 ### Profile Your Code
 
-```poly
+~~~poly
 // Good: Profile critical sections
-var start = time_now()
+var start := time_now()
 // Critical code here
-var duration = time_now() - start
+var duration := time_now() - start
 info "Duration: " + duration.to_string() + "ms"
 
 // Bad: No profiling
 // Critical code here
 // No idea how long it took
-```
+~~~
 
 ### Benchmark Different Approaches
 
-```poly
+~~~poly
 // Good: Benchmark approaches
-var start1 = time_now()
+var start1 := time_now()
 approach1()
-var duration1 = time_now() - start1
+var duration1 := time_now() - start1
 
-var start2 = time_now()
+var start2 := time_now()
 approach2()
-var duration2 = time_now() - start2
+var duration2 := time_now() - start2
 
 put "Approach 1: " + duration1.to_string() + "ms"
 put "Approach 2: " + duration2.to_string() + "ms"
@@ -446,7 +446,7 @@ put "Approach 2: " + duration2.to_string() + "ms"
 approach1()
 approach2()
 // No idea which is faster
-```
+~~~
 
 ---
 

@@ -1,0 +1,79 @@
+{
+  "name": "poly-language",
+  "displayName": "Poly Language",
+  "description": "Syntax highlighting and language server integration for the Poly programming language",
+  "version": "0.1.0",
+  "publisher": "poly",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "poly",
+    "language",
+    "lsp"
+  ],
+  "activationEvents": [
+    "onLanguage:poly"
+  ],
+  "main": "./client/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "poly",
+        "aliases": [
+          "Poly",
+          "poly"
+        ],
+        "extensions": [
+          ".poly"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "poly",
+        "scopeName": "source.poly",
+        "path": "./syntaxes/poly.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Poly",
+      "properties": {
+        "poly.lsp.path": {
+          "type": "string",
+          "default": "poly-lsp",
+          "description": "Path to the poly-lsp binary. Defaults to 'poly-lsp' on PATH; set to an absolute path (e.g. compiler/target/release/poly-lsp) if it is not installed globally."
+        },
+        "poly.lsp.trace": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "LSP trace level for the poly language server."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "poly.restartLanguageServer",
+        "title": "Poly: Restart Language Server"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "node ./client/check-deps.js",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

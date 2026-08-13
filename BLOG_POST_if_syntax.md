@@ -10,7 +10,7 @@ We're excited to announce a significant syntax improvement in the Poly language:
 ## Before and After
 
 ### Old Syntax
-```poly
+~~~poly fragment
 if x > 0 then
     put x
 else if x < 0 then
@@ -18,10 +18,10 @@ else if x < 0 then
 else
     put "zero"
 end if
-```
+~~~
 
 ### New Syntax
-```poly
+~~~poly
 if x > 0,
     put x
 else if x < 0,
@@ -29,38 +29,38 @@ else if x < 0,
 else,
     put "zero"
 end if
-```
+~~~
 
 ## Key Changes
 
 1. **Comma replaces `then`**: The `then` keyword is no longer needed. Simply use a comma after the condition.
 
 2. **Single-line support**: For simple conditions, you can write:
-   ```poly
+   ~~~poly fragment
    if x > 0, put x
-   ```
+   ~~~
 
 3. **Else-if chains work seamlessly**:
-   ```poly
+   ~~~poly
    if score >= 90,
-       grade = "A"
+       set grade to "A"
    else if score >= 80,
-       grade = "B"
+       set grade to "B"
    else if score >= 70,
-       grade = "C"
+       set grade to "C"
    else,
-       grade = "F"
+       set grade to "F"
    end if
-   ```
+   ~~~
 
 4. **Nested conditions**:
-   ```poly
+   ~~~poly
    if x > 0,
        if y > 0,
            put "both positive"
        end if
    end if
-   ```
+   ~~~
 
 ## Why the Change?
 
@@ -75,7 +75,7 @@ The comma syntax offers several advantages:
 
 The new syntax transpiles to idiomatic Rust:
 
-```rust
+~~~rust
 // Poly
 if x > 0,
     put x
@@ -93,12 +93,12 @@ if x > 0 {
 } else {
     println!("{}", "zero");
 }
-```
+~~~
 
 ## Examples
 
 ### Grade Calculator
-```poly
+~~~poly
 fn calculate_grade(score: i32): string
     if score >= 90,
         return "A+"
@@ -112,10 +112,10 @@ fn calculate_grade(score: i32): string
         return "F"
     end if
 end fn
-```
+~~~
 
 ### Temperature Classifier
-```poly
+~~~poly
 fn classify_temperature(temp: f64): string
     if temp > 40.0,
         return "Extremely Hot"
@@ -129,19 +129,19 @@ fn classify_temperature(temp: f64): string
         return "Cold"
     end if
 end fn
-```
+~~~
 
 ### Nested Conditions
-```poly
+~~~poly
 fn categorize_number(n: i32): string
     if n > 0,
-        if n % 2 == 0,
+        if n % 2 = 0,
             return "Positive Even"
         else,
             return "Positive Odd"
         end if
     else if n < 0,
-        if n % 2 == 0,
+        if n % 2 = 0,
             return "Negative Even"
         else,
             return "Negative Odd"
@@ -150,7 +150,7 @@ fn categorize_number(n: i32): string
         return "Zero"
     end if
 end fn
-```
+~~~
 
 ## Migration Guide
 
@@ -163,7 +163,7 @@ To update your existing Poly code:
 ### Example Migration
 
 **Before:**
-```poly
+~~~poly fragment
 if temperature > 100 then
     error "Too hot!"
 else if temperature < 0 then
@@ -171,10 +171,10 @@ else if temperature < 0 then
 else
     put "Temperature is OK"
 end if
-```
+~~~
 
 **After:**
-```poly
+~~~poly
 if temperature > 100,
     error "Too hot!"
 else if temperature < 0,
@@ -182,7 +182,7 @@ else if temperature < 0,
 else,
     put "Temperature is OK"
 end if
-```
+~~~
 
 ## What's Next?
 

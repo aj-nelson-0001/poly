@@ -16,15 +16,31 @@ impl<T> Spanned<T> {
 }
 
 /// The root of a Poly program.
+///
+/// The parser keeps declarations and executable statements in source order;
+/// later phases decide which declarations belong at Rust module scope.  Every
+/// statement — at the top level and inside every block — carries the exact
+/// source span that produced it so source maps and editor diagnostics can
+/// point at precise columns.
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub statements: Vec<Statement>,
+    pub statements: Block,
 }
 
+/// A block of statements, each with the source span that produced it.
+///
+/// Function bodies, if/match/loop bodies, modules, unsafe blocks, and macro
+/// bodies all use this type so diagnostics can locate nested statements with
+/// the same precision as top-level ones.
+pub type Block = Vec<Spanned<Statement>>;
+
 /// A statement in Poly.
+///
+/// Statements carry semantic structure plus the source span that produced
+/// them (see [`Spanned`] and [`Program`]).
 #[derive(Debug, Clone)]
 pub enum Statement {
-    /// Variable declaration: `var x: i32 = 0`
+    /// Variable declaration: `var x i32 := 0` or inferred `var x := 0`
     VarDeclaration {
         name: String,
         ty: Option<TypeAnnotation>,
@@ -38,11 +54,16 @@ pub enum Statement {
     },
     /// Constant declaration: `const MAX = 100`
     ConstDeclaration { name: String, value: Expression },
-    /// Assignment: `x = 5` or `x += 5`
-    Assignment {
+    /// Explicit reassignment: `set x to 5`.
+    Set {
         target: Expression,
-        op: AssignmentOp,
         value: Expression,
+    },
+    /// Explicit mutation command such as `add x` or `sub x, 2`.
+    Mutation {
+        target: Expression,
+        op: MutationOp,
+        value: Option<Expression>,
     },
     /// Function declaration
     FunctionDeclaration(FunctionDecl),
@@ -80,6 +101,8 @@ pub enum Statement {
     WarnStatement(Expression),
     /// Info statement
     InfoStatement(Expression),
+    /// Block of statements (produced by macro expansion and explicit blocks).
+    Block(Block),
 }
 
 /// Redirect for file I/O.
@@ -91,20 +114,13 @@ pub enum Redirect {
     Append(Expression),
 }
 
-/// Assignment operators.
+/// Explicit mutation commands.
 #[derive(Debug, Clone)]
-pub enum AssignmentOp {
-    Eq,
-    PlusEq,
-    MinusEq,
-    StarEq,
-    SlashEq,
-    PercentEq,
-    AmpEq,
-    PipeEq,
-    CaretEq,
-    LtLtEq,
-    GtGtEq,
+pub enum MutationOp {
+    Add,
+    Sub,
+    Inc,
+    Dec,
 }
 
 /// Type annotation.
@@ -123,9 +139,17 @@ pub enum TypeAnnotation {
         params: Vec<TypeAnnotation>,
         ret: Box<TypeAnnotation>,
     },
+    /// Generic named type: `Map<ustring, i32>`, `Box<Expr>`, `Foo<T>`.
+    Generic {
+        name: String,
+        args: Vec<TypeAnnotation>,
+    },
 }
 
 /// An expression in Poly.
+///
+/// Expression variants are shared by the parser, semantic checker, and Rust
+/// generator, so new syntax should normally be represented here first.
 #[derive(Debug, Clone)]
 pub enum Expression {
     /// Integer literal
@@ -134,8 +158,10 @@ pub enum Expression {
     FloatLiteral(String),
     /// String literal
     StringLiteral(String),
-    /// Unicode string literal
+    /// Unicode string literal (`unicode "text"`)
     UnicodeStringLiteral(String),
+    /// Unicode character literal (`unicode 'c'`)
+    UnicodeCharLiteral(char),
     /// Boolean literal
     BoolLiteral(bool),
     /// Byte literal
@@ -176,8 +202,8 @@ pub enum Expression {
     /// If expression
     IfExpression {
         condition: Box<Expression>,
-        then_block: Vec<Statement>,
-        else_block: Option<Vec<Statement>>,
+        then_block: Block,
+        else_block: Option<Block>,
     },
     /// Match expression
     MatchExpression {
@@ -207,7 +233,13 @@ pub enum Expression {
     /// Loop range expression (loop: 1..3, 7, 19..21 step 2)
     LoopRange {
         ranges: Vec<LoopRangePart>,
-        body: Vec<Statement>,
+        body: Block,
+    },
+    /// Explicit for loop: `for variable in iterable` with a block body.
+    ForLoop {
+        variable: String,
+        iterable: Box<Expression>,
+        body: Block,
     },
     /// As expression (type cast)
     AsExpression {
@@ -219,7 +251,7 @@ pub enum Expression {
     /// Get expression (input)
     GetExpression(Box<GetExpr>),
     /// Unsafe block
-    UnsafeBlock(Vec<Statement>),
+    UnsafeBlock(Block),
     /// Range expression
     Range {
         start: Box<Expression>,
@@ -229,6 +261,9 @@ pub enum Expression {
 }
 
 /// Binary operators.
+///
+/// The parser's precedence ladder constructs these nodes from low precedence
+/// (`or`) to high precedence (multiplication and unary expressions).
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOp {
     Add,
@@ -272,7 +307,7 @@ pub struct MatchArm {
 #[derive(Debug, Clone)]
 pub enum MatchArmBody {
     Expression(Expression),
-    Block(Vec<Statement>),
+    Block(Block),
 }
 
 /// Patterns in match expressions.
@@ -308,6 +343,9 @@ pub enum Pattern {
 }
 
 /// A part of a loop range (either a range, a single value, or a range with step).
+///
+/// Keeping a single value separate from a range lets code generation support
+/// both collection iteration and numeric ranges without guessing later.
 #[derive(Debug, Clone)]
 pub enum LoopRangePart {
     Range {
@@ -336,6 +374,7 @@ pub enum GetFlag {
     Mask(Expression),
     Until(Expression),
     Bytes(Expression),
+    As(TypeAnnotation),
 }
 
 /// With clause for get command.
@@ -346,14 +385,22 @@ pub enum WithClause {
     Encoding(Expression),
 }
 
+/// Generic parameter (`T: Bound`).
+#[derive(Debug, Clone)]
+pub struct GenericParam {
+    pub name: String,
+    pub bounds: Vec<String>,
+}
+
 /// Function declaration.
 #[derive(Debug, Clone)]
 pub struct FunctionDecl {
     pub name: String,
     pub params: Vec<Parameter>,
     pub return_type: Option<TypeAnnotation>,
-    pub body: Option<Vec<Statement>>,
+    pub body: Option<Block>,
     pub is_async: bool,
+    pub generics: Vec<GenericParam>,
 }
 
 /// Function parameter.
@@ -370,6 +417,7 @@ pub struct StructDecl {
     pub name: String,
     pub fields: Vec<StructField>,
     pub methods: Vec<FunctionDecl>,
+    pub generics: Vec<GenericParam>,
 }
 
 /// Struct field.
@@ -416,7 +464,7 @@ pub struct ImplDecl {
 #[derive(Debug, Clone)]
 pub struct ModuleDecl {
     pub name: String,
-    pub statements: Vec<Statement>,
+    pub statements: Block,
 }
 
 /// Use declaration.
@@ -431,4 +479,13 @@ pub struct UseDecl {
 pub struct TypeDecl {
     pub name: String,
     pub ty: TypeAnnotation,
+}
+
+/// A statement macro: `macro name(params) ... end macro`. Macros expand at
+/// parse time, substituting parameter identifiers with the call arguments.
+#[derive(Debug, Clone)]
+pub struct MacroDecl {
+    pub name: String,
+    pub params: Vec<String>,
+    pub body: Block,
 }

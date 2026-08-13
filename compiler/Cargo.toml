@@ -4,12 +4,15 @@ members = [
     "crates/poly-lexer",
     "crates/poly-parser",
     "crates/poly-types",
+    "crates/poly-intermediate-representation",
     "crates/poly-transpiler",
     "crates/poly-cli",
+    "crates/poly-lsp",
+    "crates/poly-wasm",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.7.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/poly-lang/poly"
@@ -19,7 +22,10 @@ description = "A minimalist, assembly-inspired systems programming language that
 poly-lexer = { path = "crates/poly-lexer" }
 poly-parser = { path = "crates/poly-parser" }
 poly-types = { path = "crates/poly-types" }
+poly-intermediate-representation = { path = "crates/poly-intermediate-representation" }
 poly-transpiler = { path = "crates/poly-transpiler" }
 poly-cli = { path = "crates/poly-cli" }
+poly-lsp = { path = "crates/poly-lsp" }
+poly-wasm = { path = "crates/poly-wasm" }
 thiserror = "2"
 anyhow = "1"

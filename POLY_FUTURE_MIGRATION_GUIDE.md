@@ -10,11 +10,64 @@ This guide covers strategies and best practices for migrating to future Poly syn
 
 ### Deprecation Timeline
 
-```poly\n// Deprecation phases\nenum DeprecationPhase\n    Active      // Feature is fully supported\n    Deprecated  // Feature shows warnings, still works\n    Removed     // Feature no longer works\nend enum\n\n// Deprecation warning function\nfn deprecation_warning(feature: ustring, removed_in: ustring, alternative: ustring)\n    warn \"DEPRECATED: \" + feature + \" will be removed in version \" + removed_in\n    warn \"Use \" + alternative + \" instead\"\nend fn\n\n// Example usage\nfn old_syntax()\n    deprecation_warning(u\"old_syntax()\", u\"2.0\", u\"new_syntax()\")\n    // Old implementation\nend fn\n\nfn new_syntax()\n    // New implementation\nend fn\n```
+~~~poly
+// Deprecation phases
+enum DeprecationPhase
+    Active      // Feature is fully supported
+    Deprecated  // Feature shows warnings, still works
+    Removed     // Feature no longer works
+end enum
+
+// Deprecation warning function
+fn deprecation_warning(feature: ustring, removed_in: ustring, alternative: ustring)
+    warn "DEPRECATED: " + feature + " will be removed in version " + removed_in
+    warn "Use " + alternative + " instead"
+end fn
+
+// Example usage
+fn old_syntax()
+    deprecation_warning(unicode "old_syntax()", unicode "2.0", unicode "new_syntax()")
+    // Old implementation
+end fn
+
+fn new_syntax()
+    // New implementation
+end fn
+~~~
 
 ### Version Migration Timeline
 
-```poly\n// Migration timeline\nstruct MigrationTimeline\n    deprecated_in: ustring\n    removed_in: ustring\n    alternative: ustring\nend struct\n\n// Check if feature is deprecated\nfn check_deprecation(feature: ustring, current_version: ustring): Option<MigrationTimeline>\n    var timelines: Map<ustring, MigrationTimeline> = {\n        u\"putn\": MigrationTimeline {\n            deprecated_in: u\"1.5\",\n            removed_in: u\"2.0\",\n            alternative: u\"put -n\"\n        },\n        u\"pute\": MigrationTimeline {\n            deprecated_in: u\"1.5\",\n            removed_in: u\"2.0\",\n            alternative: u\"error\"\n        },\n        u\"Err(e)\": MigrationTimeline {\n            deprecated_in: u\"1.5\",\n            removed_in: u\"2.0\",\n            alternative: u\"Error(e)\"\n        }\n    }\n    \n    return timelines.get(feature)\nend fn\n```
+~~~poly fragment
+// Migration timeline
+struct MigrationTimeline
+    deprecated_in: ustring
+    removed_in: ustring
+    alternative: ustring
+end struct
+
+// Check if feature is deprecated
+fn check_deprecation(feature: ustring, current_version: ustring): Option<MigrationTimeline>
+    var timelines Map<ustring, MigrationTimeline> := {
+        unicode "putn": MigrationTimeline {
+            deprecated_in: unicode "1.5",
+            removed_in: unicode "2.0",
+            alternative: unicode "put -n"
+        },
+        unicode "pute": MigrationTimeline {
+            deprecated_in: unicode "1.5",
+            removed_in: unicode "2.0",
+            alternative: unicode "error"
+        },
+        unicode "Err(e)": MigrationTimeline {
+            deprecated_in: unicode "1.5",
+            removed_in: unicode "2.0",
+            alternative: unicode "Error(e)"
+        }
+    }
+
+    return timelines.get(feature)
+end fn
+~~~
 
 ---
 
@@ -22,11 +75,88 @@ This guide covers strategies and best practices for migrating to future Poly syn
 
 ### Syntax Transformer
 
-```poly\n// Transform old syntax to new syntax\nfn transform_syntax(code: ustring): ustring\n    var transformed = code\n    \n    // Transform putn to put -n\n    transformed = transformed.replace(u\"putn \", u\"put -n \")\n    \n    // Transform pute to error/warn/info\n    transformed = transformed.replace(u\"pute \", u\"error \")\n    \n    // Transform Err(e) to Error(e)\n    transformed = transformed.replace(u\"Err(e)\", u\"Error(e)\")\n    \n    // Transform with timeout to --timeout\n    transformed = transformed.replace(u\"with timeout \", u\"--timeout \")\n    \n    // Transform with default to --default\n    transformed = transformed.replace(u\"with default \", u\"--default \")\n    \n    // Transform with mask to --mask\n    transformed = transformed.replace(u\"with mask \", u\"--mask \")\n    \n    // Transform as Type to --as Type\n    transformed = transformed.replace(u\" as \", u\" --as \")\n    \n    // Transform until to --until\n    transformed = transformed.replace(u\" until \", u\" --until \")\n    \n    return transformed\nend fn\n\n// Batch transformation\nfn transform_directory(dir: ustring): Result<(), TransformError>\n    var files = list_files(dir, u\"*.poly\")\n    \n    loop: files\n        var code = read_file(file)\n        var transformed = transform_syntax(code)\n        write_file(file, transformed)\n        put \"Transformed: \" + file\n    end loop\n    \n    return Ok(())\nend fn\n```
+~~~poly fragment
+// Transform old syntax to new syntax
+fn transform_syntax(code: ustring): ustring
+    var transformed := code
+
+    // Transform putn to put -n
+    transformed = transformed.replace(unicode "putn ", unicode "put -n ")
+
+    // Transform pute to error/warn/info
+    transformed = transformed.replace(unicode "pute ", unicode "error ")
+
+    // Transform Err(e) to Error(e)
+    transformed = transformed.replace(unicode "Err(e)", unicode "Error(e)")
+
+    // Transform with timeout to --timeout
+    transformed = transformed.replace(unicode "with timeout ", unicode "--timeout ")
+
+    // Transform with default to --default
+    transformed = transformed.replace(unicode "with default ", unicode "--default ")
+
+    // Transform with mask to --mask
+    transformed = transformed.replace(unicode "with mask ", unicode "--mask ")
+
+    // Transform as Type to --as Type
+    transformed = transformed.replace(unicode " as ", unicode " --as ")
+
+    // Transform until to --until
+    transformed = transformed.replace(unicode " until ", unicode " --until ")
+
+    return transformed
+end fn
+
+// Batch transformation
+fn transform_directory(dir: ustring): Result<(), TransformError>
+    var files := list_files(dir, unicode "*.poly")
+
+    loop: files
+        var code := read_file(file)
+        var transformed := transform_syntax(code)
+        write_file(file, transformed)
+        put "Transformed: " + file
+    end loop
+
+    return Ok(())
+end fn
+~~~
 
 ### Migration Script
 
-```poly\n// Migration script\nfn migrate_project(version: ustring): Result<(), MigrationError>\n    put \"Migrating to version \" + version\n    \n    // Step 1: Transform syntax\n    put \"Step 1: Transforming syntax...\"\n    try transform_directory(u\"src/\")\n    \n    // Step 2: Update dependencies\n    put \"Step 2: Updating dependencies...\"\n    try update_dependencies(version)\n    \n    // Step 3: Run tests\n    put \"Step 3: Running tests...\"\n    try run_tests()\n    \n    // Step 4: Verify migration\n    put \"Step 4: Verifying migration...\"\n    try verify_migration()\n    \n    put \"Migration complete!\"\n    return Ok(())\nend fn\n\n// Update dependencies\nfn update_dependencies(version: ustring): Result<(), DependencyError>\n    var manifest = read_file(u\"poly.toml\")\n    var updated = manifest.replace(u\"poly-version = \\\"1.4\\\"\", u\"poly-version = \\\"\" + version + u\"\\\"\")\n    write_file(u\"poly.toml\", updated)\n    return Ok(())\nend fn\n```
+~~~poly fragment
+// Migration script
+fn migrate_project(version: ustring): Result<(), MigrationError>
+    put "Migrating to version " + version
+
+    // Step 1: Transform syntax
+    put "Step 1: Transforming syntax..."
+    try transform_directory(unicode "src/")
+
+    // Step 2: Update dependencies
+    put "Step 2: Updating dependencies..."
+    try update_dependencies(version)
+
+    // Step 3: Run tests
+    put "Step 3: Running tests..."
+    try run_tests()
+
+    // Step 4: Verify migration
+    put "Step 4: Verifying migration..."
+    try verify_migration()
+
+    put "Migration complete!"
+    return Ok(())
+end fn
+
+// Update dependencies
+fn update_dependencies(version: ustring): Result<(), DependencyError>
+    var manifest := read_file(unicode "poly.toml")
+    var updated := manifest.replace(unicode "poly-version = \"1.4\"", unicode "poly-version = \"" + version + unicode "\"")
+    write_file(unicode "poly.toml", updated)
+    return Ok(())
+end fn
+~~~
 
 ---
 
@@ -34,11 +164,54 @@ This guide covers strategies and best practices for migrating to future Poly syn
 
 ### Compatibility Mode
 
-```poly\n// Compatibility mode flag\nvar compatibility_mode: bool = get_env(\"POLY_COMPAT\") or u\"false\" == u\"true\"\n\n// Compatibility wrapper\nfn compat_putn(expression: ustring)\n    if compatibility_mode,\n        // Old syntax\n        putn expression\n    else\n        // New syntax\n        put -n expression\n    end if\nend fn\n\nfn compat_pute(expression: ustring)\n    if compatibility_mode,\n        // Old syntax\n        pute expression\n    else\n        // New syntax\n        error expression\n    end if\nend fn\n```
+~~~poly
+// Compatibility mode flag
+var compatibility_mode bool := get_env("POLY_COMPAT") or unicode "false" == unicode "true"
+
+// Compatibility wrapper
+fn compat_putn(expression: ustring)
+    if compatibility_mode,
+        // Old syntax
+        putn expression
+    else
+        // New syntax
+        put -n expression
+    end if
+end fn
+
+fn compat_pute(expression: ustring)
+    if compatibility_mode,
+        // Old syntax
+        pute expression
+    else
+        // New syntax
+        error expression
+    end if
+end fn
+~~~
 
 ### Version Detection
 
-```poly\n// Detect Poly version\nfn get_poly_version(): ustring\n    // This would be provided by the runtime\n    return u\"1.5\"\nend fn\n\n// Use version-specific syntax\nfn version_specific_code()\n    var version = get_poly_version()\n    \n    if compare_versions(parse_version(version), parse_version(u\"2.0\")) >= 0,\n        // Use new syntax\n        put -n \"Loading...\"\n    else\n        // Use old syntax\n        putn u\"Loading...\"\n    end if\nend fn\n```
+~~~poly
+// Detect Poly version
+fn get_poly_version(): ustring
+    // This would be provided by the runtime
+    return unicode "1.5"
+end fn
+
+// Use version-specific syntax
+fn version_specific_code()
+    var version := get_poly_version()
+
+    if compare_versions(parse_version(version), parse_version(unicode "2.0")) >= 0,
+        // Use new syntax
+        put -n "Loading..."
+    else
+        // Use old syntax
+        putn unicode "Loading..."
+    end if
+end fn
+~~~
 
 ---
 
@@ -46,11 +219,67 @@ This guide covers strategies and best practices for migrating to future Poly syn
 
 ### Migration Tests
 
-```poly\n// Test migration correctness\nfn test_migration()\n    // Test old syntax still works (if compatibility mode)\n    if compatibility_mode,\n        test_old_syntax()\n    end if\n    \n    // Test new syntax works\n    test_new_syntax()\n    \n    // Test transformation\n    test_syntax_transformation()\nend fn\n\n// Test old syntax\nfn test_old_syntax()\n    var output = capture putn u\"test\"\n    assert(output == u\"test\")\nend fn\n\n// Test new syntax\nfn test_new_syntax()\n    var output = capture put -n u\"test\"\n    assert(output == u\"test\")\nend fn\n\n// Test transformation\nfn test_syntax_transformation()\n    var old_code = u\"putn \\\"hello\\\"\\npute \\\"error\\\"\"\n    var new_code = transform_syntax(old_code)\n    assert(new_code == u\"put -n \\\"hello\\\"\\nerror \\\"error\\\"\")\nend fn\n```
+~~~poly fragment
+// Test migration correctness
+fn test_migration()
+    // Test old syntax still works (if compatibility mode)
+    if compatibility_mode,
+        test_old_syntax()
+    end if
+
+    // Test new syntax works
+    test_new_syntax()
+
+    // Test transformation
+    test_syntax_transformation()
+end fn
+
+// Test old syntax
+fn test_old_syntax()
+    var output := capture putn unicode "test"
+    assert(output == unicode "test")
+end fn
+
+// Test new syntax
+fn test_new_syntax()
+    var output := capture put -n unicode "test"
+    assert(output == unicode "test")
+end fn
+
+// Test transformation
+fn test_syntax_transformation()
+    var old_code := unicode "putn \"hello\"\npute \"error\""
+    var new_code := transform_syntax(old_code)
+    assert(new_code == unicode "put -n \"hello\"\nerror \"error\"")
+end fn
+~~~
 
 ### Performance Testing
 
-```poly\n// Test performance impact\nfn test_performance_impact()\n    // Benchmark old syntax\n    var start = time_now()\n    loop: 0..10000\n        putn u\"test\"\n    end loop\n    var old_duration = time_now() - start\n    \n    // Benchmark new syntax\n    start = time_now()\n    loop: 0..10000\n        put -n u\"test\"\n    end loop\n    var new_duration = time_now() - start\n    \n    put \"Old syntax: \" + old_duration.to_string() + \"ms\"\n    put \"New syntax: \" + new_duration.to_string() + \"ms\"\n    \n    // Performance should be similar\n    assert(new_duration < old_duration * 1.1)  // Allow 10% variance\nend fn\n```
+~~~poly
+// Test performance impact
+fn test_performance_impact()
+    // Benchmark old syntax
+    var start := time_now()
+    loop: 0..10000
+        putn unicode "test"
+    end loop
+    var old_duration := time_now() - start
+
+    // Benchmark new syntax
+    start = time_now()
+    loop: 0..10000
+        put -n unicode "test"
+    end loop
+    var new_duration := time_now() - start
+
+    put "Old syntax: " + old_duration.to_string() + "ms"
+    put "New syntax: " + new_duration.to_string() + "ms"
+
+    // Performance should be similar
+    assert(new_duration < old_duration * 1.1)  // Allow 10% variance
+end fn
+~~~
 
 ---
 
@@ -58,11 +287,63 @@ This guide covers strategies and best practices for migrating to future Poly syn
 
 ### Update Documentation
 
-```poly\n// Update documentation for new syntax\nfn update_documentation()\n    // Update README\n    var readme = read_file(u\"README.md\")\n    var updated_readme = transform_syntax(readme)\n    write_file(u\"README.md\", updated_readme)\n    \n    // Update examples\n    var examples = list_files(u\"examples/\", u\"*.poly\")\n    loop: examples\n        var code = read_file(example)\n        var transformed = transform_syntax(code)\n        write_file(example, transformed)\n    end loop\n    \n    // Update tests\n    var tests = list_files(u\"tests/\", u\"*.poly\")\n    loop: tests\n        var code = read_file(test)\n        var transformed = transform_syntax(code)\n        write_file(test, transformed)\n    end loop\n    \n    put \"Documentation updated\"\nend fn\n```
+~~~poly
+// Update documentation for new syntax
+fn update_documentation()
+    // Update README
+    var readme := read_file(unicode "README.md")
+    var updated_readme := transform_syntax(readme)
+    write_file(unicode "README.md", updated_readme)
+
+    // Update examples
+    var examples := list_files(unicode "examples/", unicode "*.poly")
+    loop: examples
+        var code := read_file(example)
+        var transformed := transform_syntax(code)
+        write_file(example, transformed)
+    end loop
+
+    // Update tests
+    var tests := list_files(unicode "tests/", unicode "*.poly")
+    loop: tests
+        var code := read_file(test)
+        var transformed := transform_syntax(code)
+        write_file(test, transformed)
+    end loop
+
+    put "Documentation updated"
+end fn
+~~~
 
 ### Changelog
 
-```poly\n// Generate changelog\nfn generate_changelog(version: ustring): ustring\n    var changelog: ustring = \"# Changelog\\n\\n## \" + version + \"\\n\\n\"\n    \n    // Add breaking changes\n    changelog = changelog + \"### Breaking Changes\\n\\n\"\n    changelog = changelog + \"- `putn` replaced with `put -n`\\n\"\n    changelog = changelog + \"- `pute` replaced with `error`/`warn`/`info`\\n\"\n    changelog = changelog + \"- `Err(e)` replaced with `Error(e)`\\n\"\n    changelog = changelog + \"- Input flags changed from `with` to `--`\\n\\n\"\n    \n    // Add new features\n    changelog = changelog + \"### New Features\\n\\n\"\n    changelog = changelog + \"- Added `error`, `warn`, `info` commands\\n\"\n    changelog = changelog + \"- Added input flags: `--timeout`, `--default`, `--mask`, `--as`, `--until`, `--bytes`\\n\"\n    changelog = changelog + \"- Added Unicode string inference\\n\\n\"\n    \n    // Add deprecations\n    changelog = changelog + \"### Deprecations\\n\\n\"\n    changelog = changelog + \"- `putn` deprecated, use `put -n` instead\\n\"\n    changelog = changelog + \"- `pute` deprecated, use `error`/`warn`/`info` instead\\n\"\n    changelog = changelog + \"- `Err(e)` deprecated, use `Error(e)` instead\\n\\n\"\n    \n    return changelog\nend fn\n```
+~~~poly
+// Generate changelog
+fn generate_changelog(version: ustring): ustring
+    var changelog ustring := "# Changelog\n\n## " + version + "\n\n"
+
+    // Add breaking changes
+    changelog = changelog + "### Breaking Changes\n\n"
+    changelog = changelog + "- `putn` replaced with `put -n`\n"
+    changelog = changelog + "- `pute` replaced with `error`/`warn`/`info`\n"
+    changelog = changelog + "- `Err(e)` replaced with `Error(e)`\n"
+    changelog = changelog + "- Input flags changed from `with` to `--`\n\n"
+
+    // Add new features
+    changelog = changelog + "### New Features\n\n"
+    changelog = changelog + "- Added `error`, `warn`, `info` commands\n"
+    changelog = changelog + "- Added input flags: `--timeout`, `--default`, `--mask`, `--as`, `--until`, `--bytes`\n"
+    changelog = changelog + "- Added Unicode string inference\n\n"
+
+    // Add deprecations
+    changelog = changelog + "### Deprecations\n\n"
+    changelog = changelog + "- `putn` deprecated, use `put -n` instead\n"
+    changelog = changelog + "- `pute` deprecated, use `error`/`warn`/`info` instead\n"
+    changelog = changelog + "- `Err(e)` deprecated, use `Error(e)` instead\n\n"
+
+    return changelog
+end fn
+~~~
 
 ---
 
@@ -70,7 +351,62 @@ This guide covers strategies and best practices for migrating to future Poly syn
 
 ### Rollback Migration
 
-```poly\n// Rollback migration\nfn rollback_migration(version: ustring): Result<(), RollbackError>\n    put \"Rolling back to version \" + version\n    \n    // Step 1: Restore from backup\n    put \"Step 1: Restoring from backup...\"\n    try restore_backup(version)\n    \n    // Step 2: Revert syntax changes\n    put \"Step 2: Reverting syntax changes...\"\n    try revert_syntax_changes()\n    \n    // Step 3: Update dependencies\n    put \"Step 3: Updating dependencies...\"\n    try update_dependencies(version)\n    \n    // Step 4: Verify rollback\n    put \"Step 4: Verifying rollback...\"\n    try verify_rollback()\n    \n    put \"Rollback complete!\"\n    return Ok(())\nend fn\n\n// Revert syntax changes\nfn revert_syntax_changes(): Result<(), RevertError>\n    // Reverse transformations\n    var files = list_files(u\"src/\", u\"*.poly\")\n    \n    loop: files\n        var code = read_file(file)\n        var reverted = revert_syntax(code)\n        write_file(file, reverted)\n    end loop\n    \n    return Ok(())\nend fn\n\n// Revert syntax\nfn revert_syntax(code: ustring): ustring\n    var reverted = code\n    \n    // Reverse transformations\n    reverted = reverted.replace(u\"put -n \", u\"putn \")\n    reverted = reverted.replace(u\"error \", u\"pute \")\n    reverted = reverted.replace(u\"Error(e)\", u\"Err(e)\")\n    reverted = reverted.replace(u\"--timeout \", u\"with timeout \")\n    reverted = reverted.replace(u\"--default \", u\"with default \")\n    reverted = reverted.replace(u\"--mask \", u\"with mask \")\n    reverted = reverted.replace(u\"--as \", u\" as \")\n    reverted = reverted.replace(u\"--until \", u\" until \")\n    \n    return reverted\nend fn\n```
+~~~poly fragment
+// Rollback migration
+fn rollback_migration(version: ustring): Result<(), RollbackError>
+    put "Rolling back to version " + version
+
+    // Step 1: Restore from backup
+    put "Step 1: Restoring from backup..."
+    try restore_backup(version)
+
+    // Step 2: Revert syntax changes
+    put "Step 2: Reverting syntax changes..."
+    try revert_syntax_changes()
+
+    // Step 3: Update dependencies
+    put "Step 3: Updating dependencies..."
+    try update_dependencies(version)
+
+    // Step 4: Verify rollback
+    put "Step 4: Verifying rollback..."
+    try verify_rollback()
+
+    put "Rollback complete!"
+    return Ok(())
+end fn
+
+// Revert syntax changes
+fn revert_syntax_changes(): Result<(), RevertError>
+    // Reverse transformations
+    var files := list_files(unicode "src/", unicode "*.poly")
+
+    loop: files
+        var code := read_file(file)
+        var reverted := revert_syntax(code)
+        write_file(file, reverted)
+    end loop
+
+    return Ok(())
+end fn
+
+// Revert syntax
+fn revert_syntax(code: ustring): ustring
+    var reverted := code
+
+    // Reverse transformations
+    reverted = reverted.replace(unicode "put -n ", unicode "putn ")
+    reverted = reverted.replace(unicode "error ", unicode "pute ")
+    reverted = reverted.replace(unicode "Error(e)", unicode "Err(e)")
+    reverted = reverted.replace(unicode "--timeout ", unicode "with timeout ")
+    reverted = reverted.replace(unicode "--default ", unicode "with default ")
+    reverted = reverted.replace(unicode "--mask ", unicode "with mask ")
+    reverted = reverted.replace(unicode "--as ", unicode " as ")
+    reverted = reverted.replace(unicode "--until ", unicode " until ")
+
+    return reverted
+end fn
+~~~
 
 ---
 
@@ -78,11 +414,61 @@ This guide covers strategies and best practices for migrating to future Poly syn
 
 ### Migration Announcement
 
-```poly\n// Migration announcement\nfn announce_migration(version: ustring)\n    put \"=== Poly Migration Announcement ===\"\n    put \"\"\n    put \"Version \" + version + \" introduces syntax changes:\"\n    put \"\"\n    put \"Breaking Changes:\"\n    put \"  - `putn` -> `put -n`\"\n    put \"  - `pute` -> `error`/`warn`/`info`\"\n    put \"  - `Err(e)` -> `Error(e)`\"\n    put \"  - Input flags changed from `with` to `--`\"\n    put \"\"\n    put \"Migration Guide: https://poly-lang.org/migration/\" + version\n    put \"\"\n    put \"Timeline:\"\n    put \"  - Deprecation: Version 1.5\"\n    put \"  - Removal: Version 2.0\"\n    put \"\"\n    put \"Tools Available:\"\n    put \"  - `poly migrate` - Automated migration tool\"\n    put \"  - `poly transform` - Syntax transformer\"\n    put \"  - `poly test-migration` - Migration tester\"\nend fn\n```
+~~~poly
+// Migration announcement
+fn announce_migration(version: ustring)
+    put "=== Poly Migration Announcement ==="
+    put ""
+    put "Version " + version + " introduces syntax changes:"
+    put ""
+    put "Breaking Changes:"
+    put "  - `putn` -> `put -n`"
+    put "  - `pute` -> `error`/`warn`/`info`"
+    put "  - `Err(e)` -> `Error(e)`"
+    put "  - Input flags changed from `with` to `--`"
+    put ""
+    put "Migration Guide: https://poly-lang.org/migration/" + version
+    put ""
+    put "Timeline:"
+    put "  - Deprecation: Version 1.5"
+    put "  - Removal: Version 2.0"
+    put ""
+    put "Tools Available:"
+    put "  - `poly migrate` - Automated migration tool"
+    put "  - `poly transform` - Syntax transformer"
+    put "  - `poly test-migration` - Migration tester"
+end fn
+~~~
 
 ### Migration Checklist
 
-```poly\n// Migration checklist\nfn migration_checklist(): Vec<ustring>\n    var checklist: Vec<ustring> = []\n    \n    checklist.push(u\"[ ] Review migration guide\")\n    checklist.push(u\"[ ] Run automated migration tool\")\n    checklist.push(u\"[ ] Update documentation\")\n    checklist.push(u\"[ ] Run tests\")\n    checklist.push(u\"[ ] Performance testing\")\n    checklist.push(u\"[ ] Update CI/CD pipelines\")\n    checklist.push(u\"[ ] Communicate changes to team\")\n    checklist.push(u\"[ ] Monitor for issues\")\n    \n    return checklist\nend fn\n\n// Display checklist\nfn display_checklist()\n    var checklist = migration_checklist()\n    put \"Migration Checklist:\"\n    put \"\"\n    loop: checklist\n        put item\n    end loop\nend fn\n```
+~~~poly
+// Migration checklist
+fn migration_checklist(): Vec<ustring>
+    var checklist Vec<ustring> := []
+
+    checklist.push(unicode "[ ] Review migration guide")
+    checklist.push(unicode "[ ] Run automated migration tool")
+    checklist.push(unicode "[ ] Update documentation")
+    checklist.push(unicode "[ ] Run tests")
+    checklist.push(unicode "[ ] Performance testing")
+    checklist.push(unicode "[ ] Update CI/CD pipelines")
+    checklist.push(unicode "[ ] Communicate changes to team")
+    checklist.push(unicode "[ ] Monitor for issues")
+
+    return checklist
+end fn
+
+// Display checklist
+fn display_checklist()
+    var checklist := migration_checklist()
+    put "Migration Checklist:"
+    put ""
+    loop: checklist
+        put item
+    end loop
+end fn
+~~~
 
 ---
 

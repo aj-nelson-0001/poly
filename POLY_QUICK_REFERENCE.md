@@ -4,49 +4,49 @@
 
 ### Output (`put`)
 
-```poly
+~~~poly
 put expression               # Output with newline
 put -n expression            # Output without newline
 put expression > "file"      # Write to file
 put expression >> "file"     # Append to file
-```
+~~~
 
 ### Error/Warning Output
 
-```poly
+~~~poly
 error expression             # Error message to stderr
 warn expression              # Warning message to stderr
 info expression              # Debug info to stderr
-```
+~~~
 
 ### Input (`get`)
 
-```poly
-var x = get                  # Read line from stdin
-var x = get "prompt: "       # Read with prompt
-var x: i32 = get             # Auto-parse typed input
-var x = get < "file"         # Read from file
-var x: bytes = get < "file"  # Read binary from file
-```
+~~~poly
+var x := get                  # Read line from stdin
+var x := get unicode "prompt: "       # Read with prompt
+var x i32 := get             # Auto-parse typed input
+var x := get < "file"         # Read from file
+var x bytes := get < "file"  # Read binary from file
+~~~
 
 ### Input Flags
 
-```poly
-var x = get --timeout 5000       # Read with timeout (ms)
-var x = get --default u"val"     # Read with default value
-var x = get --mask u"*"          # Read with mask (password)
-var x = get --as i32             # Read and convert to type
-var x = get --until u","         # Read until delimiter
-var x = get < "file" --bytes 8   # Read specific number of bytes
-```
+~~~poly
+var x := get --timeout 5000       # Read with timeout (ms)
+var x := get --default unicode "val"     # Read with default value
+var x := get --mask unicode "*"          # Read with mask (password)
+var x := get --as i32             # Read and convert to type
+var x := get --until unicode ","         # Read until delimiter
+var x := get < "file" --bytes 8   # Read specific number of bytes
+~~~
 
 ### Complex Input Options
 
-```poly
-var x = get with validate |x| x > 0       # Validation closure
-var x = get with complete [u"a", u"b"]    # Completion array
-var x = get with encoding u"utf-8"        # Encoding specification
-```
+~~~poly
+var x := get with validate |x| x > 0       # Validation closure
+var x := get with complete [unicode "a", unicode "b"]    # Completion array
+var x := get with encoding unicode "utf-8"        # Encoding specification
+~~~
 
 ---
 
@@ -54,43 +54,43 @@ var x = get with encoding u"utf-8"        # Encoding specification
 
 ### Result Type
 
-```poly
+~~~poly fragment
 enum Result<T, E>
     Ok(T)
     Error(E)
 end enum
-```
+~~~
 
 ### Pattern Matching
 
-```poly
+~~~poly
 match result
     Ok(value) => process(value)
     Error(e) => handle_error(e)
 end match
-```
+~~~
 
 ### Wildcard Pattern
 
-```poly
+~~~poly
 match result
     Ok(value) => process(value)
     Error(_) => error "Something went wrong"  # Catches any error
 end match
-```
+~~~
 
 ### Error Propagation
 
-```poly
+~~~poly
 fn risky_operation(): Result<T, E>
-    var result = try other_operation()  # Propagates error
+    var result := try other_operation()  # Propagates error
     return Ok(result)
 end fn
-```
+~~~
 
 ### Custom Error Types
 
-```poly
+~~~poly fragment
 enum MyError
     NotFound
     InvalidInput(message: ustring)
@@ -99,11 +99,11 @@ end enum
 
 fn validate(): Result<ustring, MyError>
     if invalid,
-        return Error(MyError::InvalidInput(u"Bad data"))
+        return Error(MyError::InvalidInput(unicode "Bad data"))
     end if
-    return Ok(u"valid")
+    return Ok(unicode "valid")
 end fn
-```
+~~~
 
 ---
 
@@ -111,7 +111,7 @@ end fn
 
 ### If/Else
 
-```poly
+~~~poly
 if condition,
     // code
 else if other_condition,
@@ -119,27 +119,27 @@ else if other_condition,
 else,
     // code
 end if
-```
+~~~
 
 ### While Loop
 
-```poly
+~~~poly
 while condition
     // code
 end while
-```
+~~~
 
 ### Loop (Infinite)
 
-```poly
+~~~poly
 loop
     // code
 end loop
-```
+~~~
 
 ### Loop Ranges (SuperBASIC-style)
 
-```poly
+~~~poly
 loop: 0..10
     // code
 end loop
@@ -157,17 +157,17 @@ end loop
 loop: collection
     // code
 end loop
-```
+~~~
 
 ### Match
 
-```poly
+~~~poly
 match value
     pattern1 => expression1
     pattern2 => expression2
     _ => default_expression
 end match
-```
+~~~
 
 ---
 
@@ -175,23 +175,23 @@ end match
 
 ### Basic Function
 
-```poly
+~~~poly
 fn function_name(param: Type): ReturnType
     // code
     return value
 end fn
-```
+~~~
 
 ### Function with Error Handling
 
-```poly
+~~~poly
 fn risky_function(): Result<T, E>
     // code that might fail
     return Ok(value)
     // or
     return Error(error_value)
 end fn
-```
+~~~
 
 ---
 
@@ -199,19 +199,19 @@ end fn
 
 ### Declaration
 
-```poly
-var name: Type = value        # Mutable variable
-let name: Type = value        # Immutable variable
-const NAME = value            # Constant
-```
+~~~poly
+var name Type := value        # Mutable variable
+let name: Type := value        # Immutable variable
+const NAME := value            # Constant
+~~~
 
 ### Type Inference
 
-```poly
-var x = 42                    # Inferred as i32
-var s = u"hello"              # Inferred as ustring
-var b = true                  # Inferred as bool
-```
+~~~poly
+var x := 42                    # Inferred as i32
+var s := unicode "hello"              # Inferred as ustring
+var b := true                  # Inferred as bool
+~~~
 
 ---
 
@@ -219,26 +219,26 @@ var b = true                  # Inferred as bool
 
 ### Primitives
 
-```poly
+~~~poly fragment
 i32, i64, u32, u64           # Integers
 f32, f64                     # Floats
 bool                         # Boolean
 char, uchar                  # Characters
 ustring                      # Unicode strings
 bytes                        # Byte arrays
-```
+~~~
 
 ### Collections
 
-```poly
+~~~poly fragment
 Vec<T>                       # Dynamic array
 Map<K, V>                    # Hash map
 Set<T>                       # Hash set
-```
+~~~
 
 ### Compound Types
 
-```poly
+~~~poly
 struct Name
     field: Type
 end struct
@@ -247,7 +247,7 @@ enum Name
     Variant1
     Variant2(data: Type)
 end enum
-```
+~~~
 
 ---
 
@@ -255,48 +255,48 @@ end enum
 
 ### Interactive Input
 
-```poly
+~~~poly
 put -n "Enter your name: "
-var name: ustring = get --default u"Anonymous"
+var name ustring := get --default unicode "Anonymous"
 put "Hello, " + name + "!"
-```
+~~~
 
 ### Validated Input
 
-```poly
-var age: i32 = get with validate |x| x > 0 && x < 150
-```
+~~~poly
+var age i32 := get with validate |x| x > 0 && x < 150
+~~~
 
 ### Timeout Handling
 
-```poly
+~~~poly
 match get --timeout 3000
     Ok(input) => process(input)
     Timeout => warn "Too slow!"
     Error(e) => error "Error: " + e
 end match
-```
+~~~
 
 ### File Operations
 
-```poly
+~~~poly
 # Write to file
 put "data" > "output.txt"
 put "more" >> "output.txt"
 
 # Read from file
-var content: ustring = get < "input.txt"
-var data: bytes = get < "binary.bin"
-```
+var content ustring := get < "input.txt"
+var data bytes := get < "binary.bin"
+~~~
 
 ### Error Recovery
 
-```poly
-var valid: i32 = loop
+~~~poly fragment
+var valid i32 := loop
     put -n "Enter a number: "
     match get
         Ok(input) =>
-            var num: i32 = input.parse::<i32>()
+            var num i32 := input.parse::<i32>()
             if num > 0,
                 break num
             else
@@ -305,7 +305,7 @@ var valid: i32 = loop
         Error(e) => error "Invalid input: " + e
     end match
 end loop
-```
+~~~
 
 ---
 
@@ -313,54 +313,54 @@ end loop
 
 ### Async Functions
 
-```poly
+~~~poly
 async fn function_name(param: Type): ReturnType
     // async code
-    var result = some_async_op().await
+    var result := some_async_op().await
     return result
 end fn
-```
+~~~
 
 ### Await Expressions
 
-```poly
-var result = async_function().await
-var data = fetch(url).await
+~~~poly
+var result := async_function().await
+var data := fetch(url).await
 match async_op().await
     Ok(val) => process(val)
     Error(e) => handle_error(e)
 end match
-```
+~~~
 
 ### Struct with Async Methods
 
-```poly
+~~~poly
 struct Client
     var url: ustring
 end struct
 
 impl Client
     async fn fetch(self): Result<ustring, ustring>
-        var response = http_get(self.url).await
+        var response := http_get(self.url).await
         return Ok(response)
     end fn
 end impl
-```
+~~~
 
 ### Traits with Async Methods
 
-```poly
+~~~poly
 trait DataFetcher
     async fn fetch(self, key: ustring): Result<ustring, ustring>
 end trait
 
 impl DataFetcher for MyClient
     async fn fetch(self, key: ustring): Result<ustring, ustring>
-        var data = self.query(key).await
+        var data := self.query(key).await
         return Ok(data)
     end fn
 end impl
-```
+~~~
 
 ---
 

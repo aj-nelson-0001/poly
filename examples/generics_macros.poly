@@ -1,0 +1,93 @@
+# Poly Example: Generics, Macros, and Standard Library Helpers
+# Demonstrates generic containers and functions, parse-time statement macros,
+# math helpers (min/max/abs/sqrt/pow), and string methods.
+
+# A statement macro: `swap_values(a, b)` expands inline at parse time with the
+# parameter identifiers replaced by the call arguments.
+macro swap_values(a, b)
+    var temp := a
+    set a to b
+    set b to temp
+end macro
+
+# Macros can wrap control flow and error reporting.
+macro assert_true(condition)
+    if !condition,
+        error "Assertion failed"
+    end if
+end macro
+
+# Generic function with an inferred type parameter.
+fn identity<T>(value: T): T
+    return value
+end fn
+
+fn describe<T>(value: T): ustring
+    return unicode "value"
+end fn
+
+# Generic struct: the field type is fixed when the struct is instantiated.
+struct Pair<T>
+    var first: T
+    var second: T
+end struct
+
+fn main()
+    put "=== Generics, Macros, and Stdlib Helpers Demo ==="
+    put ""
+    
+    # Test 1: Macros
+    put "Test 1: Statement macros"
+    var x i32 := 1
+    var y i32 := 2
+    swap_values(x, y)
+    put "  After swap: x = " + x.to_string() + ", y = " + y.to_string()
+    assert_true(x = 2)
+    assert_true(y = 1)
+    put ""
+    
+    # Test 2: Generic containers
+    put "Test 2: Generic containers"
+    var numbers Vec<i32> := []
+    numbers.push(10)
+    numbers.push(20)
+    put "  len = " + numbers.len().to_string()
+    put ""
+    
+    # Test 3: Generic functions
+    put "Test 3: Generic functions"
+    var id i32 := identity(42)
+    put "  identity(42) = " + id.to_string()
+    put "  describe = " + describe(unicode "anything")
+    put ""
+    
+    # Test 4: Generic structs
+    put "Test 4: Generic structs"
+    var pair := Pair { first: 3, second: 4 }
+    put "  pair.first = " + pair.first.to_string() + ", pair.second = " + pair.second.to_string()
+    put ""
+    
+    # Test 5: Math helpers
+    put "Test 5: Math helpers"
+    put "  max(3, 7) = " + max(3, 7).to_string()
+    put "  min(3, 7) = " + min(3, 7).to_string()
+    var signed f64 := -5.0
+    put "  abs(-5.0) = " + abs(signed).to_string()
+    var base f64 := 16.0
+    put "  sqrt(16.0) = " + sqrt(base).to_string()
+    var power i32 := 2
+    put "  pow(2, 8) = " + pow(power, 8).to_string()
+    put ""
+    
+    # Test 6: String methods
+    put "Test 6: String methods"
+    var text ustring := unicode "  Hello World  "
+    put unicode "  trim: [" + text.trim() + unicode "]"
+    put unicode "  uppercase: " + text.to_uppercase()
+    put unicode "  lowercase: " + text.to_lowercase()
+    put unicode "  starts with spaces: " + text.starts_with(unicode "  ").to_string()
+    put unicode "  replace: " + text.replace(unicode "World", unicode "Poly")
+    put ""
+    
+    put "=== Demo Complete ==="
+end fn

@@ -2,7 +2,7 @@
 
 fn main()
     put "Match Demo"
-    var x = 5
+    var x := 5
     match x
         1 => put "One"
         2 => put "Two"

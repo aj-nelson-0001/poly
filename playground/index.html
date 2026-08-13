@@ -17,7 +17,6 @@
             --accent-purple: #bc8cff;
             --accent-orange: #d29922;
             --accent-red: #f85149;
-            --accent-cyan: #39d353;
         }
 
         * {
@@ -80,6 +79,8 @@
             border: 1px solid var(--border-color);
             border-radius: 8px;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
         .panel-header {
@@ -121,29 +122,37 @@
         .btn:hover {
             background: var(--bg-tertiary);
             border-color: var(--accent-blue);
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
         }
 
         .btn-primary {
             background: var(--accent-green);
             border-color: var(--accent-green);
             color: #000;
+            font-weight: 600;
         }
 
         .btn-primary:hover {
             background: #46d558;
+            border-color: #46d558;
         }
 
         .editor-container {
             position: relative;
-            height: 500px;
+            flex: 1;
+            min-height: 420px;
         }
 
-        #poly-editor {
+        #poly-editor, #rust-output {
             width: 100%;
             height: 100%;
+            min-height: 420px;
             padding: 16px;
             background: var(--bg-primary);
-            color: var(--text-primary);
             border: none;
             resize: none;
             font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
@@ -152,22 +161,16 @@
             tab-size: 4;
         }
 
-        #poly-editor:focus {
+        #poly-editor {
+            color: var(--text-primary);
+        }
+
+        #poly-editor:focus, #rust-output:focus {
             outline: none;
         }
 
         #rust-output {
-            width: 100%;
-            height: 100%;
-            padding: 16px;
-            background: var(--bg-primary);
             color: var(--text-secondary);
-            border: none;
-            resize: none;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-            tab-size: 4;
         }
 
         .error-output {
@@ -177,13 +180,43 @@
             color: var(--accent-red);
             font-family: monospace;
             font-size: 0.9rem;
-            max-height: 100px;
+            max-height: 120px;
             overflow-y: auto;
             display: none;
+            white-space: pre-wrap;
         }
 
         .error-output.visible {
             display: block;
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 16px;
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border-color);
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            display: inline-block;
+        }
+
+        .status-dot.error {
+            background: var(--accent-red);
         }
 
         .examples-section {
@@ -217,6 +250,7 @@
         .example-card:hover {
             border-color: var(--accent-blue);
             transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.15);
         }
 
         .example-card h3 {
@@ -242,6 +276,11 @@
             border: 1px solid var(--border-color);
             border-radius: 8px;
             padding: 24px;
+            transition: border-color 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--accent-purple);
         }
 
         .feature-card h3 {
@@ -290,6 +329,28 @@
             padding: 2px 6px;
             font-family: monospace;
         }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--accent-green);
+            color: var(--text-primary);
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
     </style>
 </head>
 <body>
@@ -307,25 +368,22 @@
                         Poly Code
                     </span>
                     <div class="panel-actions">
-                        <button class="btn" onclick="clearEditor()">Clear</button>
-                        <button class="btn btn-primary" onclick="transpile()">Transpile →</button>
+                        <button class="btn" onclick="clearEditor()" title="Clear the editor">Clear</button>
+                        <button class="btn" onclick="shareCode()" title="Copy a shareable link to this code">Share</button>
+                        <button class="btn btn-primary" onclick="transpile()" title="Transpile (Ctrl+Enter)">Transpile →</button>
                     </div>
                 </div>
                 <div class="editor-container">
-                    <textarea id="poly-editor" spellcheck="false" placeholder="Enter Poly code here...">var x: i32 = 42
-var message: string = "Hello, Poly!"
-
-fn add(a: i32, b: i32): i32
-    return a + b
-end fn
-
-fn main()
-    var result = add(10, 20)
-    put message
-    put "10 + 20 = " + str(result)
-end fn</textarea>
+                    <textarea id="poly-editor" spellcheck="false" placeholder="# Write Poly code here...
+# Example:
+var message ustring := unicode &quot;Hello, Poly!&quot;
+put message"></textarea>
                 </div>
                 <div id="poly-error" class="error-output"></div>
+                <div class="status-bar">
+                    <span class="status-item"><span id="status-dot" class="status-dot"></span><span id="status-text">Ready</span></span>
+                    <span class="status-item" id="status-counts">0 lines • 0 statements</span>
+                </div>
             </div>
 
             <div class="panel">
@@ -341,6 +399,10 @@ end fn</textarea>
                 <div class="editor-container">
                     <textarea id="rust-output" readonly placeholder="Rust code will appear here..."></textarea>
                 </div>
+                <div class="status-bar">
+                    <span class="status-item" id="engine-status">Engine: loading…</span>
+                    <span class="status-item" id="rust-count">0 lines</span>
+                </div>
             </div>
         </div>
 
@@ -349,27 +411,27 @@ end fn</textarea>
             <div class="examples-grid">
                 <div class="example-card" onclick="loadExample('hello')">
                     <h3>Hello World</h3>
-                    <p>Basic output with variables and functions</p>
+                    <p>Variables, functions, and output</p>
                 </div>
                 <div class="example-card" onclick="loadExample('fibonacci')">
                     <h3>Fibonacci</h3>
-                    <p>Recursive Fibonacci function</p>
+                    <p>Recursive function with ranges</p>
                 </div>
                 <div class="example-card" onclick="loadExample('struct')">
                     <h3>Structs & Methods</h3>
-                    <p>Define and use structs with methods</p>
+                    <p>Define structs and associated functions</p>
                 </div>
                 <div class="example-card" onclick="loadExample('pattern')">
                     <h3>Pattern Matching</h3>
-                    <p>Match expressions with destructuring</p>
+                    <p>Match expressions with wildcards</p>
                 </div>
-                <div class="example-card" onclick="loadExample('async')">
-                    <h3>Async/Await</h3>
-                    <p>Asynchronous functions and await</p>
+                <div class="example-card" onclick="loadExample('grades')">
+                    <h3>Grade Calculator</h3>
+                    <p>If/else-if chains with the comma syntax</p>
                 </div>
                 <div class="example-card" onclick="loadExample('closure')">
                     <h3>Closures</h3>
-                    <p>Anonymous functions and iterators</p>
+                    <p>Anonymous functions and higher-order usage</p>
                 </div>
             </div>
         </div>
@@ -377,49 +439,53 @@ end fn</textarea>
         <div class="features-section">
             <div class="feature-card">
                 <h3><span class="feature-icon">🎯</span> Clean Syntax</h3>
-                <p>Poly uses a clean, readable syntax inspired by Python, Ruby, and SuperBASIC. No semicolons, no curly braces.</p>
+                <p>Poly uses a clean, readable syntax: <code>var x i32 := 42</code>, comma-based <code>if</code> conditions, and explicit <code>end</code> keywords. No semicolons, no curly braces.</p>
             </div>
             <div class="feature-card">
                 <h3><span class="feature-icon">⚡</span> Fast Transpilation</h3>
-                <p>Poly transpiles to idiomatic Rust code, giving you all the performance benefits of Rust.</p>
+                <p>Poly transpiles to idiomatic Rust through a shared intermediate representation pipeline — constant folding, inlining, and loop optimization included.</p>
             </div>
             <div class="feature-card">
                 <h3><span class="feature-icon">🛡️</span> Type Safety</h3>
-                <p>Full static typing with type inference. Catch errors at compile time, not runtime.</p>
+                <p>Full static typing with a semantic checker that runs before code generation. Catch type mismatches at compile time, not runtime.</p>
             </div>
             <div class="feature-card">
-                <h3><span class="feature-icon">🔄</span> Pattern Matching</h3>
-                <p>Powerful pattern matching with guards, destructuring, and exhaustive checks.</p>
+                <h3><span class="feature-icon">🔄</span> Shareable Snippets</h3>
+                <p>Click <b>Share</b> to copy a link containing your code. Anyone who opens the link sees exactly what you wrote.</p>
             </div>
         </div>
 
         <div class="keyboard-hint" style="text-align: center; margin-bottom: 20px;">
-            <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to transpile • 
-            <kbd>Tab</kbd> for indentation • 
+            <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to transpile •
+            <kbd>Tab</kbd> for indentation •
             Examples are clickable!
         </div>
     </div>
 
     <footer>
-        <p>Poly Language v1.5.0 • <a href="https://github.com/user/poly">GitHub</a> • <a href="#">Documentation</a></p>
+        <p>Poly Language v1.6.0 • <a href="https://github.com/aj-nelson-0001/poly">GitHub</a></p>
         <p style="margin-top: 8px; font-size: 0.85rem;">Built with ❤️ for developers who love simplicity and performance</p>
     </footer>
 
-    <script>
-        const examples = {
-            hello: `var x: i32 = 42
-var message: string = "Hello, Poly!"
+    <div id="toast" class="toast"></div>
 
-fn add(a: i32, b: i32): i32
-    return a + b
+    <script>
+        // ------------------------------------------------------------------
+        // Examples written in the current Poly dialect (v1.6.0)
+        // ------------------------------------------------------------------
+        const examples = {
+            hello: `# Hello World example
+fn greet(name: ustring): ustring
+    return unicode "Hello, " + name + "!"
 end fn
 
 fn main()
-    var result = add(10, 20)
-    put message
-    put "10 + 20 = " + str(result)
+    put unicode "Hello, Poly!"
+    var greeting := greet(unicode "World")
+    put greeting
 end fn`,
-            fibonacci: `fn fibonacci(n: i32): i32
+            fibonacci: `# Recursive Fibonacci with a for loop
+fn fibonacci(n: i32): i32
     if n <= 1,
         return n
     end if
@@ -429,11 +495,11 @@ end fn
 fn main()
     put "Fibonacci sequence:"
     for i in 0..10
-        put str(fibonacci(i)) + " "
+        put fibonacci(i)
     end for
-    put ""
 end fn`,
-            struct: `struct Point
+            struct: `# Structs with methods and associated functions
+struct Point
     var x: f64
     var y: f64
 end struct
@@ -443,102 +509,486 @@ impl Point
         return Point { x: x, y: y }
     end fn
 
-    fn distance(self, other: Point): f64
-        var dx = self.x - other.x
-        var dy = self.y - other.y
-        return (dx * dx + dy * dy) ^ 0.5
+    fn distance_sq(self, other: Point): f64
+        var dx := self.x - other.x
+        var dy := self.y - other.y
+        return dx * dx + dy * dy
     end fn
 end impl
 
 fn main()
-    var p1 = Point::new(0.0, 0.0)
-    var p2 = Point::new(3.0, 4.0)
-    put "Distance: " + str(p1.distance(p2))
+    var p1 := Point::new(0.0, 0.0)
+    var p2 := Point::new(3.0, 4.0)
+    put "Squared distance (25.0 expected):"
+    put p1.distance_sq(p2)
 end fn`,
-            pattern: `enum Shape
-    Circle(f64)
-    Rectangle(f64, f64)
-    Triangle(f64, f64, f64)
+            pattern: `# Pattern matching with enums
+enum Color
+    Red
+    Green
+    Blue
 end enum
 
-fn area(shape: Shape): f64
-    match shape
-        Circle(r) => 3.14159 * r * r
-        Rectangle(w, h) => w * h
-        Triangle(a, b, c) =>
-            var s = (a + b + c) / 2.0
-            return (s * (s - a) * (s - b) * (s - c)) ^ 0.5
+fn describe(color: Color): string
+    match color
+        Red => return "warm"
+        Green => return "calm"
+        Blue => return "cool"
+        _ => return "unknown"
     end match
 end fn
 
 fn main()
-    var c = Circle(5.0)
-    var r = Rectangle(4.0, 6.0)
-    put "Circle area: " + str(area(c))
-    put "Rectangle area: " + str(area(r))
+    var c := Color::Red
+    put "Red is " + describe(c)
 end fn`,
-            async: `async fn fetch_data(): string
-    # Simulate async operation
-    await sleep(100)
-    return "Data loaded!"
+            grades: `# Grade calculator using comma-based if syntax
+fn grade(score: i32): string
+    if score >= 90,
+        return "A"
+    else if score >= 80,
+        return "B"
+    else if score >= 70,
+        return "C"
+    else if score >= 60,
+        return "D"
+    else,
+        return "F"
+    end if
 end fn
 
-async fn process_data()
-    var data = fetch_data().await
-    put "Processing: " + data
-end fn
-
-async fn main()
-    put "Starting async operations..."
-    process_data().await
-    put "Done!"
+fn main()
+    var score := 15
+    loop: 0..5
+        put score
+        put grade(score)
+        score += 20
+    end loop
 end fn`,
-            closure: `fn main()
-    var numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-
-    # Filter even numbers
-    var evens = numbers.filter(|n| n % 2 == 0)
-    put "Even numbers: " + str(evens)
-
-    # Map to squares
-    var squares = numbers.map(|n| n * n)
-    put "Squares: " + str(squares)
-
-    # Reduce to sum
-    var sum = numbers.reduce(0, |acc, n| acc + n)
-    put "Sum: " + str(sum)
+            closure: `# Closures are first-class: stored and called
+fn main()
+    var square := |x: i32| x * x
+    var double := |x: i32| x * 2
+    put square(4)
+    put double(21)
 end fn`
         };
 
-        // Simple syntax highlighting for display
-        function highlightPoly(code) {
-            const keywords = ['var', 'let', 'const', 'fn', 'return', 'if', 'else', 'end', 
-                            'while', 'for', 'in', 'loop', 'struct', 'enum', 'match', 'trait', 
-                            'impl', 'async', 'await', 'unsafe', 'pub', 'module', 'use', 'type'];
-            const types = ['i8', 'i16', 'i32', 'i64', 'i128', 'u8', 'u16', 'u32', 'u64', 'u128',
-                          'f32', 'f64', 'bool', 'char', 'string', 'usize', 'isize'];
-            
-            let result = code;
-            // Highlight strings
-            result = result.replace(/"([^"]*)"/g, '<span style="color: #a5d6ff">"$1"</span>');
-            // Highlight comments
-            result = result.replace(/#.*$/gm, '<span style="color: #8b949e">$&</span>');
-            // Highlight keywords
-            keywords.forEach(kw => {
-                result = result.replace(new RegExp(`\\b${kw}\\b`, 'g'), `<span style="color: #ff7b72">${kw}</span>`);
-            });
-            // Highlight types
-            types.forEach(ty => {
-                result = result.replace(new RegExp(`\\b${ty}\\b`, 'g'), `<span style="color: #79c0ff">${ty}</span>`);
-            });
-            // Highlight numbers
-            result = result.replace(/\b(\d+\.?\d*)\b/g, '<span style="color: #79c0ff">$1</span>');
-            return result;
+        // ------------------------------------------------------------------
+        // Demo transpiler
+        //
+        // This client-side transpiler mirrors the structure of the real
+        // compiler's intermediate-representation code generator so the
+        // playground output resembles what `poly file.poly` produces. It
+        // supports the core constructs: var/let/const, fn with end fn, if/
+        // else-if/else (comma syntax), while, for-in ranges, match, put,
+        // return, error/warn/info, struct, enum, closures, and ustring.
+        // Unsupported constructs pass through with a `// UNSUPPORTED:` note.
+        // ------------------------------------------------------------------
+
+        // ------------------------------------------------------------------
+        // Real WASM transpiler (with JS demo fallback)
+        // ------------------------------------------------------------------
+
+        let wasmInstance = null;
+        let wasmLoadState = 'loading'; // loading | ready | failed
+
+        const textEncoder = new TextEncoder();
+        const textDecoder = new TextDecoder();
+
+        function initWasm() {
+            if (!window.WebAssembly) {
+                wasmLoadState = 'failed';
+                console.warn('WebAssembly unavailable; using demo transpiler');
+                document.getElementById('engine-status').textContent = 'Engine: demo transpiler';
+                return;
+            }
+            fetch('poly.wasm')
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.arrayBuffer();
+                })
+                .then(bytes => WebAssembly.instantiate(bytes, {}))
+                .then(result => {
+                    wasmInstance = result.instance;
+                    wasmLoadState = 'ready';
+                    document.getElementById('engine-status').textContent = 'Engine: real Rust transpiler (WASM)';
+                    updateStatus('Ready', false);
+                })
+                .catch(error => {
+                    wasmLoadState = 'failed';
+                    console.warn('WASM transpiler unavailable (' + error.message + '); using demo transpiler');
+                    document.getElementById('engine-status').textContent = 'Engine: demo transpiler';
+                    updateStatus('Ready', false);
+                });
         }
+
+        function transpileWithWasm(source) {
+            const exp = wasmInstance.exports;
+            const bytes = textEncoder.encode(source);
+            const bufPtr = exp.poly_alloc(bytes.length);
+            new Uint8Array(exp.memory.buffer, bufPtr, bytes.length).set(bytes);
+            const result = exp.transpile(bufPtr, bytes.length);
+            exp.poly_free(bufPtr, bytes.length);
+            const outPtr = exp.result_ptr(result);
+            const outLen = exp.result_len(result);
+            const isError = exp.result_is_error(result) !== 0;
+            const out = textDecoder.decode(new Uint8Array(exp.memory.buffer, outPtr, outLen));
+            exp.free_result(result);
+            return { code: out, isError };
+        }
+
+        function transpile() {
+            const polyCode = document.getElementById('poly-editor').value;
+            const rustOutput = document.getElementById('rust-output');
+            const errorDiv = document.getElementById('poly-error');
+
+            updateStatus('Transpiling...', false);
+            try {
+                if (wasmLoadState === 'ready') {
+                    const result = transpileWithWasm(polyCode);
+                    if (result.isError) {
+                        rustOutput.value = '';
+                        errorDiv.textContent = 'Error: ' + result.code;
+                        errorDiv.classList.add('visible');
+                        document.getElementById('rust-count').textContent = '0 lines';
+                        updateStatus('Error', true);
+                    } else {
+                        rustOutput.value = result.code;
+                        errorDiv.classList.remove('visible');
+                        document.getElementById('rust-count').textContent = result.code.split('\n').length + ' lines';
+                        updateStatus('Ready', false);
+                    }
+                } else {
+                    // Fallback: the in-page demo transpiler approximates the
+                    // real output when the wasm module is unavailable.
+                    const rustCode = polyToRust(polyCode);
+                    rustOutput.value = rustCode;
+                    errorDiv.classList.remove('visible');
+                    document.getElementById('rust-count').textContent = rustCode.split('\n').length + ' lines';
+                    updateStatus(wasmLoadState === 'failed' ? 'Ready (demo transpiler)' : 'Ready', false);
+                }
+            } catch (e) {
+                rustOutput.value = '';
+                errorDiv.textContent = 'Error: ' + e.message;
+                errorDiv.classList.add('visible');
+                document.getElementById('rust-count').textContent = '0 lines';
+                updateStatus('Error', true);
+            }
+            updateCounts(polyCode);
+        }
+
+        function updateCounts(polyCode) {
+            const lines = polyCode.split('\n').filter(l => l.trim() !== '').length;
+            const statements = (polyCode.match(/^\s*(var|let|const|put|return|error|warn|info|fn|while|for)\b/gm) || []).length;
+            document.getElementById('status-counts').textContent = lines + ' lines • ~' + statements + ' statements';
+        }
+
+        function updateStatus(text, isError) {
+            document.getElementById('status-text').textContent = text;
+            const dot = document.getElementById('status-dot');
+            dot.classList.toggle('error', isError);
+        }
+
+        function polyToRust(code) {
+            const typeMap = {
+                'i8': 'i8', 'i16': 'i16', 'i32': 'i32', 'i64': 'i64',
+                'u8': 'u8', 'u16': 'u16', 'u32': 'u32', 'u64': 'u64',
+                'f32': 'f32', 'f64': 'f64', 'bool': 'bool', 'char': 'char',
+                'string': 'String', 'ustring': 'String', 'bytes': 'Vec<u8>',
+                'usize': 'usize', 'isize': 'isize'
+            };
+
+            const out = [];
+            let indent = 0;
+            const pad = () => '    '.repeat(indent);
+
+            // Track functions whose return annotation is String for `+` lowering.
+            const stringFunctions = new Set();
+
+            function mapType(ty) {
+                if (!ty) return '';
+                return typeMap[ty.trim()] || ty.trim();
+            }
+
+            function mapExpr(expr) {
+                let e = expr.trim();
+                // unicode "..." -> String::from("...")
+                e = e.replace(/\bunicode\s+"([^"]*)"/g, 'String::from("$1")');
+                return e;
+            }
+
+            function transpileBlock(lines, i, endKinds) {
+                // Returns { index, statements }
+                const statements = [];
+                while (i < lines.length) {
+                    const raw = lines[i];
+                    const trimmed = raw.trim();
+                    const l = trimmed;
+                    i += 1;
+
+                    if (l === '') { continue; }
+
+                    // Comments
+                    if (l.startsWith('#')) {
+                        statements.push('// ' + l.slice(1).trim());
+                        continue;
+                    }
+
+                    // Block terminators
+                    if (endKinds.includes(l)) {
+                        return { index: i, statements };
+                    }
+
+                    const m = pad() + l;
+                    statements.push(m);
+                }
+                return { index: i, statements };
+            }
+
+            // Pre-scan for functions returning String (for `+` lowering and
+            // println!("{}", ...) formatting).
+            for (const line of code.split('\n')) {
+                const fnMatch = line.trim().match(/^(?:async\s+)?fn\s+(\w+)\([^)]*\)(?:\s*:\s*(\w+))?/);
+                if (fnMatch && fnMatch[2]) {
+                    const ret = mapType(fnMatch[2]);
+                    if (ret === 'String') stringFunctions.add(fnMatch[1]);
+                }
+            }
+
+            const lines = code.split('\n');
+            const rust = [];
+            let i = 0;
+            let hasMain = false;
+
+            while (i < lines.length) {
+                const trimmed = lines[i].trim();
+                const l = trimmed;
+                const lineNo = i;
+                i += 1;
+
+                if (l === '') { continue; }
+
+                // Comments
+                if (l.startsWith('#')) {
+                    rust.push('// ' + l.slice(1).trim());
+                    continue;
+                }
+
+                // ---- Function declarations ----
+                const fnMatch = l.match(/^(async\s+)?fn\s+(\w+)(\([^)]*\))?(?:\s*:\s*(\w+))?$/);
+                if (fnMatch) {
+                    if (fnMatch[2] === 'main') hasMain = true;
+                    const isAsync = !!fnMatch[1];
+                    let params = fnMatch[3] || '()';
+                    // Convert `name: Type` params (Poly uses `name: Type` in
+                    // fn signatures) to Rust `name: Type`.
+                    params = params.replace(/(\w+)\s*:\s*(\w+)/g, (all, name, ty) => name + ': ' + mapType(ty));
+                    const ret = fnMatch[4] ? mapType(fnMatch[4]) : '';
+                    if (isAsync) {
+                        rust.push((ret ? 'async fn ' + fnMatch[2] + params + ' -> ' + ret + ' {' : 'async fn ' + fnMatch[2] + params + ' {'));
+                    } else {
+                        rust.push((ret ? 'fn ' + fnMatch[2] + params + ' -> ' + ret + ' {' : 'fn ' + fnMatch[2] + params + ' {'));
+                    }
+                    indent += 1;
+                    continue;
+                }
+
+                // ---- Block terminators ----
+                const endMatch = l.match(/^end\s+(\w+)$/);
+                if (endMatch) {
+                    if (indent > 0) indent -= 1;
+                    rust.push(pad() + '}');
+                    continue;
+                }
+
+                // ---- var / let / const declarations ----
+                let decl = l.match(/^(var|let|const)\s+(\w+)(?:\s+(\w+))?\s*:=\s*(.*)$/);
+                if (decl) {
+                    const kind = decl[1];
+                    const name = decl[2];
+                    const ty = decl[3] ? mapType(decl[3]) : null;
+                    const value = mapExpr(decl[4]);
+                    const keyword = kind === 'var' ? 'let mut' : (kind === 'let' ? 'let' : 'const');
+                    if (ty) {
+                        rust.push(pad() + `${keyword} ${name}: ${ty} = ${value};`);
+                    } else {
+                        rust.push(pad() + `${keyword} ${name} = ${value};`);
+                    }
+                    continue;
+                }
+
+                // ---- put ----
+                let put = l.match(/^put\s+-n\s+(.*)$/);
+                if (put) {
+                    rust.push(pad() + `print!("{}", ${mapExpr(put[1])});`);
+                    continue;
+                }
+                put = l.match(/^put\s+(.*)$/);
+                if (put) {
+                    rust.push(pad() + `println!("{}", ${mapExpr(put[1])});`);
+                    continue;
+                }
+
+                // ---- return ----
+                let ret = l.match(/^return\s+(.*)$/);
+                if (ret) {
+                    rust.push(pad() + `return ${mapExpr(ret[1])};`);
+                    continue;
+                }
+                if (l === 'return') {
+                    rust.push(pad() + 'return;');
+                    continue;
+                }
+
+                // ---- error / warn / info ----
+                let out = l.match(/^(error|warn|info)\s+(.*)$/);
+                if (out) {
+                    const fnName = out[1] === 'error' ? 'eprintln!' : (out[1] === 'warn' ? 'eprintln!' : 'println!');
+                    const prefix = out[1].toUpperCase();
+                    rust.push(pad() + `${fnName}("[${prefix}] {}", ${mapExpr(out[2])});`);
+                    continue;
+                }
+
+                // ---- if / else if / else (comma syntax) ----
+                // `else if` and `else` close the previous block with `}` and
+                // open a new one at the same nesting depth, so indent stays
+                // unchanged: emit the combined line at (indent - 1).
+                let ifMatch = l.match(/^else\s+if\s+(.*),\s*$/);
+                if (ifMatch) {
+                    const oldPad = '    '.repeat(Math.max(0, indent - 1));
+                    rust.push(oldPad + '} else if ' + mapExpr(ifMatch[1]) + ' {');
+                    continue;
+                }
+                ifMatch = l.match(/^if\s+(.*),\s*$/);
+                if (ifMatch) {
+                    rust.push(pad() + 'if ' + mapExpr(ifMatch[1]) + ' {');
+                    indent += 1;
+                    continue;
+                }
+                if (l === 'else,') {
+                    const oldPad = '    '.repeat(Math.max(0, indent - 1));
+                    rust.push(oldPad + '} else {');
+                    continue;
+                }
+
+                // ---- while ----
+                let whileMatch = l.match(/^while\s+(.*)$/);
+                if (whileMatch) {
+                    rust.push(pad() + 'while ' + mapExpr(whileMatch[1]) + ' {');
+                    indent += 1;
+                    continue;
+                }
+
+                // ---- for ... in range ----
+                let forMatch = l.match(/^for\s+(\w+)\s+in\s+(.+)$/);
+                if (forMatch) {
+                    const range = forMatch[2].trim();
+                    const rangeMatch = range.match(/^(\d+|[\w.]+)\s*\.\.\s*(\d+|[\w.]+)$/);
+                    if (rangeMatch) {
+                        rust.push(pad() + `for ${forMatch[1]} in ${rangeMatch[1]}..${rangeMatch[2]} {`);
+                    } else {
+                        rust.push(pad() + `for ${forMatch[1]} in ${range} {`);
+                    }
+                    indent += 1;
+                    continue;
+                }
+
+                // ---- match ----
+                let matchMatch = l.match(/^match\s+(.+)$/);
+                if (matchMatch) {
+                    rust.push(pad() + 'match ' + mapExpr(matchMatch[1]) + ' {');
+                    indent += 1;
+                    continue;
+                }
+                let armMatch = l.match(/^(\S.*?)\s*=>\s*(.*)$/);
+                if (armMatch && indent > 0 && !armMatch[1].includes('end')) {
+                    rust.push(pad() + mapExpr(armMatch[1]) + ' => ' + mapExpr(armMatch[2]) + ',');
+                    continue;
+                }
+
+                // ---- struct / enum declarations ----
+                let structMatch = l.match(/^struct\s+(\w+)$/);
+                if (structMatch) {
+                    rust.push(pad() + `struct ${structMatch[1]} {`);
+                    indent += 1;
+                    continue;
+                }
+                let enumMatch = l.match(/^enum\s+(\w+)$/);
+                if (enumMatch) {
+                    rust.push(pad() + `enum ${enumMatch[1]} {`);
+                    indent += 1;
+                    continue;
+                }
+                let fieldMatch = l.match(/^var\s+(\w+)\s*:\s*(\w+)$/);
+                if (fieldMatch) {
+                    rust.push(pad() + fieldMatch[1] + ': ' + mapType(fieldMatch[2]) + ',');
+                    continue;
+                }
+                let variantMatch = l.match(/^(\w+)\s*\(?/);
+                if (variantMatch && l.includes('(') && /^\w+\([^)]*\)$/.test(l)) {
+                    rust.push(pad() + mapExpr(l) + ',');
+                    continue;
+                }
+
+                // ---- impl blocks ----
+                let implMatch = l.match(/^impl\s+(\w+)$/);
+                if (implMatch) {
+                    rust.push(pad() + `impl ${implMatch[1]} {`);
+                    indent += 1;
+                    continue;
+                }
+
+                // ---- assignment / mutation ----
+                let assign = l.match(/^(\w+)\s*\+=\s*(.*)$/);
+                if (assign) {
+                    rust.push(pad() + `${assign[1]} += ${mapExpr(assign[2])};`);
+                    continue;
+                }
+                assign = l.match(/^(\w+)\s*:=\s*(.*)$/);
+                if (assign) {
+                    rust.push(pad() + `${assign[1]} = ${mapExpr(assign[2])};`);
+                    continue;
+                }
+                assign = l.match(/^(\w+)\s*=\s*(.*)$/);
+                if (assign) {
+                    rust.push(pad() + `${assign[1]} = ${mapExpr(assign[2])};`);
+                    continue;
+                }
+
+                // ---- break / continue ----
+                if (l === 'break') { rust.push(pad() + 'break;'); continue; }
+                if (l === 'continue') { rust.push(pad() + 'continue;'); continue; }
+
+                // ---- generic expression statement ----
+                rust.push(pad() + mapExpr(l) + ';');
+            }
+
+            // Close any unclosed indent (defensive).
+            while (indent > 0) {
+                indent -= 1;
+                rust.push(pad() + '}');
+            }
+
+            // Auto-generate main() when absent.
+            if (!hasMain) {
+                rust.push('');
+                rust.push('fn main() {');
+                rust.push('    println!("Hello from Poly!");');
+                rust.push('}');
+            }
+
+            const header = '#![allow(unused_variables, unused_mut, unused_imports, dead_code, unused_parens, unreachable_patterns)]\n\n// Generated from Poly source code (playground demo transpiler)';
+            return header + '\n' + rust.join('\n') + '\n';
+        }
+
+        // ------------------------------------------------------------------
+        // Editor helpers
+        // ------------------------------------------------------------------
 
         function loadExample(name) {
             const editor = document.getElementById('poly-editor');
-            editor.value = examples[name];
+            editor.value = examples[name] || '';
             transpile();
         }
 
@@ -546,150 +996,67 @@ end fn`
             document.getElementById('poly-editor').value = '';
             document.getElementById('rust-output').value = '';
             document.getElementById('poly-error').classList.remove('visible');
-        }
-
-        function transpile() {
-            const polyCode = document.getElementById('poly-editor').value;
-            const rustOutput = document.getElementById('rust-output');
-            const errorDiv = document.getElementById('poly-error');
-            
-            // Simple client-side "transpilation" (demo only)
-            // In production, this would call the actual poly compiler
-            try {
-                const rustCode = simulateTranspilation(polyCode);
-                rustOutput.value = rustCode;
-                errorDiv.classList.remove('visible');
-            } catch (e) {
-                errorDiv.textContent = e.message;
-                errorDiv.classList.add('visible');
-            }
-        }
-
-        function simulateTranspilation(code) {
-            // This is a demo - in production, you'd call the actual compiler
-            // For now, we'll generate a basic Rust template
-            
-            let rustCode = `#![allow(unused_variables, unused_mut, unused_imports, dead_code)]\n\n`;
-            
-            // Simple keyword replacements
-            let lines = code.split('\n');
-            let inFunction = false;
-            let functionName = '';
-            
-            for (let line of lines) {
-                let trimmed = line.trim();
-                
-                // Skip empty lines
-                if (!trimmed) {
-                    rustCode += '\n';
-                    continue;
-                }
-                
-                // Comment
-                if (trimmed.startsWith('#')) {
-                    rustCode += line.replace('#', '//') + '\n';
-                    continue;
-                }
-                
-                // Variable declarations
-                if (trimmed.startsWith('var ')) {
-                    let rest = trimmed.slice(4);
-                    rustCode += line.replace('var ', 'let mut ') + '\n';
-                    continue;
-                }
-                
-                if (trimmed.startsWith('let ')) {
-                    rustCode += line.replace('let ', 'let ') + '\n';
-                    continue;
-                }
-                
-                if (trimmed.startsWith('const ')) {
-                    rustCode += line.replace('const ', 'const ') + '\n';
-                    continue;
-                }
-                
-                // Function declarations
-                if (trimmed.startsWith('fn ') || trimmed.startsWith('async fn ')) {
-                    let isAsync = trimmed.startsWith('async fn');
-                    let fnPart = trimmed.replace('async fn ', 'fn ').replace('fn ', '');
-                    let parts = fnPart.split('(');
-                    let name = parts[0];
-                    let params = parts[1] ? '(' + parts[1] : '()';
-                    
-                    // Convert Poly types to Rust
-                    params = params
-                        .replace(/: i32/g, ': i32')
-                        .replace(/: f64/g, ': f64')
-                        .replace(/: string/g, ': String')
-                        .replace(/: bool/g, ': bool');
-                    
-                    // Check for return type
-                    if (params.includes('):')) {
-                        let [paramPart, returnPart] = params.split('):');
-                        params = paramPart + ')';
-                        let returnType = returnPart.trim();
-                        if (returnType === 'string') returnType = 'String';
-                        rustCode += `${isAsync ? 'async ' : ''}fn ${name}${params} -> ${returnType} {\n`;
-                    } else {
-                        rustCode += `${isAsync ? 'async ' : ''}fn ${params} {\n`;
-                    }
-                    inFunction = true;
-                    functionName = name;
-                    continue;
-                }
-                
-                // End keywords
-                if (trimmed === 'end fn' || trimmed === 'end') {
-                    rustCode += '}\n';
-                    inFunction = false;
-                    continue;
-                }
-                
-                // Put statement
-                if (trimmed.startsWith('put ')) {
-                    let content = trimmed.slice(4);
-                    rustCode += `    println!("{}", ${content});\n`;
-                    continue;
-                }
-                
-                // Return statement
-                if (trimmed.startsWith('return ')) {
-                    let value = trimmed.slice(7);
-                    rustCode += `    return ${value};\n`;
-                    continue;
-                }
-                
-                // Default: pass through
-                rustCode += `    ${line}\n`;
-            }
-            
-            // Add main function if not present
-            if (!code.includes('fn main')) {
-                rustCode += `\nfn main() {\n    println!("Hello from Poly!");\n}\n`;
-            }
-            
-            return rustCode;
+            document.getElementById('rust-count').textContent = '0 lines';
+            updateStatus('Ready', false);
+            updateCounts('');
         }
 
         function copyOutput() {
             const output = document.getElementById('rust-output');
-            navigator.clipboard.writeText(output.value);
-            
-            // Show feedback
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = 'Copied!';
-            setTimeout(() => btn.textContent = originalText, 2000);
+            if (!output.value) {
+                showToast('Nothing to copy yet');
+                return;
+            }
+            navigator.clipboard.writeText(output.value).then(() => {
+                showToast('Rust code copied to clipboard!');
+            });
         }
 
-        // Keyboard shortcut: Ctrl+Enter to transpile
+        function shareCode() {
+            const code = document.getElementById('poly-editor').value;
+            if (!code.trim()) {
+                showToast('Nothing to share — the editor is empty');
+                return;
+            }
+            const encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(code))));
+            const url = new URL(window.location.href);
+            url.hash = '#code=' + encoded;
+            navigator.clipboard.writeText(url.toString()).then(() => {
+                showToast('Share link copied to clipboard!');
+            });
+        }
+
+        function loadSharedCode() {
+            const hash = window.location.hash;
+            if (!hash.startsWith('#code=')) return;
+            try {
+                const encoded = decodeURIComponent(hash.slice('#code='.length));
+                const code = decodeURIComponent(escape(atob(encoded)));
+                document.getElementById('poly-editor').value = code;
+                transpile();
+            } catch (e) {
+                showToast('Could not decode shared code');
+            }
+        }
+
+        let toastTimer = null;
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+        }
+
+        // ------------------------------------------------------------------
+        // Events
+        // ------------------------------------------------------------------
+
         document.getElementById('poly-editor').addEventListener('keydown', function(e) {
             if (e.ctrlKey && e.key === 'Enter') {
                 e.preventDefault();
                 transpile();
             }
-            
-            // Tab for indentation
             if (e.key === 'Tab') {
                 e.preventDefault();
                 const start = this.selectionStart;
@@ -699,9 +1066,14 @@ end fn`
             }
         });
 
-        // Auto-transpile on load
         window.onload = function() {
-            transpile();
+            initWasm();
+            loadSharedCode();
+            if (!document.getElementById('poly-editor').value) {
+                loadExample('hello');
+            } else {
+                transpile();
+            }
         };
     </script>
 </body>

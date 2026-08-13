@@ -10,7 +10,7 @@ This guide covers best practices for using the new Poly I/O and error handling s
 
 ### Use `-n` for Progress Indicators
 
-```poly
+~~~poly
 // Good: Progress indicator
 put -n "Loading"
 loop: 0..10
@@ -23,11 +23,11 @@ put " Done!"
 loop: 0..10
     put "Loading..."  // Creates multiple lines
 end loop
-```
+~~~
 
 ### Use Appropriate Error Levels
 
-```poly
+~~~poly
 // Good: Use correct levels
 error "File not found: " + path           // Actual errors
 warn "Deprecated function used"           // Potential issues
@@ -36,11 +36,11 @@ info "Processing item " + item.to_string() // Debug info
 // Bad: Wrong levels
 info "File not found"     // Should be error
 error "Loading..."        // Should be info
-```
+~~~
 
 ### Format Output Consistently
 
-```poly
+~~~poly
 // Good: Consistent formatting
 put "Name: " + name
 put "Age: " + age.to_string()
@@ -50,7 +50,7 @@ put "Email: " + email
 put "Name:" + name
 put "Age is " + age
 put "Email:  " + email
-```
+~~~
 
 ---
 
@@ -58,30 +58,30 @@ put "Email:  " + email
 
 ### Always Provide Prompts
 
-```poly
+~~~poly
 // Good: Clear prompts
 put -n "Enter your name: "
-var name: ustring = get
+var name ustring := get
 
 // Bad: No prompt
-var name: ustring = get  // User doesn't know what to enter
-```
+var name ustring := get  // User doesn't know what to enter
+~~~
 
 ### Use Default Values for Optional Fields
 
-```poly
+~~~poly
 // Good: Sensible defaults
 put -n "Enter color (default: blue): "
-var color: ustring = get --default u"blue"
+var color ustring := get --default unicode "blue"
 
 // Bad: No default
 put -n "Enter color: "
-var color: ustring = get  // Forces user to enter something
-```
+var color ustring := get  // Forces user to enter something
+~~~
 
 ### Set Timeouts for Interactive Input
 
-```poly
+~~~poly
 // Good: Prevent hanging
 match get --timeout 5000
     Ok(input) => process(input)
@@ -90,33 +90,33 @@ match get --timeout 5000
 end match
 
 // Bad: No timeout
-var input: ustring = get  // Can hang forever
-```
+var input ustring := get  // Can hang forever
+~~~
 
 ### Validate Input Immediately
 
-```poly
+~~~poly
 // Good: Validate early
-var age: i32 = get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 && x < 150
 
 // Bad: Validate late
-var age: i32 = get
+var age i32 := get
 if age < 0 || age > 150,
     error "Invalid age"
 end if
-```
+~~~
 
 ### Mask Sensitive Input
 
-```poly
+~~~poly
 // Good: Mask passwords
 put -n "Enter password: "
-var password: ustring = get --mask u"*"
+var password ustring := get --mask unicode "*"
 
 // Bad: Expose passwords
 put -n "Enter password: "
-var password: ustring = get  // Visible on screen
-```
+var password ustring := get  // Visible on screen
+~~~
 
 ---
 
@@ -124,7 +124,7 @@ var password: ustring = get  // Visible on screen
 
 ### Define Specific Error Types
 
-```poly
+~~~poly
 // Good: Specific error types
 enum FileError
     NotFound
@@ -139,21 +139,21 @@ enum Error
     Error2
     Error3
 end enum
-```
+~~~
 
 ### Use `try` for Error Propagation
 
-```poly
+~~~poly
 // Good: Propagate errors
 fn process_config(): Result<ustring, FileError>
-    var content = try read_file(u"config.txt")
-    var validated = try validate_config(content)
+    var content := try read_file(unicode "config.txt")
+    var validated := try validate_config(content)
     return Ok(validated)
 end fn
 
 // Bad: Handle every error manually
 fn process_config(): Result<ustring, FileError>
-    match read_file(u"config.txt")
+    match read_file(unicode "config.txt")
         Ok(content) =>
             match validate_config(content)
                 Ok(validated) => return Ok(validated)
@@ -162,13 +162,13 @@ fn process_config(): Result<ustring, FileError>
         Error(e) => return Error(e)
     end match
 end fn
-```
+~~~
 
 ### Use Pattern Matching for Error Handling
 
-```poly
+~~~poly fragment
 // Good: Pattern matching
-match read_file(u"config.txt")
+match read_file(unicode "config.txt")
     Ok(content) => process(content)
     Error(FileError::NotFound) => create_default_config()
     Error(FileError::PermissionDenied) => request_permissions()
@@ -176,21 +176,21 @@ match read_file(u"config.txt")
 end match
 
 // Bad: If-else chains
-var result = read_file(u"config.txt")
+var result := read_file(unicode "config.txt")
 if result.is_ok(),
     process(result.unwrap())
-else if result.error() == FileError::NotFound,
+else if result.error() = FileError::NotFound,
     create_default_config()
-else if result.error() == FileError::PermissionDenied,
+else if result.error() = FileError::PermissionDenied,
     request_permissions()
 else
     error "Unexpected error"
 end if
-```
+~~~
 
 ### Use Wildcard for Catch-All
 
-```poly
+~~~poly
 // Good: Catch-all for unknown errors
 match validate_name(input)
     Ok(name) => put "Valid: " + name
@@ -206,7 +206,7 @@ match validate_name(input)
     Error(TooShort(min)) => error "Name too short"
     // Missing Error(TooLong) and Error(InvalidFormat)
 end match
-```
+~~~
 
 ---
 
@@ -214,7 +214,7 @@ end match
 
 ### Group Related Output
 
-```poly
+~~~poly
 // Good: Grouped output
 put "=== User Registration ==="
 put ""
@@ -226,20 +226,20 @@ put ""
 put "Name: " + name
 // ... 100 lines of code ...
 put "Email: " + email
-```
+~~~
 
 ### Use Functions for Complex Logic
 
-```poly
+~~~poly
 // Good: Function for complex validation
 fn validate_user(name: ustring, email: ustring): Result<(ustring, ustring), ValidationError>
-    var valid_name = try validate_name(name)
-    var valid_email = try validate_email(email)
+    var valid_name := try validate_name(name)
+    var valid_email := try validate_email(email)
     return Ok((valid_name, valid_email))
 end fn
 
 // Bad: Inline complex logic
-var valid_name = if name.len() == 0,
+var valid_name := if name.len() == 0,
     error "Empty name"
 else if name.len() < 2,
     error "Name too short"
@@ -247,14 +247,14 @@ else
     name
 end if
 // ... repeat for email ...
-```
+~~~
 
 ### Handle Errors at the Right Level
 
-```poly
+~~~poly
 // Good: Handle errors at appropriate level
 fn read_config(): Result<ustring, FileError>
-    return try read_file(u"config.txt")  // Propagate to caller
+    return try read_file(unicode "config.txt")  // Propagate to caller
 end fn
 
 fn main()
@@ -266,14 +266,14 @@ end fn
 
 // Bad: Handle errors too early
 fn read_config(): Result<ustring, FileError>
-    match read_file(u"config.txt")
+    match read_file(unicode "config.txt")
         Ok(content) => return Ok(content)
         Error(e) =>
             error "Failed to read config"  // Too early
             return Error(e)
     end match
 end fn
-```
+~~~
 
 ---
 
@@ -281,7 +281,7 @@ end fn
 
 ### Use `-n` for Frequent Output
 
-```poly
+~~~poly
 // Good: Efficient progress updates
 loop: 0..1000
     put -n "\rProcessing: " + i.to_string()
@@ -292,15 +292,15 @@ put ""
 loop: 0..1000
     put "Processing: " + i.to_string()  // Creates 1000 lines
 end loop
-```
+~~~
 
 ### Buffer Output When Possible
 
-```poly
+~~~poly
 // Good: Buffer output
-var output: ustring = ""
+var output ustring := ""
 loop: items
-    output = output + item.to_string() + "\n"
+    add output, item.to_string() + "\n"
 end loop
 put output
 
@@ -308,19 +308,19 @@ put output
 loop: items
     put item.to_string()  // Multiple system calls
 end loop
-```
+~~~
 
 ### Use Appropriate Data Types
 
-```poly
+~~~poly
 // Good: Use appropriate types
-var count: i32 = get --as i32
-var price: f64 = get --as f64
+var count i32 := get --as i32
+var price f64 := get --as f64
 
 // Bad: Wrong types
-var count: ustring = get  // Then parse later
-var price: ustring = get  // Then convert later
-```
+var count ustring := get  // Then parse later
+var price ustring := get  // Then convert later
+~~~
 
 ---
 
@@ -328,31 +328,31 @@ var price: ustring = get  // Then convert later
 
 ### Always Mask Sensitive Input
 
-```poly
+~~~poly
 // Good: Mask passwords
 put -n "Enter password: "
-var password: ustring = get --mask u"*"
+var password ustring := get --mask unicode "*"
 
 // Bad: Expose passwords
 put -n "Enter password: "
-var password: ustring = get
-```
+var password ustring := get
+~~~
 
 ### Validate All Input
 
-```poly
+~~~poly
 // Good: Validate everything
-var age: i32 = get with validate |x| x > 0 && x < 150
-var email: ustring = get with validate |e| e.contains(u"@")
+var age i32 := get with validate |x| x > 0 && x < 150
+var email ustring := get with validate |e| e.contains(unicode "@")
 
 // Bad: Trust input
-var age: i32 = get  // Could be negative
-var email: ustring = get  // Could be invalid
-```
+var age i32 := get  // Could be negative
+var email ustring := get  // Could be invalid
+~~~
 
 ### Use Timeouts for Network Operations
 
-```poly
+~~~poly
 // Good: Timeout for network
 match get --timeout 5000
     Ok(data) => process(data)
@@ -361,8 +361,8 @@ match get --timeout 5000
 end match
 
 // Bad: No timeout
-var data: ustring = get  // Can hang forever
-```
+var data ustring := get  // Can hang forever
+~~~
 
 ---
 
@@ -370,46 +370,46 @@ var data: ustring = get  // Can hang forever
 
 ### Test Error Cases
 
-```poly
+~~~poly
 // Good: Test all error paths
 fn test_validation()
     // Test empty input
-    match validate_name(u"")
+    match validate_name(unicode "")
         Ok(_) => fail("Should not succeed")
         Error(EmptyInput) => pass("Correctly caught empty input")
         Error(_) => fail("Wrong error type")
     end match
     
     // Test short input
-    match validate_name(u"a")
+    match validate_name(unicode "a")
         Ok(_) => fail("Should not succeed")
         Error(TooShort(_)) => pass("Correctly caught short input")
         Error(_) => fail("Wrong error type")
     end match
 end fn
-```
+~~~
 
 ### Test Edge Cases
 
-```poly
+~~~poly
 // Good: Test edge cases
 fn test_boundaries()
     // Test minimum valid age
-    var age = validate_age(1)
+    var age := validate_age(1)
     assert(age.is_ok())
     
     // Test maximum valid age
-    age = validate_age(150)
+    set age to validate_age(150)
     assert(age.is_ok())
     
     // Test out of bounds
-    age = validate_age(0)
+    set age to validate_age(0)
     assert(age.is_error())
     
-    age = validate_age(151)
+    set age to validate_age(151)
     assert(age.is_error())
 end fn
-```
+~~~
 
 ---
 

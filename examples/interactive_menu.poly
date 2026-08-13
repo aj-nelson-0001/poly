@@ -5,7 +5,7 @@ fn main()
     put "=== Interactive Menu Demo ==="
     put ""
     
-    var running: bool = true
+    var running bool := true
     while running
         put "Menu:"
         put "1. Greet user"
@@ -15,7 +15,7 @@ fn main()
         put ""
         put -n "Choose an option (1-4): "
         
-        var choice: i32 = get
+        var choice i32 := get
         
         match choice
             1 => greet_user()
@@ -23,7 +23,7 @@ fn main()
             3 => password_test()
             4 => 
                 put "Goodbye!"
-                running = false
+                set running to false
             _ => warn "Invalid choice. Please try again."
         end match
         
@@ -33,26 +33,26 @@ end fn
 
 fn greet_user()
     put -n "Enter your name: "
-    var name: ustring = get --default u"World"
+    var name ustring := get --default unicode "World"
     put "Hello, " + name + "!"
 end fn
 
 fn calculator()
     put -n "Enter first number: "
-    var a: f64 = get
+    var a f64 := get
     
     put -n "Enter second number: "
-    var b: f64 = get
+    var b f64 := get
     
     put -n "Choose operation (+, -, *, /): "
-    var op: ustring = get --default u"+"
+    var op ustring := get --default unicode "+"
     
-    var result: f64 = match op
-        u"+" => a + b
-        u"-" => a - b
-        u"*" => a * b
-        u"/" => 
-            if b == 0.0,
+    var result f64 := match op
+        unicode "+" => a + b
+        unicode "-" => a - b
+        unicode "*" => a * b
+        unicode "/" =>
+            if b = 0.0,
                 error "Error: Division by zero"
                 0.0
             else
@@ -68,7 +68,7 @@ end fn
 
 fn password_test()
     put "Enter password (masked): "
-    var password: ustring = get --mask u"*"
+    var password ustring := get --mask unicode "*"
     
     put "Password length: " + password.len().to_string()
     

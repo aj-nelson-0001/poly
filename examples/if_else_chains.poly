@@ -37,13 +37,13 @@ end fn
 # Nested conditions
 fn categorize_number(n: i32): string
     if n > 0,
-        if n % 2 == 0,
+        if n % 2 = 0,
             return "Positive Even"
         else,
             return "Positive Odd"
         end if
     else if n < 0,
-        if n % 2 == 0,
+        if n % 2 = 0,
             return "Negative Even"
         else,
             return "Negative Odd"
@@ -55,7 +55,7 @@ end fn
 
 # BMI calculator with nested categories
 fn calculate_bmi(weight_kg: f64, height_m: f64): string
-    var bmi = weight_kg / (height_m * height_m)
+    var bmi := weight_kg / (height_m * height_m)
     
     if bmi < 18.5,
         return "Underweight"

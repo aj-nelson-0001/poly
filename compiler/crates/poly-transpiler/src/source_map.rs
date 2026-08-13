@@ -21,6 +21,9 @@ pub struct SourceMapping {
 }
 
 /// Source map for mapping transpiled code back to original Poly source.
+///
+/// The current generator records coarse line mappings. The data model already
+/// keeps columns and symbol locations available for a future span-precise pass.
 #[derive(Debug, Clone)]
 pub struct SourceMap {
     /// The original Poly source code
@@ -67,6 +70,9 @@ impl SourceMap {
     }
 
     /// Compute byte offsets for each line in the text.
+    ///
+    /// Offsets are cached so future position lookups can avoid rescanning the
+    /// complete source or generated output for every diagnostic.
     fn compute_line_offsets(text: &str) -> Vec<usize> {
         let mut offsets = vec![0];
         for (i, _) in text.bytes().enumerate() {
@@ -125,6 +131,9 @@ impl SourceMap {
 
     /// Look up the source location for a target line.
     /// If no exact match, returns the closest previous mapping.
+    ///
+    /// Generated helper lines commonly have no direct mapping, so the previous
+    /// mapping gives callers the most useful surrounding Poly context.
     pub fn lookup_target_line(&self, target_line: usize) -> Option<usize> {
         // First try exact match
         if let Some(mapping) = self.mappings.iter().find(|m| m.target_line == target_line) {
@@ -176,12 +185,12 @@ impl SourceMap {
         if let Some(source_line) = self.lookup_target_line(target_line) {
             let source_text = self.get_source_line(target_line).unwrap_or("<unknown>");
             format!(
-                "Error at line {} (source line {}):\n{}\n{}\n{}",
+                "Error at line {} (source line {}):\n{}\n{}^-- {}",
                 target_line,
                 source_line,
                 source_text,
                 " ".repeat(target_line.to_string().len() + 2),
-                format!("^-- {}", message)
+                message
             )
         } else {
             format!("Error at line {}: {}", target_line, message)
@@ -217,6 +226,9 @@ impl SourceMap {
     }
 
     /// Generate VLQ-encoded mappings for Source Map v3 format.
+    ///
+    /// Source maps store deltas rather than absolute positions; each previous
+    /// value is therefore retained while walking mappings in output order.
     fn generate_vlq_mappings(&self) -> String {
         let mut result = String::new();
         let mut prev_generated_line = 0;
@@ -271,6 +283,9 @@ impl SourceMap {
     }
 
     /// Encode a signed integer as VLQ (Variable Length Quantity).
+    ///
+    /// The implementation mirrors the source-map specification and emits one
+    /// Base64 character per five data bits after the sign is folded in.
     /// VLQ format for Source Maps:
     /// - First sextet: [continuation][4 value bits][sign bit]
     /// - Subsequent sextets: [continuation][5 value bits]
@@ -354,7 +369,7 @@ mod tests {
 
     #[test]
     fn test_source_map_creation() {
-        let source = "var x: i32 = 42\nput x";
+        let source = "var x i32 := 42\nput x";
         let target = "// Generated from Poly source code\nfn main() {\n    let mut x: i32 = 42;\n    println!(\"{}\", x);\n}";
 
         let source_map = SourceMap::new(source, target);
@@ -384,7 +399,7 @@ mod tests {
 
     #[test]
     fn test_format_error() {
-        let mut source_map = SourceMap::new("var x = 42", "let mut x = 42;");
+        let mut source_map = SourceMap::new("var x := 42", "let mut x = 42;");
         source_map.add_mapping(1, 1);
 
         let error_msg = source_map.format_error(1, "type mismatch");
@@ -415,7 +430,7 @@ mod tests {
 
     #[test]
     fn test_json_generation() {
-        let mut source_map = SourceMap::new("var x = 1", "let x = 1;");
+        let mut source_map = SourceMap::new("var x := 1", "let x = 1;");
         source_map.add_mapping(1, 1);
         source_map.add_symbol("x", 1, 4, 1);
 

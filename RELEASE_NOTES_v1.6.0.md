@@ -21,7 +21,7 @@ This change makes Poly code more concise and familiar to developers from other l
 
 ### Examples
 
-```poly
+~~~poly
 // Simple if
 if x > 0,
     put x
@@ -36,21 +36,21 @@ end if
 
 // If-else-if chain
 if score >= 90,
-    grade = "A"
+    set grade to "A"
 else if score >= 80,
-    grade = "B"
+    set grade to "B"
 else if score >= 70,
-    grade = "C"
+    set grade to "C"
 else,
-    grade = "F"
+    set grade to "F"
 end if
-```
+~~~
 
 ### Transpilation
 
 The new syntax transpiles to idiomatic Rust:
 
-```rust
+~~~rust
 // Poly
 if x > 0,
     put x
@@ -68,7 +68,7 @@ if x > 0 {
 } else {
     println!("{}", "zero");
 }
-```
+~~~
 
 ## 📦 What's Included
 
@@ -100,7 +100,7 @@ To update your existing Poly code:
 ### Example Migration
 
 **Before:**
-```poly
+~~~poly fragment
 if temperature > 100 then
     error "Too hot!"
 else if temperature < 0 then
@@ -108,10 +108,10 @@ else if temperature < 0 then
 else
     put "Temperature is OK"
 end if
-```
+~~~
 
 **After:**
-```poly
+~~~poly
 if temperature > 100,
     error "Too hot!"
 else if temperature < 0,
@@ -119,7 +119,7 @@ else if temperature < 0,
 else,
     put "Temperature is OK"
 end if
-```
+~~~
 
 ## 📊 Test Results
 

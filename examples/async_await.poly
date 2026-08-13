@@ -4,28 +4,29 @@
 
 # Async function to simulate fetching data
 async fn fetch_data(url: ustring): ustring
-    put u"Fetching data from: " + url
-    return u"response data"
+    put unicode "Fetching data from: " + url
+    return unicode "response data"
 end fn
 
 # Async function to simulate processing
 async fn process_data(data: ustring): ustring
-    put u"Processing: " + data
-    return u"processed " + data
+    put unicode "Processing: " + data
+    return unicode "processed " + data
 end fn
 
 # Regular function that uses async
-fn get_user_info(): ustring
-    var data = fetch_data(u"https://api.example.com/user").await
-    var result = process_data(data).await
+async fn get_user_info(): ustring
+    var data := fetch_data(unicode "https://api.example.com/user").await
+    var result := process_data(data).await
     return result
 end fn
 
+
 # Main function
-fn main()
-    put u"=== Async/Await Demo ==="
+async fn main()
+    put unicode "=== Async/Await Demo ==="
     
     # Call async function
-    var result = get_user_info()
+    var result := get_user_info().await
     put result
 end fn

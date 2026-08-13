@@ -7,10 +7,10 @@
 # =============================================================================
 
 async fn simple_async(): ustring
-    put u"Starting async operation..."
-    var result = delay(100).await
-    put u"Operation complete!"
-    return u"Result: " + result
+    put unicode "Starting async operation..."
+    var result := delay(100).await
+    put unicode "Operation complete!"
+    return unicode "Result: " + result
 end fn
 
 # =============================================================================
@@ -18,23 +18,23 @@ end fn
 # =============================================================================
 
 async fn fetch_with_retry(url: ustring, max_retries: i32): Result<ustring, ustring>
-    var attempt: i32 = 0
+    var attempt i32 := 0
     
     while attempt < max_retries
-        attempt = attempt + 1
-        put u"Attempt " + attempt.to_string() + u"..."
+        add attempt
+        put unicode "Attempt " + attempt.to_string() + unicode "..."
         
         match http_get(url).await
             Ok(data) => return Ok(data)
             Error(e) => 
                 if attempt < max_retries,
-                    put u"Failed, retrying..."
+                    put unicode "Failed, retrying..."
                     delay(1000).await
                 end if
         end match
     end while
     
-    return Error(u"Max retries exceeded")
+    return Error(unicode "Max retries exceeded")
 end fn
 
 # =============================================================================
@@ -48,26 +48,26 @@ end struct
 
 impl Database
     async fn connect(self): Result<ustring, ustring>
-        put u"Connecting to database..."
-        var conn = tcp_connect(self.connection_string).await
-        self.connected = true
-        return Ok(u"Connected!")
+        put unicode "Connecting to database..."
+        var conn := tcp_connect(self.connection_string).await
+        set self.connected to true
+        return Ok(unicode "Connected!")
     end fn
     
     async fn query(self, sql: ustring): Result<Vec<ustring>, ustring>
         if !self.connected,
-            return Error(u"Not connected")
+            return Error(unicode "Not connected")
         end if
         
-        put u"Executing query: " + sql
-        var results = db_execute(sql).await
+        put unicode "Executing query: " + sql
+        var results := db_execute(sql).await
         return Ok(results)
     end fn
     
     async fn close(self)
         if self.connected,
-            put u"Closing connection..."
-            self.connected = false
+            put unicode "Closing connection..."
+            set self.connected to false
         end if
     end fn
 end impl
@@ -80,19 +80,19 @@ async fn process_response(url: ustring): ustring
     match http_get(url).await
         Ok(data) =>
             if data.len() > 0,
-                return u"Got data: " + data
+                return unicode "Got data: " + data
             else
-                return u"Empty response"
+                return unicode "Empty response"
             end if
         Error(TimeoutError) =>
-            warn u"Request timed out"
-            return u"Timeout"
+            warn unicode "Request timed out"
+            return unicode "Timeout"
         Error(NotFoundError) =>
-            error u"Resource not found"
-            return u"Not found"
+            error unicode "Resource not found"
+            return unicode "Not found"
         Error(e) =>
             error e
-            return u"Unknown error"
+            return unicode "Unknown error"
     end match
 end fn
 
@@ -101,37 +101,37 @@ end fn
 # =============================================================================
 
 fn main()
-    put u"=== Async Patterns Demo ==="
-    put u""
+    put unicode "=== Async Patterns Demo ==="
+    put unicode ""
     
     # Demo 1: Simple async
-    put u"--- Pattern 1: Simple Async ---"
+    put unicode "--- Pattern 1: Simple Async ---"
     # var result = simple_async().await
     # put result
-    put u"(Async calls would run with tokio runtime)"
-    put u""
+    put unicode "(Async calls would run with tokio runtime)"
+    put unicode ""
     
     # Demo 2: Async with retry
-    put u"--- Pattern 2: Async with Retry ---"
-    # match fetch_with_retry(u"https://api.example.com", 3).await
-    #     Ok(data) => put u"Success: " + data
+    put unicode "--- Pattern 2: Async with Retry ---"
+    # match fetch_with_retry(unicode "https://api.example.com", 3).await
+    #     Ok(data) => put unicode "Success: " + data
     #     Error(e) => error e
     # end match
-    put u""
+    put unicode ""
     
     # Demo 3: Async struct
-    put u"--- Pattern 3: Async Struct Methods ---"
-    var db = Database { connection_string: u"localhost:5432", connected: false }
+    put unicode "--- Pattern 3: Async Struct Methods ---"
+    var db := Database { connection_string: unicode "localhost:5432", connected: false }
     # var conn = db.connect().await
-    # var results = db.query(u"SELECT * FROM users").await
+    # var results = db.query(unicode "SELECT * FROM users").await
     # db.close().await
-    put u""
+    put unicode ""
     
     # Demo 4: Async with match
-    put u"--- Pattern 4: Async with Match ---"
-    # var response = process_response(u"https://api.example.com").await
+    put unicode "--- Pattern 4: Async with Match ---"
+    # var response = process_response(unicode "https://api.example.com").await
     # put response
-    put u""
+    put unicode ""
     
-    put u"=== Demo Complete ==="
+    put unicode "=== Demo Complete ==="
 end fn

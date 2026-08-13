@@ -140,6 +140,9 @@ impl std::fmt::Display for TypeError {
 impl std::error::Error for TypeError {}
 
 /// The type checker / type system.
+///
+/// This utility owns the small, reusable unification core. The AST-aware
+/// checker in `poly-transpiler` builds on these rules to understand programs.
 pub struct TypeSystem {
     /// Type environment (variable name -> type)
     env: HashMap<String, PolyType>,
@@ -180,6 +183,10 @@ impl TypeSystem {
     }
 
     /// Unify two types (check compatibility).
+    ///
+    /// Unification is intentionally asymmetric only for inference variables;
+    /// ordinary concrete types either match, widen through the supported
+    /// numeric cases, or produce a diagnostic.
     pub fn unify(&mut self, left: &PolyType, right: &PolyType) -> Result<PolyType, TypeError> {
         match (left, right) {
             // Same types
@@ -222,6 +229,9 @@ impl TypeSystem {
     }
 
     /// Infer the type of a binary operation.
+    ///
+    /// This method centralizes the operator rules so callers do not each need
+    /// to duplicate numeric, comparison, logical, and bitwise compatibility.
     pub fn infer_binary_op(
         &mut self,
         op: &str,
@@ -281,6 +291,9 @@ impl TypeSystem {
     }
 
     /// Check if a type is coercible to another.
+    ///
+    /// Coercion is deliberately narrower than unification: it describes values
+    /// that may flow into an explicitly requested destination type.
     pub fn is_coercible(&self, from: &PolyType, to: &PolyType) -> bool {
         match (from, to) {
             (a, b) if a == b => true,

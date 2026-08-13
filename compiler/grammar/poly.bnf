@@ -3,6 +3,8 @@
 **Version:** 1.5 Draft  
 **Status:** Work in Progress
 
+The canonical syntax uses `:=` for variable initialization, `=` for later assignment, `==` for equality, compound assignment operators such as `+=`, and delimiter-free `if` blocks. The parser retains the previous spellings where compatibility is supported.
+
 This document defines the formal grammar for the Poly programming language using Extended Backus-Naur Form (EBNF) notation.
 
 ---
@@ -73,9 +75,8 @@ string_literal  ::= '"' { <string_char> } '"'
 string_char     ::= <any character except '"' and newline>
                    | <escape_sequence>
 
-unicode_string_literal ::= 'u' '"' { <unicode_char> } '"'
-unicode_char    ::= <any character except '"' and newline>
-                   | <escape_sequence>
+unicode_string_literal ::= "unicode" <string_literal>
+                           // Unicode string literals use a visible prefix for readability.
 
 byte_literal    ::= <hex_byte> { <hex_byte> }
 hex_byte        ::= <hex_digit> <hex_digit>
@@ -92,15 +93,14 @@ operator        ::= <arithmetic_op>
                    | <comparison_op>
                    | <logical_op>
                    | <bitwise_op>
-                   | <assignment_op>
 
 arithmetic_op   ::= "+" | "-" | "*" | "/" | "%"
 comparison_op   ::= "==" | "!=" | "<" | ">" | "<=" | ">="
 logical_op      ::= "&&" | "||" | "!"
 bitwise_op      ::= "&" | "|" | "^" | "~" | "<<" | ">>"
-
 assignment_op   ::= "=" | "+=" | "-=" | "*=" | "/=" | "%="
-                   | "&=" | "|=" | "^=" | "<<=" | ">>="
+
+mutation_command ::= <assignment_target> <assignment_op> <expression>
 ```
 
 ### Delimiters
@@ -117,7 +117,7 @@ delimiter       ::= "(" | ")" | "[" | "]" | "{" | "}"
 
 ```
 keyword         ::= "var" | "let" | "const" | "fn" | "end"
-                   | "if" | "then" | "else" | "while" | "loop"
+                   | "if" | "else" | "while" | "loop" | "unicode"
                    | "for" | "in" | "match" | "case" | "break"
                    | "continue" | "return" | "struct" | "enum"
                    | "trait" | "impl" | "for" | "module" | "use"
@@ -174,15 +174,15 @@ statement       ::= <var_declaration>
 ### Variable Declarations
 
 ```
-var_declaration ::= "var" <identifier> ":" <type> "=" <expression>
+var_declaration ::= "var" <identifier> [<type>] ":=" <expression>
+                   // Type is optional and inferred when omitted. A colon is not used.
 
-let_declaration ::= "let" <identifier> ":" <type> "=" <expression>
+let_declaration ::= "let" <identifier> [":" <type>] "=" <expression>
 
 const_declaration ::= "const" <identifier> "=" <expression>
 
-assignment      ::= <identifier> "=" <expression>
-                   | <identifier> <assignment_op> <expression>
-                   | <identifier> "." <identifier> "=" <expression>
+assignment_target ::= <identifier> { "." <identifier> | "[" <expression> "]" }
+assignment      ::= <assignment_target> <assignment_op> <expression>
 ```
 
 ### Types
@@ -289,9 +289,12 @@ tuple_expression ::= "(" <expression> { "," <expression> } ")"
 ### Functions
 
 ```
-function_declaration ::= "fn" <identifier> "(" [<parameters>] ")" [":" <type>]
+function_declaration ::= "fn" <identifier> [<type_params>] "(" [<parameters>] ")" [":" <type>]
                          [<where_clause>]
                          <block>
+
+type_params      ::= "<" <type_param> { "," <type_param> } ">"
+type_param       ::= <identifier> [":" <trait_bound> { "+" <trait_bound> }]
 
 parameters      ::= <parameter> { "," <parameter> }
 parameter       ::= <identifier> ":" <type> ["=" <expression>]
@@ -306,8 +309,8 @@ block           ::= { <statement> }
 ### Control Flow
 
 ```
-if_expression   ::= "if" <expression> "then" <block>
-                    {"else" "if" <expression> "then" <block>}
+if_expression   ::= "if" <expression> <block>
+                    {"else" "if" <expression> <block>}
                     ["else" <block>]
                     "end" "if"
 
@@ -469,9 +472,9 @@ warn_statement  ::= "warn" <expression>
 
 info_statement  ::= "info" <expression>
 
-get_expression  ::= "get" [<get_prompt>] [<get_flags>] [<get_with>]
+get_expression  ::= "get" ["unicode" <string_literal>] [<get_flags>] [<get_with>]
 
-get_prompt      ::= <expression>
+get_prompt      ::= "unicode" <string_literal>
 
 get_flags       ::= { <get_flag> }
 

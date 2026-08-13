@@ -10,25 +10,25 @@ enum FileError
     NotFound
     PermissionDenied
     InvalidData
-    Unknown(message: ustring)
+    Unknown(ustring)
 end enum
 
 enum ValidationError
     EmptyInput
-    TooShort(min: i32)
-    TooLong(max: i32)
+    TooShort(i32)
+    TooLong(i32)
     InvalidFormat
 end enum
 
 # Function that can fail
 fn read_file(path: ustring): Result<ustring, FileError>
     # Simulate file reading
-    if path.len() == 0,
+    if path.len() = 0,
         return Error(FileError::NotFound)
     end if
     
     # Simulate successful read
-    return Ok(u"File content from: " + path)
+    return Ok(unicode "File content from: " + path)
 end fn
 
 # ============================================================
@@ -57,14 +57,14 @@ end fn
 
 fn read_config(path: ustring): Result<ustring, FileError>
     # 'try' propagates errors up the call stack
-    var content = try read_file(path)
+    var content := try read_file(path)
     
     # Process content...
     return Ok(content)
 end fn
 
 fn load_application()
-    match read_config(u"config.txt")
+    match read_config(unicode "config.txt")
         Ok(config) => 
             put "Config loaded"
             process_config(config)
@@ -79,7 +79,7 @@ end fn
 # ============================================================
 
 fn validate_name(name: ustring): Result<ustring, ValidationError>
-    if name.len() == 0,
+    if name.len() = 0,
         return Error(ValidationError::EmptyInput)
     end if
     
@@ -95,12 +95,12 @@ fn validate_name(name: ustring): Result<ustring, ValidationError>
 end fn
 
 fn validate_email(email: ustring): Result<ustring, ValidationError>
-    if email.len() == 0,
+    if email.len() = 0,
         return Error(ValidationError::EmptyInput)
     end if
     
     # Simple email validation
-    if not email.contains(u"@"),
+    if not email.contains(unicode "@"),
         return Error(ValidationError::InvalidFormat)
     end if
     
@@ -113,10 +113,10 @@ end fn
 
 fn validate_user(name: ustring, email: ustring): Result<(ustring, ustring), ValidationError>
     # Validate name
-    var valid_name = try validate_name(name)
+    var valid_name := try validate_name(name)
     
     # Validate email
-    var valid_email = try validate_email(email)
+    var valid_email := try validate_email(email)
     
     # Both validations passed
     return Ok((valid_name, valid_email))
@@ -128,10 +128,10 @@ end fn
 
 fn process_user_input()
     put "Enter your name: "
-    var name: ustring = get
+    var name ustring := get
     
     put "Enter your email: "
-    var email: ustring = get
+    var email ustring := get
     
     match validate_user(name, email)
         Ok((valid_name, valid_email)) => 
@@ -156,8 +156,8 @@ end fn
 fn read_with_timeout(path: ustring, timeout_ms: i32): Result<ustring, FileError>
     match get --timeout timeout_ms
         Ok(content) => return Ok(content)
-        Timeout => return Error(FileError::Unknown(u"Read timeout"))
-        Error(e) => return Error(FileError::Unknown(u"Read error: " + e))
+        Timeout => return Error(FileError::Unknown(unicode "Read timeout"))
+        Error(e) => return Error(FileError::Unknown(unicode "Read error: " + e))
     end match
 end fn
 
@@ -167,29 +167,29 @@ end fn
 
 # Error chaining
 enum AppError
-    IoError(message: ustring)
-    ValidationError(message: ustring)
+    IoError(ustring)
+    ValidationError(ustring)
     NetworkError(code: i32)
 end enum
 
 fn chain_errors(): Result<ustring, AppError>
     # Use try to propagate,,convert error type
-    match read_config(u"config.txt")
+    match read_config(unicode "config.txt")
         Ok(content) => return Ok(content)
-        Error(e) => return Error(AppError::IoError(u"Config error: " + e.to_string()))
+        Error(e) => return Error(AppError::IoError(unicode "Config error: " + e.to_string()))
     end match
 end fn
 
 # Retry pattern (simplified)
 fn retry_operation(max_retries: i32): Result<ustring, AppError>
-    var attempt: i32 = 0
+    var attempt i32 := 0
     while attempt < max_retries
         # Simulate a risky operation
         if attempt < 2,
             warn "Attempt " + attempt.to_string() + " failed"
             add attempt
         else
-            return Ok(u"Success on attempt " + attempt.to_string())
+            return Ok(unicode "Success on attempt " + attempt.to_string())
         end if
     end while
     return Error(AppError::NetworkError(0))
@@ -197,6 +197,7 @@ end fn
 
 # Wildcard pattern for catch-all
 fn handle_any_error()
+    var input ustring := get
     match validate_name(input)
         Ok(name) => put "Valid: " + name
         Error(_) => error "Validation failed"  # Catches any validation error
@@ -213,7 +214,7 @@ fn main()
     
     # Example 1: Basic error handling
     put "Example 1: Basic Error Handling"
-    process_file(u"test.txt")
+    process_file(unicode "test.txt")
     put ""
     
     # Example 2: Error propagation
@@ -228,7 +229,7 @@ fn main()
     
     # Example 4: Multiple error types
     put "Example 4: Multiple Error Types"
-    match validate_user(u"John", u"john@example.com")
+    match validate_user(unicode "John", unicode "john@example.com")
         Ok((name, email)) => 
             put "Valid: " + name + " (" + email + ")"
         Error(e) => 

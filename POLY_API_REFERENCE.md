@@ -4,12 +4,12 @@
 
 ### `put` - Standard Output
 
-```poly
+~~~poly
 put expression               # Output with newline
 put -n expression            # Output without newline
 put expression > "file"      # Write to file (truncate)
 put expression >> "file"     # Append to file
-```
+~~~
 
 **Parameters:**
 - `expression`: Any value (string, number, boolean, etc.)
@@ -18,21 +18,21 @@ put expression >> "file"     # Append to file
 **Returns:** Nothing
 
 **Examples:**
-```poly
+~~~poly
 put "Hello, World!"
 put 42
 put -n "Loading..."
 put "data" > "output.txt"
 put "more" >> "output.txt"
-```
+~~~
 
 ---
 
 ### `error` - Error Output (stderr)
 
-```poly
+~~~poly
 error expression
-```
+~~~
 
 **Parameters:**
 - `expression`: Error message
@@ -42,18 +42,18 @@ error expression
 **Output:** Automatically prefixed with `[ERROR]`
 
 **Examples:**
-```poly
+~~~poly
 error "File not found"
 error "Error: " + e
-```
+~~~
 
 ---
 
 ### `warn` - Warning Output (stderr)
 
-```poly
+~~~poly
 warn expression
-```
+~~~
 
 **Parameters:**
 - `expression`: Warning message
@@ -63,18 +63,18 @@ warn expression
 **Output:** Automatically prefixed with `[WARN]`
 
 **Examples:**
-```poly
+~~~poly
 warn "Deprecated function"
 warn "Memory usage high"
-```
+~~~
 
 ---
 
 ### `info` - Debug Output (stderr)
 
-```poly
+~~~poly
 info expression
-```
+~~~
 
 **Parameters:**
 - `expression`: Debug information
@@ -84,10 +84,10 @@ info expression
 **Output:** Automatically prefixed with `[INFO]`
 
 **Examples:**
-```poly
+~~~poly
 info "Request took 42ms"
 info "Memory: 128MB"
-```
+~~~
 
 ---
 
@@ -95,14 +95,14 @@ info "Memory: 128MB"
 
 ### `get` - Read Input
 
-```poly
-var x = get                          # Read line from stdin
-var x = get "prompt: "               # Read with prompt
-var x: Type = get                    # Auto-parse typed input
-var x = get < "file"                 # Read from file
-var x: bytes = get < "file"         # Read binary from file
-var x: bytes = get < "file" --bytes 8  # Read specific number of bytes
-```
+~~~poly
+var x := get                          # Read line from stdin
+var x := get unicode "prompt: "               # Read with prompt
+var x Type := get                    # Auto-parse typed input
+var x := get < "file"                 # Read from file
+var x bytes := get < "file"         # Read binary from file
+var x bytes := get < "file" --bytes 8  # Read specific number of bytes
+~~~
 
 **Parameters:**
 - `"prompt: "`: Optional prompt string
@@ -111,12 +111,12 @@ var x: bytes = get < "file" --bytes 8  # Read specific number of bytes
 **Returns:** Input value (type depends on variable)
 
 **Examples:**
-```poly
-var name: ustring = get
-var age: i32 = get
-var data: bytes = get < "binary.bin"
-var header: bytes = get < "image.png" --bytes 8
-```
+~~~poly
+var name ustring := get
+var age i32 := get
+var data bytes := get < "binary.bin"
+var header bytes := get < "image.png" --bytes 8
+~~~
 
 ---
 
@@ -124,9 +124,9 @@ var header: bytes = get < "image.png" --bytes 8
 
 #### `--timeout` - Read with Timeout
 
-```poly
-var x = get --timeout milliseconds
-```
+~~~poly
+var x := get --timeout milliseconds
+~~~
 
 **Parameters:**
 - `milliseconds`: Timeout in milliseconds
@@ -134,21 +134,21 @@ var x = get --timeout milliseconds
 **Returns:** `Result<T, TimeoutError>`
 
 **Examples:**
-```poly
+~~~poly
 match get --timeout 3000
     Ok(input) => process(input)
     Timeout => warn "Too slow!"
     Error(e) => error "Error: " + e
 end match
-```
+~~~
 
 ---
 
 #### `--default` - Read with Default Value
 
-```poly
-var x = get --default value
-```
+~~~poly
+var x := get --default value
+~~~
 
 **Parameters:**
 - `value`: Default value if input is empty
@@ -156,36 +156,36 @@ var x = get --default value
 **Returns:** Input value or default
 
 **Examples:**
-```poly
-var color: ustring = get --default u"blue"
-var count: i32 = get --default 0
-```
+~~~poly
+var color ustring := get --default unicode "blue"
+var count i32 := get --default 0
+~~~
 
 ---
 
 #### `--mask` - Read with Input Mask
 
-```poly
-var x = get --mask mask_char
-```
+~~~poly
+var x := get --mask mask_char
+~~~
 
 **Parameters:**
-- `mask_char`: Character to display (e.g., `u"*"`)
+- `mask_char`: Character to display (e.g., `unicode "*"`)
 
 **Returns:** Hidden input value
 
 **Examples:**
-```poly
-var password: ustring = get --mask u"*"
-```
+~~~poly
+var password ustring := get --mask unicode "*"
+~~~
 
 ---
 
 #### `--as` - Type Conversion
 
-```poly
-var x = get --as Type
-```
+~~~poly
+var x := get --as Type
+~~~
 
 **Parameters:**
 - `Type`: Target type for conversion
@@ -193,18 +193,18 @@ var x = get --as Type
 **Returns:** Converted value
 
 **Examples:**
-```poly
-var num: i32 = get --as i32
-var person: Person = get --as Person
-```
+~~~poly
+var num i32 := get --as i32
+var person Person := get --as Person
+~~~
 
 ---
 
 #### `--until` - Delimiter-Based Input
 
-```poly
-var x = get --until delimiter
-```
+~~~poly
+var x := get --until delimiter
+~~~
 
 **Parameters:**
 - `delimiter`: Delimiter string
@@ -212,18 +212,18 @@ var x = get --until delimiter
 **Returns:** Input until delimiter
 
 **Examples:**
-```poly
-var csv_line: ustring = get --until u","
-var field: ustring = get --until u"\n"
-```
+~~~poly
+var csv_line ustring := get --until unicode ","
+var field ustring := get --until unicode "\n"
+~~~
 
 ---
 
 #### `--bytes` - Read Specific Number of Bytes
 
-```poly
-var x = get < "file" --bytes count
-```
+~~~poly
+var x := get < "file" --bytes count
+~~~
 
 **Parameters:**
 - `count`: Number of bytes to read
@@ -231,9 +231,9 @@ var x = get < "file" --bytes count
 **Returns:** Bytes value
 
 **Examples:**
-```poly
-var header: bytes = get < "image.png" --bytes 8
-```
+~~~poly
+var header bytes := get < "image.png" --bytes 8
+~~~
 
 ---
 
@@ -241,9 +241,9 @@ var header: bytes = get < "image.png" --bytes 8
 
 #### `with validate` - Input Validation
 
-```poly
-var x = get with validate closure
-```
+~~~poly
+var x := get with validate closure
+~~~
 
 **Parameters:**
 - `closure`: Validation function `(value) -> bool`
@@ -251,18 +251,18 @@ var x = get with validate closure
 **Returns:** Validated value
 
 **Examples:**
-```poly
-var age: i32 = get with validate |x| x >= 1 && x <= 150
-var email: ustring = get with validate |e| e.contains(u"@")
-```
+~~~poly
+var age i32 := get with validate |x| x >= 1 && x <= 150
+var email ustring := get with validate |e| e.contains(unicode "@")
+~~~
 
 ---
 
 #### `with complete` - Input Completion
 
-```poly
-var x = get with complete array
-```
+~~~poly
+var x := get with complete array
+~~~
 
 **Parameters:**
 - `array`: Array of completion options
@@ -270,27 +270,27 @@ var x = get with complete array
 **Returns:** Selected value
 
 **Examples:**
-```poly
-var command: ustring = get with complete [u"start", u"stop", u"pause"]
-```
+~~~poly
+var command ustring := get with complete [unicode "start", unicode "stop", unicode "pause"]
+~~~
 
 ---
 
 #### `with encoding` - Encoding Specification
 
-```poly
-var x = get with encoding encoding_name
-```
+~~~poly
+var x := get with encoding encoding_name
+~~~
 
 **Parameters:**
-- `encoding_name`: Encoding string (e.g., `u"utf-8"`)
+- `encoding_name`: Encoding string (e.g., `unicode "utf-8"`)
 
 **Returns:** Decoded value
 
 **Examples:**
-```poly
-var text: ustring = get < "file.txt" with encoding u"utf-8"
-```
+~~~poly
+var text ustring := get < "file.txt" with encoding unicode "utf-8"
+~~~
 
 ---
 
@@ -298,12 +298,12 @@ var text: ustring = get < "file.txt" with encoding u"utf-8"
 
 ### Result Type
 
-```poly
+~~~poly fragment
 enum Result<T, E>
     Ok(T)
     Error(E)
 end enum
-```
+~~~
 
 **Variants:**
 - `Ok(T)`: Success with value of type `T`
@@ -313,59 +313,59 @@ end enum
 
 ### Error Propagation
 
-```poly
-var result = try risky_operation()
-```
+~~~poly
+var result := try risky_operation()
+~~~
 
 **Behavior:**
 - If `Ok(value)`: Unwraps to `value`
 - If `Error(e)`: Propagates error up the call stack
 
 **Examples:**
-```poly
+~~~poly
 fn process(): Result<ustring, Error>
-    var data = try read_file(u"config.txt")  # Propagates error
+    var data := try read_file(unicode "config.txt")  # Propagates error
     return Ok(data)
 end fn
-```
+~~~
 
 ---
 
 ### Pattern Matching
 
-```poly
+~~~poly
 match result
     Ok(value) => handle_success(value)
     Error(e) => handle_error(e)
 end match
-```
+~~~
 
 **Examples:**
-```poly
-match read_file(u"config.txt")
+~~~poly
+match read_file(unicode "config.txt")
     Ok(content) => process(content)
     Error(FileError::NotFound) => error "File not found"
     Error(FileError::PermissionDenied) => error "Permission denied"
     Error(e) => error "Unknown error"
 end match
-```
+~~~
 
 ---
 
 ### Wildcard Pattern
 
-```poly
+~~~poly
 match result
     Ok(value) => process(value)
     Error(_) => error "Something went wrong"
 end match
-```
+~~~
 
 ---
 
 ## Custom Error Types
 
-```poly
+~~~poly fragment
 enum MyError
     NotFound
     InvalidInput(message: ustring)
@@ -374,11 +374,61 @@ end enum
 
 fn validate(): Result<ustring, MyError>
     if invalid,
-        return Error(MyError::InvalidInput(u"Bad data"))
+        return Error(MyError::InvalidInput(unicode "Bad data"))
     end if
-    return Ok(u"valid")
+    return Ok(unicode "valid")
 end fn
-```
+~~~
+
+---
+
+## Math Functions
+
+Poly provides a small set of numeric helper functions that lower to idiomatic Rust methods. All of them require numeric operands.
+
+### `abs` - Absolute Value
+
+~~~poly
+var magnitude i32 := abs(-42)      # 42
+var distance f64 := abs(-3.5)      # 3.5
+~~~
+
+**Parameters:** one numeric expression  
+**Returns:** the operand type  
+**Rust:** `(expr).abs()`
+
+### `sqrt` - Square Root
+
+~~~poly fragment
+var length f64 := sqrt(16.0)       # 4.0
+~~~
+
+**Parameters:** one numeric expression  
+**Returns:** the operand type  
+**Rust:** `(expr).sqrt()`  
+**Note:** `sqrt` requires a float operand (`f32`/`f64`) in Rust; annotate the variable or literal accordingly.
+
+### `pow` - Power
+
+~~~poly
+var squared i32 := pow(3, 2)       # 9
+var cubed f64 := pow(2.0, 3.0)     # 8.0
+~~~
+
+**Parameters:** `base`, `exponent`  
+**Returns:** the wider operand type  
+**Rust:** `(base).pow(exponent)`
+
+### `min` / `max` - Extrema
+
+~~~poly
+var smallest i32 := min(3, 7)      # 3
+var largest i32 := max(3, 7)       # 7
+~~~
+
+**Parameters:** two numeric expressions  
+**Returns:** the wider operand type  
+**Rust:** `(a).min(b)` / `(a).max(b)`
 
 ---
 
@@ -400,13 +450,13 @@ end fn
 
 | Poly | Rust |
 |------|------|
-| `var x = get` | `stdin().read_line()` |
-| `var x: i32 = get` | `read_line() + parse()` |
+| `var x := get` | `stdin().read_line()` |
+| `var x i32 := get` | `read_line() + parse()` |
 | `get --timeout 5000` | Thread with timeout |
-| `get --default u"val"` | `unwrap_or_default()` |
-| `get --mask u"*"` | Terminal raw mode |
+| `get --default unicode "val"` | `unwrap_or_default()` |
+| `get --mask unicode "*"` | Terminal raw mode |
 | `get --as i32` | Type conversion |
-| `get --until u","` | Read until delimiter |
+| `get --until unicode ","` | Read until delimiter |
 | `get --bytes 8` | Read N bytes |
 | `get with validate \|x\| ...` | Validation loop |
 | `get with complete [...]` | Line editor completion |

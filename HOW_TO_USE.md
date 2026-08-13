@@ -4,28 +4,33 @@
 
 ### 1. Build the Compiler
 
-```bash
+~~~bash
 cd compiler
 cargo build --release
-```
+~~~
 
 The binary will be at `target/release/poly`.
 
-### 2. Transpile a Poly File to Rust
+### 2. Compile a Poly File
 
-```bash
+~~~bash
 poly hello.poly
-```
+cargo run --manifest-path rust_output/hello/Cargo.toml
+~~~
 
-This outputs Rust code to stdout.
+This generates and builds `rust_output/hello/` as an isolated Cargo project. The generated Rust is in `rust_output/hello/src/main.rs`; the built executable is in `rust_output/hello/target/debug/hello`.
+
+To print the generated Rust instead, use:
+
+~~~bash
+poly --emit-rust hello.poly
+~~~
 
 ### 3. Run the Generated Rust Code
 
-```bash
-poly hello.poly > hello.rs
-rustc hello.rs -o hello
-./hello
-```
+~~~bash
+cargo run --manifest-path rust_output/hello/Cargo.toml
+~~~
 
 ---
 
@@ -33,8 +38,11 @@ rustc hello.rs -o hello
 
 | Command | Description |
 |---------|-------------|
-| `poly file.poly` | Transpile to Rust |
-| `poly --check file.poly` | Validate code (like `rustc --check`) |
+| `poly file.poly` | Generate and build `rust_output/<program>/` with Cargo |
+| `poly --emit-rust file.poly` | Print transpiled Rust |
+| `poly --intermediate-representation file.poly` | Print the intermediate representation pipeline output (optimized Rust); `--ir` is an alias |
+| `poly --source-map file.poly` | Print the generated Poly→Rust source map |
+| `poly --check file.poly` | Validate code and verify generated Rust compilation |
 | `poly --tokens file.poly` | Show lexer tokens |
 | `poly --ast file.poly` | Show AST |
 | `poly --repl` | Start interactive REPL |
@@ -47,72 +55,72 @@ rustc hello.rs -o hello
 
 ### Hello World
 
-```poly
+~~~poly
 put "Hello, World!"
-```
+~~~
 
 ### Variables
 
-```poly
-var x: i32 = 42
-var name: ustring = "Alice"
-var pi = 3.14
-```
+~~~poly
+var x i32 := 42
+var name ustring := "Alice"
+var pi := 3.14
+~~~
 
 ### Functions
 
-```poly
+~~~poly fragment
 fn add(a: i32, b: i32): i32
     return a + b
 end fn
 
-var result = add(3, 4)
+var result := add(3, 4)
 put result
-```
+~~~
 
 ### Control Flow
 
 **If/Else:**
-```poly
-if x > 0,
+~~~poly
+if x > 0
     put "positive"
 else
     put "non-positive"
 end if
-```
+~~~
 
 **While Loop:**
-```poly
-var i = 0
+~~~poly
+var i := 0
 while i < 10
     put i
-    add i
+    i += 1
 end while
-```
+~~~
 
 **For Loop (Range):**
-```poly
+~~~poly
 for i in 0..10
     put i
 end for
-```
+~~~
 
 ### Increment
 
-```poly
-var x = 0
-add x       # x = x + 1
-```
+~~~poly
+var x := 0
+x += 1       # increment x by one
+~~~
 
 ### Pattern Matching
 
-```poly
+~~~poly
 match direction
     North => put "up"
     South => put "down"
     _ => put "other"
 end match
-```
+~~~
 
 ---
 
@@ -120,32 +128,32 @@ end match
 
 ### Read User Input
 
-```poly
-var name = get "What is your name? "
+~~~poly
+var name := get unicode "What is your name? "
 put "Hello, " + name + "!"
-```
+~~~
 
 ### Read a File
 
-```poly
-var content = get < "data.txt"
+~~~poly
+var content := get < "data.txt"
 put content
-```
+~~~
 
 ### Write to a File
 
-```poly
+~~~poly
 put "Hello" > "output.txt"
 put "World" >> "output.txt"
-```
+~~~
 
 ### Error Handling
 
-```poly
+~~~poly
 error "Something went wrong!"
 warn "This might be a problem"
 info "Debug: x = " + x
-```
+~~~
 
 ---
 
@@ -153,29 +161,46 @@ info "Debug: x = " + x
 
 Start the interactive REPL:
 
-```bash
+~~~bash
 poly --repl
-```
+~~~
+
+The REPL keeps a **stateful session**: variables and functions you declare persist across lines, and the whole session is re-transpiled after every submission. On Linux/macOS terminals a raw-mode line editor provides Tab completion, arrow-key history navigation, and cursor movement; elsewhere it falls back to plain line reading.
 
 **REPL Commands:**
 - `:help` - Show help
-- `:tokens` - Show tokens for buffered input
-- `:ast` - Show AST for buffered input
-- `:clear` - Clear the buffer
+- `:tokens` - Show tokens for the session or pending buffer
+- `:ast` - Show AST for the session or pending buffer
+- `:vars` - List session statements and bindings
+- `:history` - Show command history
+- `:clear` - Clear the pending buffer
+- `:reset` - Reset the session (drop all variables)
+- `:clear-history` - Clear saved history
 - `:quit` - Exit
 
 **Example Session:**
-```
-poly> var x = 42
+~~~
+poly> var x := 42
 poly> put x
 
 // Generated Rust code:
 // let mut x = 42;
 // println!("{}", x);
 
+poly> var y := x * 2   # x is still in scope
+poly> put y
+
+poly> :vars
+Session:
+  1  var x := 42
+  2  put x
+  3  var y := x * 2
+  4  put y
+Bindings: x, y
+
 poly> :quit
 Goodbye!
-```
+~~~
 
 ---
 
@@ -183,14 +208,14 @@ Goodbye!
 
 Validate without transpiling:
 
-```bash
+~~~bash
 poly --check file.poly
-```
+~~~
 
 Output on success:
-```
+~~~
 OK: 5 statements parsed
-```
+~~~
 
 ---
 
@@ -198,11 +223,10 @@ OK: 5 statements parsed
 
 Run the example files:
 
-```bash
-poly examples/prime_numbers.poly > primes.rs
-rustc primes.rs -o primes
-./primes
-```
+~~~bash
+poly examples/prime_numbers.poly
+cargo run --manifest-path rust_output/prime_numbers/Cargo.toml
+~~~
 
 Available examples:
 - `prime_numbers.poly` - Calculate prime numbers
@@ -228,10 +252,11 @@ Available examples:
 
 ## Tips
 
-1. **Use `--check` first** to validate code before transpiling
-2. **Try the REPL** to experiment with syntax
-3. **Check generated Rust** if you get compilation errors
-4. **Use examples** as reference for common patterns
+1. **Use `--check` first** to validate code before compiling
+2. **Use `--emit-rust`** when you need to inspect generated Rust
+3. **Try the REPL** to experiment with syntax
+4. **Check generated Rust** if you get compilation errors
+5. **Use examples** as reference for common patterns
 
 ---
 

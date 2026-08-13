@@ -1,15 +1,24 @@
 //! Recursive descent parser for the Poly language.
 
-use poly_lexer::token::{Token, TokenKind};
+use std::collections::HashMap;
+
+use poly_lexer::token::{Span, Token, TokenKind};
 
 use crate::ast::*;
 use crate::error::ParseError;
 
 /// The Poly language parser.
 pub struct Parser<'a> {
+    // The parser borrows lexer output so parsing never needs to duplicate token data.
     tokens: &'a [Token],
+    // `pos` always points at the next token to consume; `peek` reads without moving it.
     pos: usize,
+    // Recovery keeps collecting diagnostics so callers can show more than one fix at a time.
     errors: Vec<ParseError>,
+    // Chained conditionals recurse, so cap their depth before malformed input can exhaust the stack.
+    if_depth: usize,
+    // Statement macros defined so far; invocations expand during parsing.
+    macros: HashMap<String, MacroDecl>,
 }
 
 impl<'a> Parser<'a> {
@@ -19,16 +28,22 @@ impl<'a> Parser<'a> {
             tokens,
             pos: 0,
             errors: Vec::new(),
+            if_depth: 0,
+            macros: HashMap::new(),
         }
     }
 
     /// Parse the token stream and return a Program AST.
+    ///
+    /// This compatibility entry point preserves the historical first-error API;
+    /// tools that want all diagnostics should call `parse_with_recovery`.
     pub fn parse(&mut self) -> Result<Program, ParseError> {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
+            let start = self.pos;
             match self.parse_statement() {
-                Ok(stmt) => statements.push(stmt),
+                Ok(stmt) => statements.push(Spanned::new(stmt, self.statement_span(start))),
                 Err(mut e) => {
                     e.generate_suggestion();
                     self.errors.push(e);
@@ -46,12 +61,16 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse with error recovery, collecting all errors.
+    ///
+    /// A partially built program is returned alongside diagnostics so the CLI
+    /// and editor integrations can continue analyzing valid later statements.
     pub fn parse_with_recovery(&mut self) -> (Program, Vec<ParseError>) {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
+            let start = self.pos;
             match self.parse_statement() {
-                Ok(stmt) => statements.push(stmt),
+                Ok(stmt) => statements.push(Spanned::new(stmt, self.statement_span(start))),
                 Err(mut e) => {
                     e.generate_suggestion();
                     self.errors.push(e);
@@ -61,6 +80,25 @@ impl<'a> Parser<'a> {
         }
 
         (Program { statements }, self.errors.clone())
+    }
+
+    /// Compute the source span of a successfully parsed statement.
+    ///
+    /// `start` is the token index where the statement began.  The span runs
+    /// from the start of the first consumed token to the end of the last one;
+    /// if nothing was consumed (defensive), it falls back to the token at
+    /// `start` itself.
+    fn statement_span(&self, start: usize) -> Span {
+        let first = self.tokens.get(start).or_else(|| self.tokens.last());
+        let last = if self.pos > start {
+            self.tokens.get(self.pos - 1)
+        } else {
+            first
+        };
+        match (first, last) {
+            (Some(first), Some(last)) => Span::new(first.span.start, last.span.end),
+            _ => Span::new(0, 0),
+        }
     }
 
     /// Get collected errors.
@@ -89,6 +127,11 @@ impl<'a> Parser<'a> {
                 | TokenKind::Return
                 | TokenKind::Break
                 | TokenKind::Continue
+                | TokenKind::Set
+                | TokenKind::Add
+                | TokenKind::Sub
+                | TokenKind::Inc
+                | TokenKind::Dec
                 | TokenKind::Put
                 | TokenKind::Error
                 | TokenKind::Warn
@@ -135,6 +178,9 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self) -> &Token {
+        // The lexer always appends EOF. The increment guard keeps normal parsing
+        // on the final sentinel, while callers still ensure a token is available
+        // before advancing during recovery.
         let token = &self.tokens[self.pos];
         if self.pos + 1 < self.tokens.len() {
             self.pos += 1;
@@ -177,6 +223,8 @@ impl<'a> Parser<'a> {
 
     // === Statement parsing ===
 
+    // Dispatching on the first token keeps each declaration/control-flow parser
+    // small and makes synchronization points explicit in `synchronize` above.
     fn parse_statement(&mut self) -> Result<Statement, ParseError> {
         match self.peek().clone() {
             TokenKind::Var => self.parse_var_declaration(),
@@ -204,6 +252,7 @@ impl<'a> Parser<'a> {
             TokenKind::Type => self
                 .parse_type_declaration()
                 .map(Statement::TypeDeclaration),
+            TokenKind::Macro => self.parse_macro_declaration(),
             TokenKind::While => self.parse_while_statement(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Break => {
@@ -214,15 +263,9 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Statement::ContinueStatement)
             }
-            TokenKind::Add => {
-                self.advance(); // consume 'add'
-                let name = self.expect_identifier()?;
-                // add x means x = x + 1
-                Ok(Statement::Assignment {
-                    target: Expression::Identifier(name),
-                    op: AssignmentOp::PlusEq,
-                    value: Expression::IntLiteral("1".to_string()),
-                })
+            TokenKind::Set => self.parse_set_statement(),
+            TokenKind::Add | TokenKind::Sub | TokenKind::Inc | TokenKind::Dec => {
+                self.parse_mutation_statement()
             }
             TokenKind::Put => self.parse_put_statement(),
             TokenKind::Error => {
@@ -257,39 +300,68 @@ impl<'a> Parser<'a> {
                 }))
             }
             _ => {
-                // Try expression statement or assignment
-                let expr = self.parse_expression()?;
-
-                // Check for assignment
-                if self.peek().is_assignment_op() {
-                    let op = self.parse_assignment_op()?;
-                    let value = self.parse_expression()?;
-                    Ok(Statement::Assignment {
-                        target: expr,
-                        op,
-                        value,
-                    })
-                } else {
-                    Ok(Statement::ExpressionStatement(expr))
+                if self.starts_assignment_statement() {
+                    return self.parse_assignment_statement();
                 }
+                let expr = self.parse_expression()?;
+                if let Expression::Call { func, args } = &expr {
+                    if let Expression::Identifier(name) = func.as_ref() {
+                        if let Some(declaration) = self.macros.get(name).cloned() {
+                            return self.expand_macro_call(&declaration, args);
+                        }
+                    }
+                }
+                Ok(Statement::ExpressionStatement(expr))
             }
         }
     }
 
+    /// Parse the strict variable declaration syntax:
+    /// `var name := value` or `var name Type := value`.
     fn parse_var_declaration(&mut self) -> Result<Statement, ParseError> {
-        self.advance(); // consume 'var'
+        self.advance(); // consume `var`
         let name = self.expect_identifier()?;
-        let ty = if self.match_token(&TokenKind::Colon) {
-            Some(self.parse_type()?)
-        } else {
+
+        if self.match_token(&TokenKind::Colon) {
+            return Err(ParseError::with_suggestion(
+                "Variable declarations no longer use `:` before the type",
+                self.current().span,
+                format!("Use `var {name} type := value` or `var {name} := value`"),
+            ));
+        }
+
+        let ty = if matches!(self.peek(), TokenKind::ColonEq) {
             None
-        };
-        let value = if self.match_token(&TokenKind::Eq) {
-            Some(self.parse_expression()?)
+        } else if matches!(self.peek(), TokenKind::Eq) {
+            return Err(ParseError::with_suggestion(
+                "Variable declarations must use `:=` to initialize a value",
+                self.current().span,
+                format!("Use `var {name} := value`"),
+            ));
         } else {
-            None
+            Some(self.parse_type().map_err(|error| {
+                ParseError::with_suggestion(
+                    "Expected a type or `:=` after the variable name",
+                    error.span,
+                    format!("Use `var {name} type := value` or `var {name} := value`"),
+                )
+            })?)
         };
-        Ok(Statement::VarDeclaration { name, ty, value })
+
+        if !self.match_token(&TokenKind::ColonEq) {
+            return Err(ParseError::with_suggestion(
+                "Variable declarations must initialize a value with `:=`",
+                self.current().span,
+                format!("Use `var {name} := value` or `var {name} type := value`"),
+            ));
+        }
+
+        let value = self.parse_expression()?;
+        Ok(Statement::VarDeclaration {
+            name,
+            ty,
+            value: Some(value),
+        })
     }
 
     fn parse_let_declaration(&mut self) -> Result<Statement, ParseError> {
@@ -300,7 +372,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        self.expect(&TokenKind::Eq)?;
+        self.expect_initializer()?;
         let value = self.parse_expression()?;
         Ok(Statement::LetDeclaration { name, ty, value })
     }
@@ -308,19 +380,26 @@ impl<'a> Parser<'a> {
     fn parse_const_declaration(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'const'
         let name = self.expect_identifier()?;
-        self.expect(&TokenKind::Eq)?;
+        self.expect_initializer()?;
         let value = self.parse_expression()?;
         Ok(Statement::ConstDeclaration { name, value })
     }
 
     fn parse_return_statement(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'return'
-        let value =
-            if self.is_at_end() || matches!(self.peek(), TokenKind::Newline | TokenKind::Eof) {
-                None
-            } else {
-                Some(self.parse_expression()?)
-            };
+        let value = if self.is_at_end()
+            || matches!(
+                self.peek(),
+                TokenKind::Newline
+                    | TokenKind::Eof
+                    | TokenKind::End
+                    | TokenKind::Else
+                    | TokenKind::RBrace
+            ) {
+            None
+        } else {
+            Some(self.parse_expression()?)
+        };
         Ok(Statement::ReturnStatement(value))
     }
 
@@ -337,13 +416,271 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    fn parse_set_statement(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // consume `set`
+        let target = self.parse_expression()?;
+        self.expect(&TokenKind::To)?;
+        let value = self.parse_expression()?;
+
+        if expression_contains_target(&value, &target) {
+            return Err(ParseError::new(
+                format!(
+                    "Self-reference in `set {}` is not allowed; use an explicit mutation command",
+                    expression_description(&target)
+                ),
+                self.current().span,
+            ));
+        }
+
+        Ok(Statement::Set { target, value })
+    }
+
+    fn parse_mutation_statement(&mut self) -> Result<Statement, ParseError> {
+        let op = match self.peek() {
+            TokenKind::Add => MutationOp::Add,
+            TokenKind::Sub => MutationOp::Sub,
+            TokenKind::Inc => MutationOp::Inc,
+            TokenKind::Dec => MutationOp::Dec,
+            _ => {
+                return Err(ParseError::new(
+                    format!("Expected mutation command, got {:?}", self.peek()),
+                    self.current().span,
+                ));
+            }
+        };
+        self.advance();
+        let target = self.parse_expression()?;
+        let value = if self.match_token(&TokenKind::Comma) {
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+        if matches!(op, MutationOp::Inc | MutationOp::Dec) && value.is_some() {
+            return Err(ParseError::new(
+                "`inc` and `dec` do not take a value; use `add` or `sub` for a custom amount",
+                self.current().span,
+            ));
+        }
+        Ok(Statement::Mutation { target, op, value })
+    }
+
+    /// Accept the conventional `=` initializer and the legacy `:=` spelling.
+    fn match_initializer(&mut self) -> bool {
+        self.match_token(&TokenKind::Eq) || self.match_token(&TokenKind::ColonEq)
+    }
+
+    fn expect_initializer(&mut self) -> Result<(), ParseError> {
+        if self.match_initializer() {
+            Ok(())
+        } else {
+            Err(ParseError::new(
+                format!("Expected `=` after declaration, got {:?}", self.peek()),
+                self.current().span,
+            ))
+        }
+    }
+
+    /// Detect an assignment whose target is an identifier, field, or index expression.
+    fn starts_assignment_statement(&self) -> bool {
+        let mut index = self.pos;
+        if !matches!(
+            self.tokens.get(index).map(|token| &token.kind),
+            Some(TokenKind::Identifier(_))
+        ) {
+            return false;
+        }
+        index += 1;
+
+        loop {
+            match self.tokens.get(index).map(|token| &token.kind) {
+                Some(TokenKind::Dot) => {
+                    index += 1;
+                    if !matches!(
+                        self.tokens.get(index).map(|token| &token.kind),
+                        Some(TokenKind::Identifier(_)) | Some(TokenKind::Await)
+                    ) {
+                        return false;
+                    }
+                    index += 1;
+                }
+                Some(TokenKind::LBracket) => {
+                    let mut depth = 1;
+                    index += 1;
+                    while depth > 0 {
+                        match self.tokens.get(index).map(|token| &token.kind) {
+                            Some(TokenKind::LBracket) => depth += 1,
+                            Some(TokenKind::RBracket) => depth -= 1,
+                            Some(TokenKind::Eof) | None => return false,
+                            _ => {}
+                        }
+                        index += 1;
+                    }
+                }
+                _ => break,
+            }
+        }
+
+        matches!(
+            self.tokens.get(index).map(|token| &token.kind),
+            Some(
+                TokenKind::Eq
+                    | TokenKind::PlusEq
+                    | TokenKind::MinusEq
+                    | TokenKind::StarEq
+                    | TokenKind::SlashEq
+                    | TokenKind::PercentEq
+                    | TokenKind::AmpEq
+                    | TokenKind::PipeEq
+                    | TokenKind::CaretEq
+                    | TokenKind::LtLtEq
+                    | TokenKind::GtGtEq
+            )
+        )
+    }
+
+    fn parse_assignment_target(&mut self) -> Result<Expression, ParseError> {
+        let name = self.expect_identifier()?;
+        let mut target = Expression::Identifier(name);
+
+        loop {
+            match self.peek() {
+                TokenKind::Dot => {
+                    self.advance();
+                    let field = self.expect_identifier()?;
+                    target = Expression::FieldAccess {
+                        object: Box::new(target),
+                        field,
+                    };
+                }
+                TokenKind::LBracket => {
+                    self.advance();
+                    let index = self.parse_expression()?;
+                    self.expect(&TokenKind::RBracket)?;
+                    target = Expression::Index {
+                        object: Box::new(target),
+                        index: Box::new(index),
+                    };
+                }
+                _ => break,
+            }
+        }
+
+        Ok(target)
+    }
+
+    fn parse_assignment_statement(&mut self) -> Result<Statement, ParseError> {
+        let target = self.parse_assignment_target()?;
+        let operator = self.advance().kind.clone();
+        let value = self.parse_expression()?;
+
+        match operator {
+            TokenKind::Eq => Ok(Statement::Set { target, value }),
+            TokenKind::PlusEq => Ok(Statement::Mutation {
+                target,
+                op: MutationOp::Add,
+                value: Some(value),
+            }),
+            TokenKind::MinusEq => Ok(Statement::Mutation {
+                target,
+                op: MutationOp::Sub,
+                value: Some(value),
+            }),
+            TokenKind::StarEq => Ok(Statement::Set {
+                target: target.clone(),
+                value: Expression::BinaryOp {
+                    op: BinaryOp::Mul,
+                    left: Box::new(target),
+                    right: Box::new(value),
+                },
+            }),
+            TokenKind::SlashEq => Ok(Statement::Set {
+                target: target.clone(),
+                value: Expression::BinaryOp {
+                    op: BinaryOp::Div,
+                    left: Box::new(target),
+                    right: Box::new(value),
+                },
+            }),
+            TokenKind::PercentEq => Ok(Statement::Set {
+                target: target.clone(),
+                value: Expression::BinaryOp {
+                    op: BinaryOp::Mod,
+                    left: Box::new(target),
+                    right: Box::new(value),
+                },
+            }),
+            TokenKind::AmpEq => Ok(Statement::Set {
+                target: target.clone(),
+                value: Expression::BinaryOp {
+                    op: BinaryOp::BitAnd,
+                    left: Box::new(target),
+                    right: Box::new(value),
+                },
+            }),
+            TokenKind::PipeEq => Ok(Statement::Set {
+                target: target.clone(),
+                value: Expression::BinaryOp {
+                    op: BinaryOp::BitOr,
+                    left: Box::new(target),
+                    right: Box::new(value),
+                },
+            }),
+            TokenKind::CaretEq => Ok(Statement::Set {
+                target: target.clone(),
+                value: Expression::BinaryOp {
+                    op: BinaryOp::BitXor,
+                    left: Box::new(target),
+                    right: Box::new(value),
+                },
+            }),
+            TokenKind::LtLtEq => Ok(Statement::Set {
+                target: target.clone(),
+                value: Expression::BinaryOp {
+                    op: BinaryOp::Shl,
+                    left: Box::new(target),
+                    right: Box::new(value),
+                },
+            }),
+            TokenKind::GtGtEq => Ok(Statement::Set {
+                target: target.clone(),
+                value: Expression::BinaryOp {
+                    op: BinaryOp::Shr,
+                    left: Box::new(target),
+                    right: Box::new(value),
+                },
+            }),
+            _ => Err(ParseError::new(
+                "Expected assignment operator",
+                self.current().span,
+            )),
+        }
+    }
+
     fn parse_put_statement(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'put'
-        let no_newline = self.match_token(&TokenKind::Minus);
-        if no_newline {
-            // Consume 'n' after -n
-            self.expect_identifier()?;
-        }
+        let no_newline = if self.peek() == &TokenKind::Minus {
+            match self.tokens.get(self.pos + 1).map(|token| &token.kind) {
+                Some(TokenKind::Identifier(name)) if name == "n" => {
+                    self.advance(); // consume '-'
+                    self.advance(); // consume 'n'
+                    true
+                }
+                Some(TokenKind::Identifier(name)) if name == "u" => {
+                    // `-u "..."` is no longer a valid Unicode literal. Leave
+                    // it for parse_expression so it receives a migration error.
+                    false
+                }
+                _ => {
+                    return Err(ParseError::with_suggestion(
+                        "Unknown `put` flag",
+                        self.current().span,
+                        "Use `put -n value` for no-newline output or `put unicode \"text\"` for Unicode text",
+                    ));
+                }
+            }
+        } else {
+            false
+        };
         let expr = self.parse_expression()?;
         let redirect = if self.match_token(&TokenKind::Gt) {
             Some(Redirect::Write(self.parse_expression()?))
@@ -361,11 +698,14 @@ impl<'a> Parser<'a> {
 
     // === Declaration parsing ===
 
+    // Function, struct, enum, trait, and impl parsers all preserve the source
+    // declaration shape so later phases can share one AST representation.
     fn parse_function_declaration(&mut self) -> Result<FunctionDecl, ParseError> {
         // Check for async modifier
         let is_async = self.match_token(&TokenKind::Async);
         self.advance(); // consume 'fn'
         let name = self.expect_identifier()?;
+        let generics = self.parse_generic_params()?;
         self.expect(&TokenKind::LParen)?;
         let params = self.parse_params()?;
         self.expect(&TokenKind::RParen)?;
@@ -380,16 +720,18 @@ impl<'a> Parser<'a> {
             self.expect(&TokenKind::RBrace)?;
             Some(stmts)
         } else if self.peek() == &TokenKind::End {
-            // Function with no body (just signature)
+            // An explicit empty body is still a complete function.
+            self.advance();
+            self.expect(&TokenKind::Fn)?;
+            Some(Vec::new())
+        } else if self.is_at_end() {
+            // A declaration-only signature at EOF remains valid.
             None
         } else {
             // Parse body until 'end fn'
             let stmts = self.parse_block()?;
-            // Consume 'end fn'
-            if self.peek() == &TokenKind::End {
-                self.advance();
-                self.expect(&TokenKind::Fn)?;
-            }
+            self.expect(&TokenKind::End)?;
+            self.expect(&TokenKind::Fn)?;
             Some(stmts)
         };
         Ok(FunctionDecl {
@@ -398,7 +740,34 @@ impl<'a> Parser<'a> {
             return_type,
             body,
             is_async,
+            generics,
         })
+    }
+
+    /// Parse generic parameter lists such as `<T: Bound1 + Bound2, U>` used by
+    /// generic functions and structs. Returns an empty list when absent.
+    fn parse_generic_params(&mut self) -> Result<Vec<GenericParam>, ParseError> {
+        let mut params = Vec::new();
+        if self.peek() != &TokenKind::Lt {
+            return Ok(params);
+        }
+        self.advance(); // consume '<'
+        loop {
+            let name = self.expect_identifier()?;
+            let mut bounds = Vec::new();
+            if self.match_token(&TokenKind::Colon) {
+                bounds.push(self.expect_identifier()?);
+                while self.match_token(&TokenKind::Plus) {
+                    bounds.push(self.expect_identifier()?);
+                }
+            }
+            params.push(GenericParam { name, bounds });
+            if !self.match_token(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(&TokenKind::Gt)?;
+        Ok(params)
     }
 
     fn parse_params(&mut self) -> Result<Vec<Parameter>, ParseError> {
@@ -418,7 +787,7 @@ impl<'a> Parser<'a> {
             } else {
                 self.expect(&TokenKind::Colon)?;
                 let ty = self.parse_type()?;
-                let default = if self.match_token(&TokenKind::Eq) {
+                let default = if self.match_initializer() {
                     Some(self.parse_expression()?)
                 } else {
                     None
@@ -435,6 +804,7 @@ impl<'a> Parser<'a> {
     fn parse_struct_declaration(&mut self) -> Result<StructDecl, ParseError> {
         self.advance(); // consume 'struct'
         let name = self.expect_identifier()?;
+        let generics = self.parse_generic_params()?;
         let mut fields = Vec::new();
         let mut methods = Vec::new();
 
@@ -446,7 +816,7 @@ impl<'a> Parser<'a> {
                 let field_name = self.expect_identifier()?;
                 self.expect(&TokenKind::Colon)?;
                 let ty = self.parse_type()?;
-                let default = if self.match_token(&TokenKind::Eq) {
+                let default = if self.match_initializer() {
                     Some(self.parse_expression()?)
                 } else {
                     None
@@ -466,6 +836,7 @@ impl<'a> Parser<'a> {
             name,
             fields,
             methods,
+            generics,
         })
     }
 
@@ -559,6 +930,16 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+        // Empty enums are not valid Poly declarations. This also prevents
+        // `enum` followed immediately by `end enum` from being accepted as
+        // an enum whose name was accidentally taken from a variant line.
+        if variants.is_empty() && methods.is_empty() {
+            return Err(ParseError::new(
+                "Enum declaration must contain at least one variant or method",
+                self.current().span,
+            ));
+        }
+
         // consume 'enum'
         self.expect(&TokenKind::Enum)?;
 
@@ -594,6 +975,7 @@ impl<'a> Parser<'a> {
                 return_type,
                 body: None,
                 is_async,
+                generics: Vec::new(),
             });
         }
         // consume 'trait'
@@ -655,6 +1037,7 @@ impl<'a> Parser<'a> {
                 return_type,
                 body,
                 is_async,
+                generics: Vec::new(),
             });
         }
         // consume 'impl'
@@ -670,10 +1053,12 @@ impl<'a> Parser<'a> {
     fn parse_module_declaration(&mut self) -> Result<ModuleDecl, ParseError> {
         self.advance(); // consume 'module'
         let name = self.expect_identifier()?;
-        let mut statements = Vec::new();
+        let mut statements = Block::new();
 
         while !self.match_token(&TokenKind::End) {
-            statements.push(self.parse_statement()?);
+            let start = self.pos;
+            let statement = self.parse_statement()?;
+            statements.push(Spanned::new(statement, self.statement_span(start)));
         }
         // consume 'module'
         self.expect(&TokenKind::Module)?;
@@ -702,13 +1087,72 @@ impl<'a> Parser<'a> {
     fn parse_type_declaration(&mut self) -> Result<TypeDecl, ParseError> {
         self.advance(); // consume 'type'
         let name = self.expect_identifier()?;
-        self.expect(&TokenKind::Eq)?;
+        self.expect_initializer()?;
         let ty = self.parse_type()?;
         Ok(TypeDecl { name, ty })
     }
 
+    // === Macro parsing ===
+
+    // Statement macros expand during parsing: `macro name(params)` collects
+    // body statements, and later `name(arg, ...)` calls are replaced by that
+    // body with parameter identifiers substituted for the arguments.
+    fn parse_macro_declaration(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // consume 'macro'
+        let name = self.expect_identifier()?;
+        let mut params = Vec::new();
+        if self.match_token(&TokenKind::LParen) {
+            if self.peek() != &TokenKind::RParen {
+                params.push(self.expect_identifier()?);
+                while self.match_token(&TokenKind::Comma) {
+                    params.push(self.expect_identifier()?);
+                }
+            }
+            self.expect(&TokenKind::RParen)?;
+        }
+        let body = self.parse_block()?;
+        self.expect(&TokenKind::End)?;
+        self.expect(&TokenKind::Macro)?;
+        self.macros
+            .insert(name.clone(), MacroDecl { name, params, body });
+        // The declaration itself is not a statement; continue with the next one.
+        self.parse_statement()
+    }
+
+    /// Expand a macro invocation into a block statement whose bodies have had
+    /// parameter identifiers replaced by the supplied argument expressions.
+    fn expand_macro_call(
+        &self,
+        declaration: &MacroDecl,
+        args: &[Expression],
+    ) -> Result<Statement, ParseError> {
+        if declaration.params.len() != args.len() {
+            return Err(ParseError::new(
+                format!(
+                    "macro `{}` expects {} arguments, got {}",
+                    declaration.name,
+                    declaration.params.len(),
+                    args.len()
+                ),
+                self.current().span,
+            ));
+        }
+        let mut substitutions = HashMap::new();
+        for (param, arg) in declaration.params.iter().zip(args.iter()) {
+            substitutions.insert(param.clone(), arg.clone());
+        }
+        let expanded = declaration
+            .body
+            .iter()
+            .map(|statement| substitute_spanned_statement(statement, &substitutions))
+            .collect();
+        Ok(Statement::Block(expanded))
+    }
+
     // === Type parsing ===
 
+    // Type parsing is recursive because containers and function signatures nest
+    // other annotations inside delimiters such as `<...>` and `(...)`.
     fn parse_type(&mut self) -> Result<TypeAnnotation, ParseError> {
         match self.peek().clone() {
             TokenKind::I8 => {
@@ -823,6 +1267,24 @@ impl<'a> Parser<'a> {
                 self.expect(&TokenKind::Gt)?;
                 Ok(TypeAnnotation::Result(Box::new(ok_ty), Box::new(err_ty)))
             }
+            TokenKind::Fn => {
+                self.advance();
+                self.expect(&TokenKind::LParen)?;
+                let mut params = Vec::new();
+                if self.peek() != &TokenKind::RParen {
+                    params.push(self.parse_type()?);
+                    while self.match_token(&TokenKind::Comma) {
+                        params.push(self.parse_type()?);
+                    }
+                }
+                self.expect(&TokenKind::RParen)?;
+                self.expect(&TokenKind::Arrow)?;
+                let ret = self.parse_type()?;
+                Ok(TypeAnnotation::Function {
+                    params,
+                    ret: Box::new(ret),
+                })
+            }
             TokenKind::Identifier(name) => {
                 self.advance();
                 if self.match_token(&TokenKind::Lt) {
@@ -831,8 +1293,7 @@ impl<'a> Parser<'a> {
                         args.push(self.parse_type()?);
                     }
                     self.expect(&TokenKind::Gt)?;
-                    // For now, just return as named with generic args
-                    Ok(TypeAnnotation::Named(format!("{}<{}>", name, args.len())))
+                    Ok(TypeAnnotation::Generic { name, args })
                 } else {
                     Ok(TypeAnnotation::Named(name))
                 }
@@ -879,6 +1340,9 @@ impl<'a> Parser<'a> {
 
     // === Expression parsing ===
 
+    // Each helper below represents one precedence level. Lower-precedence
+    // helpers call higher-precedence helpers first, producing left-associative
+    // trees without a separate precedence table.
     fn parse_expression(&mut self) -> Result<Expression, ParseError> {
         self.parse_or_expression()
     }
@@ -915,7 +1379,7 @@ impl<'a> Parser<'a> {
         let mut left = self.parse_bitwise_or()?;
         loop {
             match self.peek() {
-                TokenKind::EqEq => {
+                TokenKind::Eq | TokenKind::EqEq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
                     left = Expression::BinaryOp {
@@ -1111,8 +1575,23 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary(&mut self) -> Result<Expression, ParseError> {
+        // Prefix operators recurse into unary parsing so chains such as `!!x`
+        // and `*ptr` bind tighter than every binary operator.
         match self.peek() {
             TokenKind::Minus => {
+                if matches!(self.tokens.get(self.pos + 1).map(|token| &token.kind), Some(TokenKind::Identifier(name)) if name == "u")
+                    && matches!(
+                        self.tokens.get(self.pos + 2).map(|token| &token.kind),
+                        Some(TokenKind::StringLiteral(_))
+                    )
+                {
+                    return Err(ParseError::with_suggestion(
+                        "The `unicode \"...\"` Unicode string syntax has been removed",
+                        self.current().span,
+                        "Use `unicode \"...\"` instead",
+                    ));
+                }
+
                 self.advance();
                 let expr = self.parse_unary()?;
                 Ok(Expression::UnaryOp {
@@ -1244,9 +1723,7 @@ impl<'a> Parser<'a> {
                     func: Box::new(Expression::Identifier("for_each_destructure".into())),
                     args: vec![
                         Expression::TupleLiteral(
-                            vars.into_iter()
-                                .map(Expression::Identifier)
-                                .collect(),
+                            vars.into_iter().map(Expression::Identifier).collect(),
                         ),
                         collection,
                     ],
@@ -1342,17 +1819,19 @@ impl<'a> Parser<'a> {
         let variable = self.expect_identifier()?;
         self.expect(&TokenKind::In)?;
         let iter = self.parse_expression()?;
-        let _body = self.parse_block()?;
+        let body = self.parse_block()?;
         self.expect(&TokenKind::End)?;
         self.expect(&TokenKind::For)?;
-        // Represent as a call for now
-        Ok(Expression::Call {
-            func: Box::new(Expression::Identifier("for_loop".into())),
-            args: vec![Expression::Identifier(variable), iter],
+        Ok(Expression::ForLoop {
+            variable,
+            iterable: Box::new(iter),
+            body,
         })
     }
 
     fn parse_postfix(&mut self) -> Result<Expression, ParseError> {
+        // Start with an atom, then repeatedly attach calls, indexing, and field
+        // access. Repetition is what permits expressions like `a.b()[i].c`.
         let mut expr = self.parse_primary()?;
 
         loop {
@@ -1433,6 +1912,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary(&mut self) -> Result<Expression, ParseError> {
+        // Primary expressions are the leaves of the expression tree: literals,
+        // names, grouped values, and language constructs such as `match`.
         match self.peek().clone() {
             TokenKind::IntLiteral(val) => {
                 self.advance();
@@ -1464,10 +1945,17 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Expression::StringLiteral(val))
             }
-            TokenKind::UnicodeStringLiteral(val) => {
-                self.advance();
-                Ok(Expression::UnicodeStringLiteral(val))
-            }
+            TokenKind::UnicodeStringLiteral(_) => Err(ParseError::with_suggestion(
+                "The legacy Unicode string syntax is no longer accepted",
+                self.current().span,
+                "Use `unicode \"...\"` instead",
+            )),
+            TokenKind::UnicodeCharLiteral(_) => Err(ParseError::with_suggestion(
+                "Character literals must use the explicit `unicode` keyword",
+                self.current().span,
+                "Use `unicode 'c'` instead",
+            )),
+            TokenKind::Unicode => self.parse_unicode_literal(),
             TokenKind::BoolLiteral(val) => {
                 self.advance();
                 Ok(Expression::BoolLiteral(val))
@@ -1477,6 +1965,18 @@ impl<'a> Parser<'a> {
                 Ok(Expression::ByteLiteral(val))
             }
             TokenKind::Identifier(name) => {
+                if name == "u"
+                    && matches!(
+                        self.tokens.get(self.pos + 1).map(|token| &token.kind),
+                        Some(TokenKind::StringLiteral(_)) | Some(TokenKind::UnicodeCharLiteral(_))
+                    )
+                {
+                    return Err(ParseError::with_suggestion(
+                        "The legacy Unicode literal syntax is no longer accepted",
+                        self.current().span,
+                        "Use `unicode \"...\"` or `unicode 'c'` instead",
+                    ));
+                }
                 self.advance();
 
                 // Check for enum variant: EnumName::Variant
@@ -1590,28 +2090,158 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_unicode_literal(&mut self) -> Result<Expression, ParseError> {
+        self.advance(); // consume `unicode`
+        match self.peek().clone() {
+            TokenKind::StringLiteral(value) => {
+                self.advance();
+                Ok(Expression::UnicodeStringLiteral(value))
+            }
+            TokenKind::UnicodeCharLiteral(value) => {
+                self.advance();
+                let character = value
+                    .chars()
+                    .next()
+                    .expect("lexer guarantees one Unicode character");
+                Ok(Expression::UnicodeCharLiteral(character))
+            }
+            _ => Err(ParseError::with_suggestion(
+                "Expected a quoted string or character after `unicode`",
+                self.current().span,
+                "Use `unicode \"text\"` or `unicode 'c'`",
+            )),
+        }
+    }
+
     fn parse_if_expression(&mut self) -> Result<Expression, ParseError> {
+        self.parse_if_expression_inner(true)
+    }
+
+    fn starts_block_statement(&self) -> bool {
+        matches!(
+            self.peek(),
+            TokenKind::Var
+                | TokenKind::Let
+                | TokenKind::Const
+                | TokenKind::Fn
+                | TokenKind::Async
+                | TokenKind::Struct
+                | TokenKind::Enum
+                | TokenKind::Trait
+                | TokenKind::Impl
+                | TokenKind::Module
+                | TokenKind::Use
+                | TokenKind::Type
+                | TokenKind::While
+                | TokenKind::If
+                | TokenKind::Return
+                | TokenKind::Break
+                | TokenKind::Continue
+                | TokenKind::Set
+                | TokenKind::Add
+                | TokenKind::Sub
+                | TokenKind::Inc
+                | TokenKind::Dec
+                | TokenKind::Put
+                | TokenKind::Error
+                | TokenKind::Warn
+                | TokenKind::Info
+                | TokenKind::Match
+                | TokenKind::Loop
+                | TokenKind::For
+        )
+    }
+
+    /// Parse an if expression while optionally consuming its shared `end if`.
+    /// Chained `else if` branches share one terminator, owned by the outermost
+    /// if expression. A finite limit keeps malformed or machine-generated input
+    /// from overflowing the parser thread's stack.
+    fn parse_if_expression_inner(
+        &mut self,
+        consume_terminator: bool,
+    ) -> Result<Expression, ParseError> {
+        const MAX_IF_DEPTH: usize = 32;
+        if self.if_depth >= MAX_IF_DEPTH {
+            return Err(ParseError::new(
+                format!("Maximum nested if depth ({MAX_IF_DEPTH}) exceeded"),
+                self.current().span,
+            ));
+        }
+
+        self.if_depth += 1;
+        let result = self.parse_if_expression_inner_impl(consume_terminator);
+        self.if_depth -= 1;
+        result
+    }
+
+    fn parse_if_expression_inner_impl(
+        &mut self,
+        consume_terminator: bool,
+    ) -> Result<Expression, ParseError> {
         self.advance(); // consume 'if'
         let condition = self.parse_expression()?;
-        // New syntax: use comma instead of 'then'
-        self.expect(&TokenKind::Comma)?;
+        // New syntax: use comma instead of 'then'. Support the compact
+        // expression form `if condition, value else other_value` as well
+        // as the block form used by ordinary statements.
+        // A comma is accepted for compatibility, but the canonical form is
+        // now simply `if condition` followed by its block or expression.
+        self.match_token(&TokenKind::Comma);
+        let expression_start = self.pos;
+        if !self.starts_block_statement() {
+            if let Ok(then_expr) = self.parse_expression() {
+                let then_span = self.statement_span(expression_start);
+                if self.match_token(&TokenKind::Else) {
+                    let else_start = self.pos;
+                    if let Ok(else_expr) = self.parse_expression() {
+                        let else_span = self.statement_span(else_start);
+                        if consume_terminator && self.match_token(&TokenKind::End) {
+                            self.expect(&TokenKind::If)?;
+                        }
+                        return Ok(Expression::IfExpression {
+                            condition: Box::new(condition),
+                            then_block: vec![Spanned::new(
+                                Statement::ExpressionStatement(then_expr),
+                                then_span,
+                            )],
+                            else_block: Some(vec![Spanned::new(
+                                Statement::ExpressionStatement(else_expr),
+                                else_span,
+                            )]),
+                        });
+                    }
+                    // `else` followed by a statement keyword belongs to the
+                    // block form, not the compact expression form.
+                    self.pos = else_start;
+                }
+            }
+        }
+        self.pos = expression_start;
         let then_block = self.parse_block()?;
         let else_block = if self.match_token(&TokenKind::Else) {
             // Consume comma after 'else' if present
             self.match_token(&TokenKind::Comma);
             if self.peek() == &TokenKind::If {
-                // else if - parse as nested if expression
-                let else_if = self.parse_if_expression()?;
-                vec![Statement::ExpressionStatement(else_if)]
+                // `else if` is one chained conditional, so the recursive
+                // branch owns the final shared `end if`.
+                let else_start = self.pos;
+                let else_if = self.parse_if_expression_inner(true)?;
+                vec![Spanned::new(
+                    Statement::ExpressionStatement(else_if),
+                    self.statement_span(else_start),
+                )]
             } else {
                 let block = self.parse_block()?;
-                self.expect(&TokenKind::End)?;
-                self.expect(&TokenKind::If)?;
+                if consume_terminator {
+                    self.expect(&TokenKind::End)?;
+                    self.expect(&TokenKind::If)?;
+                }
                 block
             }
         } else {
-            self.expect(&TokenKind::End)?;
-            self.expect(&TokenKind::If)?;
+            if consume_terminator {
+                self.expect(&TokenKind::End)?;
+                self.expect(&TokenKind::If)?;
+            }
             vec![]
         };
         Ok(Expression::IfExpression {
@@ -1622,6 +2252,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_match_expression(&mut self) -> Result<Expression, ParseError> {
+        // Match arms are parsed until their closing `end match`; each arm owns
+        // its pattern, optional guard, and either an expression or block body.
         self.advance(); // consume 'match'
         let scrutinee = self.parse_expression()?;
         let mut arms = Vec::new();
@@ -1669,7 +2301,9 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            stmts.push(self.parse_statement()?);
+            let start = self.pos;
+            let statement = self.parse_statement()?;
+            stmts.push(Spanned::new(statement, self.statement_span(start)));
         }
 
         if stmts.is_empty() {
@@ -1677,7 +2311,7 @@ impl<'a> Parser<'a> {
             let expr = self.parse_expression()?;
             Ok(MatchArmBody::Expression(expr))
         } else if stmts.len() == 1 {
-            if let Statement::ExpressionStatement(expr) = &stmts[0] {
+            if let Statement::ExpressionStatement(expr) = &stmts[0].node {
                 Ok(MatchArmBody::Expression(expr.clone()))
             } else {
                 Ok(MatchArmBody::Block(stmts))
@@ -1695,6 +2329,8 @@ impl<'a> Parser<'a> {
                 | TokenKind::IntLiteral(_)
                 | TokenKind::StringLiteral(_)
                 | TokenKind::UnicodeStringLiteral(_)
+                | TokenKind::UnicodeCharLiteral(_)
+                | TokenKind::Unicode
                 | TokenKind::BoolLiteral(_)
                 | TokenKind::Minus
                 | TokenKind::LParen
@@ -1754,6 +2390,18 @@ impl<'a> Parser<'a> {
             }
             TokenKind::UnicodeStringLiteral(_) => {
                 self.advance();
+            }
+            TokenKind::UnicodeCharLiteral(_) => {
+                self.advance();
+            }
+            TokenKind::Unicode => {
+                self.advance();
+                if matches!(
+                    self.peek(),
+                    TokenKind::StringLiteral(_) | TokenKind::UnicodeCharLiteral(_)
+                ) {
+                    self.advance();
+                }
             }
             TokenKind::BoolLiteral(_) => {
                 self.advance();
@@ -1817,6 +2465,8 @@ impl<'a> Parser<'a> {
             TokenKind::IntLiteral(_)
             | TokenKind::StringLiteral(_)
             | TokenKind::UnicodeStringLiteral(_)
+            | TokenKind::UnicodeCharLiteral(_)
+            | TokenKind::Unicode
             | TokenKind::BoolLiteral(_) => {
                 let expr = self.parse_primary()?;
                 Ok(Pattern::Literal(expr))
@@ -1901,20 +2551,59 @@ impl<'a> Parser<'a> {
             source = Some(Box::new(self.parse_primary()?));
         }
 
-        // Check for prompt (string literal right after get)
+        if source.is_some() && self.peek() == &TokenKind::Unicode {
+            return Err(ParseError::new(
+                "A file input cannot also have a Unicode prompt",
+                self.current().span,
+            ));
+        }
+
+        // Prompts use an explicit `unicode` keyword.
+        if source.is_none() && self.peek() == &TokenKind::Unicode {
+            self.advance();
+            let parsed_prompt = match self.peek().clone() {
+                TokenKind::StringLiteral(value) => {
+                    self.advance();
+                    Expression::StringLiteral(value)
+                }
+                _ => {
+                    return Err(ParseError::with_suggestion(
+                        "`get unicode` expects a quoted prompt",
+                        self.current().span,
+                        "Use `get unicode \"Prompt:\"`",
+                    ));
+                }
+            };
+            prompt = Some(parsed_prompt);
+        }
+
         if source.is_none()
             && matches!(
                 self.peek(),
                 TokenKind::StringLiteral(_) | TokenKind::UnicodeStringLiteral(_)
             )
         {
-            prompt = Some(self.parse_expression()?);
+            return Err(ParseError::with_suggestion(
+                "Input prompts must use `get unicode \"Prompt:\"`; do not place a string directly after `get`",
+                self.current().span,
+                "Use `get unicode \"Prompt:\"`",
+            ));
         }
 
         // Parse flags
         loop {
             match self.peek() {
                 TokenKind::Minus => {
+                    if matches!(
+                        self.tokens.get(self.pos + 1).map(|token| &token.kind),
+                        Some(TokenKind::Identifier(name)) if name == "u"
+                    ) {
+                        return Err(ParseError::with_suggestion(
+                            "The `get -u` prompt syntax has been removed",
+                            self.current().span,
+                            "Use `get unicode \"Prompt:\"` instead",
+                        ));
+                    }
                     self.advance();
                     if self.peek() == &TokenKind::Minus {
                         self.advance();
@@ -1939,6 +2628,10 @@ impl<'a> Parser<'a> {
                                 self.advance();
                                 flags.push(GetFlag::Bytes(self.parse_expression()?));
                             }
+                            TokenKind::As => {
+                                self.advance();
+                                flags.push(GetFlag::As(self.parse_type()?));
+                            }
                             TokenKind::Identifier(ref s) if s == "bytes" => {
                                 self.advance();
                                 flags.push(GetFlag::Bytes(self.parse_expression()?));
@@ -1946,10 +2639,10 @@ impl<'a> Parser<'a> {
                             _ => break,
                         }
                     } else {
-                        // -n flag
-                        self.expect_identifier()?;
-                        // This is for put, not get
-                        break;
+                        return Err(ParseError::new(
+                            "Unknown `get` flag; use `get unicode \"Prompt:\"` for prompts or a documented `--` option",
+                            self.current().span,
+                        ));
                     }
                 }
                 TokenKind::With => {
@@ -1988,69 +2681,698 @@ impl<'a> Parser<'a> {
         })))
     }
 
-    fn parse_assignment_op(&mut self) -> Result<AssignmentOp, ParseError> {
-        match self.peek() {
-            TokenKind::Eq => {
-                self.advance();
-                Ok(AssignmentOp::Eq)
-            }
-            TokenKind::PlusEq => {
-                self.advance();
-                Ok(AssignmentOp::PlusEq)
-            }
-            TokenKind::MinusEq => {
-                self.advance();
-                Ok(AssignmentOp::MinusEq)
-            }
-            TokenKind::StarEq => {
-                self.advance();
-                Ok(AssignmentOp::StarEq)
-            }
-            TokenKind::SlashEq => {
-                self.advance();
-                Ok(AssignmentOp::SlashEq)
-            }
-            TokenKind::PercentEq => {
-                self.advance();
-                Ok(AssignmentOp::PercentEq)
-            }
-            TokenKind::AmpEq => {
-                self.advance();
-                Ok(AssignmentOp::AmpEq)
-            }
-            TokenKind::PipeEq => {
-                self.advance();
-                Ok(AssignmentOp::PipeEq)
-            }
-            TokenKind::CaretEq => {
-                self.advance();
-                Ok(AssignmentOp::CaretEq)
-            }
-            TokenKind::LtLtEq => {
-                self.advance();
-                Ok(AssignmentOp::LtLtEq)
-            }
-            TokenKind::GtGtEq => {
-                self.advance();
-                Ok(AssignmentOp::GtGtEq)
-            }
-            _ => Err(ParseError::new(
-                format!("Expected assignment operator, got {:?}", self.peek()),
-                self.current().span,
-            )),
-        }
-    }
-
-    fn parse_block(&mut self) -> Result<Vec<Statement>, ParseError> {
-        let mut stmts = Vec::new();
+    fn parse_block(&mut self) -> Result<Block, ParseError> {
+        // Blocks stop before terminators so the caller can consume the exact
+        // closing keyword (`end if`, `end fn`, and so on).  Every nested
+        // statement gets its own span, exactly like top-level statements.
+        let mut stmts = Block::new();
         while !self.is_at_end()
             && self.peek() != &TokenKind::End
             && self.peek() != &TokenKind::RBrace
             && self.peek() != &TokenKind::Else
         {
-            stmts.push(self.parse_statement()?);
+            let start = self.pos;
+            let statement = self.parse_statement()?;
+            stmts.push(Spanned::new(statement, self.statement_span(start)));
         }
         Ok(stmts)
+    }
+}
+
+fn expression_description(expr: &Expression) -> String {
+    match expr {
+        Expression::Identifier(name) => name.clone(),
+        Expression::FieldAccess { object, field } => {
+            format!("{}.{}", expression_description(object), field)
+        }
+        Expression::Index { object, index } => {
+            format!(
+                "{}[{}]",
+                expression_description(object),
+                expression_description(index)
+            )
+        }
+        _ => "target".to_string(),
+    }
+}
+
+fn expressions_match_target(left: &Expression, right: &Expression) -> bool {
+    match (left, right) {
+        (Expression::Identifier(left), Expression::Identifier(right)) => left == right,
+        (
+            Expression::FieldAccess {
+                object: left_object,
+                field: left_field,
+            },
+            Expression::FieldAccess {
+                object: right_object,
+                field: right_field,
+            },
+        ) => left_field == right_field && expressions_match_target(left_object, right_object),
+        (
+            Expression::Index {
+                object: left_object,
+                index: left_index,
+            },
+            Expression::Index {
+                object: right_object,
+                index: right_index,
+            },
+        ) => {
+            expressions_match_target(left_object, right_object)
+                && expressions_match_target(left_index, right_index)
+        }
+        (Expression::Parenthesized(left), right) => expressions_match_target(left, right),
+        (left, Expression::Parenthesized(right)) => expressions_match_target(left, right),
+        (Expression::IntLiteral(left), Expression::IntLiteral(right))
+        | (Expression::FloatLiteral(left), Expression::FloatLiteral(right))
+        | (Expression::StringLiteral(left), Expression::StringLiteral(right))
+        | (Expression::UnicodeStringLiteral(left), Expression::UnicodeStringLiteral(right)) => {
+            left == right
+        }
+        (Expression::UnicodeCharLiteral(left), Expression::UnicodeCharLiteral(right)) => {
+            left == right
+        }
+        (Expression::BoolLiteral(left), Expression::BoolLiteral(right)) => left == right,
+        _ => false,
+    }
+}
+
+fn expression_contains_target(expr: &Expression, target: &Expression) -> bool {
+    if expressions_match_target(expr, target) {
+        return true;
+    }
+
+    match expr {
+        Expression::BinaryOp { left, right, .. } => {
+            expression_contains_target(left, target) || expression_contains_target(right, target)
+        }
+        Expression::UnaryOp { expr, .. }
+        | Expression::Parenthesized(expr)
+        | Expression::TryExpression(expr)
+        | Expression::AsExpression { expr, .. } => expression_contains_target(expr, target),
+        Expression::Call { func, args } => {
+            expression_contains_target(func, target)
+                || args
+                    .iter()
+                    .any(|arg| expression_contains_target(arg, target))
+        }
+        Expression::MethodCall { object, args, .. } => {
+            expression_contains_target(object, target)
+                || args
+                    .iter()
+                    .any(|arg| expression_contains_target(arg, target))
+        }
+        Expression::Index { object, index } => {
+            expression_contains_target(object, target) || expression_contains_target(index, target)
+        }
+        Expression::FieldAccess { object, .. } => expression_contains_target(object, target),
+        Expression::IfExpression {
+            condition,
+            then_block,
+            else_block,
+        } => {
+            expression_contains_target(condition, target)
+                || then_block
+                    .iter()
+                    .any(|stmt| statement_contains_target(&stmt.node, target))
+                || else_block.as_ref().is_some_and(|block| {
+                    block
+                        .iter()
+                        .any(|stmt| statement_contains_target(&stmt.node, target))
+                })
+        }
+        Expression::ArrayLiteral(elements) | Expression::TupleLiteral(elements) => elements
+            .iter()
+            .any(|element| expression_contains_target(element, target)),
+        Expression::StructLiteral { fields, .. } => fields
+            .iter()
+            .any(|(_, value)| expression_contains_target(value, target)),
+        Expression::EnumVariant { data, .. } => data.as_ref().is_some_and(|values| {
+            values
+                .iter()
+                .any(|value| expression_contains_target(value, target))
+        }),
+        Expression::Range { start, end, .. } => {
+            expression_contains_target(start, target) || expression_contains_target(end, target)
+        }
+        Expression::LoopRange { ranges, body } => {
+            ranges.iter().any(|range| match range {
+                LoopRangePart::Range {
+                    start, end, step, ..
+                } => {
+                    expression_contains_target(start, target)
+                        || expression_contains_target(end, target)
+                        || step
+                            .as_ref()
+                            .is_some_and(|value| expression_contains_target(value, target))
+                }
+                LoopRangePart::Value(value) => expression_contains_target(value, target),
+            }) || body
+                .iter()
+                .any(|stmt| statement_contains_target(&stmt.node, target))
+        }
+        Expression::ForLoop { iterable, body, .. } => {
+            expression_contains_target(iterable, target)
+                || body
+                    .iter()
+                    .any(|stmt| statement_contains_target(&stmt.node, target))
+        }
+        Expression::MatchExpression { scrutinee, arms } => {
+            expression_contains_target(scrutinee, target)
+                || arms.iter().any(|arm| match &arm.body {
+                    MatchArmBody::Expression(value) => expression_contains_target(value, target),
+                    MatchArmBody::Block(block) => block
+                        .iter()
+                        .any(|stmt| statement_contains_target(&stmt.node, target)),
+                })
+        }
+        Expression::Closure { body, .. } => expression_contains_target(body, target),
+        Expression::GetExpression(get) => {
+            get.prompt
+                .as_ref()
+                .is_some_and(|value| expression_contains_target(value, target))
+                || get
+                    .source
+                    .as_ref()
+                    .is_some_and(|value| expression_contains_target(value, target))
+                || get.flags.iter().any(|flag| match flag {
+                    GetFlag::Timeout(value)
+                    | GetFlag::Default(value)
+                    | GetFlag::Mask(value)
+                    | GetFlag::Until(value)
+                    | GetFlag::Bytes(value) => expression_contains_target(value, target),
+                    GetFlag::As(_) => false,
+                })
+                || get.with_clause.as_ref().is_some_and(|clause| match clause {
+                    WithClause::Validate(value)
+                    | WithClause::Complete(value)
+                    | WithClause::Encoding(value) => expression_contains_target(value, target),
+                })
+        }
+        Expression::UnsafeBlock(block) => block
+            .iter()
+            .any(|stmt| statement_contains_target(&stmt.node, target)),
+        Expression::Identifier(_)
+        | Expression::IntLiteral(_)
+        | Expression::FloatLiteral(_)
+        | Expression::StringLiteral(_)
+        | Expression::UnicodeStringLiteral(_)
+        | Expression::UnicodeCharLiteral(_)
+        | Expression::BoolLiteral(_)
+        | Expression::ByteLiteral(_) => false,
+    }
+}
+
+fn statement_contains_target(stmt: &Statement, target: &Expression) -> bool {
+    match stmt {
+        Statement::Set {
+            target: value,
+            value: expr,
+        } => expression_contains_target(value, target) || expression_contains_target(expr, target),
+        Statement::Mutation {
+            target: value,
+            value: expr,
+            ..
+        } => {
+            expression_contains_target(value, target)
+                || expr
+                    .as_ref()
+                    .is_some_and(|value| expression_contains_target(value, target))
+        }
+        Statement::ExpressionStatement(expr) => expression_contains_target(expr, target),
+        Statement::ReturnStatement(value) => value
+            .as_ref()
+            .is_some_and(|value| expression_contains_target(value, target)),
+        Statement::PutStatement { expr, redirect, .. } => {
+            expression_contains_target(expr, target)
+                || redirect.as_ref().is_some_and(|redirect| match redirect {
+                    Redirect::Write(value) | Redirect::Append(value) => {
+                        expression_contains_target(value, target)
+                    }
+                })
+        }
+        _ => false,
+    }
+}
+
+// === Macro substitution ===
+
+// Expanding a macro replaces every identifier in the captured body that names
+// a macro parameter with the corresponding argument expression. The walk is
+// exhaustive over the AST so substituted parameters inside nested blocks,
+// match arms, and closures are rewritten consistently.
+
+/// Substitute inside a spanned statement, preserving the original span.
+fn substitute_spanned_statement(
+    statement: &Spanned<Statement>,
+    substitutions: &HashMap<String, Expression>,
+) -> Spanned<Statement> {
+    Spanned::new(
+        substitute_statement(&statement.node, substitutions),
+        statement.span,
+    )
+}
+
+fn substitute_statement(
+    statement: &Statement,
+    substitutions: &HashMap<String, Expression>,
+) -> Statement {
+    match statement {
+        Statement::VarDeclaration { name, ty, value } => Statement::VarDeclaration {
+            name: name.clone(),
+            ty: ty.clone(),
+            value: value
+                .as_ref()
+                .map(|value| substitute_expression(value, substitutions)),
+        },
+        Statement::LetDeclaration { name, ty, value } => Statement::LetDeclaration {
+            name: name.clone(),
+            ty: ty.clone(),
+            value: substitute_expression(value, substitutions),
+        },
+        Statement::ConstDeclaration { name, value } => Statement::ConstDeclaration {
+            name: name.clone(),
+            value: substitute_expression(value, substitutions),
+        },
+        Statement::Set { target, value } => Statement::Set {
+            target: substitute_expression(target, substitutions),
+            value: substitute_expression(value, substitutions),
+        },
+        Statement::Mutation { target, op, value } => Statement::Mutation {
+            target: substitute_expression(target, substitutions),
+            op: op.clone(),
+            value: value
+                .as_ref()
+                .map(|value| substitute_expression(value, substitutions)),
+        },
+        Statement::FunctionDeclaration(declaration) => {
+            Statement::FunctionDeclaration(FunctionDecl {
+                name: declaration.name.clone(),
+                params: declaration.params.clone(),
+                return_type: declaration.return_type.clone(),
+                body: declaration.body.as_ref().map(|body| {
+                    body.iter()
+                        .map(|statement| substitute_spanned_statement(statement, substitutions))
+                        .collect()
+                }),
+                is_async: declaration.is_async,
+                generics: declaration.generics.clone(),
+            })
+        }
+        Statement::StructDeclaration(declaration) => Statement::StructDeclaration(StructDecl {
+            name: declaration.name.clone(),
+            fields: declaration.fields.clone(),
+            methods: declaration
+                .methods
+                .iter()
+                .map(|method| substitute_function(method, substitutions))
+                .collect(),
+            generics: declaration.generics.clone(),
+        }),
+        Statement::EnumDeclaration(declaration) => Statement::EnumDeclaration(EnumDecl {
+            name: declaration.name.clone(),
+            variants: declaration.variants.clone(),
+            methods: declaration
+                .methods
+                .iter()
+                .map(|method| substitute_function(method, substitutions))
+                .collect(),
+        }),
+        Statement::TraitDeclaration(declaration) => Statement::TraitDeclaration(TraitDecl {
+            name: declaration.name.clone(),
+            methods: declaration
+                .methods
+                .iter()
+                .map(|method| substitute_function(method, substitutions))
+                .collect(),
+        }),
+        Statement::ImplDeclaration(declaration) => Statement::ImplDeclaration(ImplDecl {
+            trait_name: declaration.trait_name.clone(),
+            type_name: declaration.type_name.clone(),
+            methods: declaration
+                .methods
+                .iter()
+                .map(|method| substitute_function(method, substitutions))
+                .collect(),
+        }),
+        Statement::ModuleDeclaration(declaration) => Statement::ModuleDeclaration(ModuleDecl {
+            name: declaration.name.clone(),
+            statements: declaration
+                .statements
+                .iter()
+                .map(|statement| substitute_spanned_statement(statement, substitutions))
+                .collect(),
+        }),
+        Statement::UseDeclaration(declaration) => Statement::UseDeclaration(declaration.clone()),
+        Statement::TypeDeclaration(declaration) => Statement::TypeDeclaration(declaration.clone()),
+        Statement::ExpressionStatement(expression) => {
+            Statement::ExpressionStatement(substitute_expression(expression, substitutions))
+        }
+        Statement::ReturnStatement(value) => Statement::ReturnStatement(
+            value
+                .as_ref()
+                .map(|value| substitute_expression(value, substitutions)),
+        ),
+        Statement::BreakStatement => Statement::BreakStatement,
+        Statement::ContinueStatement => Statement::ContinueStatement,
+        Statement::PutStatement {
+            no_newline,
+            expr,
+            redirect,
+        } => Statement::PutStatement {
+            no_newline: *no_newline,
+            expr: substitute_expression(expr, substitutions),
+            redirect: redirect.as_ref().map(|redirect| match redirect {
+                Redirect::Write(path) => {
+                    Redirect::Write(substitute_expression(path, substitutions))
+                }
+                Redirect::Append(path) => {
+                    Redirect::Append(substitute_expression(path, substitutions))
+                }
+            }),
+        },
+        Statement::ErrorStatement(expression) => {
+            Statement::ErrorStatement(substitute_expression(expression, substitutions))
+        }
+        Statement::WarnStatement(expression) => {
+            Statement::WarnStatement(substitute_expression(expression, substitutions))
+        }
+        Statement::InfoStatement(expression) => {
+            Statement::InfoStatement(substitute_expression(expression, substitutions))
+        }
+        Statement::Block(statements) => Statement::Block(
+            statements
+                .iter()
+                .map(|statement| substitute_spanned_statement(statement, substitutions))
+                .collect(),
+        ),
+    }
+}
+
+fn substitute_function(
+    function: &FunctionDecl,
+    substitutions: &HashMap<String, Expression>,
+) -> FunctionDecl {
+    FunctionDecl {
+        name: function.name.clone(),
+        params: function.params.clone(),
+        return_type: function.return_type.clone(),
+        body: function.body.as_ref().map(|body| {
+            body.iter()
+                .map(|statement| substitute_spanned_statement(statement, substitutions))
+                .collect()
+        }),
+        is_async: function.is_async,
+        generics: function.generics.clone(),
+    }
+}
+
+fn substitute_pattern(pattern: &Pattern, substitutions: &HashMap<String, Expression>) -> Pattern {
+    match pattern {
+        Pattern::Wildcard => Pattern::Wildcard,
+        Pattern::Literal(expression) => {
+            Pattern::Literal(substitute_expression(expression, substitutions))
+        }
+        Pattern::Identifier(name) => {
+            if let Some(expression) = substitutions.get(name) {
+                Pattern::Literal(expression.clone())
+            } else {
+                Pattern::Identifier(name.clone())
+            }
+        }
+        Pattern::Tuple(patterns) => Pattern::Tuple(
+            patterns
+                .iter()
+                .map(|pattern| substitute_pattern(pattern, substitutions))
+                .collect(),
+        ),
+        Pattern::Enum {
+            enum_name,
+            variant,
+            inner,
+        } => Pattern::Enum {
+            enum_name: enum_name.clone(),
+            variant: variant.clone(),
+            inner: inner.as_ref().map(|inner| {
+                inner
+                    .iter()
+                    .map(|pattern| substitute_pattern(pattern, substitutions))
+                    .collect()
+            }),
+        },
+        Pattern::NamedFields { name, fields } => Pattern::NamedFields {
+            name: name.clone(),
+            fields: fields
+                .iter()
+                .map(|(field, pattern)| (field.clone(), substitute_pattern(pattern, substitutions)))
+                .collect(),
+        },
+        Pattern::Range {
+            start,
+            end,
+            inclusive,
+        } => Pattern::Range {
+            start: Box::new(substitute_expression(start, substitutions)),
+            end: Box::new(substitute_expression(end, substitutions)),
+            inclusive: *inclusive,
+        },
+        Pattern::Binding { name, pattern } => Pattern::Binding {
+            name: name.clone(),
+            pattern: Box::new(substitute_pattern(pattern, substitutions)),
+        },
+    }
+}
+
+fn substitute_expression(
+    expression: &Expression,
+    substitutions: &HashMap<String, Expression>,
+) -> Expression {
+    match expression {
+        Expression::IntLiteral(value) => Expression::IntLiteral(value.clone()),
+        Expression::FloatLiteral(value) => Expression::FloatLiteral(value.clone()),
+        Expression::StringLiteral(value) => Expression::StringLiteral(value.clone()),
+        Expression::UnicodeStringLiteral(value) => Expression::UnicodeStringLiteral(value.clone()),
+        Expression::UnicodeCharLiteral(value) => Expression::UnicodeCharLiteral(*value),
+        Expression::BoolLiteral(value) => Expression::BoolLiteral(*value),
+        Expression::ByteLiteral(value) => Expression::ByteLiteral(value.clone()),
+        Expression::Identifier(name) => substitutions
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| Expression::Identifier(name.clone())),
+        Expression::BinaryOp { op, left, right } => Expression::BinaryOp {
+            op: op.clone(),
+            left: Box::new(substitute_expression(left, substitutions)),
+            right: Box::new(substitute_expression(right, substitutions)),
+        },
+        Expression::UnaryOp { op, expr } => Expression::UnaryOp {
+            op: op.clone(),
+            expr: Box::new(substitute_expression(expr, substitutions)),
+        },
+        Expression::Call { func, args } => Expression::Call {
+            func: Box::new(substitute_expression(func, substitutions)),
+            args: args
+                .iter()
+                .map(|arg| substitute_expression(arg, substitutions))
+                .collect(),
+        },
+        Expression::MethodCall {
+            object,
+            method,
+            args,
+        } => Expression::MethodCall {
+            object: Box::new(substitute_expression(object, substitutions)),
+            method: method.clone(),
+            args: args
+                .iter()
+                .map(|arg| substitute_expression(arg, substitutions))
+                .collect(),
+        },
+        Expression::Index { object, index } => Expression::Index {
+            object: Box::new(substitute_expression(object, substitutions)),
+            index: Box::new(substitute_expression(index, substitutions)),
+        },
+        Expression::FieldAccess { object, field } => Expression::FieldAccess {
+            object: Box::new(substitute_expression(object, substitutions)),
+            field: field.clone(),
+        },
+        Expression::Parenthesized(inner) => {
+            Expression::Parenthesized(Box::new(substitute_expression(inner, substitutions)))
+        }
+        Expression::IfExpression {
+            condition,
+            then_block,
+            else_block,
+        } => Expression::IfExpression {
+            condition: Box::new(substitute_expression(condition, substitutions)),
+            then_block: then_block
+                .iter()
+                .map(|statement| substitute_spanned_statement(statement, substitutions))
+                .collect(),
+            else_block: else_block.as_ref().map(|block| {
+                block
+                    .iter()
+                    .map(|statement| substitute_spanned_statement(statement, substitutions))
+                    .collect()
+            }),
+        },
+        Expression::MatchExpression { scrutinee, arms } => Expression::MatchExpression {
+            scrutinee: Box::new(substitute_expression(scrutinee, substitutions)),
+            arms: arms
+                .iter()
+                .map(|arm| MatchArm {
+                    pattern: substitute_pattern(&arm.pattern, substitutions),
+                    guard: arm
+                        .guard
+                        .as_ref()
+                        .map(|guard| substitute_expression(guard, substitutions)),
+                    body: match &arm.body {
+                        MatchArmBody::Expression(body) => {
+                            MatchArmBody::Expression(substitute_expression(body, substitutions))
+                        }
+                        MatchArmBody::Block(statements) => MatchArmBody::Block(
+                            statements
+                                .iter()
+                                .map(|statement| {
+                                    substitute_spanned_statement(statement, substitutions)
+                                })
+                                .collect(),
+                        ),
+                    },
+                })
+                .collect(),
+        },
+        Expression::Closure { params, body } => Expression::Closure {
+            params: params.clone(),
+            body: Box::new(substitute_expression(body, substitutions)),
+        },
+        Expression::ArrayLiteral(elements) => Expression::ArrayLiteral(
+            elements
+                .iter()
+                .map(|element| substitute_expression(element, substitutions))
+                .collect(),
+        ),
+        Expression::TupleLiteral(elements) => Expression::TupleLiteral(
+            elements
+                .iter()
+                .map(|element| substitute_expression(element, substitutions))
+                .collect(),
+        ),
+        Expression::StructLiteral { name, fields } => Expression::StructLiteral {
+            name: name.clone(),
+            fields: fields
+                .iter()
+                .map(|(field, value)| (field.clone(), substitute_expression(value, substitutions)))
+                .collect(),
+        },
+        Expression::EnumVariant {
+            enum_name,
+            variant,
+            data,
+        } => Expression::EnumVariant {
+            enum_name: enum_name.clone(),
+            variant: variant.clone(),
+            data: data.as_ref().map(|values| {
+                values
+                    .iter()
+                    .map(|value| substitute_expression(value, substitutions))
+                    .collect()
+            }),
+        },
+        Expression::LoopRange { ranges, body } => Expression::LoopRange {
+            ranges: ranges
+                .iter()
+                .map(|range| match range {
+                    LoopRangePart::Range {
+                        start,
+                        end,
+                        inclusive,
+                        step,
+                    } => LoopRangePart::Range {
+                        start: Box::new(substitute_expression(start, substitutions)),
+                        end: Box::new(substitute_expression(end, substitutions)),
+                        inclusive: *inclusive,
+                        step: step
+                            .as_ref()
+                            .map(|step| substitute_expression(step, substitutions)),
+                    },
+                    LoopRangePart::Value(value) => {
+                        LoopRangePart::Value(Box::new(substitute_expression(value, substitutions)))
+                    }
+                })
+                .collect(),
+            body: body
+                .iter()
+                .map(|statement| substitute_spanned_statement(statement, substitutions))
+                .collect(),
+        },
+        Expression::ForLoop {
+            variable,
+            iterable,
+            body,
+        } => Expression::ForLoop {
+            variable: variable.clone(),
+            iterable: Box::new(substitute_expression(iterable, substitutions)),
+            body: body
+                .iter()
+                .map(|statement| substitute_spanned_statement(statement, substitutions))
+                .collect(),
+        },
+        Expression::AsExpression { expr, ty } => Expression::AsExpression {
+            expr: Box::new(substitute_expression(expr, substitutions)),
+            ty: ty.clone(),
+        },
+        Expression::TryExpression(expr) => {
+            Expression::TryExpression(Box::new(substitute_expression(expr, substitutions)))
+        }
+        Expression::GetExpression(get) => Expression::GetExpression(Box::new(GetExpr {
+            prompt: get
+                .prompt
+                .as_ref()
+                .map(|prompt| Box::new(substitute_expression(prompt, substitutions))),
+            source: get
+                .source
+                .as_ref()
+                .map(|source| Box::new(substitute_expression(source, substitutions))),
+            flags: get
+                .flags
+                .iter()
+                .map(|flag| match flag {
+                    GetFlag::Timeout(value) => {
+                        GetFlag::Timeout(substitute_expression(value, substitutions))
+                    }
+                    GetFlag::Default(value) => {
+                        GetFlag::Default(substitute_expression(value, substitutions))
+                    }
+                    GetFlag::Mask(value) => {
+                        GetFlag::Mask(substitute_expression(value, substitutions))
+                    }
+                    GetFlag::Until(value) => {
+                        GetFlag::Until(substitute_expression(value, substitutions))
+                    }
+                    GetFlag::Bytes(value) => {
+                        GetFlag::Bytes(substitute_expression(value, substitutions))
+                    }
+                    GetFlag::As(ty) => GetFlag::As(ty.clone()),
+                })
+                .collect(),
+            with_clause: get.with_clause.clone(),
+        })),
+        Expression::UnsafeBlock(statements) => Expression::UnsafeBlock(
+            statements
+                .iter()
+                .map(|statement| substitute_spanned_statement(statement, substitutions))
+                .collect(),
+        ),
+        Expression::Range {
+            start,
+            end,
+            inclusive,
+        } => Expression::Range {
+            start: Box::new(substitute_expression(start, substitutions)),
+            end: Box::new(substitute_expression(end, substitutions)),
+            inclusive: *inclusive,
+        },
     }
 }
 
@@ -2066,10 +3388,142 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_var_declaration() {
-        let prog = parse_source("var x: i32 = 42").unwrap();
+    fn statement_spans_cover_exact_source_ranges() {
+        let source =
+            "var x i32 := 42\nfn sum(a: i32, b: i32): i32\n    return a + b\nend fn\nput x";
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty());
+        let mut parser = Parser::new(&tokens);
+        let (program, parse_errors) = parser.parse_with_recovery();
+        assert!(parse_errors.is_empty());
+
+        assert_eq!(program.statements.len(), 3);
+
+        // Statement spans must slice back to the exact source text.
+        let first = &program.statements[0];
+        assert_eq!(&source[first.span.start..first.span.end], "var x i32 := 42");
+
+        let function = &program.statements[1];
+        assert_eq!(
+            &source[function.span.start..function.span.end],
+            "fn sum(a: i32, b: i32): i32\n    return a + b\nend fn"
+        );
+
+        let put = &program.statements[2];
+        assert_eq!(&source[put.span.start..put.span.end], "put x");
+    }
+
+    #[test]
+    fn test_parse_generic_type_annotations() {
+        let prog =
+            parse_source("var scores Map<ustring, i32> := []\nvar seen Set<i32> := []").unwrap();
+        assert_eq!(prog.statements.len(), 2);
+        match &prog.statements[0].node {
+            Statement::VarDeclaration { ty: Some(ty), .. } => match ty {
+                TypeAnnotation::Generic { name, args } => {
+                    assert_eq!(name, "Map");
+                    assert_eq!(args.len(), 2);
+                }
+                other => panic!("expected generic type, got {other:?}"),
+            },
+            other => panic!("expected var declaration, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_generic_function_and_struct() {
+        let prog = parse_source(
+            "fn identity<T>(value: T): T\n    return value\nend fn\n\
+             struct Pair<T>\n    var first: T\n    var second: T\nend struct",
+        )
+        .unwrap();
+        match &prog.statements[0].node {
+            Statement::FunctionDeclaration(function) => {
+                assert_eq!(function.generics.len(), 1);
+                assert_eq!(function.generics[0].name, "T");
+            }
+            other => panic!("expected function declaration, got {other:?}"),
+        }
+        match &prog.statements[1].node {
+            Statement::StructDeclaration(struct_decl) => {
+                assert_eq!(struct_decl.generics.len(), 1);
+                assert_eq!(struct_decl.generics[0].name, "T");
+            }
+            other => panic!("expected struct declaration, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_generic_function_with_trait_bound() {
+        let prog =
+            parse_source("fn process<T: DataFetcher>(fetcher: T)\n    put unicode \"ok\"\nend fn")
+                .unwrap();
+        match &prog.statements[0].node {
+            Statement::FunctionDeclaration(function) => {
+                assert_eq!(function.generics.len(), 1);
+                assert_eq!(function.generics[0].name, "T");
+                assert_eq!(function.generics[0].bounds, vec!["DataFetcher"]);
+            }
+            other => panic!("expected function declaration, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_macro_expansion() {
+        let prog = parse_source(
+            "macro swap_values(a, b)\n    var temp := a\n    set a to b\n    set b to temp\nend macro\n\
+             var x i32 := 1\nvar y i32 := 2\nswap_values(x, y)",
+        )
+        .unwrap();
+        // The macro declaration is consumed; only the variables and the
+        // expanded call remain.
+        assert_eq!(prog.statements.len(), 3);
+        match &prog.statements[2].node {
+            Statement::Block(statements) => {
+                assert_eq!(statements.len(), 3);
+                match &statements[0].node {
+                    Statement::VarDeclaration { name, .. } => assert_eq!(name, "temp"),
+                    other => panic!("expected var declaration, got {other:?}"),
+                }
+            }
+            other => panic!("expected expanded block, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_macro_inside_expansion_binds_arguments() {
+        let prog = parse_source(
+            "macro double(value)\n    var result := value + value\n    put result\nend macro\n\
+             double(21)",
+        )
+        .unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
+            Statement::Block(statements) => match &statements[0].node {
+                Statement::VarDeclaration {
+                    value: Some(value), ..
+                } => {
+                    assert!(matches!(
+                        value,
+                        Expression::BinaryOp {
+                            op: BinaryOp::Add,
+                            left,
+                            right,
+                        } if matches!(**left, Expression::IntLiteral(ref v) if v == "21")
+                            && matches!(**right, Expression::IntLiteral(ref v) if v == "21")
+                    ));
+                }
+                other => panic!("expected var declaration, got {other:?}"),
+            },
+            other => panic!("expected expanded block, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_var_declaration() {
+        let prog = parse_source("var x i32 := 42").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0].node {
             Statement::VarDeclaration { name, ty, value } => {
                 assert_eq!(name, "x");
                 assert!(ty.is_some());
@@ -2080,10 +3534,50 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_strict_var_syntax_and_prompt_errors() {
+        assert!(parse_source("var inferred := 42").is_ok());
+        assert!(parse_source("var typed i32 := 42").is_ok());
+
+        let colon_error = parse_source("var typed: i32 := 42").unwrap_err();
+        assert!(colon_error.message.contains("no longer use"));
+        assert!(colon_error
+            .suggestion
+            .unwrap()
+            .contains("var typed type := value"));
+
+        let equals_error = parse_source("var typed = 42").unwrap_err();
+        assert!(equals_error.message.contains("must use `:=`"));
+
+        let prompt_error = parse_source(r#"var name := get "Prompt: ""#).unwrap_err();
+        assert!(prompt_error.message.contains("get unicode"));
+        assert!(parse_source(r#"var name := get unicode "Prompt: ""#).is_ok());
+        assert!(parse_source(r#"var name := get -u "Prompt: ""#).is_err());
+        assert!(parse_source(r#"var greeting := unicode "Hello, 世界!""#).is_ok());
+        assert!(parse_source(r#"var marker := unicode '✓'"#).is_ok());
+        assert!(parse_source(r#"put unicode "Hello, 世界!""#).is_ok());
+        assert!(parse_source(r#"var file := get < "input.txt" unicode "Prompt: ""#).is_err());
+        assert!(parse_source(r#"var legacy_char := u'✓'"#).is_err());
+        assert!(parse_source(
+            r#"match unicode "yes"
+    unicode "yes" => put "ok"
+end match"#
+        )
+        .is_ok());
+
+        let legacy_source = format!("var greeting := {}{}{}{}", "u", '"', "Hello", '"');
+        let legacy_unicode_error = parse_source(&legacy_source).unwrap_err();
+        assert!(legacy_unicode_error.message.contains("no longer accepted"));
+        assert!(legacy_unicode_error
+            .suggestion
+            .unwrap()
+            .contains("unicode \"...\""));
+    }
+
+    #[test]
     fn test_parse_function() {
         let prog = parse_source("fn sum(a: i32, b: i32): i32").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::FunctionDeclaration(decl) => {
                 assert_eq!(decl.name, "sum");
                 assert_eq!(decl.params.len(), 2);
@@ -2094,10 +3588,48 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_equality_and_assignment() {
+        let equality = parse_source("var same := x == 1").unwrap();
+        assert!(matches!(
+            equality.statements.first().map(|s| &s.node),
+            Some(Statement::VarDeclaration {
+                value: Some(Expression::BinaryOp {
+                    op: BinaryOp::Eq,
+                    ..
+                }),
+                ..
+            })
+        ));
+        assert!(parse_source("var x := 0\nx = x + 1").is_ok());
+        assert!(parse_source("var x := 0\nx += 1").is_ok());
+        assert!(parse_source("var x := 0\nset x to x + 1").is_err());
+        assert!(parse_source("var x := 0\nadd x").is_ok());
+        assert!(parse_source("var x := 0\nset x to 1").is_ok());
+    }
+
+    #[test]
+    fn test_parse_set_target_shapes_and_self_reference() {
+        assert!(parse_source("set total to 10").is_ok());
+        assert!(parse_source("set item.value to 10").is_ok());
+        assert!(parse_source("set items[0] to 10").is_ok());
+
+        assert!(parse_source("set item.value to item.value + 1").is_err());
+        assert!(parse_source("set items[0] to items[0] + 1").is_err());
+        assert!(parse_source("set item.value to other.value").is_ok());
+    }
+
+    #[test]
+    fn test_parse_accepts_conventional_equality_and_compound_mutation() {
+        assert!(parse_source("var x := a == b").is_ok());
+        assert!(parse_source("var x := 0\nx += 1").is_ok());
+        assert!(parse_source("var x := 0\nx -= 1").is_ok());
+    }
+
+    #[test]
     fn test_parse_binary_expression() {
-        let prog = parse_source("var x = a + b * 2").unwrap();
+        let prog = parse_source("var x := a + b * 2").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::VarDeclaration {
                 value: Some(expr), ..
             } => {
@@ -2117,7 +3649,7 @@ mod tests {
     fn test_parse_put_statement() {
         let prog = parse_source(r#"put "Hello""#).unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::PutStatement {
                 no_newline, expr, ..
             } => {
@@ -2132,9 +3664,35 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_unicode_string_and_character_literals() {
+        let program =
+            parse_source("var greeting := unicode \"Hello, 世界\"\nvar marker := unicode '✓'")
+                .unwrap();
+        assert_eq!(program.statements.len(), 2);
+        match &program.statements[0].node {
+            Statement::VarDeclaration {
+                value: Some(Expression::UnicodeStringLiteral(value)),
+                ..
+            } => {
+                assert_eq!(value, "Hello, 世界");
+            }
+            _ => panic!("Expected Unicode string literal"),
+        }
+        match &program.statements[1].node {
+            Statement::VarDeclaration {
+                value: Some(Expression::UnicodeCharLiteral(value)),
+                ..
+            } => {
+                assert_eq!(*value, '✓');
+            }
+            _ => panic!("Expected Unicode character literal"),
+        }
+    }
+
+    #[test]
     fn test_parse_put_no_newline() {
         let prog = parse_source(r#"put -n "Hello""#).unwrap();
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::PutStatement { no_newline, .. } => {
                 assert!(*no_newline);
             }
@@ -2143,11 +3701,21 @@ mod tests {
     }
 
     #[test]
+    fn test_reject_legacy_unicode_string_literal() {
+        let error = parse_source(r#"var greeting := u"Hello""#).unwrap_err();
+        assert!(error.message.contains("no longer accepted"));
+        assert!(error
+            .suggestion
+            .as_deref()
+            .is_some_and(|suggestion| suggestion.contains("unicode")));
+    }
+
+    #[test]
     fn test_parse_struct() {
         let prog =
             parse_source("struct Point\n    var x: f32\n    var y: f32\nend struct").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::StructDeclaration(decl) => {
                 assert_eq!(decl.name, "Point");
                 assert_eq!(decl.fields.len(), 2);
@@ -2160,7 +3728,7 @@ mod tests {
     fn test_parse_enum() {
         let prog = parse_source("enum Direction\n    North\n    South\nend enum").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::EnumDeclaration(decl) => {
                 assert_eq!(decl.name, "Direction");
                 assert_eq!(decl.variants.len(), 2);
@@ -2173,7 +3741,7 @@ mod tests {
     fn test_parse_if_expression() {
         let prog = parse_source("if x > 0,\n    put x\nend if").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression { .. }) => {}
             _ => panic!("Expected IfExpression"),
         }
@@ -2181,9 +3749,9 @@ mod tests {
 
     #[test]
     fn test_parse_closure() {
-        let prog = parse_source("var square = |x: i32| x * x").unwrap();
+        let prog = parse_source("var square := |x: i32| x * x").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::VarDeclaration {
                 value: Some(Expression::Closure { params, .. }),
                 ..
@@ -2196,9 +3764,9 @@ mod tests {
 
     #[test]
     fn test_parse_range() {
-        let prog = parse_source("var r = 0..10").unwrap();
+        let prog = parse_source("var r := 0..10").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::VarDeclaration {
                 value: Some(Expression::Range { inclusive, .. }),
                 ..
@@ -2213,7 +3781,7 @@ mod tests {
     fn test_parse_loop_range() {
         let prog = parse_source("loop: 0..10\n    put i\nend loop").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange { ranges, body }) => {
                 assert_eq!(ranges.len(), 1);
                 assert_eq!(body.len(), 1);
@@ -2226,7 +3794,7 @@ mod tests {
     fn test_parse_multi_range_loop() {
         let prog = parse_source("loop: 1..3, 7, 19..21\n    put i\nend loop").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange { ranges, .. }) => {
                 assert_eq!(ranges.len(), 3);
             }
@@ -2238,7 +3806,7 @@ mod tests {
     fn test_parse_step_range() {
         let prog = parse_source("loop: 0..10 step 2\n    put i\nend loop").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange { ranges, .. }) => {
                 assert_eq!(ranges.len(), 1);
                 match &ranges[0] {
@@ -2259,7 +3827,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
                 assert_eq!(arms.len(), 2);
                 // First arm should have a block body
@@ -2281,7 +3849,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
                 assert_eq!(arms.len(), 2);
             }
@@ -2292,7 +3860,7 @@ mod tests {
     #[test]
     fn test_parse_named_enum_variant() {
         let prog = parse_source("enum Error\n    NotFound(message: ustring)\nend enum").unwrap();
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::EnumDeclaration(decl) => {
                 assert_eq!(decl.variants.len(), 1);
                 match &decl.variants[0] {
@@ -2311,7 +3879,7 @@ mod tests {
     fn test_parse_if_else_if() {
         let prog = parse_source("if x > 0,\n    put x\nelse if x < 0,\n    put \"negative\"\nelse,\n    put \"zero\"\nend if").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression {
                 then_block,
                 else_block,
@@ -2328,9 +3896,9 @@ mod tests {
 
     #[test]
     fn test_parse_inline_if() {
-        let prog = parse_source("var y = if x > 0, x else -x end if").unwrap();
+        let prog = parse_source("var y := if x > 0, x else -x end if").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::VarDeclaration {
                 value: Some(Expression::IfExpression { .. }),
                 ..
@@ -2346,7 +3914,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression { then_block, .. }) => {
                 // The inner if should be in the then_block
                 assert_eq!(then_block.len(), 1);
@@ -2357,9 +3925,9 @@ mod tests {
 
     #[test]
     fn test_parse_if_without_else() {
-        let prog = parse_source("if x > 0,\n    put x\nend if").unwrap();
+        let prog = parse_source("if x > 0\n    put x\nend if").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression {
                 then_block,
                 else_block,
@@ -2379,7 +3947,7 @@ mod tests {
         let prog =
             parse_source("if x > 0,\n    put x\nelse,\n    put \"negative\"\nend if").unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression {
                 then_block,
                 else_block,
@@ -2399,7 +3967,7 @@ mod tests {
         let source = "if x > 10,\n    put \"high\"\nelse if x > 5,\n    put \"medium\"\nelse if x > 0,\n    put \"low\"\nelse,\n    put \"zero\"\nend if";
         let prog = parse_source(source).unwrap();
         assert_eq!(prog.statements.len(), 1);
-        match &prog.statements[0] {
+        match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression {
                 then_block,
                 else_block,

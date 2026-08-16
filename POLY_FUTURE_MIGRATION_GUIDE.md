@@ -111,7 +111,7 @@ end fn
 fn transform_directory(dir: ustring): Result<(), TransformError>
     var files := list_files(dir, unicode "*.poly")
 
-    loop: files
+    loop: file in files
         var code := read_file(file)
         var transformed := transform_syntax(code)
         write_file(file, transformed)
@@ -261,14 +261,14 @@ end fn
 fn test_performance_impact()
     // Benchmark old syntax
     var start := time_now()
-    loop: 0..10000
+    loop: i 0..10000
         putn unicode "test"
     end loop
     var old_duration := time_now() - start
 
     // Benchmark new syntax
     start = time_now()
-    loop: 0..10000
+    loop: i 0..10000
         put -n unicode "test"
     end loop
     var new_duration := time_now() - start
@@ -297,7 +297,7 @@ fn update_documentation()
 
     // Update examples
     var examples := list_files(unicode "examples/", unicode "*.poly")
-    loop: examples
+    loop: example in examples
         var code := read_file(example)
         var transformed := transform_syntax(code)
         write_file(example, transformed)
@@ -305,7 +305,7 @@ fn update_documentation()
 
     // Update tests
     var tests := list_files(unicode "tests/", unicode "*.poly")
-    loop: tests
+    loop: test in tests
         var code := read_file(test)
         var transformed := transform_syntax(code)
         write_file(test, transformed)
@@ -381,7 +381,7 @@ fn revert_syntax_changes(): Result<(), RevertError>
     // Reverse transformations
     var files := list_files(unicode "src/", unicode "*.poly")
 
-    loop: files
+    loop: file in files
         var code := read_file(file)
         var reverted := revert_syntax(code)
         write_file(file, reverted)
@@ -464,7 +464,7 @@ fn display_checklist()
     var checklist := migration_checklist()
     put "Migration Checklist:"
     put ""
-    loop: checklist
+    loop: item in checklist
         put item
     end loop
 end fn

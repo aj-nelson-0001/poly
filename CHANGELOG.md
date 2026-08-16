@@ -2,6 +2,54 @@
 
 All notable changes to the Poly language compiler will be documented in this file.
 
+## [1.7.3] - 2026-08-16
+
+Audit pass fixing optimizer soundness, runtime stubs, and checker holes.
+
+### Fixed
+
+- **Optimizer soundness**: functions returning closures are no longer inlined (previously the optimized `--ir` path emitted `|x| (x + n)` with a dangling capture); integer comparisons now fold to `bool` literals instead of `int` (`let flag: bool = 1;` no longer generated); logical `not` folds only over booleans while `~` keeps bitwise semantics. The CLI `--ir` path now verifies that the optimized Rust actually compiles before printing it.
+- **Runtime APIs**: `open` lowers to a `BufReader` and `get_line`/`eof` are implemented (`while not f.eof()` no longer loops forever, `get_line` no longer returns an empty string). `sleep` lowers to `std::thread::sleep` and `delay` to `tokio::time::sleep`. `exit(n)` lowers to `std::process::exit`. `get --timeout`/`--default`/`--as`/`--bytes` are implemented (real timeout via channel + reader thread, typed parsing, bounded raw reads). `http_get`/`tcp_connect`/`db_execute`/`spawn`/`--mask`/`--until` remain stubs but now emit compiler warnings instead of silently misbehaving.
+- **Match patterns are validated**: a misspelled enum variant (bare or with payload) or an unknown name on a `Result` scrutinee is rejected instead of silently compiling into an irrefutable Rust binding that swallows every other value.
+- **Range patterns work**: `match n ... 0..=9` no longer fails `--check` with a bogus `expected i32, got Vec<i32>` error.
+- **`Map`/`Set` methods implemented**: `insert`/`get`/`remove`/`contains_key`/`contains`/`len`/`is_empty` type-check and codegen borrows keys correctly; `m[key]` reads lower to `get().map(clone).unwrap_or_default()` and `m[key] = v` lowers to `insert`. Keyword method names (`map.get(...)`) now parse.
+- **Stored-then-returned closures type-check**: `var f := |x| x + n; return f` (the v1.7.2 example) now passes `--check` — `_` placeholders behave like unknown types and arithmetic on unknown operands is permissive until a signature pins types down.
+- **Loop steps**: negative steps keep their magnitude (`10..1 step -2` iterates `10, 8, 6, 4, 2`), descending ranges with positive steps are empty, and a constant `step 0` is rejected.
+- **LSP**: hover/completion positions are UTF-16-accurate on lines with non-ASCII text, and the JSON parser handles `\uD83D\uDE00`-style surrogate-pair escapes.
+- **Version metadata synced**: README and playground advertise v1.7.x instead of v1.6.0.
+
+### Infrastructure
+
+- `performance_benchmarks.rs` updated to comma match syntax; CI now runs `cargo check --workspace --all-targets` (the benchmark regression was previously invisible), checks all examples with `poly --check`, and rebuilds/verifies the checked-in `playground/poly.wasm`.
+
+## [1.7.2] - 2026-08-13
+
+### Added
+
+- Functions can now return closures through function-typed return annotations: `fn make_adder(n: i32): |x: i32| i32`. The returned closure literal inherits the declared signature (untyped parameters pick up the declared types), and codegen lowers the return type to `impl Fn(i32) -> i32` and marks returned closures `move` so they may capture locals. The result can be stored (`var add5 := make_adder(5)`) and called (`add5(10)`, or `make_adder(100)(1)`).
+- Vec higher-order methods `map`, `filter`, and `reduce`: `xs.map(|x| x * 2)`, `xs.filter(|x| x % 2 == 0)`, `xs.reduce(0, |acc, x| acc + x)`. The checker validates callbacks against the element (and accumulator) types — non-function arguments, wrong parameter counts, and non-`bool` filter predicates are rejected — and codegen emits `iter().cloned().map(...)`, `iter().cloned().filter(...)`, and `iter().cloned().fold(...)` so the receiver stays usable.
+- `map`/`filter`/`reduce` also work on strings, iterating Unicode characters (`"hello".map(|c| c)` yields `Vec<char>`), and vectors gained `sort_by`: `xs.sort_by(|a, b| a > b)` returns a sorted copy (a boolean comparator is lowered to Rust `Ordering`).
+- `put` of vector-like values (arrays, vector variables, and `map`/`filter`/`sort_by` results) now prints with `{:?}` debug formatting instead of failing to compile, e.g. `put xs.map(|x| x * 2)` prints `[2, 4, 6, 8, 10]`. Vector values written to files are formatted the same way.
+- Added `examples/higher_order_functions.poly` and a playground example covering function-typed parameters, returned closures, `map`/`filter`/`reduce`/`sort_by`, and vector printing.
+- Match arms now use comma syntax (`pattern, expression`) instead of `=>`, while generated Rust continues to use `=>` internally.
+- Range and collection loops now require an explicit binding: `loop: value 1..3, 7, 19..20` and `loop: item in items`; implicit `i`, `j`, and collection-name-derived bindings are no longer generated. Loop-range endpoints are inclusive, so the range example visits `1, 2, 3, 7, 19, 20` and lowers to inclusive Rust ranges.
+
+### Fixed
+
+- Closures stored in a variable and then returned now capture with `move`, so `var f := |x| x + n; return f` no longer generates a borrow that outlives the function.
+
+## [1.7.1] - 2026-08-13
+
+### Added
+
+- Closure type annotations in parameter positions: `fn apply(f: |x: i32| i32, v: i32): i32`. The parser accepts `|param: type, ...| return_type` (parameter names optional, e.g. `|i32| i32`) as a `TypeAnnotation::Function`, and codegen renders it as `fn(i32) -> i32` in Rust.
+- The type checker now checks closure literals against the expected function type: an untyped literal passed to a function-typed parameter inherits the declared parameter types, so `apply(|x| x * 2, 21)` type-checks and mismatched return types or arities are rejected with `expected fn(i32) -> i32, got ...`.
+- Function-type compatibility in the checker: `PolyType::Function` values now compare structurally (parameter types and return type), so typed closures stored in variables can be passed to function-typed parameters.
+
+### Fixed
+
+- The type checker already inferred `for x in xs` element types for `Vec<T>` and `String` iterables; this is now covered by explicit tests and documented as supported (previously listed as a known limitation).
+
 ## [1.7.0] - 2026-08-13
 
 ### Fixed

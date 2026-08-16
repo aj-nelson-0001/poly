@@ -129,10 +129,10 @@ fn route_request(request: Request): Response
     var version := get_api_version(request)
 
     match version
-        unicode "1.0" => return handle_v1(request)
-        unicode "1.1" => return handle_v1_1(request)
-        unicode "2.0" => return handle_v2(request)
-        _ =>
+        unicode "1.0", return handle_v1(request)
+        unicode "1.1", return handle_v1_1(request)
+        unicode "2.0", return handle_v2(request)
+        _,
             var response := Response()
             response.status = 400
             response.body = unicode "Unsupported API version"
@@ -237,10 +237,10 @@ fn respond_with_version(request: Request, data: ustring): Response
     var response := Response()
 
     match version
-        unicode "1.0" =>
+        unicode "1.0",
             response.headers.set(unicode "Content-Type", unicode "application/vnd.api.v1+json")
             response.body = transform_to_v1(data)
-        unicode "2.0" =>
+        unicode "2.0",
             response.headers.set(unicode "Content-Type", unicode "application/vnd.api.v2+json")
             response.body = transform_to_v2(data)
     end match
@@ -303,10 +303,10 @@ fn get_endpoints(version: ustring): Vec<Endpoint>
 
     // Add version-specific endpoints
     match version
-        unicode "1.0" =>
+        unicode "1.0",
             endpoints.push(Endpoint { path: unicode "/users", method: unicode "GET" })
             endpoints.push(Endpoint { path: unicode "/users", method: unicode "POST" })
-        unicode "2.0" =>
+        unicode "2.0",
             endpoints.push(Endpoint { path: unicode "/users", method: unicode "GET" })
             endpoints.push(Endpoint { path: unicode "/users", method: unicode "POST" })
             endpoints.push(Endpoint { path: unicode "/users/{id}", method: unicode "PUT" })
@@ -333,9 +333,9 @@ fn migrate_api(old_version: ustring, new_version: ustring): Result<(), Migration
 
     // Run migration steps
     match (old_version, new_version)
-        (unicode "1.0", unicode "2.0") => try migrate_v1_to_v2()
-        (unicode "1.1", unicode "2.0") => try migrate_v1_1_to_v2()
-        _ => return Error(MigrationError::UnsupportedMigration)
+        (unicode "1.0", unicode "2.0"), try migrate_v1_to_v2()
+        (unicode "1.1", unicode "2.0"), try migrate_v1_1_to_v2()
+        _, return Error(MigrationError::UnsupportedMigration)
     end match
 
     // Verify migration

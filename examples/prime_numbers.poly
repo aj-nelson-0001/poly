@@ -20,7 +20,7 @@ end fn
 put unicode "First 20 prime numbers:"
 
 var count i32 := 0
-loop: 2..200
+loop: i 2..200
     if is_prime(i),
         put i
         add count

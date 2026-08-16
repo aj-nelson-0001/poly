@@ -100,9 +100,9 @@ end enum
 
 ~~~poly fragment
 match value
-    pattern1 => expression1
-    pattern2 if guard => expression2
-    _ => default
+    pattern1, expression1
+    pattern2 if guard, expression2
+    _, default
 end match
 ~~~
 
@@ -192,9 +192,9 @@ get < "file"            // Read from file
 // Fibonacci with pattern matching
 fn fibonacci(n: i32): i32
     match n
-        0 => 0
-        1 => 1
-        _ => fibonacci(n - 1) + fibonacci(n - 2)
+        0, 0
+        1, 1
+        _, fibonacci(n - 1) + fibonacci(n - 2)
     end match
 end fn
 

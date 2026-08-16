@@ -16,9 +16,9 @@ This guide covers integrating with external services in Poly applications using 
 // HTTP client
 fn http_get(url: ustring): Result<ustring, HttpError>
     match get --timeout 10000 < url
-        Ok(response) => return Ok(response)
-        Timeout => return Error(HttpError::Timeout)
-        Error(e) => return Error(HttpError::NetworkError(e))
+        Ok(response), return Ok(response)
+        Timeout, return Error(HttpError::Timeout)
+        Error(e), return Error(HttpError::NetworkError(e))
     end match
 end fn
 
@@ -30,9 +30,9 @@ end fn
 
 // Usage
 match http_get(unicode "https://api.example.com/data")
-    Ok(data) => process(data)
-    Error(HttpError::Timeout) => warn "Request timed out"
-    Error(HttpError::NetworkError(e)) => error "Network error: " + e
+    Ok(data), process(data)
+    Error(HttpError::Timeout), warn "Request timed out"
+    Error(HttpError::NetworkError(e)), error "Network error: " + e
 end match
 ~~~
 
@@ -54,9 +54,9 @@ fn client_get(client: APIClient, endpoint: ustring): Result<ustring, APIError>
     ]
 
     match get --timeout client.timeout_ms < url with headers headers
-        Ok(response) => return Ok(response)
-        Timeout => return Error(APIError::Timeout)
-        Error(e) => return Error(APIError::NetworkError(e))
+        Ok(response), return Ok(response)
+        Timeout, return Error(APIError::Timeout)
+        Error(e), return Error(APIError::NetworkError(e))
     end match
 end fn
 
@@ -68,9 +68,9 @@ fn client_post(client: APIClient, endpoint: ustring, body: ustring): Result<ustr
     ]
 
     match post --timeout client.timeout_ms < url with headers headers and body body
-        Ok(response) => return Ok(response)
-        Timeout => return Error(APIError::Timeout)
-        Error(e) => return Error(APIError::NetworkError(e))
+        Ok(response), return Ok(response)
+        Timeout, return Error(APIError::Timeout)
+        Error(e), return Error(APIError::NetworkError(e))
     end match
 end fn
 ~~~
@@ -110,7 +110,7 @@ end fn
 // Usage
 var db := try connect_database(config)
 var users := try query(db, unicode "SELECT * FROM users WHERE age > ?", [unicode "18"])
-loop: users
+loop: user in users
     put unicode "User: " + user.name
 end loop
 ~~~
@@ -276,9 +276,9 @@ end struct
 
 fn cache_get(cache: Cache, key: ustring): Result<Option<ustring>, CacheError>
     match redis_get(cache.redis, key)
-        Ok(value) => return Ok(Some(value))
-        Error(RedisError::KeyNotFound) => return Ok(None)
-        Error(e) => return Error(CacheError::RedisError(e))
+        Ok(value), return Ok(Some(value))
+        Error(RedisError::KeyNotFound), return Ok(None)
+        Error(e), return Error(CacheError::RedisError(e))
     end match
 end fn
 
@@ -390,8 +390,8 @@ fn s3_upload(s3: S3, key: ustring, data: bytes): Result<(), S3Error>
     ]
 
     match put --timeout 30000 < url with headers headers and body data
-        Ok(_) => return Ok(())
-        Error(e) => return Error(S3Error::UploadFailed(e))
+        Ok(_), return Ok(())
+        Error(e), return Error(S3Error::UploadFailed(e))
     end match
 end fn
 
@@ -404,8 +404,8 @@ fn s3_download(s3: S3, key: ustring): Result<bytes, S3Error>
     ]
 
     match get --timeout 30000 < url with headers headers
-        Ok(data) => return Ok(data)
-        Error(e) => return Error(S3Error::DownloadFailed(e))
+        Ok(data), return Ok(data)
+        Error(e), return Error(S3Error::DownloadFailed(e))
     end match
 end fn
 ~~~

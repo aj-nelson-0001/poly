@@ -109,7 +109,7 @@ mutation_command ::= "set" <expression> "to" <expression>
 ~~~
 delimiter       ::= "(" | ")" | "[" | "]" | "{" | "}"
                    | "," | ";" | ":" | "." | "::"
-                   | "->" | "=>" | ".." | "..="
+                   | "->" | ".." | "..="
                    | "<" | ">"  // for file I/O
                    | ">>"       // for file append
 ~~~
@@ -321,11 +321,12 @@ loop_expression ::= <infinite_loop> | <range_loop> | <collection_loop>
 
 infinite_loop   ::= "loop" <block> "end" "loop"
 
-range_loop      ::= "loop" ":" <range_list> [<step_clause>] <block> "end" "loop"
+range_loop      ::= "loop" ":" <identifier> <range_list> <block> "end" "loop"
 
-collection_loop ::= "loop" ":" <expression> <block> "end" "loop"
+collection_loop ::= "loop" ":" <identifier> "in" <expression> <block> "end" "loop"
                    | "loop" ":" <tuple_destructuring> "in" <expression> <block> "end" "loop"
 
+// Loop ranges include both endpoints; `..=` is accepted as an explicit spelling.
 range_list      ::= <range> { "," <range> }
 range           ::= <expression> ".." <expression>
                    | <expression> "..=" <expression>
@@ -338,7 +339,7 @@ step_clause     ::= "step" <expression>
 ~~~
 match_expression ::= "match" <expression> { <match_arm> } "end" "match"
 
-match_arm       ::= <pattern> ["if" <expression>] "=>" <expression>
+match_arm       ::= <pattern> ["if" <expression>] "," <expression>
 
 pattern         ::= <literal_pattern>
                    | <identifier_pattern>

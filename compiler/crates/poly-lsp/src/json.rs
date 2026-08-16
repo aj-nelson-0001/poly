@@ -273,6 +273,34 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unicode_escape(&mut self) -> Result<char, JsonError> {
+        let value = self.parse_hex_quad()?;
+        // Surrogate pairs: a high surrogate (\uD800..\uDBFF) must be followed
+        // by a low surrogate (\uDC00..\uDFFF); together they encode one
+        // astral code point.  Lone surrogates are invalid on their own.
+        if (0xD800..=0xDBFF).contains(&value) {
+            if self.peek() != Some(b'\\') {
+                return Err(self.error("expected low surrogate after high surrogate"));
+            }
+            self.position += 1;
+            if self.peek() != Some(b'u') {
+                return Err(self.error("expected low surrogate after high surrogate"));
+            }
+            self.position += 1;
+            let low = self.parse_hex_quad()?;
+            if !(0xDC00..=0xDFFF).contains(&low) {
+                return Err(self.error("invalid low surrogate"));
+            }
+            let combined = 0x10000 + ((value - 0xD800) << 10) + (low - 0xDC00);
+            return char::from_u32(combined)
+                .ok_or_else(|| self.error("invalid unicode code point"));
+        }
+        if (0xDC00..=0xDFFF).contains(&value) {
+            return Err(self.error("unexpected low surrogate"));
+        }
+        char::from_u32(value).ok_or_else(|| self.error("invalid unicode code point"))
+    }
+
+    fn parse_hex_quad(&mut self) -> Result<u32, JsonError> {
         if self.position + 4 > self.bytes.len() {
             return Err(self.error("incomplete unicode escape"));
         }
@@ -287,7 +315,7 @@ impl<'a> Parser<'a> {
                 .ok_or_else(|| self.error("unicode escape overflow"))?;
         }
         self.position += 4;
-        char::from_u32(value).ok_or_else(|| self.error("invalid unicode code point"))
+        Ok(value)
     }
 
     fn parse_number(&mut self) -> Result<Json, JsonError> {
@@ -434,6 +462,22 @@ mod tests {
     fn parse_unicode_escape() {
         assert_eq!(parse("\"\\u0041\"").unwrap(), Json::str("A"));
         assert_eq!(parse("\"\\u00e9\"").unwrap(), Json::str("é"));
+    }
+
+    #[test]
+    fn parse_surrogate_pair_escape() {
+        // 😀 = U+1F600 = \uD83D\uDE00 as a surrogate pair.
+        assert_eq!(parse("\"\\uD83D\\uDE00\"").unwrap(), Json::str("😀"));
+        assert_eq!(parse("\"a\\uD83D\\uDE00b\"").unwrap(), Json::str("a😀b"));
+    }
+
+    #[test]
+    fn reject_lone_surrogates() {
+        // A lone high surrogate without a following low surrogate, and a lone
+        // low surrogate, are invalid JSON escapes.
+        assert!(parse("\"\\uD83D\"").is_err());
+        assert!(parse("\"\\uDE00\"").is_err());
+        assert!(parse("\"\\uD83Dx\"").is_err());
     }
 
     #[test]

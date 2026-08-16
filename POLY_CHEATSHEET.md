@@ -82,9 +82,9 @@ var x ustring := get < "file"           # Read from file
 var x bytes := get < "file"            # Read binary from file
 var x ustring := get --timeout 5000     # Read with timeout (ms)
 var x ustring := get --default unicode "val"   # Read with default value
-var x ustring := get --mask unicode "*"        # Read with mask (password)
+var x ustring := get --mask unicode "*"        # Experimental: mask parses but is not applied (warning)
 var x i32 := get --as i32               # Read and convert to type
-var x ustring := get --until unicode ","       # Read until delimiter
+var x ustring := get --until unicode ","       # Experimental: until parses but reads to end of line (warning)
 ~~~
 
 ### Complex Options (using "with" syntax)
@@ -116,13 +116,13 @@ var age i32 := get with validate |x| x > 0 && x < 150
 var name ustring := get --default unicode "Anonymous"
 
 # Input with mask (password)
-var password ustring := get --mask unicode "*"
+var password ustring := get --mask unicode "*"  # Note: masking is not implemented yet (see API reference)
 
 # Input with timeout
 match get --timeout 3000
-    Ok(input) => put "You typed: " + input
-    Timeout => put "Too slow!"
-    Error(e) => error "Error: " + e
+    Ok(input), put "You typed: " + input
+    Timeout, put "Too slow!"
+    Error(e), error "Error: " + e
 end match
 ~~~
 
@@ -157,10 +157,10 @@ end fn
 
 # Handle errors with match
 match read_file(unicode "config.txt")
-    Ok(content) => process(content)
-    Error(FileError::NotFound) => error "File not found"
-    Error(FileError::PermissionDenied) => error "Permission denied"
-    Error(FileError::InvalidData) => error "Invalid data"
+    Ok(content), process(content)
+    Error(FileError::NotFound), error "File not found"
+    Error(FileError::PermissionDenied), error "Permission denied"
+    Error(FileError::InvalidData), error "Invalid data"
 end match
 ~~~
 
@@ -192,18 +192,18 @@ end fn
 
 # Match with data extraction
 match validate_name(unicode "John")
-    Ok(valid_name) => put "Valid: " + valid_name
-    Error(EmptyInput) => error "Name cannot be empty"
-    Error(TooShort(min)) => error "Name too short, minimum " + min.to_string()
-    Error(TooLong(max)) => error "Name too long, maximum " + max.to_string()
+    Ok(valid_name), put "Valid: " + valid_name
+    Error(EmptyInput), error "Name cannot be empty"
+    Error(TooShort(min)), error "Name too short, minimum " + min.to_string()
+    Error(TooLong(max)), error "Name too long, maximum " + max.to_string()
 end match
 ~~~
 
 ### Wildcard Pattern
 ~~~poly
 match validate_name(input)
-    Ok(name) => put "Valid: " + name
-    Error(_) => error "Validation failed"  # Catches any error
+    Ok(name), put "Valid: " + name
+    Error(_), error "Validation failed"  # Catches any error
 end match
 ~~~
 
@@ -229,40 +229,116 @@ loop
     put -n "Choose: "
     var choice i32 := get
     match choice
-        1 => start_process()
-        2 => stop_process()
-        3 => break
-        _ => put "Invalid choice"
+        1, start_process()
+        2, stop_process()
+        3, break
+        _, put "Invalid choice"
     end match
 end loop
 ~~~
 
 ### Loop Ranges (SuperBASIC-style)
+
+The loop variable must be named explicitly after `loop:`:
+`loop: <var_name> <ranges>`. Loop `..` includes both endpoints; `..=` is
+accepted but redundant. A collection loop uses
+`loop: <var_name> in <collection>`.
+
 ~~~poly
 // Simple range
-loop: 0..10
+loop: i 0..10
     put i
 end loop
 
 // Multiple ranges and specific values
-loop: 1..3, 7, 19..20
-    put i  // Iterates: 1, 2, 3, 7, 19, 20
+loop: value 1..3, 7, 19..20
+    put value  // Loop `..` includes its end: 1, 2, 3, 7, 19, 20
 end loop
 
 // With step
-loop: 1..10 step 2
-    put i  // Iterates: 1, 3, 5, 7, 9
+loop: i 1..10 step 2
+    put i  // Iterates: 1, 3, 5, 7, 9 (10 is not on the step)
 end loop
 
 // Negative step (counting down)
-loop: 10..1 step -1
+loop: i 10..1 step -1
     put i  // Iterates: 10, 9, 8, ..., 1
 end loop
+~~~
 
-// Iterate over collection
-loop: items
+### Collection Iteration
+
+`items` is an ordinary variable; declare the collection before using it.
+
+~~~poly
+var items := [10, 20, 30]
+
+// Iterate over each value
+loop: item in items
     put item
 end loop
+
+// Iterate over a string's characters
+var text := "hello"
+loop: character in text
+    put character
+end loop
+
+// Iterate with a zero-based index
+loop: (index, item) in items.enumerate()
+    put index
+    put item
+end loop
+~~~
+
+The indexed form pairs each value with its zero-based index:
+`(0, 10)`, `(1, 20)`, and `(2, 30)`.
+
+Collection loops borrow: iterating `items` does not consume it, so the same
+collection can be looped over again (and used afterwards) without a manual
+`.iter()`.
+
+If `enumerate()` is unavailable or a manual index is clearer, use a numeric
+range and index into the collection:
+
+~~~poly
+var items := [10, 20, 30]
+
+loop: index 0..items.len() - 1
+    put items[index]
+end loop
+~~~
+
+In Rust, iterating by value consumes a collection:
+
+~~~rust
+let items = vec![10, 20, 30];
+
+for item in items {
+    println!("{}", item);
+}
+~~~
+
+Borrow the collection when it must remain available afterward:
+
+~~~rust
+let items = vec![10, 20, 30];
+
+for item in items.iter() {
+    println!("{}", item);
+}
+
+println!("{:?}", items);
+~~~
+
+Rust's indexed equivalent is:
+
+~~~rust
+let items = vec![10, 20, 30];
+
+for (index, item) in items.iter().enumerate() {
+    println!("{}: {}", index, item);
+}
 ~~~
 
 ### Error Recovery
@@ -270,14 +346,14 @@ end loop
 var valid_number i32 := loop
     put -n "Enter a positive number: "
     match get
-        Ok(input) =>
+        Ok(input),
             var num i32 := input.parse::<i32>()
             if num > 0,
                 break num
             else
                 warn "Please enter a positive number"
             end if
-        Error(e) => error "Invalid input: " + e
+        Error(e), error "Invalid input: " + e
     end match
 end loop
 ~~~

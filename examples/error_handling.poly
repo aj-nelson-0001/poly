@@ -37,16 +37,16 @@ end fn
 
 fn process_file(path: ustring)
     match read_file(path)
-        Ok(content) => 
+        Ok(content),
             put "File loaded successfully"
             put "Content: " + content
-        Error(FileError::NotFound) => 
+        Error(FileError::NotFound),
             error "File not found: " + path
-        Error(FileError::PermissionDenied) => 
+        Error(FileError::PermissionDenied),
             error "Permission denied: " + path
-        Error(FileError::InvalidData) => 
+        Error(FileError::InvalidData),
             error "Invalid file data: " + path
-        Error(Unknown(message)) => 
+        Error(Unknown(message)),
             error "Unknown error: " + message
     end match
 end fn
@@ -65,10 +65,10 @@ end fn
 
 fn load_application()
     match read_config(unicode "config.txt")
-        Ok(config) => 
+        Ok(config),
             put "Config loaded"
             process_config(config)
-        Error(e) => 
+        Error(e),
             error "Failed to load config"
             exit(1)
     end match
@@ -134,17 +134,17 @@ fn process_user_input()
     var email ustring := get
     
     match validate_user(name, email)
-        Ok((valid_name, valid_email)) => 
+        Ok((valid_name, valid_email)),
             put "User validated successfully"
             put "Name: " + valid_name
             put "Email: " + valid_email
-        Error(EmptyInput) => 
+        Error(EmptyInput),
             error "Name and email cannot be empty"
-        Error(TooShort(min)) => 
+        Error(TooShort(min)),
             error "Name too short, minimum " + min.to_string() + " characters"
-        Error(TooLong(max)) => 
+        Error(TooLong(max)),
             error "Name too long, maximum " + max.to_string() + " characters"
-        Error(InvalidFormat) => 
+        Error(InvalidFormat),
             error "Invalid email format"
     end match
 end fn
@@ -155,9 +155,9 @@ end fn
 
 fn read_with_timeout(path: ustring, timeout_ms: i32): Result<ustring, FileError>
     match get --timeout timeout_ms
-        Ok(content) => return Ok(content)
-        Timeout => return Error(FileError::Unknown(unicode "Read timeout"))
-        Error(e) => return Error(FileError::Unknown(unicode "Read error: " + e))
+        Ok(content), return Ok(content)
+        Timeout, return Error(FileError::Unknown(unicode "Read timeout"))
+        Error(e), return Error(FileError::Unknown(unicode "Read error: " + e))
     end match
 end fn
 
@@ -175,8 +175,8 @@ end enum
 fn chain_errors(): Result<ustring, AppError>
     # Use try to propagate,,convert error type
     match read_config(unicode "config.txt")
-        Ok(content) => return Ok(content)
-        Error(e) => return Error(AppError::IoError(unicode "Config error: " + e.to_string()))
+        Ok(content), return Ok(content)
+        Error(e), return Error(AppError::IoError(unicode "Config error: " + e.to_string()))
     end match
 end fn
 
@@ -199,8 +199,8 @@ end fn
 fn handle_any_error()
     var input ustring := get
     match validate_name(input)
-        Ok(name) => put "Valid: " + name
-        Error(_) => error "Validation failed"  # Catches any validation error
+        Ok(name), put "Valid: " + name
+        Error(_), error "Validation failed"  # Catches any validation error
     end match
 end fn
 
@@ -230,9 +230,9 @@ fn main()
     # Example 4: Multiple error types
     put "Example 4: Multiple Error Types"
     match validate_user(unicode "John", unicode "john@example.com")
-        Ok((name, email)) => 
+        Ok((name, email)),
             put "Valid: " + name + " (" + email + ")"
-        Error(e) => 
+        Error(e),
             error "Validation failed"
     end match
     

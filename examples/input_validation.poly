@@ -26,9 +26,9 @@ fn main()
     # Test 4: Timeout test
     put "Test 4: Timeout (3 seconds to respond)"
     match get --timeout 3000
-        Ok(input) => put "You typed: " + input
-        Timeout => warn "Too slow! Timeout occurred."
-        Error(e) => error "Error: " + e
+        Ok(input), put "You typed: " + input
+        Timeout, warn "Too slow! Timeout occurred."
+        Error(e), error "Error: " + e
     end match
     put ""
     
@@ -74,7 +74,7 @@ fn is_valid_email(email: ustring): bool
     
     # Check for @ symbol
     var has_at bool := false
-    loop: 0..email.len()
+    loop: i 0..email.len() - 1
         if email[i] = unicode '@',
             set has_at to true
             break
@@ -88,7 +88,7 @@ fn is_valid_email(email: ustring): bool
     # Check for . after @
     var has_dot bool := false
     var after_at bool := false
-    loop: 0..email.len()
+    loop: i 0..email.len() - 1
         if email[i] = unicode '@',
             set after_at to true
         else if after_at && email[i] = unicode '.',

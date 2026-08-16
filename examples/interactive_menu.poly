@@ -18,13 +18,13 @@ fn main()
         var choice i32 := get
         
         match choice
-            1 => greet_user()
-            2 => calculator()
-            3 => password_test()
-            4 => 
+            1, greet_user()
+            2, calculator()
+            3, password_test()
+            4,
                 put "Goodbye!"
                 set running to false
-            _ => warn "Invalid choice. Please try again."
+            _, warn "Invalid choice. Please try again."
         end match
         
         put ""
@@ -48,17 +48,17 @@ fn calculator()
     var op ustring := get --default unicode "+"
     
     var result f64 := match op
-        unicode "+" => a + b
-        unicode "-" => a - b
-        unicode "*" => a * b
-        unicode "/" =>
+        unicode "+", a + b
+        unicode "-", a - b
+        unicode "*", a * b
+        unicode "/",
             if b = 0.0,
                 error "Error: Division by zero"
                 0.0
             else
                 a / b
             end if
-        _ => 
+        _,
             warn "Unknown operation, using +"
             a + b
     end match

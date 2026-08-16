@@ -298,10 +298,10 @@ end for
 var x := 42
 
 match x
-    0 => put "Zero"
-    1 => put "One"
-    n if n > 0 => put "Positive"
-    _ => put "Other"
+    0, put "Zero"
+    1, put "One"
+    n if n > 0, put "Positive"
+    _, put "Other"
 end match
 ~~~
 
@@ -473,11 +473,11 @@ end enum
 var x := 42
 
 match x
-    0 => put "Zero"
-    1 => put "One"
-    2..=9 => put "Small"
-    10..=99 => put "Medium"
-    _ => put "Large"
+    0, put "Zero"
+    1, put "One"
+    2..=9, put "Small"
+    10..=99, put "Medium"
+    _, put "Large"
 end match
 ~~~
 
@@ -487,10 +487,10 @@ end match
 var point := (3.0, 4.0)
 
 match point
-    (0.0, 0.0) => put "Origin"
-    (x, 0.0) => put "On x-axis at " + x
-    (0.0, y) => put "On y-axis at " + y
-    (x, y) => put "Point at (" + x + ", " + y + ")"
+    (0.0, 0.0), put "Origin"
+    (x, 0.0), put "On x-axis at " + x
+    (0.0, y), put "On y-axis at " + y
+    (x, y), put "Point at (" + x + ", " + y + ")"
 end match
 ~~~
 
@@ -500,12 +500,12 @@ end match
 var age := 25
 
 match age
-    n if n < 0 => put "Invalid"
-    0 => put "Just born"
-    n if n < 13 => put "Child"
-    n if n < 18 => put "Teenager"
-    n if n < 65 => put "Adult"
-    _ => put "Senior"
+    n if n < 0, put "Invalid"
+    0, put "Just born"
+    n if n < 13, put "Child"
+    n if n < 18, put "Teenager"
+    n if n < 65, put "Adult"
+    _, put "Senior"
 end match
 ~~~
 
@@ -520,9 +520,9 @@ end enum
 
 fn evaluate(expr: Expr): f32
     match expr
-        Num(n) => n
-        Add(l, r) => evaluate(l) + evaluate(r)
-        Mul(l, r) => evaluate(l) * evaluate(r)
+        Num(n), n
+        Add(l, r), evaluate(l) + evaluate(r)
+        Mul(l, r), evaluate(l) * evaluate(r)
     end match
 end fn
 
@@ -893,9 +893,9 @@ add counter, 1
 // Good - exhaustive matching
 fn process(value: Shape)
     match value
-        Circle(r) => process_circle(r)
-        Rectangle(w, h) => process_rect(w, h)
-        Triangle(a, b, c) => process_tri(a, b, c)
+        Circle(r), process_circle(r)
+        Rectangle(w, h), process_rect(w, h)
+        Triangle(a, b, c), process_tri(a, b, c)
     end match
 end fn
 

@@ -184,7 +184,12 @@ fn main() -> Result<()> {
 
                 // Run semantic type checking before transpilation.
                 if !has_errors {
-                    if let Err(type_errors) = poly_transpiler::check_program(&program) {
+                    let (check_result, warnings) =
+                        poly_transpiler::check_program_with_warnings(&program);
+                    for warning in warnings {
+                        eprintln!("Warning: {}", warning);
+                    }
+                    if let Err(type_errors) = check_result {
                         eprintln!("Type errors:");
                         for error in type_errors {
                             eprintln!("  {}", error);
@@ -256,6 +261,13 @@ fn main() -> Result<()> {
             let rust_code = transpiler
                 .transpile_with_intermediate_representation(&source)
                 .map_err(|e| anyhow::anyhow!(e))?;
+            // The optimizer can rewrite programs in ways the checker never
+            // sees, so verify the optimized output actually compiles instead
+            // of printing invalid Rust silently.
+            if let Err(e) = verify_rust_compiles(&rust_code) {
+                eprintln!("Optimized Rust compilation error: {}", e);
+                process::exit(1);
+            }
             let formatted = format_with_rustfmt(&rust_code).unwrap_or(rust_code);
             println!("{}", formatted);
             Ok(())
@@ -577,7 +589,8 @@ fn cargo_package_name(output_dir: &Path, source_path: &Path) -> String {
 /// Build the manifest for a generated Cargo project.
 fn cargo_manifest(package_name: &str, needs_tokio: bool) -> String {
     let dependencies = if needs_tokio {
-        "tokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }\n"
+        // "time" enables `tokio::time::sleep`, used by `delay`.
+        "tokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\"] }\n"
     } else {
         ""
     };
@@ -769,7 +782,10 @@ fn verify_rust_compiles(code: &str) -> Result<()> {
             .as_nanos()
     );
 
-    if code.contains("#[tokio::main]") {
+    // A program needs the tokio-backed Cargo project when it emits
+    // `#[tokio::main]` or references tokio directly (e.g. `delay` lowers to
+    // `tokio::time::sleep` inside async functions even when main stays sync).
+    if code.contains("#[tokio::main]") || code.contains("tokio::") {
         return verify_async_rust_compiles(code, &unique_id);
     }
 
@@ -814,7 +830,7 @@ fn verify_async_rust_compiles(code: &str, unique_id: &str) -> Result<()> {
     let project_dir = temp_dir.join(format!("poly_check_async_{unique_id}"));
     let src_dir = project_dir.join("src");
     std::fs::create_dir_all(&src_dir).context("Failed to create temp Cargo project")?;
-    let manifest = "[package]\nname = \"poly_check_async\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }\n[workspace]\n";
+    let manifest = "[package]\nname = \"poly_check_async\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\"] }\n[workspace]\n";
     std::fs::write(project_dir.join("Cargo.toml"), manifest)
         .context("Failed to write temp Cargo.toml")?;
     std::fs::write(src_dir.join("main.rs"), code).context("Failed to write temp main.rs")?;
@@ -957,6 +973,7 @@ mod tests {
 
         let asynchronous = cargo_manifest("demo", true);
         assert!(asynchronous.contains("tokio = { version = \"1\""));
+        assert!(asynchronous.contains("\"time\""));
     }
 
     #[test]

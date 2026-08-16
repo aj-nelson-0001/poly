@@ -19,6 +19,9 @@ pub struct Parser<'a> {
     if_depth: usize,
     // Statement macros defined so far; invocations expand during parsing.
     macros: HashMap<String, MacroDecl>,
+    // While parsing `get` flag values, a `--` starts the next flag, so a
+    // binary minus must not swallow it: `get --timeout 5000 --default 0`.
+    stop_at_double_minus: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -30,6 +33,7 @@ impl<'a> Parser<'a> {
             errors: Vec::new(),
             if_depth: 0,
             macros: HashMap::new(),
+            stop_at_double_minus: false,
         }
     }
 
@@ -219,6 +223,25 @@ impl<'a> Parser<'a> {
         } else {
             false
         }
+    }
+
+    /// Accept an identifier or a keyword token whose spelling is a plausible
+    /// method/field name (e.g. `map.get(...)`, `stream.put(...)`).  Method
+    /// names are not reserved words in Poly, so `get`/`put`/`error` after a
+    /// `.` must parse instead of being mistaken for statement keywords.
+    fn expect_field_name(&mut self) -> Result<String, ParseError> {
+        if let TokenKind::Identifier(name) = self.peek().clone() {
+            self.advance();
+            return Ok(name);
+        }
+        if let Some(name) = keyword_as_field_name(self.peek()) {
+            self.advance();
+            return Ok(name.to_string());
+        }
+        Err(ParseError::new(
+            format!("Expected identifier, got {:?}", self.peek()),
+            self.current().span,
+        ))
     }
 
     // === Statement parsing ===
@@ -1267,6 +1290,35 @@ impl<'a> Parser<'a> {
                 self.expect(&TokenKind::Gt)?;
                 Ok(TypeAnnotation::Result(Box::new(ok_ty), Box::new(err_ty)))
             }
+            TokenKind::Pipe => {
+                // Closure type annotation: `|x: i32, y: f64| bool`. Parameter
+                // names are optional and discarded; only the types matter for
+                // the annotation (they map to TypeAnnotation::Function).
+                self.advance(); // consume '|'
+                let mut params = Vec::new();
+                if *self.peek() != TokenKind::Pipe {
+                    loop {
+                        // Optional `name: ` prefix before each parameter type.
+                        if matches!(self.peek(), TokenKind::Identifier(_))
+                            && self.tokens.get(self.pos + 1).map(|token| &token.kind)
+                                == Some(&TokenKind::Colon)
+                        {
+                            self.advance(); // consume the parameter name
+                            self.advance(); // consume ':'
+                        }
+                        params.push(self.parse_type()?);
+                        if !self.match_token(&TokenKind::Comma) {
+                            break;
+                        }
+                    }
+                }
+                self.expect(&TokenKind::Pipe)?;
+                let ret = self.parse_type()?;
+                Ok(TypeAnnotation::Function {
+                    params,
+                    ret: Box::new(ret),
+                })
+            }
             TokenKind::Fn => {
                 self.advance();
                 self.expect(&TokenKind::LParen)?;
@@ -1523,6 +1575,16 @@ impl<'a> Parser<'a> {
                     };
                 }
                 TokenKind::Minus => {
+                    // Inside a `get` flag value, `--` begins the next flag
+                    // rather than a subtraction of a negative operand.
+                    if self.stop_at_double_minus
+                        && matches!(
+                            self.tokens.get(self.pos + 1).map(|token| &token.kind),
+                            Some(TokenKind::Minus)
+                        )
+                    {
+                        break;
+                    }
                     self.advance();
                     let right = self.parse_mul_div()?;
                     left = Expression::BinaryOp {
@@ -1690,7 +1752,7 @@ impl<'a> Parser<'a> {
     fn parse_loop_expression(&mut self) -> Result<Expression, ParseError> {
         self.advance(); // consume 'loop'
 
-        // Check for range loop: loop: 0..10 or loop: 1..3, 7, 19..21 step 2
+        // Check for range loop: loop: i 0..10 or loop: i 1..3, 7, 19..21 step 2
         if self.peek() == &TokenKind::Colon {
             self.advance(); // consume ':'
 
@@ -1714,25 +1776,39 @@ impl<'a> Parser<'a> {
                 // Parse the collection expression
                 let collection = self.parse_expression()?;
 
-                let _body = self.parse_block()?;
+                let body = self.parse_block()?;
                 self.expect(&TokenKind::End)?;
                 self.expect(&TokenKind::Loop)?;
 
-                // Return as a for-each call with destructuring
-                return Ok(Expression::Call {
-                    func: Box::new(Expression::Identifier("for_each_destructure".into())),
-                    args: vec![
-                        Expression::TupleLiteral(
-                            vars.into_iter().map(Expression::Identifier).collect(),
-                        ),
-                        collection,
-                    ],
+                // The tuple pattern travels in the loop variable; the checker
+                // registers each destructured name and codegen emits it as a
+                // Rust tuple pattern: `for (a, b) in collection.iter() { ... }`.
+                return Ok(Expression::LoopRange {
+                    variable: format!("({})", vars.join(", ")),
+                    ranges: vec![LoopRangePart::Value(Box::new(collection))],
+                    body,
                 });
             }
 
-            // Check for collection iteration: loop: collection
-            // or multi-range: loop: 1..3, 7, 19..21
-            // First, parse the first part
+            // The loop variable is explicit: `loop: i 1..3, 7, 19..21`.
+            let variable = self.expect_identifier()?;
+
+            // `loop: item in collection` is the collection form of the same
+            // syntax; keep it explicit rather than deriving a name from the
+            // collection identifier.
+            if self.match_token(&TokenKind::In) {
+                let collection = self.parse_expression()?;
+                let body = self.parse_block()?;
+                self.expect(&TokenKind::End)?;
+                self.expect(&TokenKind::Loop)?;
+                return Ok(Expression::LoopRange {
+                    variable,
+                    ranges: vec![LoopRangePart::Value(Box::new(collection))],
+                    body,
+                });
+            }
+
+            // Parse the first range/value part.
             let mut range_parts = Vec::new();
 
             loop {
@@ -1749,33 +1825,30 @@ impl<'a> Parser<'a> {
             self.expect(&TokenKind::Loop)?;
 
             return Ok(Expression::LoopRange {
+                variable,
                 ranges: range_parts,
                 body,
             });
         }
 
-        // Infinite loop
-        let _body = self.parse_block()?;
+        // Infinite loop: `loop` ... `end loop` with a block body.
+        let body = self.parse_block()?;
         self.expect(&TokenKind::End)?;
         self.expect(&TokenKind::Loop)?;
-        Ok(Expression::Call {
-            func: Box::new(Expression::Identifier("loop".into())),
-            args: vec![],
-        })
+        Ok(Expression::InfiniteLoop(body))
     }
 
     /// Parse a single part of a loop range spec.
     /// This can be: 0..10, 0..=10, 0..10 step 2, or just 5 (a single value).
+    /// Unlike ordinary range expressions, loop ranges include both endpoints.
     fn parse_loop_range_part(&mut self) -> Result<LoopRangePart, ParseError> {
         let first = self.parse_expression()?;
 
         // If parse_expression already consumed a range (e.g., 0..10), extract it
-        if let Expression::Range {
-            start,
-            end,
-            inclusive,
-        } = first
-        {
+        if let Expression::Range { start, end, .. } = first {
+            // Poly loop ranges include both endpoints. `..=` remains accepted
+            // as an explicit spelling of the same inclusive behavior.
+            let inclusive = true;
             // Check for optional step: ..10 step 2
             let step = if self.peek() == &TokenKind::Step {
                 self.advance(); // consume 'step'
@@ -1790,7 +1863,8 @@ impl<'a> Parser<'a> {
                 step,
             })
         } else if self.peek() == &TokenKind::DotDot || self.peek() == &TokenKind::DotDotEq {
-            let inclusive = self.peek() == &TokenKind::DotDotEq;
+            // Loop ranges are inclusive even when written with `..`.
+            let inclusive = true;
             self.advance(); // consume .. or ..=
             let end = self.parse_expression()?;
 
@@ -1847,7 +1921,7 @@ impl<'a> Parser<'a> {
                             args: vec![],
                         };
                     } else {
-                        let field = self.expect_identifier()?;
+                        let field = self.expect_field_name()?;
                         expr = Expression::FieldAccess {
                             object: Box::new(expr),
                             field,
@@ -2265,7 +2339,9 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            self.expect(&TokenKind::FatArrow)?;
+            // Poly match arms use a comma between the pattern and body:
+            // `pattern, expression`. The generated Rust uses `=>` later.
+            self.expect(&TokenKind::Comma)?;
             let body = self.parse_match_arm_body()?;
             arms.push(MatchArm {
                 pattern,
@@ -2295,8 +2371,9 @@ impl<'a> Parser<'a> {
             // Check if this looks like a new match arm pattern:
             // identifier, int literal, string literal, negative, or tuple pattern
             if self.could_be_pattern_start() {
-                // Peek ahead: if we see FatArrow after a potential pattern, this is a new arm
-                if self.peek_ahead_is_fatarrow() {
+                // Peek ahead: if we see a comma after a potential pattern,
+                // this is a new arm.
+                if self.peek_ahead_is_match_separator() {
                     break;
                 }
             }
@@ -2337,111 +2414,16 @@ impl<'a> Parser<'a> {
                 | TokenKind::Pipe
         )
     }
-
-    /// Peek ahead to check if a FatArrow follows (indicating a new match arm).
-    /// This does a limited lookahead.
-    fn peek_ahead_is_fatarrow(&mut self) -> bool {
+    /// Parse a potential pattern and guard speculatively, then check for the
+    /// comma that separates it from its body. This avoids mistaking an
+    /// expression such as `x + 1` for the start of the next arm.
+    fn peek_ahead_is_match_separator(&mut self) -> bool {
         let saved_pos = self.pos;
-        let mut found_fatarrow = false;
-
-        // Skip over what looks like a pattern
-        match self.peek().clone() {
-            TokenKind::Identifier(_) => {
-                self.advance();
-                // Check for Enum::Variant pattern
-                if *self.peek() == TokenKind::ColonColon {
-                    self.advance(); // ::
-                    if matches!(self.peek(), TokenKind::Identifier(_)) {
-                        self.advance(); // variant name
-                    }
-                    // Check for (args)
-                    if *self.peek() == TokenKind::LParen {
-                        self.advance(); // (
-                                        // Skip until matching )
-                        let mut depth = 1;
-                        while depth > 0 && !self.is_at_end() {
-                            match self.peek() {
-                                TokenKind::LParen => depth += 1,
-                                TokenKind::RParen => depth -= 1,
-                                _ => {}
-                            }
-                            self.advance();
-                        }
-                    }
-                } else if *self.peek() == TokenKind::LParen {
-                    // Variant pattern without :: (e.g., Ok(content), Error(e))
-                    self.advance(); // (
-                    let mut depth = 1;
-                    while depth > 0 && !self.is_at_end() {
-                        match self.peek() {
-                            TokenKind::LParen => depth += 1,
-                            TokenKind::RParen => depth -= 1,
-                            _ => {}
-                        }
-                        self.advance();
-                    }
-                }
-            }
-            TokenKind::IntLiteral(_) => {
-                self.advance();
-            }
-            TokenKind::StringLiteral(_) => {
-                self.advance();
-            }
-            TokenKind::UnicodeStringLiteral(_) => {
-                self.advance();
-            }
-            TokenKind::UnicodeCharLiteral(_) => {
-                self.advance();
-            }
-            TokenKind::Unicode => {
-                self.advance();
-                if matches!(
-                    self.peek(),
-                    TokenKind::StringLiteral(_) | TokenKind::UnicodeCharLiteral(_)
-                ) {
-                    self.advance();
-                }
-            }
-            TokenKind::BoolLiteral(_) => {
-                self.advance();
-            }
-            TokenKind::Minus => {
-                self.advance();
-                if matches!(self.peek(), TokenKind::IntLiteral(_)) {
-                    self.advance();
-                }
-            }
-            TokenKind::LParen => {
-                // Tuple pattern: skip to matching )
-                self.advance();
-                let mut depth = 1;
-                while depth > 0 && !self.is_at_end() {
-                    match self.peek() {
-                        TokenKind::LParen => depth += 1,
-                        TokenKind::RParen => depth -= 1,
-                        _ => {}
-                    }
-                    self.advance();
-                }
-            }
-            _ => {}
-        }
-
-        // Now check for optional guard (if condition)
-        if *self.peek() == TokenKind::If {
-            self.advance();
-            // Skip expression until FatArrow
-            // (simplified: just skip tokens until we find =>)
-        }
-
-        if *self.peek() == TokenKind::FatArrow {
-            found_fatarrow = true;
-        }
-
-        // Restore position
+        let is_separator = self.parse_pattern().is_ok()
+            && (!self.match_token(&TokenKind::If) || self.parse_expression().is_ok())
+            && self.peek() == &TokenKind::Comma;
         self.pos = saved_pos;
-        found_fatarrow
+        is_separator
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern, ParseError> {
@@ -2538,6 +2520,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a `get` flag value. Inside a flag value, `--` begins the next
+    /// flag, so the expression parser stops at a double minus instead of
+    /// treating it as subtraction of a negative operand.
+    fn parse_flag_value(&mut self) -> Result<Expression, ParseError> {
+        let saved = self.stop_at_double_minus;
+        self.stop_at_double_minus = true;
+        let result = self.parse_expression();
+        self.stop_at_double_minus = saved;
+        result
+    }
+
     fn parse_get_expression(&mut self) -> Result<Expression, ParseError> {
         self.advance(); // consume 'get'
         let mut prompt = None;
@@ -2610,23 +2603,23 @@ impl<'a> Parser<'a> {
                         match self.peek() {
                             TokenKind::Timeout => {
                                 self.advance();
-                                flags.push(GetFlag::Timeout(self.parse_expression()?));
+                                flags.push(GetFlag::Timeout(self.parse_flag_value()?));
                             }
                             TokenKind::Default => {
                                 self.advance();
-                                flags.push(GetFlag::Default(self.parse_expression()?));
+                                flags.push(GetFlag::Default(self.parse_flag_value()?));
                             }
                             TokenKind::Mask => {
                                 self.advance();
-                                flags.push(GetFlag::Mask(self.parse_expression()?));
+                                flags.push(GetFlag::Mask(self.parse_flag_value()?));
                             }
                             TokenKind::Identifier(ref s) if s == "until" => {
                                 self.advance();
-                                flags.push(GetFlag::Until(self.parse_expression()?));
+                                flags.push(GetFlag::Until(self.parse_flag_value()?));
                             }
                             TokenKind::Bytes => {
                                 self.advance();
-                                flags.push(GetFlag::Bytes(self.parse_expression()?));
+                                flags.push(GetFlag::Bytes(self.parse_flag_value()?));
                             }
                             TokenKind::As => {
                                 self.advance();
@@ -2634,7 +2627,7 @@ impl<'a> Parser<'a> {
                             }
                             TokenKind::Identifier(ref s) if s == "bytes" => {
                                 self.advance();
-                                flags.push(GetFlag::Bytes(self.parse_expression()?));
+                                flags.push(GetFlag::Bytes(self.parse_flag_value()?));
                             }
                             _ => break,
                         }
@@ -2713,6 +2706,34 @@ fn expression_description(expr: &Expression) -> String {
             )
         }
         _ => "target".to_string(),
+    }
+}
+
+/// Map a keyword token to its source spelling when the keyword is also a
+/// plausible method/field name (used after `.`, e.g. `map.get(...)`).
+fn keyword_as_field_name(token: &TokenKind) -> Option<&'static str> {
+    use TokenKind::*;
+    match token {
+        Put => Some("put"),
+        Get => Some("get"),
+        Error => Some("error"),
+        Warn => Some("warn"),
+        Info => Some("info"),
+        Try => Some("try"),
+        Move => Some("move"),
+        Set => Some("set"),
+        Step => Some("step"),
+        Type => Some("type"),
+        To => Some("to"),
+        With => Some("with"),
+        Validate => Some("validate"),
+        Complete => Some("complete"),
+        Encoding => Some("encoding"),
+        Timeout => Some("timeout"),
+        Default => Some("default"),
+        Mask => Some("mask"),
+        Bytes => Some("bytes"),
+        _ => None,
     }
 }
 
@@ -2816,7 +2837,7 @@ fn expression_contains_target(expr: &Expression, target: &Expression) -> bool {
         Expression::Range { start, end, .. } => {
             expression_contains_target(start, target) || expression_contains_target(end, target)
         }
-        Expression::LoopRange { ranges, body } => {
+        Expression::LoopRange { ranges, body, .. } => {
             ranges.iter().any(|range| match range {
                 LoopRangePart::Range {
                     start, end, step, ..
@@ -2838,6 +2859,9 @@ fn expression_contains_target(expr: &Expression, target: &Expression) -> bool {
                     .iter()
                     .any(|stmt| statement_contains_target(&stmt.node, target))
         }
+        Expression::InfiniteLoop(body) => body
+            .iter()
+            .any(|stmt| statement_contains_target(&stmt.node, target)),
         Expression::MatchExpression { scrutinee, arms } => {
             expression_contains_target(scrutinee, target)
                 || arms.iter().any(|arm| match &arm.body {
@@ -3279,7 +3303,12 @@ fn substitute_expression(
                     .collect()
             }),
         },
-        Expression::LoopRange { ranges, body } => Expression::LoopRange {
+        Expression::LoopRange {
+            variable,
+            ranges,
+            body,
+        } => Expression::LoopRange {
+            variable: variable.clone(),
             ranges: ranges
                 .iter()
                 .map(|range| match range {
@@ -3318,6 +3347,11 @@ fn substitute_expression(
                 .map(|statement| substitute_spanned_statement(statement, substitutions))
                 .collect(),
         },
+        Expression::InfiniteLoop(body) => Expression::InfiniteLoop(
+            body.iter()
+                .map(|statement| substitute_spanned_statement(statement, substitutions))
+                .collect(),
+        ),
         Expression::AsExpression { expr, ty } => Expression::AsExpression {
             expr: Box::new(substitute_expression(expr, substitutions)),
             ty: ty.clone(),
@@ -3559,7 +3593,7 @@ mod tests {
         assert!(parse_source(r#"var legacy_char := u'✓'"#).is_err());
         assert!(parse_source(
             r#"match unicode "yes"
-    unicode "yes" => put "ok"
+    unicode "yes", put "ok"
 end match"#
         )
         .is_ok());
@@ -3763,6 +3797,45 @@ end match"#
     }
 
     #[test]
+    fn test_parse_closure_type_annotation() {
+        // Closure types may appear in parameter positions: `|x: i32| i32`.
+        let prog = parse_source("fn apply(f: |x: i32| i32, v: i32): i32\n    return f(v)\nend fn")
+            .unwrap();
+        match &prog.statements[0].node {
+            Statement::FunctionDeclaration(function) => {
+                assert_eq!(function.params.len(), 2);
+                match &function.params[0].ty {
+                    TypeAnnotation::Function { params, ret } => {
+                        assert_eq!(params.len(), 1);
+                        assert!(matches!(params[0], TypeAnnotation::Named(ref n) if n == "i32"));
+                        assert!(matches!(**ret, TypeAnnotation::Named(ref n) if n == "i32"));
+                    }
+                    other => panic!("Expected function type, got {other:?}"),
+                }
+            }
+            _ => panic!("Expected function declaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_bare_closure_type_annotation() {
+        // Parameter names are optional inside closure types: `|i32| i32`.
+        let prog =
+            parse_source("fn twice(f: |i32| i32, v: i32): i32\n    return f(v)\nend fn").unwrap();
+        match &prog.statements[0].node {
+            Statement::FunctionDeclaration(function) => match &function.params[0].ty {
+                TypeAnnotation::Function { params, ret } => {
+                    assert_eq!(params.len(), 1);
+                    assert!(matches!(params[0], TypeAnnotation::Named(ref n) if n == "i32"));
+                    assert!(matches!(**ret, TypeAnnotation::Named(ref n) if n == "i32"));
+                }
+                other => panic!("Expected function type, got {other:?}"),
+            },
+            _ => panic!("Expected function declaration"),
+        }
+    }
+
+    #[test]
     fn test_parse_range() {
         let prog = parse_source("var r := 0..10").unwrap();
         assert_eq!(prog.statements.len(), 1);
@@ -3779,10 +3852,15 @@ end match"#
 
     #[test]
     fn test_parse_loop_range() {
-        let prog = parse_source("loop: 0..10\n    put i\nend loop").unwrap();
+        let prog = parse_source("loop: i 0..10\n    put i\nend loop").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
-            Statement::ExpressionStatement(Expression::LoopRange { ranges, body }) => {
+            Statement::ExpressionStatement(Expression::LoopRange {
+                variable,
+                ranges,
+                body,
+            }) => {
+                assert_eq!(variable, "i");
                 assert_eq!(ranges.len(), 1);
                 assert_eq!(body.len(), 1);
             }
@@ -3792,10 +3870,13 @@ end match"#
 
     #[test]
     fn test_parse_multi_range_loop() {
-        let prog = parse_source("loop: 1..3, 7, 19..21\n    put i\nend loop").unwrap();
+        let prog = parse_source("loop: value 1..3, 7, 19..21\n    put value\nend loop").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
-            Statement::ExpressionStatement(Expression::LoopRange { ranges, .. }) => {
+            Statement::ExpressionStatement(Expression::LoopRange {
+                variable, ranges, ..
+            }) => {
+                assert_eq!(variable, "value");
                 assert_eq!(ranges.len(), 3);
             }
             _ => panic!("Expected LoopRange with 3 parts"),
@@ -3804,11 +3885,18 @@ end match"#
 
     #[test]
     fn test_parse_step_range() {
-        let prog = parse_source("loop: 0..10 step 2\n    put i\nend loop").unwrap();
+        let prog = parse_source("loop: n 0..10 step 2\n    put n\nend loop").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange { ranges, .. }) => {
                 assert_eq!(ranges.len(), 1);
+                assert!(matches!(
+                    ranges[0],
+                    LoopRangePart::Range {
+                        inclusive: true,
+                        ..
+                    }
+                ));
                 match &ranges[0] {
                     LoopRangePart::Range { step, .. } => {
                         assert!(step.is_some());
@@ -3821,9 +3909,63 @@ end match"#
     }
 
     #[test]
+    fn test_parse_loop_range_requires_explicit_variable() {
+        assert!(parse_source("loop: 0..10\n    put i\nend loop").is_err());
+    }
+
+    #[test]
+    fn test_parse_infinite_loop_keeps_body() {
+        let prog = parse_source("loop\n    put 1\n    break\nend loop").unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0].node {
+            Statement::ExpressionStatement(Expression::InfiniteLoop(body)) => {
+                assert_eq!(body.len(), 2);
+            }
+            _ => panic!("Expected InfiniteLoop with body"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_get_flags() {
+        let prog =
+            parse_source("var x ustring := get --timeout 5000 --default unicode \"0\"").unwrap();
+        match &prog.statements[0].node {
+            Statement::VarDeclaration { value, .. } => match value {
+                Some(Expression::GetExpression(get)) => {
+                    assert_eq!(get.flags.len(), 2);
+                }
+                _ => panic!("Expected GetExpression"),
+            },
+            _ => panic!("Expected VarDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_tuple_destructuring_loop() {
+        let prog = parse_source(
+            "loop: (index, fruit) in fruits.enumerate()\n    put index\n    put fruit\nend loop",
+        )
+        .unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0].node {
+            Statement::ExpressionStatement(Expression::LoopRange {
+                variable,
+                ranges,
+                body,
+            }) => {
+                assert_eq!(variable, "(index, fruit)");
+                assert_eq!(ranges.len(), 1);
+                assert!(matches!(ranges[0], LoopRangePart::Value(_)));
+                assert_eq!(body.len(), 2);
+            }
+            _ => panic!("Expected LoopRange with tuple binding"),
+        }
+    }
+
+    #[test]
     fn test_parse_match_with_block_body() {
         let prog = parse_source(
-            "match x\n    1 =>\n        put \"one\"\n        x + 1\n    _ => 0\nend match",
+            "match x\n    1,\n        put \"one\"\n        x + 1\n    _, 0\nend match",
         )
         .unwrap();
         assert_eq!(prog.statements.len(), 1);
@@ -3844,14 +3986,30 @@ end match"#
 
     #[test]
     fn test_parse_variant_pattern_without_colons() {
-        let prog = parse_source(
-            "match x\n    Ok(content) => put content\n    Error(e) => error e\nend match",
-        )
-        .unwrap();
+        let prog =
+            parse_source("match x\n    Ok(content), put content\n    Error(e), error e\nend match")
+                .unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
                 assert_eq!(arms.len(), 2);
+            }
+            _ => panic!("Expected MatchExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_match_rejects_fat_arrow() {
+        assert!(parse_source("match x\n    1 => put \"one\"\nend match").is_err());
+    }
+
+    #[test]
+    fn test_parse_match_with_comma_separator_and_guard() {
+        let prog = parse_source("match x\n    n if n > 0, put n\n    _, put 0\nend match").unwrap();
+        match &prog.statements[0].node {
+            Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
+                assert_eq!(arms.len(), 2);
+                assert!(arms[0].guard.is_some());
             }
             _ => panic!("Expected MatchExpression"),
         }

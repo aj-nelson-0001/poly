@@ -116,9 +116,9 @@ x += 1       # increment x by one
 
 ~~~poly
 match direction
-    North => put "up"
-    South => put "down"
-    _ => put "other"
+    North, put "up"
+    South, put "down"
+    _, put "other"
 end match
 ~~~
 

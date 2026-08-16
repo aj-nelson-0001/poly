@@ -1,19 +1,126 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-08-13.
+Last updated: 2026-08-16.
+
+## Audit-fix pass (2026-08-16, v1.7.3)
+
+All items from the 2026-08-15 project review's prioritized follow-up are addressed:
+
+- **Optimizer soundness**: closure-returning functions are excluded from inlining;
+  integer comparisons fold to `bool` literals; logical `not` folds only on booleans
+  while `~` keeps bitwise semantics. `poly --ir` now verifies the optimized Rust
+  compiles before printing, so invalid optimizer output can no longer ship silently.
+- **Benchmarks + CI**: `performance_benchmarks.rs` uses comma match syntax; CI runs
+  `cargo check --workspace --all-targets`, checks every example with `poly --check`,
+  and rebuilds/verifies the checked-in wasm bundle.
+- **Runtime APIs**: `open`/`get_line`/`eof` are implemented via `BufReader`;
+  `sleep`/`delay`/`exit` lower to real calls; `get --timeout`/`--default`/`--as`/
+  `--bytes` are implemented (channel + reader thread, typed parsing). The remaining
+  stubs (`http_get`, `tcp_connect`, `db_execute`, `spawn`, `--mask`, `--until`)
+  now emit checker warnings and docs mark them experimental.
+- **Match-pattern validation**: unknown names on enum/struct/Result scrutinees are
+  rejected instead of silently becoming irrefutable Rust bindings; range patterns
+  (`0..=9`) now pass `--check`.
+- **Map/Set**: `insert`/`get`/`remove`/`contains_key`/`contains`/`len`/`is_empty`
+  type-check and codegen borrows keys; `m[key]`/`m[key] = v` lower correctly;
+  keyword method names (`map.get(...)`) parse.
+- **Closures**: `var f := |x| x + n; return f` now passes `--check` (`_` behaves as
+  unknown; arithmetic on unknown operands is permissive).
+- **Loop steps**: negative steps keep magnitude (`10..1 step -2` ->
+  `(1..=10).rev().step_by(2)`); constant `step 0` rejected.
+- **LSP**: UTF-16-correct hover/completion positions; JSON parser handles surrogate
+  pairs.
+- **Version metadata**: README/playground now advertise v1.7.3.
+- Tests: 13 new checker tests, 7 new optimizer tests, 6 new codegen tests, 4 new
+  LSP tests; all 20 example files pass `poly --check`; the wasm was rebuilt (364K).
+
+
+## Explicit loop variables (2026-08-14)
+
+- `loop:` now requires the binding name immediately after the colon, for example
+  `loop: value 1..3, 7, 19..20` and `loop: item in items`.
+- The explicit variable is carried through the parser AST, intermediate representation,
+  checker, optimizer, and Rust codegen; the old implicit `i`/`j` and collection-name
+  heuristics were removed.
+- `loop:` ranges are inclusive at both endpoints: `1..3` produces `1, 2, 3` and
+  lowers to Rust `1..=3`; ordinary non-loop range expressions keep their existing
+  exclusive `..` behavior.
+- Added parser, checker, and codegen regression coverage and updated examples,
+  grammar, cheatsheet, README, guides, and playground source.
 
 ## Status
 
 All items in this log are **complete and verified**:
 
 - Workspace build: 0 errors / 0 warnings
-- Workspace tests: all pass (221 tests across 14 suites)
+- Workspace tests: all pass (246 tests across 20 suites)
 - Clippy (`--workspace --all-targets`): 0 warnings
 - `cargo fmt --all -- --check`: clean
 - `scripts/check_markdown.py`: passes (tilde fences, no triple backticks)
-- `scripts/check_poly_examples.py`: passes (0 unmarked parse failures)
-- Playground JS: syntax valid; all 6 examples transpile through the real wasm binary
+- `scripts/check_poly_examples.py`: passes (0 unmarked parse failures; 21 examples)
+- Playground JS: syntax valid; all 7 examples transpile through the real wasm binary
+
+## Higher-order functions (2026-08-13, v1.7.2)
+
+- **Functions can return closures**: `fn make_adder(n: i32): |x: i32| i32` parses,
+  `check_return` checks the returned closure literal against the declared
+  signature (untyped parameters inherit the declared types), and codegen lowers
+  the return type to `impl Fn(i32) -> i32` and emits returned closures with
+  `move` so they may capture locals. Closures assigned to a variable and then
+  returned are also identified ahead of code generation and emitted with
+  `move`. Verified end-to-end: `make_adder(5)(10)` prints `15`,
+  `make_adder(100)(1)` prints `101`.
+- **Vec `map`/`filter`/`reduce` methods**: `xs.map(|x| x * 2)`,
+  `xs.filter(|x| x % 2 == 0)`, `xs.reduce(0, |acc, x| acc + x)`. The checker
+  derives the callback signature from the element (and accumulator) types and
+  rejects non-function callbacks, wrong parameter counts, and non-`bool` filter
+  predicates. Codegen emits `iter().cloned().map/filter/fold(...)` so the
+  receiver stays usable; the filter predicate derefs its single parameter.
+- **Docs/examples**: `examples/higher_order_functions.poly` (passes `--check`
+  and runs), a 7th playground example (`hof`) covering all three features, and
+  a README section. The playground demo transpiler now lowers closure-typed fn
+  signatures to `impl Fn`.
+- Verified: 9 new tests (7 checker, 2 codegen); the wasm was rebuilt and all 7
+  playground examples transpile through the real binary. Version bumped to 1.7.2.
+
+### Follow-up: vector printing, string HOFs, and sort_by
+
+- **`put` of vectors prints with `{:?}`**: array literals, vector variables
+  (typed or inferred, tracked in a new `vec_scopes` mirroring `string_scopes`),
+  and `map`/`filter`/`sort_by`/`split` results now print with debug formatting
+  instead of failing to compile (`put xs.map(|x| x * 2)` prints `[2, 4, ...]`).
+  File writes (`>`, `>>`) format vectors the same way.
+- **Strings support `map`/`filter`/`reduce`** over their characters:
+  `"hello".map(|c| c)` yields `Vec<char>`; codegen lowers to `.chars().map/filter/fold`.
+- **`sort_by` returns a sorted copy**: `xs.sort_by(|a, b| a > b)` — the checker
+  validates a two-parameter boolean comparator, and codegen emits a clone +
+  `v.sort_by` wrapper that derefs the references and maps the boolean to
+  `Ordering`. Sorting a string is rejected by the checker.
+- 6 new tests (3 checker, 3 codegen); `examples/higher_order_functions.poly`
+  and the playground `hof` example now demonstrate vector printing, `sort_by`,
+  and string `map`. The wasm was rebuilt again (340K).
+
+## Closure type annotations (2026-08-13, v1.7.1)
+
+- **Closure type annotations in parameter positions**: `fn apply(f: |x: i32| i32, v: i32): i32`
+  now parses. `parse_type` gained a `Pipe` branch that accepts `|name: type, ...| return_type`
+  (parameter names optional, e.g. `|i32| i32`) and maps it to `TypeAnnotation::Function`,
+  which already flowed through the generator, codegen (`fn(i32) -> i32`), and checker.
+- **Closure literals are checked against the expected signature**: `check_call` resolves the
+  callee's declared parameter types up front and `check_argument` checks closure-literal
+  arguments against them, so untyped literals inherit the declared types:
+  `apply(|x| x * 2, 21)` type-checks. Return-type mismatches (`expected fn(i32) -> i32,
+  got fn(i32) -> String`) and arity mismatches are rejected.
+- **Function-type compatibility**: `compatible` gained a `Function`/`Function` arm that
+  compares params and return structurally, so typed closures stored in variables
+  (`var double := |x: i32| x * 2; apply(double, 21)`) pass as function-typed arguments.
+- Verified end-to-end: `--check` passes, generated Rust builds and runs (`combine(|a, b| a + b, 2, 3)`
+  prints `5`), and the playground wasm was rebuilt (332K) with all 6 examples transpiling.
+- **Array iteration is confirmed supported**: `for x in xs` over `Vec<T>` and `String` already
+  inferred element types in the checker; added explicit tests and removed it from the known
+  limitations list.
+- Version bumped to 1.7.1 with matching CHANGELOG entries.
 
 ## Bug-fix pass (2026-08-13)
 
@@ -27,8 +134,8 @@ Audit fixes landing with v1.7.0:
   registered as a callable and its body is checked, so `inner(x)` calls from
   the enclosing body no longer report `unknown function`.
 - **Builtin `Option`/`Some`/`None` support in the checker**: value
-  construction (`Some(42)`, `None`), bare `None =>` patterns, and
-  `Some(v) =>` patterns all type-check against `Option<T>` scrutinees;
+  construction (`Some(42)`, `None`), bare `None,` patterns, and
+  `Some(v),` patterns all type-check against `Option<T>` scrutinees;
   mismatches still error.
 - **`Map<K,V>`/`Set<T>` empty initializers emit `HashMap::new()`/
   `HashSet::new()`** instead of `vec![]`, so the documented
@@ -169,13 +276,40 @@ PROGRESS.md                                        (this file)
 
 ## Known limitations / future work
 
-- `for` loops iterate ranges; element-type inference for array iteration is not
-  yet implemented in the checker (Rust compile step still catches it via
-  `--check`).
-- Closure type annotations in parameter positions (`fn apply(f: |x: i32| i32)`)
-  are not yet parsed; closures are inferred from literals only.
 - `^` is a bitwise operator, not exponentiation; float powers need a library
   call or `sqrt`-style helper.
 - `Type::method(receiver, args)` (explicit-receiver call via `::`) hits the
   associated-function arity path; the error message can be confusing.
 - The playground wasm could shrink further with `wasm-opt` if installed.
+
+## Project review (2026-08-15)
+
+### Verified working
+
+- `cargo test --workspace -- --test-threads=1` passes across the workspace (260 listed test cases, including parser recovery, checker, IR, LSP, WASM native round trips, and integration tests).
+- `cargo clippy --workspace --all-targets -- -D warnings` passes.
+- `cargo fmt --all -- --check` passes.
+- `scripts/check_markdown.py` passes: 35 Markdown files and 1,252 tilde fence markers.
+- `scripts/check_poly_examples.py` passes: 537 Poly blocks, 378 complete examples parsed, 159 marked fragments, and 0 unmarked parse failures.
+- Every current `examples/*.poly` file passes `poly --check`, including `higher_order_functions.poly` and `async_await.poly`.
+- The parser/checker/codegen support explicit loop bindings, inclusive ranges, collection iteration, closures, function-typed parameters and return values, vector/string higher-order methods, `Option`, nested functions, async syntax, LSP features, and the native WASM ABI tests.
+
+### Verified failures and risks
+
+- `cargo test --workspace --all-targets` fails because `poly-cli/benches/performance_benchmarks.rs` still contains retired `=>` match-arm syntax. CI currently runs workspace tests without `--all-targets`, so this regression is not caught.
+- The optimized `--ir` path can emit invalid Rust for closure-returning functions: inlining `make_adder` loses the captured `n`. The optimizer also folds boolean comparisons into integer literals and the IR codegen maps bitwise-not to logical-not.
+- Runtime APIs including `http_get`, `tcp_connect`, `db_execute`, `delay`, `eof`, and `get_line` are placeholder implementations; generated file/input operations use `unwrap()` and can panic. `spawn` lowers to `spawn_task` without a complete visible runtime implementation.
+- Generic type checking is permissive: generic type variables are commonly represented as `Unknown`, generic substitutions are not inferred at call sites, and generic bounds are not semantically validated.
+- Source-map line mappings remain best-effort heuristics, despite precise statement spans being available in the AST.
+- LSP diagnostics convert to UTF-16, but hover/completion position handling still uses character indexes; non-ASCII text can therefore produce incorrect locations. The custom JSON parser also lacks full surrogate-pair escape handling.
+- `README.md` and `playground/index.html` still advertise v1.6.0 while the compiler workspace is v1.7.2.
+- CI does not rebuild/verify the checked-in WASM bundle, run browser tests, package the VS Code extension, or execute benchmark targets.
+
+### Prioritized follow-up
+
+1. Update benchmark fixtures to comma match syntax and add `--all-targets` to CI.
+2. Disable unsafe optimizer inlining for closures/generics/async functions and compile-check optimized output; fix boolean constant folding and bitwise-not codegen.
+3. Decide which runtime APIs are supported versus experimental, then implement them or reject them during checking.
+4. Synchronize version metadata and add WASM/VS Code artifact validation to CI.
+5. Implement generic substitution/bound checking, UTF-16-safe LSP positions, and source-location propagation through the IR.
+6. Add runtime tests for higher-order functions, async behavior, file errors, generic misuse, and optimized output.

@@ -80,8 +80,8 @@ impl DataFetcher for HttpClient
         var response := http_get(full_url).await
         
         match response
-            Ok(data) => return Ok(data)
-            Error(e) => return Error(unicode "HTTP Error: " + e)
+            Ok(data), return Ok(data)
+            Error(e), return Error(unicode "HTTP Error: " + e)
         end match
     end fn
 end impl
@@ -89,8 +89,8 @@ end impl
 # Use the async trait
 async fn process_data<T: DataFetcher>(fetcher: T, url: ustring): ustring
     match fetcher.fetch(url).await
-        Ok(data) => return data
-        Error(e) => 
+        Ok(data), return data
+        Error(e),
             error e
             return unicode ""
     end match

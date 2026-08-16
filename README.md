@@ -2,7 +2,7 @@
 
 **A minimalist, assembly-inspired systems programming language that transpiles to safe, idiomatic Rust.**
 
-![Version](https://img.shields.io/badge/version-1.6.0-green)
+![Version](https://img.shields.io/badge/version-1.7.3-green)
 ![Status](https://img.shields.io/badge/status-Active%20Development-blue)
 ![Backend](https://img.shields.io/badge/backend-Rust-black)
 
@@ -22,15 +22,13 @@ Poly is designed as a minimalist, low-overhead system programming language with 
 
 ---
 
-## What's New in v1.6.0
+## What's New in v1.7.3
 
-🎉 **Clear, explicit expressions!** Poly uses `:=` for variable initialization, `=` for assignment, `==` for equality, and `+=`/`-=` for mutation.
+🎉 **Higher-order functions!** Functions can return closures (`fn make_adder(n: i32): |x: i32| i32`), vectors and strings support `map`/`filter`/`reduce`/`sort_by`, and closure literals can be stored in variables and passed around.
 
-If blocks use a readable delimiter-free form: `if x > 0 ... end if`. A comma remains accepted for compatibility.
+Match arms use comma syntax: `Ok(data), put data` (previously `=>`). Loop ranges are inclusive and require an explicit binding: `loop: i 0..10`. `get` supports real `--timeout`/`--default`/`--as` behavior, file reading (`get_line`/`eof`) works, and vectors print with `{:?}` formatting.
 
-**Syntax note:** Use `var name Type := value` or `var name := value` for declarations. Use `=` for later assignment, `==` for comparisons, and `+=`/`-=` for mutation.
-
-[Read the full blog post](BLOG_POST_if_syntax.md)
+See [CHANGELOG.md](CHANGELOG.md) for the full history, including v1.7.0 (LSP + in-browser wasm transpiler), v1.7.1 (closure type annotations), and v1.6.0 (explicit `:=`/`=`/`==` syntax).
 
 ---
 
@@ -72,28 +70,31 @@ fn read_config(path: ustring): Result<ustring, FileError>
 end fn
 
 match read_config(unicode "config.txt")
-    Ok(content) => put "Config loaded: " + content
-    Error(NotFound) => error "Config file not found"
-    Error(PermissionDenied) => error "Permission denied"
+    Ok(content), put "Config loaded: " + content
+    Error(NotFound), error "Config file not found"
+    Error(PermissionDenied), error "Permission denied"
 end match
 ~~~
 
 ### Loop Ranges (SuperBASIC-inspired)
 
+The loop variable must be named explicitly after `loop:`: `loop: <var_name> <ranges>`.
+Collection iteration uses `loop: <var_name> in <collection>`. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`; `..=` is accepted but redundant for `loop:` ranges.
+
 ~~~poly
 # Simple range
-loop: 0..10
+loop: i 0..10
     put i
 end loop
 
 # Multiple ranges and specific values
-loop: 1..3, 7, 19..20
-    put i  # Iterates: 1, 2, 3, 7, 19, 20
+loop: value 1..3, 7, 19..20
+    put value  # Iterates: 1, 2, 3, 7, 19, 20
 end loop
 
 # With step
-loop: 0..10 step 2
-    put i  # Iterates: 0, 2, 4, 6, 8
+loop: i 0..10 step 2
+    put i  # Iterates: 0, 2, 4, 6, 8, 10
 end loop
 ~~~
 
@@ -105,7 +106,7 @@ end loop
 
 | Feature | Syntax | Description |
 |---------|--------|-------------|
-| Basic output | `put expr` | Print with newline |
+| Basic output | `put expr` | Print with newline (vectors print with `{:?}` debug formatting) |
 | No newline | `put -n expr` | Print without newline |
 | File write | `put expr > "file"` | Write/overwrite file |
 | File append | `put expr >> "file"` | Append to file |
@@ -155,10 +156,16 @@ end loop
 - **Modules**: `module name ... end module`
 - **Macros**: `macro name(params) ... end macro` (compile-time text expansion with substitution)
 - **Closures**: `|params| expr` or `|params| ... end`
+- **Function types**: `fn apply(f: |x: i32| i32, v: i32): i32` — closures as
+  typed parameters; `fn make_adder(n: i32): |x: i32| i32` returns a closure
+- **Higher-order methods**: `xs.map(|x| x * 2)`, `xs.filter(|x| x % 2 == 0)`,
+  `xs.reduce(0, |acc, x| acc + x)`, `xs.sort_by(|a, b| a > b)` — callbacks
+  receive owned elements; strings iterate their characters (`"hi".map(|c| c)`
+  yields `Vec<char>`); `sort_by` returns a sorted copy
 - **If/Else**: `if cond ... else ... end if`
 - **While**: `while cond ... end while`
-- **Loop**: `loop ... end loop` (infinite), `loop: range ... end loop` (range)
-- **Match**: `match expr ... pattern => expr ... end match`
+- **Loop**: `loop ... end loop` (infinite), `loop: variable range ... end loop` (range), `loop: variable in collection ... end loop`
+- **Match**: `match expr ... pattern, expr ... end match`
 - **Error handling**: `Result<T, E>` with `Ok(val)` / `Error(err)`, `try` for propagation
 - **Math functions**: `abs`, `sqrt`, `pow`, `min`, `max`
 - **Generic containers**: `Vec<T>`, `Map<K, V>`, `Set<T>`, `Box<T>`, `Rc<T>`, `Arc<T>`
@@ -250,7 +257,7 @@ Poly transpiles to Rust. Every Poly construct has a direct Rust equivalent:
 | `put "hello"` | `println!("{}", "hello");` |
 | `get` | Standard input reading |
 | `if x > 0` | `if x > 0 {` |
-| `loop: 0..10` | `for i in 0..10 {` |
+| `loop: i 0..10` | `for i in 0..=10 {` |
 | `fn add(a: i32, b: i32): i32` | `fn add(a: i32, b: i32) -> i32` |
 | `struct Point` | `struct Point` |
 | `enum Shape` | `enum Shape` |
@@ -280,7 +287,7 @@ end fn
 
 put unicode "First 20 prime numbers:"
 var count i32 := 0
-loop: 2..200
+loop: num 2..200
     if is_prime(num)
         put num
         count += 1
@@ -303,11 +310,39 @@ fn main()
         put -n "Choose: "
         var choice i32 := get
         match choice
-            1 => greet_user()
-            2 => running = false
-            _ => warn "Invalid choice"
+            1, greet_user()
+            2, running = false
+            _, warn "Invalid choice"
         end match
     end while
+end fn
+~~~
+
+### Higher-Order Functions
+
+Functions are values: a function can accept a closure through a function-typed
+parameter, return a closure that captures locals, and vectors expose `map`,
+`filter`, and `reduce`:
+
+~~~poly
+fn apply(f: |x: i32| i32, v: i32): i32
+    return f(v)
+end fn
+
+fn make_adder(n: i32): |x: i32| i32
+    return |x| x + n
+end fn
+
+fn main()
+    put apply(|x| x * 2, 21)          # 42
+    var add5 := make_adder(5)
+    put add5(10)                      # 15
+    var xs := [1, 2, 3, 4, 5]
+    put xs.map(|x| x * 2)             # [2, 4, 6, 8, 10] (vectors print with {:?})
+    put xs.filter(|x| x % 2 == 0)     # [2, 4]
+    put xs.reduce(0, |acc, x| acc + x)  # 15
+    put xs.sort_by(|a, b| a > b)      # [5, 4, 3, 2, 1]
+    put "hello".map(|c| c)            # ['h', 'e', 'l', 'l', 'o']
 end fn
 ~~~
 

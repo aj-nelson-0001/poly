@@ -230,8 +230,9 @@ pub enum Expression {
         variant: String,
         data: Option<Vec<Expression>>,
     },
-    /// Loop range expression (loop: 1..3, 7, 19..21 step 2)
+    /// Loop range expression (`loop: variable 1..3, 7, 19..21 step 2`).
     LoopRange {
+        variable: String,
         ranges: Vec<LoopRangePart>,
         body: Block,
     },
@@ -241,6 +242,8 @@ pub enum Expression {
         iterable: Box<Expression>,
         body: Block,
     },
+    /// Infinite loop: `loop` ... `end loop` with a block body.
+    InfiniteLoop(Block),
     /// As expression (type cast)
     AsExpression {
         expr: Box<Expression>,
@@ -342,7 +345,7 @@ pub enum Pattern {
     Binding { name: String, pattern: Box<Pattern> },
 }
 
-/// A part of a loop range (either a range, a single value, or a range with step).
+/// A part of a loop range (either an inclusive range, a single value, or a range with step).
 ///
 /// Keeping a single value separate from a range lets code generation support
 /// both collection iteration and numeric ranges without guessing later.

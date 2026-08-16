@@ -8,9 +8,9 @@
 
 async fn simple_async(): ustring
     put unicode "Starting async operation..."
-    var result := delay(100).await
+    delay(100).await
     put unicode "Operation complete!"
-    return unicode "Result: " + result
+    return unicode "Operation finished"
 end fn
 
 # =============================================================================
@@ -25,8 +25,8 @@ async fn fetch_with_retry(url: ustring, max_retries: i32): Result<ustring, ustri
         put unicode "Attempt " + attempt.to_string() + unicode "..."
         
         match http_get(url).await
-            Ok(data) => return Ok(data)
-            Error(e) => 
+            Ok(data), return Ok(data)
+            Error(e),
                 if attempt < max_retries,
                     put unicode "Failed, retrying..."
                     delay(1000).await
@@ -78,19 +78,19 @@ end impl
 
 async fn process_response(url: ustring): ustring
     match http_get(url).await
-        Ok(data) =>
+        Ok(data),
             if data.len() > 0,
                 return unicode "Got data: " + data
             else
                 return unicode "Empty response"
             end if
-        Error(TimeoutError) =>
+        Error(TimeoutError),
             warn unicode "Request timed out"
             return unicode "Timeout"
-        Error(NotFoundError) =>
+        Error(NotFoundError),
             error unicode "Resource not found"
             return unicode "Not found"
-        Error(e) =>
+        Error(e),
             error e
             return unicode "Unknown error"
     end match
@@ -114,8 +114,8 @@ fn main()
     # Demo 2: Async with retry
     put unicode "--- Pattern 2: Async with Retry ---"
     # match fetch_with_retry(unicode "https://api.example.com", 3).await
-    #     Ok(data) => put unicode "Success: " + data
-    #     Error(e) => error e
+    #     Ok(data), put unicode "Success: " + data
+    #     Error(e), error e
     # end match
     put unicode ""
     

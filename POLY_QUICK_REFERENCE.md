@@ -34,9 +34,9 @@ var x bytes := get < "file"  # Read binary from file
 ~~~poly
 var x := get --timeout 5000       # Read with timeout (ms)
 var x := get --default unicode "val"     # Read with default value
-var x := get --mask unicode "*"          # Read with mask (password)
+var x := get --mask unicode "*"          # Experimental: mask parses but is not applied (warning)
 var x := get --as i32             # Read and convert to type
-var x := get --until unicode ","         # Read until delimiter
+var x := get --until unicode ","         # Experimental: until parses but reads to end of line (warning)
 var x := get < "file" --bytes 8   # Read specific number of bytes
 ~~~
 
@@ -65,8 +65,8 @@ end enum
 
 ~~~poly
 match result
-    Ok(value) => process(value)
-    Error(e) => handle_error(e)
+    Ok(value), process(value)
+    Error(e), handle_error(e)
 end match
 ~~~
 
@@ -74,8 +74,8 @@ end match
 
 ~~~poly
 match result
-    Ok(value) => process(value)
-    Error(_) => error "Something went wrong"  # Catches any error
+    Ok(value), process(value)
+    Error(_), error "Something went wrong"  # Catches any error
 end match
 ~~~
 
@@ -139,22 +139,24 @@ end loop
 
 ### Loop Ranges (SuperBASIC-style)
 
+Loop ranges include both endpoints. Thus `1..3` iterates `1, 2, 3`; `..=` is accepted but redundant for `loop:` ranges.
+
 ~~~poly
-loop: 0..10
+loop: i 0..10
     // code
 end loop
 
-loop: 1..3, 7, 19..20
+loop: value 1..3, 7, 19..20
     // iterates: 1, 2, 3, 7, 19, 20
     // code
 end loop
 
-loop: 1..10 step 2
-    // iterates: 1, 3, 5, 7, 9
+loop: i 1..10 step 2
+    // iterates: 1, 3, 5, 7, 9 (10 is not on the step)
     // code
 end loop
 
-loop: collection
+loop: item in collection
     // code
 end loop
 ~~~
@@ -163,9 +165,9 @@ end loop
 
 ~~~poly
 match value
-    pattern1 => expression1
-    pattern2 => expression2
-    _ => default_expression
+    pattern1, expression1
+    pattern2, expression2
+    _, default_expression
 end match
 ~~~
 
@@ -271,9 +273,9 @@ var age i32 := get with validate |x| x > 0 && x < 150
 
 ~~~poly
 match get --timeout 3000
-    Ok(input) => process(input)
-    Timeout => warn "Too slow!"
-    Error(e) => error "Error: " + e
+    Ok(input), process(input)
+    Timeout, warn "Too slow!"
+    Error(e), error "Error: " + e
 end match
 ~~~
 
@@ -295,14 +297,14 @@ var data bytes := get < "binary.bin"
 var valid i32 := loop
     put -n "Enter a number: "
     match get
-        Ok(input) =>
+        Ok(input),
             var num i32 := input.parse::<i32>()
             if num > 0,
                 break num
             else
                 warn "Please enter a positive number"
             end if
-        Error(e) => error "Invalid input: " + e
+        Error(e), error "Invalid input: " + e
     end match
 end loop
 ~~~
@@ -327,8 +329,8 @@ end fn
 var result := async_function().await
 var data := fetch(url).await
 match async_op().await
-    Ok(val) => process(val)
-    Error(e) => handle_error(e)
+    Ok(val), process(val)
+    Error(e), handle_error(e)
 end match
 ~~~
 

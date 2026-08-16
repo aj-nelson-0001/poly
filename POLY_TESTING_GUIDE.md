@@ -110,9 +110,9 @@ end fn
 fn test_timeout()
     var input := mock_timeout(100)  // Timeout after 100ms
     match get --timeout 50
-        Ok(_) => fail("Should have timed out")
-        Timeout => pass("Correctly timed out")
-        Error(e) => fail("Unexpected error: " + e)
+        Ok(_), fail("Should have timed out")
+        Timeout, pass("Correctly timed out")
+        Error(e), fail("Unexpected error: " + e)
     end match
 end fn
 
@@ -127,8 +127,8 @@ end fn
 fn test_validation_failure()
     var input := mock_input("200")
     match get with validate |x| x >= 1 && x <= 150
-        Ok(_) => fail("Should have failed validation")
-        Error(_) => pass("Correctly failed validation")
+        Ok(_), fail("Should have failed validation")
+        Error(_), pass("Correctly failed validation")
     end match
 end fn
 ~~~
@@ -173,8 +173,8 @@ end fn
 fn test_ok_value()
     var result Result<i32, ustring> := Ok(42)
     match result
-        Ok(value) => assert(value = 42)
-        Error(_) => fail("Should be Ok")
+        Ok(value), assert(value = 42)
+        Error(_), fail("Should be Ok")
     end match
 end fn
 
@@ -182,8 +182,8 @@ end fn
 fn test_error_value()
     var result Result<i32, ustring> := Error(unicode "Something went wrong")
     match result
-        Ok(_) => fail("Should be Error")
-        Error(e) => assert(e = unicode "Something went wrong")
+        Ok(_), fail("Should be Error")
+        Error(e), assert(e = unicode "Something went wrong")
     end match
 end fn
 ~~~
@@ -198,8 +198,8 @@ end fn
 
 fn test_error_propagation()
     match risky_operation()
-        Ok(_) => fail("Should have failed")
-        Error(e) => assert(e = unicode "Risky error")
+        Ok(_), fail("Should have failed")
+        Error(e), assert(e = unicode "Risky error")
     end match
 end fn
 
@@ -227,9 +227,9 @@ end enum
 fn test_specific_patterns()
     var result Result<ustring, TestError> := Error(TestError::NotFound)
     match result
-        Ok(_) => fail("Should be Error")
-        Error(NotFound) => pass("Correctly matched NotFound")
-        Error(_) => fail("Wrong error type")
+        Ok(_), fail("Should be Error")
+        Error(NotFound), pass("Correctly matched NotFound")
+        Error(_), fail("Wrong error type")
     end match
 end fn
 
@@ -237,8 +237,8 @@ end fn
 fn test_wildcard_pattern()
     var result Result<ustring, TestError> := Error(TestError::InvalidData(unicode "bad"))
     match result
-        Ok(_) => fail("Should be Error")
-        Error(_) => pass("Correctly matched any error")
+        Ok(_), fail("Should be Error")
+        Error(_), pass("Correctly matched any error")
     end match
 end fn
 
@@ -246,9 +246,9 @@ end fn
 fn test_pattern_with_data()
     var result Result<ustring, TestError> := Error(TestError::InvalidData(unicode "bad data"))
     match result
-        Ok(_) => fail("Should be Error")
-        Error(InvalidData(message)) => assert(message = unicode "bad data")
-        Error(_) => fail("Wrong error type")
+        Ok(_), fail("Should be Error")
+        Error(InvalidData(message)), assert(message = unicode "bad data")
+        Error(_), fail("Wrong error type")
     end match
 end fn
 ~~~
@@ -294,7 +294,7 @@ fn test_file_workflow()
     
     // Process lines
     var processed Vec<ustring> := []
-    loop: lines
+    loop: line in lines
         processed.push(line.to_uppercase())
     end loop
     
@@ -383,7 +383,7 @@ end fn
 // Test frequent output
 fn test_frequent_output()
     var start := time_now()
-    loop: 0..1000
+    loop: i 0..1000
         put -n "."
     end loop
     put ""
@@ -394,7 +394,7 @@ end fn
 // Test file write performance
 fn test_file_write_performance()
     var start := time_now()
-    loop: 0..1000
+    loop: i 0..1000
         put "Line " + i.to_string() >> "perf_test.txt"
     end loop
     var duration := time_now() - start
@@ -409,7 +409,7 @@ end fn
 // Test input parsing performance
 fn test_input_parsing()
     var start := time_now()
-    loop: 0..1000
+    loop: i 0..1000
         var input := mock_input(i.to_string())
         var num i32 := get
         assert(num = i)

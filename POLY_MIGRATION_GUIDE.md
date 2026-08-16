@@ -82,8 +82,8 @@ enum Result<T, E>
 end enum
 
 match result
-    Ok(value) => process(value)
-    Err(e) => handle_error(e)
+    Ok(value), process(value)
+    Err(e), handle_error(e)
 end match
 ~~~
 
@@ -95,8 +95,8 @@ enum Result<T, E>
 end enum
 
 match result
-    Ok(value) => process(value)
-    Error(e) => handle_error(e)
+    Ok(value), process(value)
+    Error(e), handle_error(e)
 end match
 ~~~
 
@@ -145,10 +145,10 @@ loop
     putn unicode "Choose: "
     var choice i32 := get
     match choice
-        1 => start_process()
-        2 => stop_process()
-        3 => break
-        _ => put unicode "Invalid choice"
+        1, start_process()
+        2, stop_process()
+        3, break
+        _, put unicode "Invalid choice"
     end match
 end loop
 ~~~
@@ -163,10 +163,10 @@ loop
     put -n "Choose: "
     var choice i32 := get
     match choice
-        1 => start_process()
-        2 => stop_process()
-        3 => break
-        _ => put "Invalid choice"
+        1, start_process()
+        2, stop_process()
+        3, break
+        _, put "Invalid choice"
     end match
 end loop
 ~~~
@@ -205,8 +205,8 @@ fn read_file(path: ustring): Result<ustring, FileError>
 end fn
 
 match read_file(unicode "config.txt")
-    Ok(content) => process(content)
-    Err(e) => print_err(unicode "Error: " + e)
+    Ok(content), process(content)
+    Err(e), print_err(unicode "Error: " + e)
 end match
 ~~~
 
@@ -218,8 +218,8 @@ fn read_file(path: ustring): Result<ustring, FileError>
 end fn
 
 match read_file(unicode "config.txt")
-    Ok(content) => process(content)
-    Error(e) => error "Error: " + e
+    Ok(content), process(content)
+    Error(e), error "Error: " + e
 end match
 ~~~
 
@@ -261,27 +261,27 @@ end for
 ### New Syntax
 ~~~poly
 # Simple range
-loop: 0..10
+loop: i 0..10
     put i
 end loop
 
 # Multiple ranges and values (SuperBASIC-inspired)
-loop: 1..3, 7, 19..21
+loop: i 1..3, 7, 19..21
     put i  # Iterates: 1, 2, 3, 7, 19, 20, 21
 end loop
 
 # With step
-loop: 0..10 step 2
-    put i  # Iterates: 0, 2, 4, 6, 8
+loop: i 0..10 step 2
+    put i  # Iterates: 0, 2, 4, 6, 8, 10
 end loop
 
 # Negative step (counting down)
-loop: 10..1 step -1
+loop: i 10..1 step -1
     put i  # Iterates: 10, 9, 8, ..., 1
 end loop
 
 # Iterate over collection
-loop: items
+loop: item in items
     put item
 end loop
 
@@ -294,10 +294,10 @@ end loop
 ### Changes Summary
 | Old | New | Description |
 |-----|-----|-------------|
-| `for i in 0..10` | `loop: 0..10` | Use `loop:` with colon for ranges |
-| `for item in items` | `loop: items` | Iterate over collections |
+| `for i in 0..10` | `loop: i 0..10` | Name the loop variable after `loop:`; Poly loop ranges include the end |
+| `for item in items` | `loop: item in items` | Iterate over collections |
 | `end for` | `end loop` | Closing keyword changed |
-| N/A | `loop: 1..3, 7, 19..21` | New: Multiple ranges and values |
+| N/A | `loop: i 1..3, 7, 19..21` | New: Multiple ranges and values |
 | N/A | `step` | New: Step support for increments |
 
 **Note:** The infinite `loop` (without colon) remains unchanged.

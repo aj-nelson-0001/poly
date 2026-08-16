@@ -18,6 +18,8 @@ pub struct IntermediateRepresentationCodeGen {
     string_scopes: Vec<HashSet<String>>,
     /// Poly type name of named values.
     type_scopes: Vec<HashMap<String, String>>,
+    /// Names whose values are vectors (needed for `{:?}` put formatting).
+    vec_scopes: Vec<HashSet<String>>,
     /// Functions whose return annotation lowers to Rust `String`.
     string_functions: HashSet<String>,
     /// Methods keyed by receiver type and method name whose return type is `String`.
@@ -32,10 +34,20 @@ pub struct IntermediateRepresentationCodeGen {
     recursive_enum_fields: HashSet<(String, String, usize)>,
     /// Whether generated code needs `std::io::Write`.
     needs_io_write: bool,
+    /// Whether generated code needs `std::io::BufRead` (file line reading).
+    /// Set from `&self` expression generation, hence the cell.
+    needs_bufread: RefCell<bool>,
     /// Match bindings whose values are boxed recursive enum fields.
     boxed_bindings: RefCell<Vec<HashSet<String>>>,
     /// Names extracted from nested boxed patterns and their owned expressions.
     pattern_aliases: RefCell<Vec<HashMap<String, String>>>,
+    /// Whether the expression currently being generated is a `return` value;
+    /// closures rendered under this flag capture with `move` so returned
+    /// closures that capture locals satisfy Rust's lifetime rules.
+    closure_move: RefCell<bool>,
+    /// Per-function names returned from a `return` statement. Closure
+    /// declarations bound to these names must own their captures as well.
+    returned_closure_names: RefCell<Vec<HashSet<String>>>,
 }
 
 impl IntermediateRepresentationCodeGen {
@@ -46,6 +58,7 @@ impl IntermediateRepresentationCodeGen {
             output: String::new(),
             string_scopes: vec![HashSet::new()],
             type_scopes: vec![HashMap::new()],
+            vec_scopes: vec![HashSet::new()],
             string_functions: HashSet::new(),
             string_methods: HashSet::new(),
             string_constants: HashSet::new(),
@@ -53,8 +66,11 @@ impl IntermediateRepresentationCodeGen {
             enum_struct_fields: HashMap::new(),
             recursive_enum_fields: HashSet::new(),
             needs_io_write: false,
+            needs_bufread: RefCell::new(false),
             boxed_bindings: RefCell::new(Vec::new()),
             pattern_aliases: RefCell::new(Vec::new()),
+            closure_move: RefCell::new(false),
+            returned_closure_names: RefCell::new(Vec::new()),
         }
     }
 
@@ -138,6 +154,9 @@ impl IntermediateRepresentationCodeGen {
         result.push_str(&self.output);
         if self.needs_io_write {
             result.push_str("\nuse std::io::Write;\n");
+        }
+        if *self.needs_bufread.borrow() {
+            result.push_str("\nuse std::io::BufRead;\n");
         }
         result
     }
@@ -256,6 +275,9 @@ impl IntermediateRepresentationCodeGen {
 
     fn gen_function(&mut self, function: &Function, is_method: bool) {
         self.enter_scope();
+        self.returned_closure_names
+            .borrow_mut()
+            .push(collect_returned_binding_names(&function.body));
         let generics = self.gen_generics(&function.generics);
         let params: Vec<String> = function
             .params
@@ -271,11 +293,20 @@ impl IntermediateRepresentationCodeGen {
                 }
             })
             .collect();
-        let ret = function
-            .return_type
-            .as_ref()
-            .map(|ty| format!(" -> {}", self.gen_type(ty)))
-            .unwrap_or_default();
+        // A function-typed return annotation lowers to `impl Fn` so the body
+        // can return closure literals (which capture) as well as fn pointers.
+        let ret = match &function.return_type {
+            Some(Type::Function { params, ret }) => {
+                let rendered: Vec<String> = params.iter().map(|t| self.gen_type(t)).collect();
+                format!(
+                    " -> impl Fn({}) -> {}",
+                    rendered.join(", "),
+                    self.gen_type(ret)
+                )
+            }
+            Some(ty) => format!(" -> {}", self.gen_type(ty)),
+            None => String::new(),
+        };
 
         for parameter in &function.params {
             if let Some(type_name) = named_type_name(&parameter.ty) {
@@ -283,6 +314,9 @@ impl IntermediateRepresentationCodeGen {
             }
             if Self::is_string_type(&parameter.ty) {
                 self.declare_string(parameter.name.clone());
+            }
+            if Self::is_vec_type(&parameter.ty) {
+                self.declare_vec(parameter.name.clone());
             }
         }
 
@@ -304,6 +338,7 @@ impl IntermediateRepresentationCodeGen {
         }
         self.indent -= 1;
         self.writeln("}");
+        self.returned_closure_names.borrow_mut().pop();
         self.exit_scope();
     }
 
@@ -471,10 +506,24 @@ impl IntermediateRepresentationCodeGen {
                 if ty.as_ref().is_some_and(Self::is_string_type) || value_is_string {
                     self.declare_string(name.clone());
                 }
+                if ty.as_ref().is_some_and(Self::is_vec_type)
+                    || value
+                        .as_ref()
+                        .is_some_and(|value| matches!(value, Expr::Array(_)))
+                    || value.as_ref().is_some_and(|value| {
+                        matches!(
+                            value,
+                            Expr::Get(get)
+                                if get.flags.iter().any(|flag| matches!(flag, GetFlag::Bytes(_)))
+                        )
+                    })
+                {
+                    self.declare_vec(name.clone());
+                }
                 let ty_str = ty.as_ref().map(|ty| self.gen_type(ty)).unwrap_or_default();
                 match value {
                     Some(value) => {
-                        let value_str = self.gen_value_expr(value, ty.as_ref());
+                        let value_str = self.gen_decl_value(name, value, ty.as_ref());
                         if ty.is_some() {
                             self.writeln(&format!("let mut {}: {} = {};", name, ty_str, value_str));
                         } else {
@@ -503,8 +552,18 @@ impl IntermediateRepresentationCodeGen {
                 if ty.as_ref().is_some_and(Self::is_string_type) || value_is_string {
                     self.declare_string(name.clone());
                 }
+                if ty.as_ref().is_some_and(Self::is_vec_type)
+                    || matches!(value, Expr::Array(_))
+                    || matches!(
+                        value,
+                        Expr::Get(get)
+                            if get.flags.iter().any(|flag| matches!(flag, GetFlag::Bytes(_)))
+                    )
+                {
+                    self.declare_vec(name.clone());
+                }
                 let ty_str = ty.as_ref().map(|ty| self.gen_type(ty)).unwrap_or_default();
-                let value_str = self.gen_value_expr(value, ty.as_ref());
+                let value_str = self.gen_decl_value(name, value, ty.as_ref());
                 if ty.is_some() {
                     self.writeln(&format!("let {}: {} = {};", name, ty_str, value_str));
                 } else {
@@ -512,6 +571,20 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Statement::Assignment { target, value } => {
+                // `m[key] = value` on a Map inserts rather than indexing
+                // (`HashMap` has no `IndexMut` for owned keys).
+                if let Expr::Index { object, index } = target {
+                    if self.is_map_expr(object) {
+                        let object_str = self.gen_expr(object);
+                        let index_str = self.gen_expr(index);
+                        let value_str = self.gen_expr(value);
+                        self.writeln(&format!(
+                            "{}.insert({}, {});",
+                            object_str, index_str, value_str
+                        ));
+                        return;
+                    }
+                }
                 let target_str = self.gen_expr(target);
                 let value_str = self.gen_expr(value);
                 self.writeln(&format!("{} = {};", target_str, value_str));
@@ -532,7 +605,12 @@ impl IntermediateRepresentationCodeGen {
             }
             Statement::Return(value) => match value {
                 Some(value) => {
-                    self.writeln(&format!("return {};", self.gen_expr(value)));
+                    // Closures in return position capture with `move` so the
+                    // returned closure owns any locals it references.
+                    *self.closure_move.borrow_mut() = true;
+                    let rendered = self.gen_expr(value);
+                    *self.closure_move.borrow_mut() = false;
+                    self.writeln(&format!("return {};", rendered));
                 }
                 None => self.writeln("return;"),
             },
@@ -586,6 +664,7 @@ impl IntermediateRepresentationCodeGen {
                     Expr::If { .. }
                     | Expr::LoopRange { .. }
                     | Expr::ForLoop { .. }
+                    | Expr::InfiniteLoop(_)
                     | Expr::Match { .. } => {
                         self.writeln(&expr_str);
                     }
@@ -707,6 +786,16 @@ impl IntermediateRepresentationCodeGen {
         }
     }
 
+    /// The `println!`/`format!` spec used for a put value: `{:?}` for vectors
+    /// (which do not implement `Display`), `{}` otherwise.
+    fn put_format_spec(&self, expr: &Expr) -> &'static str {
+        if self.is_vec_expr(expr) {
+            "{:?}"
+        } else {
+            "{}"
+        }
+    }
+
     fn gen_put(&mut self, no_newline: bool, expr: &Expr, redirect: Option<&Redirect>) {
         if let Expr::BinaryOp { op, left, right } = expr {
             match op {
@@ -716,7 +805,7 @@ impl IntermediateRepresentationCodeGen {
                     let value = if self.is_bytes_expr(left) {
                         content
                     } else {
-                        format!("format!(\"{}\", {})", "{}", content)
+                        format!("format!(\"{}\", {})", self.put_format_spec(left), content)
                     };
                     self.writeln(&format!("std::fs::write({}, {}).unwrap();", path, value));
                     return;
@@ -726,8 +815,8 @@ impl IntermediateRepresentationCodeGen {
                     let path = self.gen_expr(right);
                     self.needs_io_write = true;
                     self.writeln(&format!(
-                        "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{{}}\", {}).unwrap(); }}",
-                        path, content
+                        "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{}\", {}).unwrap(); }}",
+                        path, self.put_format_spec(left), content
                     ));
                     return;
                 }
@@ -736,6 +825,7 @@ impl IntermediateRepresentationCodeGen {
         }
 
         let expr_str = self.gen_expr(expr);
+        let spec = self.put_format_spec(expr);
         match redirect {
             Some(Redirect::Write(path)) => {
                 let path_str = self.gen_expr(path);
@@ -744,7 +834,7 @@ impl IntermediateRepresentationCodeGen {
                     let value = if self.is_bytes_expr(expr) {
                         expr_str
                     } else {
-                        format!("format!(\"{}\\n\", {})", "{}", expr_str)
+                        format!("format!(\"{}\\n\", {})", spec, expr_str)
                     };
                     self.writeln(&format!(
                         "std::fs::write({}, {}).unwrap();",
@@ -753,7 +843,7 @@ impl IntermediateRepresentationCodeGen {
                 } else {
                     self.writeln(&format!(
                         "std::fs::write({}, format!(\"{}\\n\", {})).unwrap();",
-                        path_str, "{}", expr_str
+                        path_str, spec, expr_str
                     ));
                 }
             }
@@ -761,15 +851,15 @@ impl IntermediateRepresentationCodeGen {
                 let path_str = self.gen_expr(path);
                 self.needs_io_write = true;
                 self.writeln(&format!(
-                    "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{{}}\", {}).unwrap(); }}",
-                    path_str, expr_str
+                    "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{}\", {}).unwrap(); }}",
+                    path_str, spec, expr_str
                 ));
             }
             None => {
                 if no_newline {
-                    self.writeln(&format!("print!(\"{}\", {});", "{}", expr_str));
+                    self.writeln(&format!("print!(\"{}\", {});", spec, expr_str));
                 } else {
-                    self.writeln(&format!("println!(\"{}\", {});", "{}", expr_str));
+                    self.writeln(&format!("println!(\"{}\", {});", spec, expr_str));
                 }
             }
         }
@@ -892,7 +982,13 @@ impl IntermediateRepresentationCodeGen {
                 }
                 match func_str.as_str() {
                     "open" if args.len() == 1 => {
-                        format!("std::fs::File::open({}).unwrap()", args_str.join(", "))
+                        // Lower to a buffered reader so `get_line`/`eof` can
+                        // be implemented on top of `BufRead`.
+                        *self.needs_bufread.borrow_mut() = true;
+                        format!(
+                            "std::io::BufReader::new(std::fs::File::open({}).unwrap())",
+                            args_str.join(", ")
+                        )
                     }
                     "str" | "to_string" if args.len() == 1 => {
                         format!("format!(\"{}\", {})", "{}", args_str[0])
@@ -915,11 +1011,24 @@ impl IntermediateRepresentationCodeGen {
                     "pow" if args.len() == 2 => {
                         format!("({}).pow({})", args_str[0], args_str[1])
                     }
-                    "delay" => "async { String::new() }".to_string(),
+                    "sleep" if args.len() == 1 => format!(
+                        "std::thread::sleep(std::time::Duration::from_millis({} as u64))",
+                        args_str[0]
+                    ),
+                    "delay" if args.len() == 1 => format!(
+                        "tokio::time::sleep(std::time::Duration::from_millis({} as u64))",
+                        args_str[0]
+                    ),
+                    "exit" if args.len() == 1 => {
+                        format!("std::process::exit({})", args_str[0])
+                    }
+                    // Network/database builtins remain experimental stubs:
+                    // they compile so example programs stay buildable, but
+                    // they return empty values instead of real data.
                     "http_get" => "async { Ok::<String, String>(String::new()) }".to_string(),
                     "tcp_connect" => "async { String::new() }".to_string(),
                     "db_execute" => "async { Vec::<String>::new() }".to_string(),
-                    "process_config" | "exit" | "for_each_destructure" => "()".to_string(),
+                    "process_config" => "()".to_string(),
                     _ => format!("{}({})", func_str, args_str.join(", ")),
                 }
             }
@@ -935,13 +1044,28 @@ impl IntermediateRepresentationCodeGen {
                 let object_str = self.gen_expr(object);
                 let args_str: Vec<String> = args.iter().map(|a| self.gen_expr(a)).collect();
                 match method.as_str() {
-                    "eof" => "false /* eof check - needs BufReader implementation */".to_string(),
+                    "eof" => {
+                        // `BufRead::fill_buf` peeks without consuming; an empty
+                        // buffer (or a failed read) means end-of-file.
+                        *self.needs_bufread.borrow_mut() = true;
+                        format!(
+                            "{{ {}.fill_buf().map(|buffer| buffer.is_empty()).unwrap_or(true) }}",
+                            object_str
+                        )
+                    }
                     "get_line" => {
-                        "String::new() /* get_line - needs BufReader implementation */".to_string()
+                        *self.needs_bufread.borrow_mut() = true;
+                        format!(
+                            "{{ let mut __poly_line = String::new(); let _ = {}.read_line(&mut __poly_line).unwrap(); __poly_line.trim_end().to_string() }}",
+                            object_str
+                        )
                     }
                     "len" => format!("({}.len() as i32)", object_str),
-                    "contains" if args.len() == 1 => {
+                    "contains" if args.len() == 1 && self.is_string_expr(object) => {
                         format!("{}.contains({}.as_str())", object_str, args_str[0])
+                    }
+                    "contains" if args.len() == 1 && self.is_set_expr(object) => {
+                        format!("{}.contains(&{})", object_str, args_str[0])
                     }
                     "to_string" => {
                         if self.is_string_expr(object) {
@@ -958,14 +1082,68 @@ impl IntermediateRepresentationCodeGen {
                         "{}.split({}.as_str()).map(|part| part.to_string()).collect::<Vec<String>>()",
                         object_str, args_str[0]
                     ),
-                    "starts_with" | "ends_with" if args.len() == 1 => format!(
-                        "{}.{}({}.as_str())",
-                        object_str, method, args_str[0]
-                    ),
+                    "starts_with" | "ends_with"
+                        if args.len() == 1 && self.is_string_expr(object) =>
+                    {
+                        format!("{}.{}({}.as_str())", object_str, method, args_str[0])
+                    }
                     "replace" if args.len() == 2 => format!(
                         "{}.replace({}.as_str(), {}.as_str())",
                         object_str, args_str[0], args_str[1]
                     ),
+                    // Higher-order methods iterate owned elements: `.chars()`
+                    // for strings, `iter().cloned()` for vectors, so the
+                    // receiver stays usable afterwards.
+                    "map" if args.len() == 1 => {
+                        let iter = if self.is_string_expr(object) {
+                            "chars()"
+                        } else {
+                            "iter().cloned()"
+                        };
+                        format!(
+                            "{}.{}.map({}).collect::<Vec<_>>()",
+                            object_str, iter, args_str[0]
+                        )
+                    }
+                    "reduce" if args.len() == 2 => {
+                        let iter = if self.is_string_expr(object) {
+                            "chars()"
+                        } else {
+                            "iter().cloned()"
+                        };
+                        format!(
+                            "{}.{}.fold({}, {})",
+                            object_str, iter, args_str[0], args_str[1]
+                        )
+                    }
+                    "filter" if args.len() == 1 => {
+                        let iter = if self.is_string_expr(object) {
+                            "chars()"
+                        } else {
+                            "iter().cloned()"
+                        };
+                        format!(
+                            "{}.{}.filter({}).collect::<Vec<_>>()",
+                            object_str,
+                            iter,
+                            self.gen_filter_callback(&args[0])
+                        )
+                    }
+                    "sort_by" if args.len() == 1 => format!(
+                        "{{ let mut v = {}.clone(); v.sort_by({}); v }}",
+                        object_str,
+                        self.gen_sort_callback(&args[0])
+                    ),
+                    // Map accessors borrow their keys: `HashMap::get(&key)`;
+                    // Set `remove` borrows its element too.
+                    "get" | "contains_key" | "remove"
+                        if args.len() == 1 && self.is_map_expr(object) =>
+                    {
+                        format!("{}.{}(&{})", object_str, method, args_str[0])
+                    }
+                    "remove" if args.len() == 1 && self.is_set_expr(object) => {
+                        format!("{}.remove(&{})", object_str, args_str[0])
+                    }
                     _ => format!("{}.{}({})", object_str, method, args_str.join(", ")),
                 }
             }
@@ -975,6 +1153,11 @@ impl IntermediateRepresentationCodeGen {
                 if self.is_string_expr(object) {
                     format!(
                         "{}.chars().nth({} as usize).expect(\"string index out of bounds\")",
+                        object_str, index_str
+                    )
+                } else if self.is_map_expr(object) {
+                    format!(
+                        "{}.get(&{}).map(|v| v.clone()).unwrap_or_default()",
                         object_str, index_str
                     )
                 } else {
@@ -1103,7 +1286,17 @@ impl IntermediateRepresentationCodeGen {
                         }
                     })
                     .collect();
-                format!("|{}| {}", params_str.join(", "), self.gen_expr(body))
+                let prefix = if *self.closure_move.borrow() {
+                    "move "
+                } else {
+                    ""
+                };
+                format!(
+                    "{}|{}| {}",
+                    prefix,
+                    params_str.join(", "),
+                    self.gen_expr(body)
+                )
             }
             Expr::Array(elements) => {
                 let elems: Vec<String> = elements.iter().map(|e| self.gen_expr(e)).collect();
@@ -1199,12 +1392,24 @@ impl IntermediateRepresentationCodeGen {
                     format!("{}..{}", s, e)
                 }
             }
-            Expr::LoopRange { ranges, body } => self.gen_loop_range(ranges, body),
+            Expr::LoopRange {
+                variable,
+                ranges,
+                body,
+            } => self.gen_loop_range(variable, ranges, body),
             Expr::ForLoop {
                 variable,
                 iterable,
                 body,
             } => self.gen_for_loop(variable, iterable, body),
+            Expr::InfiniteLoop(body) => {
+                let mut result = "loop {\n".to_string();
+                for statement in body {
+                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                }
+                result.push('}');
+                result
+            }
             Expr::Try(expr) => format!("{}?", self.gen_expr(expr)),
             Expr::As { expr, ty } => {
                 format!("{} as {}", self.gen_expr(expr), self.gen_type(ty))
@@ -1218,6 +1423,21 @@ impl IntermediateRepresentationCodeGen {
                 result.push('}');
                 result
             }
+        }
+    }
+
+    /// Absolute value of a loop step expression (`-2` -> `2`), used by the
+    /// reversed-step iterator lowering.
+    fn gen_step_magnitude(&self, step: &Expr) -> String {
+        match step {
+            Expr::UnaryOp {
+                op: UnaryOp::Neg,
+                expr,
+            } => self.gen_expr(expr),
+            Expr::Literal(Literal::Int(value)) => {
+                value.strip_prefix('-').unwrap_or(value).to_string()
+            }
+            other => self.gen_expr(other),
         }
     }
 
@@ -1244,23 +1464,26 @@ impl IntermediateRepresentationCodeGen {
         result
     }
 
-    fn gen_loop_range(&self, ranges: &[LoopRangePart], body: &[Statement]) -> String {
+    fn gen_loop_range(
+        &self,
+        variable: &str,
+        ranges: &[LoopRangePart],
+        body: &[Statement],
+    ) -> String {
         let mut result = String::new();
         if ranges.len() == 1 {
             match &ranges[0] {
                 LoopRangePart::Range {
                     start,
                     end,
-                    inclusive,
+                    inclusive: _,
                     step,
                 } => {
                     let s = self.gen_expr(start);
                     let e = self.gen_expr(end);
-                    let range = if *inclusive {
-                        format!("{}..={}", s, e)
-                    } else {
-                        format!("{}..{}", s, e)
-                    };
+                    // Poly loop ranges include both endpoints, unlike ordinary
+                    // Poly/Rust range expressions.
+                    let range = format!("{}..={}", s, e);
                     let iterator = if let Some(step) = step {
                         let is_negative = matches!(
                             step,
@@ -1270,52 +1493,55 @@ impl IntermediateRepresentationCodeGen {
                             }
                         ) || matches!(step, Expr::Literal(Literal::Int(value)) if value.starts_with('-'));
                         if is_negative {
-                            format!("({}..={}).rev()", e, s)
+                            format!(
+                                "({}..={}).rev().step_by({} as usize)",
+                                e,
+                                s,
+                                self.gen_step_magnitude(step)
+                            )
                         } else {
                             format!("({}).step_by({} as usize)", range, self.gen_expr(step))
                         }
                     } else {
                         range
                     };
-                    let contains_nested_loop = body.iter().any(|statement| {
-                        matches!(statement, Statement::Expression(Expr::LoopRange { .. }))
-                    });
-                    let loop_variable = if !contains_nested_loop
-                        && body
-                            .iter()
-                            .map(|statement| self.gen_statement_str(statement))
-                            .any(|statement| statement.contains(" j"))
-                    {
-                        "j"
-                    } else {
-                        "i"
-                    };
-                    result.push_str(&format!("for {} in {} {{\n", loop_variable, iterator));
+                    result.push_str(&format!("for {} in {} {{\n", variable, iterator));
                 }
                 LoopRangePart::Value(value) => {
-                    if let Expr::MethodCall { object, method, .. } = value.as_ref() {
-                        if method == "enumerate" {
-                            let object_str = self.gen_expr(object);
-                            result.push_str(&format!(
-                                "for (index, fruit) in {}.iter().enumerate() {{\n",
-                                object_str
-                            ));
+                    // Collection loops iterate by reference so the collection
+                    // stays usable afterwards: `loop: item in items` lowers to
+                    // `for item in items.iter()`, and `loop: (a, b) in
+                    // items.enumerate()` borrows the receiver too. Strings are
+                    // already borrowed via `.chars()`, and temporaries (array
+                    // literals, method results such as `map`/`filter`/`split`)
+                    // can be consumed directly.
+                    let iterator = if self.is_string_expr(value) {
+                        format!("{}.chars()", self.gen_expr(value))
+                    } else if let Expr::MethodCall {
+                        object,
+                        method,
+                        args,
+                        ..
+                    } = value.as_ref()
+                    {
+                        let object_str = self.gen_expr(object);
+                        if method == "enumerate" && args.is_empty() {
+                            if self.is_string_expr(object) {
+                                format!("{}.chars().enumerate()", object_str)
+                            } else {
+                                format!("{}.iter().enumerate()", object_str)
+                            }
                         } else {
-                            let v = self.gen_expr(value);
-                            result.push_str(&format!("for i in [{}] {{\n", v));
+                            self.gen_expr(value)
                         }
+                    } else if matches!(value.as_ref(), Expr::Identifier(_)) {
+                        format!("{}.iter()", self.gen_expr(value))
+                    } else if matches!(value.as_ref(), Expr::Array(_)) {
+                        self.gen_expr(value)
                     } else {
-                        let v = self.gen_expr(value);
-                        if let Expr::Identifier(name) = value.as_ref() {
-                            result.push_str(&format!(
-                                "for {} in {} {{\n",
-                                name.trim_end_matches('s'),
-                                v
-                            ));
-                        } else {
-                            result.push_str(&format!("for i in [{}] {{\n", v));
-                        }
-                    }
+                        format!("[{}]", self.gen_expr(value))
+                    };
+                    result.push_str(&format!("for {} in {} {{\n", variable, iterator));
                 }
             }
         } else {
@@ -1325,16 +1551,13 @@ impl IntermediateRepresentationCodeGen {
                     LoopRangePart::Range {
                         start,
                         end,
-                        inclusive,
+                        inclusive: _,
                         step,
                     } => {
                         let s = self.gen_expr(start);
                         let e = self.gen_expr(end);
-                        let range = if *inclusive {
-                            format!("{}..={}", s, e)
-                        } else {
-                            format!("{}..{}", s, e)
-                        };
+                        // Poly loop ranges include both endpoints.
+                        let range = format!("{}..={}", s, e);
                         let iterator = if let Some(step) = step {
                             let is_negative = matches!(
                                 step,
@@ -1347,7 +1570,12 @@ impl IntermediateRepresentationCodeGen {
                                 Expr::Literal(Literal::Int(value)) if value.starts_with('-')
                             );
                             if is_negative {
-                                format!("({}..={}).rev()", e, s)
+                                format!(
+                                    "({}..={}).rev().step_by({} as usize)",
+                                    e,
+                                    s,
+                                    self.gen_step_magnitude(step)
+                                )
                             } else {
                                 format!("({}).step_by({} as usize)", range, self.gen_expr(step))
                             }
@@ -1365,13 +1593,28 @@ impl IntermediateRepresentationCodeGen {
                 .into_iter()
                 .reduce(|left, right| format!("{}.chain({})", left, right))
                 .unwrap_or_else(|| "std::iter::empty()".to_string());
-            result.push_str(&format!("for i in {} {{\n", chained));
+            result.push_str(&format!("for {} in {} {{\n", variable, chained));
         }
         for statement in body {
             result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
         }
         result.push('}');
         result
+    }
+
+    /// Apply a `--as <type>` conversion to the input variable, or return the
+    /// trimmed input unchanged when no conversion was requested.
+    fn gen_get_as(&self, input_var: &str, as_type: Option<&Type>) -> String {
+        let Some(ty) = as_type else {
+            return input_var.to_string();
+        };
+        if matches!(ty, Type::Named(name) if matches!(name.as_str(), "string" | "ustring" | "String"))
+        {
+            format!("{input_var}.to_string()")
+        } else {
+            let rust_ty = self.gen_type(ty);
+            format!("{input_var}.parse::<{rust_ty}>().unwrap_or_default()")
+        }
     }
 
     fn gen_get(&self, get: &GetExpr) -> String {
@@ -1402,19 +1645,53 @@ impl IntermediateRepresentationCodeGen {
                 )
             })
             .unwrap_or_default();
-        if get
-            .flags
-            .iter()
-            .any(|flag| matches!(flag, GetFlag::Timeout(_)))
-        {
+        let timeout = get.flags.iter().find_map(|flag| match flag {
+            GetFlag::Timeout(value) => Some(self.gen_expr(value)),
+            _ => None,
+        });
+        let default = get.flags.iter().find_map(|flag| match flag {
+            GetFlag::Default(value) => Some(self.gen_expr(value)),
+            _ => None,
+        });
+        let bytes = get.flags.iter().find_map(|flag| match flag {
+            GetFlag::Bytes(value) => Some(self.gen_expr(value)),
+            _ => None,
+        });
+        let as_type = get.flags.iter().find_map(|flag| match flag {
+            GetFlag::As(ty) => Some(ty),
+            _ => None,
+        });
+
+        // `get --bytes N` on stdin reads up to N raw bytes.
+        if let Some(count) = bytes {
             return format!(
-                "{{ {}let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); Ok::<String, String>(input.trim().to_string()) }}",
-                prompt
+                "{{ {}let mut __poly_bytes: Vec<u8> = Vec::new(); let _ = std::io::Read::read_to_end(&mut std::io::Read::take(std::io::stdin(), {} as u64), &mut __poly_bytes).unwrap(); __poly_bytes }}",
+                prompt, count
             );
         }
+
+        // `get --timeout N` reads stdin on a background thread so a blocked
+        // read can actually time out; `--default` supplies the value used on
+        // timeout, otherwise the read returns `Err("timeout")` which matches
+        // the documented `Timeout` arm.
+        if let Some(ms) = timeout {
+            let on_ok = self.gen_get_as("input", as_type);
+            let timeout_result = match default {
+                Some(default_expr) => {
+                    format!("Ok::<String, String>({})", default_expr)
+                }
+                None => "Err::<String, String>(String::from(\"timeout\"))".to_string(),
+            };
+            return format!(
+                "{{ {}let (__poly_tx, __poly_rx) = std::sync::mpsc::channel(); std::thread::spawn(move || {{ let mut __poly_input = String::new(); let _ = std::io::stdin().read_line(&mut __poly_input); let _ = __poly_tx.send(__poly_input.trim().to_string()); }}); match __poly_rx.recv_timeout(std::time::Duration::from_millis({} as u64)) {{ Ok(input) => Ok::<String, String>({}), Err(_) => {} }} }}",
+                prompt, ms, on_ok, timeout_result
+            );
+        }
+
+        let finalized = self.gen_get_as("input", as_type);
         format!(
-            "{{ {}let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); input.trim().to_string() }}",
-            prompt
+            "{{ {}let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); {} }}",
+            prompt, finalized
         )
     }
 
@@ -1427,11 +1704,18 @@ impl IntermediateRepresentationCodeGen {
             .iter()
             .map(|p| format!("{}: {}", p.name, self.gen_type(&p.ty)))
             .collect();
-        let ret = function
-            .return_type
-            .as_ref()
-            .map(|ty| format!(" -> {}", self.gen_type(ty)))
-            .unwrap_or_default();
+        let ret = match &function.return_type {
+            Some(Type::Function { params, ret }) => {
+                let rendered: Vec<String> = params.iter().map(|t| self.gen_type(t)).collect();
+                format!(
+                    " -> impl Fn({}) -> {}",
+                    rendered.join(", "),
+                    self.gen_type(ret)
+                )
+            }
+            Some(ty) => format!(" -> {}", self.gen_type(ty)),
+            None => String::new(),
+        };
         let async_prefix = if function.is_async { "async " } else { "" };
         format!(
             "{}fn {}{}({}){} {{\n    /* nested function body */\n}}",
@@ -1455,7 +1739,12 @@ impl IntermediateRepresentationCodeGen {
                     _ => format!("{};", generated),
                 }
             }
-            Statement::Return(Some(expr)) => format!("return {};", self.gen_expr(expr)),
+            Statement::Return(Some(expr)) => {
+                *self.closure_move.borrow_mut() = true;
+                let rendered = self.gen_expr(expr);
+                *self.closure_move.borrow_mut() = false;
+                format!("return {};", rendered)
+            }
             Statement::Return(None) => "return;".to_string(),
             Statement::Break => "break;".to_string(),
             Statement::Continue => "continue;".to_string(),
@@ -1527,7 +1816,7 @@ impl IntermediateRepresentationCodeGen {
             }
             Statement::LetDecl { name, ty, value } => {
                 let ty_str = ty.as_ref().map(|ty| self.gen_type(ty)).unwrap_or_default();
-                let value_str = self.gen_value_expr(value, ty.as_ref());
+                let value_str = self.gen_decl_value(name, value, ty.as_ref());
                 if ty.is_some() {
                     format!("let {}: {} = {};", name, ty_str, value_str)
                 } else {
@@ -1538,7 +1827,7 @@ impl IntermediateRepresentationCodeGen {
                 let ty_str = ty.as_ref().map(|ty| self.gen_type(ty)).unwrap_or_default();
                 match value {
                     Some(value) => {
-                        let value_str = self.gen_value_expr(value, ty.as_ref());
+                        let value_str = self.gen_decl_value(name, value, ty.as_ref());
                         if ty.is_some() {
                             format!("let mut {}: {} = {};", name, ty_str, value_str)
                         } else {
@@ -1685,6 +1974,26 @@ impl IntermediateRepresentationCodeGen {
         }
     }
 
+    /// Generate a declaration initializer, forcing a closure binding to own
+    /// its captures when that binding is returned from the current function.
+    fn gen_decl_value(&self, name: &str, value: &Expr, declared_type: Option<&Type>) -> String {
+        let should_move = is_closure_expr(value)
+            && self
+                .returned_closure_names
+                .borrow()
+                .last()
+                .is_some_and(|names| names.contains(name));
+        if should_move {
+            let previous = *self.closure_move.borrow();
+            *self.closure_move.borrow_mut() = true;
+            let rendered = self.gen_value_expr(value, declared_type);
+            *self.closure_move.borrow_mut() = previous;
+            rendered
+        } else {
+            self.gen_value_expr(value, declared_type)
+        }
+    }
+
     fn gen_value_expr(&self, value: &Expr, declared_type: Option<&Type>) -> String {
         if let Expr::Get(get) = value {
             if let Some(Type::Named(name)) = declared_type {
@@ -1699,14 +2008,18 @@ impl IntermediateRepresentationCodeGen {
                 GetFlag::As(ty) => Some(ty),
                 _ => None,
             });
-            if let Some(ty) = requested_type.or(declared_type) {
-                let rust_type = self.gen_type(ty);
-                if rust_type != "String" && rust_type != "Vec<u8>" {
-                    return format!(
-                        "({}).parse::<{}>().expect(\"invalid input\")",
-                        self.gen_expr(value),
-                        rust_type
-                    );
+            // An explicit `--as` is already applied inside `gen_get`; only
+            // infer a parse from the declared type when no flag was given.
+            if requested_type.is_none() {
+                if let Some(ty) = declared_type {
+                    let rust_type = self.gen_type(ty);
+                    if rust_type != "String" && rust_type != "Vec<u8>" {
+                        return format!(
+                            "({}).parse::<{}>().expect(\"invalid input\")",
+                            self.gen_expr(value),
+                            rust_type
+                        );
+                    }
                 }
             }
         }
@@ -2095,6 +2408,56 @@ impl IntermediateRepresentationCodeGen {
         }
     }
 
+    /// Render the predicate for `filter`.
+    ///
+    /// `Iterator::filter` hands the closure a reference to each item, so a
+    /// single-parameter closure literal is wrapped with a deref binding to
+    /// keep the user's body (`|x| x % 2 == 0`) working on owned values. The
+    /// parameter is left unannotated so Rust infers `&T` from the iterator.
+    fn gen_filter_callback(&self, arg: &Expr) -> String {
+        if let Expr::Closure { params, body } = arg {
+            if params.len() == 1 {
+                let parameter = &params[0];
+                return format!(
+                    "|{}| {{ let {} = *{}; {} }}",
+                    parameter.name,
+                    parameter.name,
+                    parameter.name,
+                    self.gen_expr(body)
+                );
+            }
+        }
+        self.gen_expr(arg)
+    }
+
+    /// Render the comparator for `sort_by`.
+    ///
+    /// The user's closure returns a `bool` (`|a, b| a < b`); it is wrapped so
+    /// the references handed out by `sort_by` are deref'd and the boolean is
+    /// translated into an `Ordering`. Parameters stay unannotated so Rust
+    /// infers `&T` from the sort's signature.
+    fn gen_sort_callback(&self, arg: &Expr) -> String {
+        if let Expr::Closure { params, body } = arg {
+            if params.len() == 2 {
+                let first = &params[0].name;
+                let second = &params[1].name;
+                return format!(
+                    "|{}, {}| {{ let {} = *{}; let {} = *{}; if {} {{ std::cmp::Ordering::Less }} else if ({} == {}) {{ std::cmp::Ordering::Equal }} else {{ std::cmp::Ordering::Greater }} }}",
+                    first,
+                    second,
+                    first,
+                    first,
+                    second,
+                    second,
+                    self.gen_expr(body),
+                    first,
+                    second
+                );
+            }
+        }
+        self.gen_expr(arg)
+    }
+
     fn gen_binary_op(&self, op: &BinaryOp) -> String {
         match op {
             BinaryOp::Add => "+",
@@ -2227,13 +2590,80 @@ impl IntermediateRepresentationCodeGen {
     fn enter_scope(&mut self) {
         self.string_scopes.push(HashSet::new());
         self.type_scopes.push(HashMap::new());
+        self.vec_scopes.push(HashSet::new());
     }
 
     fn exit_scope(&mut self) {
         if self.string_scopes.len() > 1 {
             self.string_scopes.pop();
             self.type_scopes.pop();
+            self.vec_scopes.pop();
         }
+    }
+
+    fn is_vec_name(&self, name: &str) -> bool {
+        self.vec_scopes
+            .iter()
+            .rev()
+            .any(|scope| scope.contains(name))
+    }
+
+    fn declare_vec(&mut self, name: String) {
+        if let Some(scope) = self.vec_scopes.last_mut() {
+            scope.insert(name);
+        }
+    }
+
+    /// Whether a type annotation denotes a vector-like value (Vec, array,
+    /// bytes, or a Map/Set collection).
+    fn is_vec_type(ty: &Type) -> bool {
+        matches!(ty, Type::Vec(_) | Type::Array(_, _))
+            || matches!(ty, Type::Named(name) if name == "bytes")
+            || matches!(
+                ty,
+                Type::Generic { name, .. } if matches!(name.as_str(), "Vec" | "Set" | "Map")
+            )
+    }
+
+    /// Whether an expression produces a vector-like value (for `{:?}` put
+    /// formatting): array literals, vector-typed names, and the methods and
+    /// builtins that return vectors.
+    fn is_vec_expr(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Array(_) => true,
+            Expr::Identifier(name) => {
+                self.is_vec_name(name)
+                    || self.expression_type_name(expr).is_some_and(|type_name| {
+                        type_name.starts_with("Map<") || type_name.starts_with("Set<")
+                    })
+            }
+            Expr::Call { func, .. } => {
+                matches!(func.as_ref(), Expr::Identifier(name) if name == "db_execute")
+            }
+            Expr::MethodCall { method, .. } => {
+                matches!(method.as_str(), "map" | "filter" | "split" | "sort_by")
+            }
+            Expr::Get(get) => get
+                .flags
+                .iter()
+                .any(|flag| matches!(flag, GetFlag::Bytes(_))),
+            Expr::Parenthesized(inner) => self.is_vec_expr(inner),
+            _ => false,
+        }
+    }
+
+    /// Whether an expression has a `Map<...>` type (for `get`/`insert`
+    /// lowering that needs to borrow keys).
+    fn is_map_expr(&self, expr: &Expr) -> bool {
+        self.expression_type_name(expr)
+            .is_some_and(|name| name.starts_with("Map<"))
+    }
+
+    /// Whether an expression has a `Set<...>` type (for `contains`/`remove`
+    /// which borrow their element).
+    fn is_set_expr(&self, expr: &Expr) -> bool {
+        self.expression_type_name(expr)
+            .is_some_and(|name| name.starts_with("Set<"))
     }
 
     fn indent_str(&self) -> String {
@@ -2257,6 +2687,139 @@ fn named_type_name(ty: &Type) -> Option<String> {
         Type::Named(name) if name != "string" && name != "ustring" && name != "Self" => {
             Some(name.clone())
         }
+        // Structured containers register under their rendered name so
+        // `expression_type_name` can detect `Map<...>` receivers.
+        Type::Generic { name, args } if matches!(name.as_str(), "Map" | "Set" | "Vec") => {
+            let rendered: Vec<String> = args
+                .iter()
+                .map(|arg| match arg {
+                    Type::Named(n) if matches!(n.as_str(), "string" | "ustring" | "String") => {
+                        "String".to_string()
+                    }
+                    Type::Named(n) if n == "uchar" => "char".to_string(),
+                    Type::Named(n) if n == "byte" => "u8".to_string(),
+                    Type::Named(n) => n.clone(),
+                    other => format!("{other:?}"),
+                })
+                .collect();
+            Some(format!("{}<{}>", name, rendered.join(", ")))
+        }
+        _ => None,
+    }
+}
+
+fn is_closure_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Closure { .. } => true,
+        Expr::Parenthesized(inner) => is_closure_expr(inner),
+        _ => false,
+    }
+}
+
+fn collect_returned_binding_names(statements: &[Statement]) -> HashSet<String> {
+    let mut names = HashSet::new();
+    collect_returned_binding_names_from_statements(statements, &mut names);
+    names
+}
+
+fn collect_returned_binding_names_from_statements(
+    statements: &[Statement],
+    names: &mut HashSet<String>,
+) {
+    for statement in statements {
+        match statement {
+            Statement::Return(Some(expr)) => {
+                if let Some(name) = returned_binding_name(expr) {
+                    names.insert(name.to_string());
+                }
+                collect_returned_binding_names_from_expr(expr, names);
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                collect_returned_binding_names_from_statements(then_block, names);
+                if let Some(else_block) = else_block {
+                    collect_returned_binding_names_from_statements(else_block, names);
+                }
+            }
+            Statement::Block(statements) => {
+                collect_returned_binding_names_from_statements(statements, names);
+            }
+            Statement::Match { arms, .. } => {
+                for arm in arms {
+                    match &arm.body {
+                        MatchArmBody::Expression(expr) => {
+                            collect_returned_binding_names_from_expr(expr, names);
+                        }
+                        MatchArmBody::Block(statements) => {
+                            collect_returned_binding_names_from_statements(statements, names);
+                        }
+                    }
+                }
+            }
+            Statement::Expression(expr) => {
+                collect_returned_binding_names_from_expr(expr, names);
+            }
+            // Nested functions have their own return-binding scope.
+            Statement::NestedFunction(_)
+            | Statement::Return(None)
+            | Statement::Break
+            | Statement::Continue
+            | Statement::VarDecl { .. }
+            | Statement::LetDecl { .. }
+            | Statement::Assignment { .. }
+            | Statement::Mutation { .. }
+            | Statement::Put { .. }
+            | Statement::Error(_)
+            | Statement::Warn(_)
+            | Statement::Info(_) => {}
+        }
+    }
+}
+
+fn collect_returned_binding_names_from_expr(expr: &Expr, names: &mut HashSet<String>) {
+    match expr {
+        // Do not inspect closure bodies: returns inside a closure are not
+        // returns from the enclosing function.
+        Expr::Closure { .. } => {}
+        Expr::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            collect_returned_binding_names_from_statements(then_block, names);
+            if let Some(else_block) = else_block {
+                collect_returned_binding_names_from_statements(else_block, names);
+            }
+        }
+        Expr::Match { arms, .. } => {
+            for arm in arms {
+                match &arm.body {
+                    MatchArmBody::Expression(expr) => {
+                        collect_returned_binding_names_from_expr(expr, names);
+                    }
+                    MatchArmBody::Block(statements) => {
+                        collect_returned_binding_names_from_statements(statements, names);
+                    }
+                }
+            }
+        }
+        Expr::LoopRange { body, .. }
+        | Expr::ForLoop { body, .. }
+        | Expr::InfiniteLoop(body)
+        | Expr::UnsafeBlock(body) => {
+            collect_returned_binding_names_from_statements(body, names);
+        }
+        _ => {}
+    }
+}
+
+fn returned_binding_name(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Identifier(name) => Some(name),
+        Expr::Parenthesized(inner) => returned_binding_name(inner),
         _ => None,
     }
 }
@@ -2348,5 +2911,283 @@ mod tests {
     fn non_empty_arrays_are_unchanged() {
         let rust = transpile("fn main()\n    var v Vec<i32> := [1, 2, 3]\nend fn");
         assert!(rust.contains("vec![1, 2, 3]"), "{rust}");
+    }
+
+    #[test]
+    fn function_returning_closure_emits_impl_fn_and_move() {
+        let rust = transpile("fn make_adder(n: i32): |x: i32| i32\n    return |x| x + n\nend fn");
+        assert!(
+            rust.contains("fn make_adder(n: i32) -> impl Fn(i32) -> i32 {"),
+            "missing impl Fn return: {rust}"
+        );
+        assert!(
+            rust.contains("return move |x| (x + n);"),
+            "missing move closure: {rust}"
+        );
+    }
+
+    #[test]
+    fn closure_binding_returned_from_function_emits_move() {
+        let rust = transpile(
+            "fn make_adder(n: i32): |x: i32| i32\n    var f := |x| x + n\n    return f\nend fn",
+        );
+        assert!(
+            rust.contains("let mut f = move |x| (x + n);"),
+            "returned closure binding must move captures: {rust}"
+        );
+    }
+
+    #[test]
+    fn infinite_loop_emits_rust_loop() {
+        let rust = transpile(
+            "fn main()\n    var count i32 := 0\n    loop\n        count += 1\n        if count = 3,\n            break\n        end if\n    end loop\nend fn",
+        );
+        assert!(rust.contains("loop {"), "missing loop block: {rust}");
+        assert!(rust.contains("count += 1;"), "missing body: {rust}");
+        assert!(rust.contains("break;"), "missing break: {rust}");
+    }
+
+    #[test]
+    fn multiple_get_flags_parse_and_lower() {
+        let rust = transpile(
+            "fn main()\n    match get --timeout 5000 --default unicode \"0\"\n        Ok(input), put input\n        Error(e), error e\n    end match\nend fn",
+        );
+        assert!(
+            rust.contains("Ok::<String, String>"),
+            "missing Result-returning get: {rust}"
+        );
+    }
+
+    #[test]
+    fn collection_loops_borrow_and_destructure_enumerate() {
+        let rust = transpile(
+            "fn main()\n    var fruits Vec<ustring> := []\n    loop: fruit in fruits\n        put fruit\n    end loop\n    loop: (index, fruit) in fruits.enumerate()\n        put index\n        put fruit\n    end loop\nend fn",
+        );
+        assert!(
+            rust.contains("for fruit in fruits.iter() {"),
+            "collection loop must borrow: {rust}"
+        );
+        assert!(
+            rust.contains("for (index, fruit) in fruits.iter().enumerate() {"),
+            "enumerate loop must destructure and borrow: {rust}"
+        );
+    }
+
+    #[test]
+    fn loop_range_uses_declared_variable() {
+        let rust = transpile(
+            "fn main()\n    loop: value 1..3, 7, 19..20\n        put value\n    end loop\nend fn",
+        );
+        assert!(
+            rust.contains("for value in (1..=3).chain(std::iter::once(7)).chain((19..=20))"),
+            "{rust}"
+        );
+        assert!(rust.contains("println!(\"{}\", value);"), "{rust}");
+        assert!(
+            !rust.contains("for i in"),
+            "implicit loop variable leaked: {rust}"
+        );
+    }
+
+    #[test]
+    fn vec_hof_methods_emit_iterator_chains() {
+        let rust = transpile(
+            "fn main()\n    var xs := [1, 2, 3]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x % 2 == 0)\n    put xs.reduce(0, |acc, x| acc + x)\nend fn",
+        );
+        assert!(
+            rust.contains("xs.iter().cloned().map(|x| (x * 2)).collect::<Vec<_>>()[(0) as usize]"),
+            "missing map lowering: {rust}"
+        );
+        assert!(
+            rust.contains("let x = *x;"),
+            "missing filter deref binding: {rust}"
+        );
+        assert!(
+            rust.contains("xs.iter().cloned().fold(0, |acc, x| (acc + x))"),
+            "missing reduce lowering: {rust}"
+        );
+    }
+
+    #[test]
+    fn put_of_vectors_uses_debug_formatting() {
+        let rust = transpile(
+            "fn main()\n    var xs := [1, 2, 3]\n    var typed Vec<i32> := [4, 5]\n    put xs\n    put typed\n    put [9, 8]\n    put xs.map(|x| x * 2)\nend fn",
+        );
+        assert!(
+            rust.contains("println!(\"{:?}\", xs);"),
+            "missing {{:?}}: {rust}"
+        );
+        assert!(
+            rust.contains("println!(\"{:?}\", typed);"),
+            "missing {{:?}}: {rust}"
+        );
+        assert!(
+            rust.contains("println!(\"{:?}\", vec![9, 8]);"),
+            "missing {{:?}}: {rust}"
+        );
+        assert!(
+            rust.contains(
+                "println!(\"{:?}\", xs.iter().cloned().map(|x| (x * 2)).collect::<Vec<_>>());"
+            ),
+            "missing {{:?}} on map result: {rust}"
+        );
+    }
+
+    #[test]
+    fn string_hof_methods_emit_chars() {
+        let rust = transpile(
+            "fn main()\n    put \"hello\".map(|c| c)\n    put \"hello\".filter(|c| c != unicode 'l')\n    put \"hello\".reduce(0, |acc, c| acc + (c as i32))\nend fn",
+        );
+        assert!(
+            rust.contains("String::from(\"hello\").chars().map(|c| c).collect::<Vec<_>>()"),
+            "missing string map: {rust}"
+        );
+        assert!(
+            rust.contains("String::from(\"hello\").chars().filter(|c| { let c = *c; (c != 'l') }).collect::<Vec<_>>()"),
+            "missing string filter: {rust}"
+        );
+        assert!(
+            rust.contains("String::from(\"hello\").chars().fold(0, |acc, c| (acc + (c as i32)))"),
+            "missing string reduce: {rust}"
+        );
+    }
+
+    #[test]
+    fn sort_by_emits_ordering_wrapper() {
+        let rust = transpile(
+            "fn main()\n    var xs := [3, 1, 2]\n    put xs.sort_by(|a, b| a > b)\nend fn",
+        );
+        assert!(
+            rust.contains("v.sort_by(|a, b| { let a = *a; let b = *b; if (a > b) { std::cmp::Ordering::Less } else if (a == b) { std::cmp::Ordering::Equal } else { std::cmp::Ordering::Greater } })"),
+            "missing sort wrapper: {rust}"
+        );
+        assert!(
+            rust.contains("let mut v = xs.clone();"),
+            "missing clone: {rust}"
+        );
+    }
+
+    #[test]
+    fn map_methods_borrow_keys() {
+        let rust = transpile(
+            "fn main()\n    var m Map<ustring, i32> := []\n    m.insert(unicode \"key\", 42)\n    put m.get(unicode \"key\")\n    put m.contains_key(unicode \"key\")\n    m.remove(unicode \"key\")\n    m[unicode \"other\"] = 7\n    var v := m[unicode \"other\"]\n    put v\nend fn",
+        );
+        assert!(
+            rust.contains("m.insert(String::from(\"key\"), 42);"),
+            "missing insert: {rust}"
+        );
+        assert!(
+            rust.contains("m.get(&String::from(\"key\"))"),
+            "get must borrow the key: {rust}"
+        );
+        assert!(
+            rust.contains("m.contains_key(&String::from(\"key\"))"),
+            "contains_key must borrow the key: {rust}"
+        );
+        assert!(
+            rust.contains("m.remove(&String::from(\"key\"))"),
+            "remove must borrow the key: {rust}"
+        );
+        assert!(
+            rust.contains("m.insert(String::from(\"other\"), 7);"),
+            "map index assignment must lower to insert: {rust}"
+        );
+        assert!(
+            rust.contains("m.get(&String::from(\"other\")).map(|v| v.clone()).unwrap_or_default()"),
+            "map index read must lower to get: {rust}"
+        );
+    }
+
+    #[test]
+    fn set_methods_borrow_elements() {
+        let rust = transpile(
+            "fn main()\n    var s Set<i32> := []\n    s.insert(1)\n    put s.contains(1)\n    s.remove(1)\nend fn",
+        );
+        assert!(
+            rust.contains("s.contains(&1)"),
+            "set contains must borrow: {rust}"
+        );
+        assert!(
+            rust.contains("s.remove(&1)"),
+            "set remove must borrow: {rust}"
+        );
+    }
+
+    #[test]
+    fn negative_loop_steps_keep_magnitude() {
+        let rust = transpile(
+            "fn main()\n    loop: i 10..1 step -2\n        put i\n    end loop\n    loop: j 10..1 step 2\n        put j\n    end loop\nend fn",
+        );
+        assert!(
+            rust.contains("for i in (1..=10).rev().step_by(2 as usize)"),
+            "negative step magnitude dropped: {rust}"
+        );
+        assert!(
+            rust.contains("for j in (10..=1).step_by(2 as usize)"),
+            "descending positive step should be empty: {rust}"
+        );
+    }
+
+    #[test]
+    fn get_timeout_emits_real_timeout() {
+        let rust = transpile(
+            "fn main()\n    match get --timeout 2000 --default unicode \"fallback\"\n        Ok(input), put input\n        Timeout, put unicode \"too slow\"\n    end match\nend fn",
+        );
+        assert!(
+            rust.contains("std::sync::mpsc::channel()"),
+            "timeout must use a channel: {rust}"
+        );
+        assert!(
+            rust.contains("recv_timeout(std::time::Duration::from_millis(2000 as u64))"),
+            "missing recv_timeout: {rust}"
+        );
+        assert!(
+            rust.contains("Ok::<String, String>(String::from(\"fallback\"))"),
+            "missing default on timeout: {rust}"
+        );
+    }
+
+    #[test]
+    fn file_read_methods_use_buffered_reader() {
+        let rust = transpile(
+            "fn main()\n    var f := open(unicode \"data.txt\")\n    while not f.eof()\n        var line := f.get_line()\n        put line\n    end while\nend fn",
+        );
+        assert!(
+            rust.contains(
+                "std::io::BufReader::new(std::fs::File::open(String::from(\"data.txt\")).unwrap())"
+            ),
+            "open must lower to a BufReader: {rust}"
+        );
+        assert!(
+            rust.contains("f.fill_buf().map(|buffer| buffer.is_empty()).unwrap_or(true)"),
+            "eof must use fill_buf: {rust}"
+        );
+        assert!(
+            rust.contains("f.read_line(&mut __poly_line).unwrap()"),
+            "get_line must use read_line: {rust}"
+        );
+        assert!(
+            rust.contains("use std::io::BufRead;"),
+            "missing BufRead import: {rust}"
+        );
+    }
+
+    #[test]
+    fn sleep_delay_and_exit_lower_to_real_calls() {
+        let rust = transpile("fn main()\n    sleep(50)\n    exit(0)\nend fn");
+        assert!(
+            rust.contains("std::thread::sleep(std::time::Duration::from_millis(50 as u64))"),
+            "missing thread sleep: {rust}"
+        );
+        assert!(
+            rust.contains("std::process::exit(0)"),
+            "missing exit: {rust}"
+        );
+
+        let async_rust = transpile("async fn main()\n    delay(50).await\nend fn");
+        assert!(
+            async_rust.contains("tokio::time::sleep(std::time::Duration::from_millis(50 as u64))"),
+            "missing tokio sleep: {async_rust}"
+        );
     }
 }

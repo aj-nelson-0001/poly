@@ -324,17 +324,17 @@ enum TrafficLight
 
 fn duration(self): i32
     match self
-        TrafficLight::Red => 60
-        TrafficLight::Yellow => 5
-        TrafficLight::Green => 45
+        TrafficLight::Red, 60
+        TrafficLight::Yellow, 5
+        TrafficLight::Green, 45
     end match
 end fn
 
 fn next(self): TrafficLight
     match self
-        TrafficLight::Red => TrafficLight::Green
-        TrafficLight::Yellow => TrafficLight::Red
-        TrafficLight::Green => TrafficLight::Yellow
+        TrafficLight::Red, TrafficLight::Green
+        TrafficLight::Yellow, TrafficLight::Red
+        TrafficLight::Green, TrafficLight::Yellow
     end match
 end fn
 
@@ -415,7 +415,7 @@ end impl
 ~~~poly fragment
 // Function with trait bound
 fn draw_all<T: Drawable>(items: Vec<T>)
-    loop: items
+    loop: item in items
         item.draw()
     end loop
 end fn
@@ -472,7 +472,7 @@ end fn
 pub module advanced
     pub fn power(base: f64, exp: i32): f64
         var result := 1.0
-        loop: 0..exp
+        loop: i 0..exp
             set result to result * base
         end loop
         return result
@@ -674,8 +674,8 @@ end if
 
 // Or with pattern matching
 match maybe_ptr
-    Some(ptr) => var value := deref ptr
-    None => print(unicode "Null pointer")
+    Some(ptr), var value := deref ptr
+    None, print(unicode "Null pointer")
 end match
 ~~~
 
@@ -737,8 +737,8 @@ end fn
 // Using functions with error handling
 fn process_config()
     match read_file(unicode "config.txt")
-        Ok(content) => parse_config(content)
-        Error(e) => 
+        Ok(content), parse_config(content)
+        Error(e),
             print(unicode "Error: " + e.to_string())
             exit(1)
         end
@@ -777,19 +777,19 @@ end fn
 // Handling errors with match
 fn process_name()
     match validate_name(unicode "John")
-        Ok(valid_name) => put "Valid name: " + valid_name
-        Error(EmptyInput) => error "Name cannot be empty"
-        Error(TooShort(min)) => error "Name too short, minimum " + min.to_string() + " characters"
-        Error(TooLong(max)) => error "Name too long, maximum " + max.to_string() + " characters"
-        Error(InvalidFormat) => error "Invalid name format"
+        Ok(valid_name), put "Valid name: " + valid_name
+        Error(EmptyInput), error "Name cannot be empty"
+        Error(TooShort(min)), error "Name too short, minimum " + min.to_string() + " characters"
+        Error(TooLong(max)), error "Name too long, maximum " + max.to_string() + " characters"
+        Error(InvalidFormat), error "Invalid name format"
     end match
 end fn
 
 // Using wildcard pattern for catch-all
 fn handle_any_error()
     match validate_name(input)
-        Ok(name) => put "Valid: " + name
-        Error(_) => error "Validation failed"  // Catches any validation error
+        Ok(name), put "Valid: " + name
+        Error(_), error "Validation failed"  // Catches any validation error
     end match
 end fn
 
@@ -817,8 +817,8 @@ var value i32 := optional_value.expect(unicode "Value must exist")
 
 // Safe alternatives
 match optional_value
-    Some(v) => use(v)
-    None => handle_missing()
+    Some(v), use(v)
+    None, handle_missing()
 end match
 ~~~
 
@@ -901,48 +901,48 @@ end loop
 
 ### Loop Ranges (Inspired by Sinclair QL SuperBASIC)
 
-Poly's `loop` command with colon syntax supports multiple ranges and specific values, borrowing from Sinclair QL SuperBASIC's flexible `FOR` loop design. Use `loop:` (with colon) for range/value iteration, while `loop` (without colon) remains the infinite loop.
+Poly's `loop` command with colon syntax supports multiple ranges and specific values, borrowing from Sinclair QL SuperBASIC's flexible `FOR` loop design. Loop ranges include both endpoints: `1..3` iterates `1, 2, 3`. The `..=` spelling is accepted but redundant for `loop:` ranges. Use `loop:` (with colon) for range/value iteration, while `loop` (without colon) remains the infinite loop.
 
 #### Syntax Variants
 
 ~~~poly
 // Simple range
-loop: 0..10
+loop: i 0..10
     print(i)
 end loop
 
 // Inclusive range
-loop: 0..=10
+loop: i 0..=10
     print(i)
 end loop
 
 // Multiple ranges and specific values (SuperBASIC style)
-loop: 1..3, 7, 19..20
+loop: i 1..3, 7, 19..20
     print(i)  // Iterates: 1, 2, 3, 7, 19, 20
 end loop
 
 // With step (positive)
-loop: 1..10 step 2
-    print(i)  // Iterates: 1, 3, 5, 7, 9
+loop: i 1..10 step 2
+    print(i)  // Iterates: 1, 3, 5, 7, 9 (10 is not on the step)
 end loop
 
 // With step (negative, counting down)
-loop: 10..1 step -1
+loop: i 10..1 step -1
     print(i)  // Iterates: 10, 9, 8, ..., 1
 end loop
 
 // Mixed ranges with step
-loop: 0..10 step 2, 20..30 step 3
-    print(i)  // Iterates: 0, 2, 4, 6, 8, 20, 23, 26, 29
+loop: i 0..10 step 2, 20..30 step 3
+    print(i)  // Iterates: 0, 2, 4, 6, 8, 10, 20, 23, 26, 29
 end loop
 
 // Specific values only
-loop: 1, 5, 10, 100
+loop: i 1, 5, 10, 100
     print(i)  // Iterates: 1, 5, 10, 100
 end loop
 
 // Complex mix: ranges, values, and steps
-loop: 1..5, 10, 20..25 step 2, 100
+loop: i 1..5, 10, 20..25 step 2, 100
     print(i)  // Iterates: 1, 2, 3, 4, 5, 10, 20, 22, 24, 100
 end loop
 ~~~
@@ -952,7 +952,7 @@ end loop
 ~~~poly fragment
 // Iterate over collection
 var items Vec<i32> := [1, 2, 3, 4, 5]
-loop: items
+loop: item in items
     print(item)
 end loop
 
@@ -963,13 +963,13 @@ end loop
 
 // Iterate over string characters
 var text ustring := unicode "Hello"
-loop: text.chars()
+loop: ch in text.chars()
     print(ch)
 end loop
 
 // Iterate over bytes
 var data string := "binary"
-loop: data.bytes()
+loop: byte in data.bytes()
     print(byte)
 end loop
 
@@ -984,7 +984,7 @@ end loop
 
 ~~~poly fragment
 // Reverse using negative step
-loop: 10..1 step -1
+loop: i 10..1 step -1
     print(i)  // Iterates: 10, 9, 8, ..., 1
 end loop
 
@@ -998,54 +998,54 @@ end loop
 
 | Poly Syntax | Rust Output |
 |-------------|-------------|
-| `loop: 0..10` | `for i in 0..10 {` |
-| `loop: 0..=10` | `for i in 0..=10 {` |
-| `loop: 1..3, 7, 19..20` | `for i in (1..3).chain(std::iter::once(7)).chain(19..20) {` |
-| `loop: 1..10 step 2` | `for i in (1..10).step_by(2) {` |
-| `loop: 10..1 step -1` | `for i in (1..10).rev() {` |
-| `loop: items` | `for item in items {` |
-| `loop: items.enumerate()` | `for (index, item) in items.into_iter().enumerate() {` |
+| `loop: i 0..10` | `for i in 0..=10 {` |
+| `loop: i 0..=10` | `for i in 0..=10 {` |
+| `loop: i 1..3, 7, 19..20` | `for i in (1..=3).chain(std::iter::once(7)).chain(19..=20) {` |
+| `loop: i 1..10 step 2` | `for i in (1..=10).step_by(2) {` |
+| `loop: i 10..1 step -1` | `for i in (1..=10).rev() {` |
+| `loop: item in items` | `for item in items {` |
+| `loop: item in items.enumerate()` | `for (index, item) in items.into_iter().enumerate() {` |
 
 ### Match Expressions
 
 ~~~poly fragment
 // Basic match
 match command
-    unicode "start" => start_process()
-    unicode "stop" => stop_process()
-    unicode "pause" => pause_process()
-    _ => unknown_command()  // Wildcard/default
+    unicode "start", start_process()
+    unicode "stop", stop_process()
+    unicode "pause", pause_process()
+    _, unknown_command()  // Wildcard/default
 end match
 
 // Match with variables
 match message
-    unicode "quit" => exit(0)
-    unicode "help" => show_help()
-    other => print(unicode "Unknown: " + other)
+    unicode "quit", exit(0)
+    unicode "help", show_help()
+    other, print(unicode "Unknown: " + other)
 end match
 
 // Match on enum
 match shape
-    Shape::Circle(r) => 
+    Shape::Circle(r),
         var area := PI * r * r
         print(area)
-    Shape::Rectangle { width, height } => 
+    Shape::Rectangle { width, height },
         var area := width * height
         print(area)
-    _ => print(unicode "Unknown shape")
+    _, print(unicode "Unknown shape")
 end match
 
 // Match with guards
 match number
-    n if n < 0 => print(unicode "Negative")
-    n if n = 0 => print(unicode "Zero")
-    n if n > 0 => print(unicode "Positive")
+    n if n < 0, print(unicode "Negative")
+    n if n = 0, print(unicode "Zero")
+    n if n > 0, print(unicode "Positive")
 end match
 
 // Exhaustive match
 match option_value
-    Some(v) => process(v)
-    None => handle_none()
+    Some(v), process(v)
+    None, handle_none()
     // No wildcard needed - all cases covered
 end match
 ~~~
@@ -1062,11 +1062,11 @@ end match
 | `end while` | `}` |
 | `loop` | `loop {` |
 | `end loop` | `}` |
-| `loop: 0..10` | `for i in 0..10 {` |
-| `loop: items` | `for item in items {` |
+| `loop: i 0..10` | `for i in 0..=10 {` |
+| `loop: item in items` | `for item in items {` |
 | `end loop` | `}` |
 | `match expr` | `match expr {` |
-| `pattern => expr` | `pattern => expr,` |
+| `pattern, expr` | `pattern => expr,` |
 | `end match` | `}` |
 
 ---
@@ -1190,6 +1190,13 @@ Poly supports asynchronous programming through `async fn` and `.await` syntax, w
 3. **Tokio runtime**: Async code runs on the Tokio runtime (automatically added `#[tokio::main]`)
 4. **Trait support**: Traits can have async methods
 
+> **Runtime status:** `delay(ms)` and `sleep(ms)` are implemented (`delay` lowers to
+> `tokio::time::sleep`, `sleep` to `std::thread::sleep`). `http_get`, `tcp_connect`,
+> and `db_execute` are **experimental stubs**: they type-check and compile but
+> always return empty values (the compiler emits a warning when they are used).
+> `get --timeout`/`--default`/`--as`/`--bytes` are implemented; `--mask` and
+> `--until` are parsed but not yet implemented (warning emitted).
+
 ### Async Function Declaration
 
 ~~~poly
@@ -1202,8 +1209,8 @@ end fn
 // Async function with Result return type
 async fn fetch_json(url: ustring): Result<ustring, ustring>
     match http_get(url).await
-        Ok(response) => return Ok(response)
-        Error(e) => return Error(unicode "Network error: " + e)
+        Ok(response), return Ok(response)
+        Error(e), return Error(unicode "Network error: " + e)
     end match
 end fn
 
@@ -1234,8 +1241,8 @@ var posts := db.get_posts(user.id).await
 
 // Await in match expression
 match http_get(url).await
-    Ok(response) => process(response)
-    Error(e) => handle_error(e)
+    Ok(response), process(response)
+    Error(e), handle_error(e)
 end match
 
 // Await in function arguments
@@ -1292,8 +1299,8 @@ end impl
 // Function with trait bound
 async fn process_fetcher<T: DataFetcher>(fetcher: T, key: ustring): ustring
     match fetcher.fetch(key).await
-        Ok(data) => return data
-        Error(e) => 
+        Ok(data), return data
+        Error(e),
             error e
             return unicode ""
     end match
@@ -1321,7 +1328,7 @@ end fn
 // Async iteration
 async fn process_items(items: Vec<ustring>): Vec<ustring>
     var results Vec<ustring> := []
-    loop: items
+    loop: item in items
         var result := process_item(item).await
         results.push(result)
     end loop
@@ -1331,11 +1338,11 @@ end fn
 // Error handling in async code
 async fn safe_fetch(url: ustring): Option<ustring>
     match fetch_with_timeout(url, 5000).await
-        Ok(data) => return Some(data)
-        Error(TimeoutError) => 
+        Ok(data), return Some(data)
+        Error(TimeoutError),
             warn unicode "Request timed out"
             return None
-        Error(e) => 
+        Error(e),
             error e
             return None
     end match
@@ -1365,8 +1372,8 @@ impl ApiClient
     async fn get_users(self): Result<Vec<ustring>, ustring>
         var response := http_get(self.base_url + unicode "/users").await
         match response
-            Ok(data) => return Ok(parse_json(data))
-            Error(e) => return Error(e)
+            Ok(data), return Ok(parse_json(data))
+            Error(e), return Error(e)
         end match
     end fn
     
@@ -1383,12 +1390,12 @@ async fn main_task()
     
     # Fetch users
     match client.get_users().await
-        Ok(users) => 
+        Ok(users),
             put unicode "Found " + users.len().to_string() + unicode " users"
-            loop: users
+            loop: user in users
                 put user
             end loop
-        Error(e) => error e
+        Error(e), error e
     end match
     
     # Create new user
@@ -1411,17 +1418,17 @@ end fn
 ~~~poly
 // Literal matching
 match x
-    0 => print(unicode "zero")
-    1 => print(unicode "one")
-    2 => print(unicode "two")
-    _ => print(unicode "other")
+    0, print(unicode "zero")
+    1, print(unicode "one")
+    2, print(unicode "two")
+    _, print(unicode "other")
 end match
 
 // String matching
 match command
-    unicode "start" => start()
-    unicode "stop" => stop()
-    _ => unknown()
+    unicode "start", start()
+    unicode "stop", stop()
+    _, unknown()
 end match
 ~~~
 
@@ -1430,13 +1437,13 @@ end match
 ~~~poly
 // Bind matched value to variable
 match message
-    unicode "quit" => exit(0)
-    cmd => print(unicode "Unknown command: " + cmd)
+    unicode "quit", exit(0)
+    cmd, print(unicode "Unknown command: " + cmd)
 end match
 
 // Ignore value
 match data
-    _ => process_any()
+    _, process_any()
 end match
 ~~~
 
@@ -1445,26 +1452,26 @@ end match
 ~~~poly fragment
 // Tuple destructuring
 match point
-    (0, 0) => print(unicode "origin")
-    (x, 0) => print(unicode "on x-axis at " + x)
-    (0, y) => print(unicode "on y-axis at " + y)
-    (x, y) => print(unicode "at " + x + unicode ", " + y)
+    (0, 0), print(unicode "origin")
+    (x, 0), print(unicode "on x-axis at " + x)
+    (0, y), print(unicode "on y-axis at " + y)
+    (x, y), print(unicode "at " + x + unicode ", " + y)
 end match
 
 // Struct destructuring
 match person
-    Person { name: unicode "Alice", age } => print(unicode "Alice is " + age)
-    Person { name, age: n if n > 60 } => print(name + unicode " is a senior")
-    Person { name, age } => print(name + unicode " is " + age)
+    Person { name: unicode "Alice", age }, print(unicode "Alice is " + age)
+    Person { name, age: n if n > 60 }, print(name + unicode " is a senior")
+    Person { name, age }, print(name + unicode " is " + age)
 end match
 
 // Enum destructuring
 match shape
-    Shape::Circle(r) => 
+    Shape::Circle(r),
         print(unicode "Circle with radius " + r)
-    Shape::Rectangle { width, height } => 
+    Shape::Rectangle { width, height },
         print(unicode "Rectangle " + width + unicode "x" + height)
-    _ => print(unicode "Unknown shape")
+    _, print(unicode "Unknown shape")
 end match
 ~~~
 
@@ -1473,10 +1480,10 @@ end match
 ~~~poly fragment
 // Nested matching
 match data
-    Some((x, y)) if x > 0 && y > 0 => print(unicode "Positive point")
-    Some((x, _)) if x < 0 => print(unicode "Negative x")
-    Some(_) => print(unicode "Other point")
-    None => print(unicode "No point")
+    Some((x, y)) if x > 0 && y > 0, print(unicode "Positive point")
+    Some((x, _)) if x < 0, print(unicode "Negative x")
+    Some(_), print(unicode "Other point")
+    None, print(unicode "No point")
 end match
 ~~~
 
@@ -1484,10 +1491,10 @@ end match
 
 ~~~poly fragment
 match number
-    n if n < 0 => print(unicode "Negative")
-    n if n = 0 => print(unicode "Zero")
-    n if n > 0 && n < 100 => print(unicode "Small positive")
-    n if n >= 100 => print(unicode "Large positive")
+    n if n < 0, print(unicode "Negative")
+    n if n = 0, print(unicode "Zero")
+    n if n > 0 && n < 100, print(unicode "Small positive")
+    n if n >= 100, print(unicode "Large positive")
 end match
 ~~~
 
@@ -1496,10 +1503,10 @@ end match
 ~~~poly fragment
 // @ binding (bind while matching)
 match age
-    n @ 0..12 => print(unicode "Child: " + n)
-    n @ 13..17 => print(unicode "Teenager: " + n)
-    n @ 18..64 => print(unicode "Adult: " + n)
-    n @ 65.. => print(unicode "Senior: " + n)
+    n @ 0..12, print(unicode "Child: " + n)
+    n @ 13..17, print(unicode "Teenager: " + n)
+    n @ 18..64, print(unicode "Adult: " + n)
+    n @ 65.., print(unicode "Senior: " + n)
 end match
 ~~~
 
@@ -1639,7 +1646,7 @@ data > "binary.bin"
 
 // Write formatted data to file
 var records Vec<ustring> := [unicode "Alice,30", unicode "Bob,25"]
-loop: records
+loop: record in records
     put record >> "contacts.csv"
 end loop
 ~~~
@@ -1683,7 +1690,7 @@ if verbose,
 end if
 
 // Output in loop
-loop: 0..10
+loop: i 0..10
     put unicode "Step {i + 1} of 10"
 end loop
 
@@ -1735,10 +1742,10 @@ fn display_progress(current: i32, total: i32)
     var empty i32 := bar_width - filled
     
     put -n "["
-    loop: 0..filled
+    loop: i 0..filled - 1
         put -n "#"
     end loop
-    loop: 0..empty
+    loop: i 0..empty - 1
         put -n "-"
     end loop
     put "]"
@@ -1754,29 +1761,29 @@ fn log_request(method: ustring, path: ustring, status: i32, duration_ms: i32)
     var message ustring := "{method} {path} -> {status} ({duration_ms}ms)"
     
     match level
-        unicode "ERROR" => error message
-        unicode "WARN" => warn message
-        unicode "INFO" => info message
+        unicode "ERROR", error message
+        unicode "WARN", warn message
+        unicode "INFO", info message
     end match
 end fn
 
 // Dynamic table output
 fn display_table(headers: Vec<ustring>, rows: Vec<Vec<ustring>>)
     // Print headers
-    loop: headers
+    loop: header in headers
         put -n header.pad_right(15)
     end loop
     put ""
     
     // Print separator
-    loop: 0..headers.len()
+    loop: i 0..headers.len() - 1
         put -n "-".repeat(15)
     end loop
     put ""
     
     // Print rows
-    loop: rows
-        loop: row
+    loop: row in rows
+        loop: cell in row
             put -n cell.pad_right(15)
         end loop
         put ""
@@ -1820,9 +1827,9 @@ data > "null_bytes.bin"
 
 // Timeout edge cases
 match get --timeout 0  // Immediate timeout
-    Ok(input) => put input
-    Timeout => warn "Immediate timeout"
-    Error(e) => error e
+    Ok(input), put input
+    Timeout, warn "Immediate timeout"
+    Error(e), error e
 end match
 
 // Validation edge cases
@@ -1846,9 +1853,9 @@ fn risky(): Result<ustring, ustring>
 end fn
 
 match risky()
-    Ok(_) => put "Success"
-    Error("") => warn "Empty error"
-    Error(e) => error e
+    Ok(_), put "Success"
+    Error(""), warn "Empty error"
+    Error(e), error e
 end match
 ~~~
 
@@ -1910,17 +1917,17 @@ info "debug_var = " + debug_var
 info "debug_var.len() = " + debug_var.len().to_string()
 
 // Loop debugging
-loop: 0..10
+loop: i 0..10
     info "Iteration i = " + i.to_string()
     // ... loop body
 end loop
 
 // Error debugging
 match result
-    Ok(value) => 
+    Ok(value),
         info "Success: " + value.to_string()
         process(value)
-    Error(e) => 
+    Error(e),
         error "Error occurred: " + e.to_string()
         info "Error type: " + type_of(e)
         info "Stack trace: " + get_stack_trace()
@@ -1997,21 +2004,21 @@ put item_count.to_string() + " " + pluralize(item_count, unicode "item", unicode
 // Date formatting
 fn format_date(date: Date, locale: ustring): ustring
     match locale
-        unicode "en-US" => return date.format(unicode "MM/DD/YYYY")
-        unicode "en-GB" => return date.format(unicode "DD/MM/YYYY")
-        unicode "ja-JP" => return date.format(unicode "YYYY年MM月DD日")
-        unicode "zh-CN" => return date.format(unicode "YYYY年MM月DD日")
-        _ => return date.format(unicode "YYYY-MM-DD")
+        unicode "en-US", return date.format(unicode "MM/DD/YYYY")
+        unicode "en-GB", return date.format(unicode "DD/MM/YYYY")
+        unicode "ja-JP", return date.format(unicode "YYYY年MM月DD日")
+        unicode "zh-CN", return date.format(unicode "YYYY年MM月DD日")
+        _, return date.format(unicode "YYYY-MM-DD")
     end match
 end fn
 
 // Number formatting
 fn format_number(number: f64, locale: ustring): ustring
     match locale
-        unicode "en-US" => return number.format(unicode "#,##0.00")  // 1,234.56
-        unicode "de-DE" => return number.format(unicode "#.##0,00")  // 1.234,56
-        unicode "ja-JP" => return number.format(unicode "#,##0.00")  // 1,234.56
-        _ => return number.to_string()
+        unicode "en-US", return number.format(unicode "#,##0.00")  // 1,234.56
+        unicode "de-DE", return number.format(unicode "#.##0,00")  // 1.234,56
+        unicode "ja-JP", return number.format(unicode "#,##0.00")  // 1,234.56
+        _, return number.to_string()
     end match
 end fn
 
@@ -2020,11 +2027,11 @@ fn format_currency(amount: f64, currency: ustring, locale: ustring): ustring
     var formatted_amount := format_number(amount, locale)
     
     match currency
-        unicode "USD" => return unicode "$" + formatted_amount
-        unicode "EUR" => return unicode "€" + formatted_amount
-        unicode "JPY" => return unicode "¥" + formatted_amount
-        unicode "CNY" => return unicode "¥" + formatted_amount
-        _ => return currency + unicode " " + formatted_amount
+        unicode "USD", return unicode "$" + formatted_amount
+        unicode "EUR", return unicode "€" + formatted_amount
+        unicode "JPY", return unicode "¥" + formatted_amount
+        unicode "CNY", return unicode "¥" + formatted_amount
+        _, return currency + unicode " " + formatted_amount
     end match
 end fn
 
@@ -2067,7 +2074,7 @@ fn increment_counter()
     counter.unlock()
 end fn
 
-// Spawn multiple threads    loop: 0..10
+// Spawn multiple threads    loop: i 0..10
         spawn(|| increment_counter())
     end loop
 
@@ -2076,7 +2083,7 @@ var channel Channel<ustring> := Channel::new()
 
 // Producer
 spawn(|| {
-    loop: 0..10
+    loop: i 0..10
         channel.send(unicode "Message " + i.to_string())
     end loop
     channel.close()
@@ -2096,7 +2103,7 @@ async fn process_files(filenames: Vec<ustring>): Vec<Result<ustring, ustring>>
     end loop
     
     var results Vec<Result<ustring, ustring>> := []
-    loop: futures
+    loop: future in futures
         results.push(await future)
     end loop
     
@@ -2109,12 +2116,12 @@ fn parallel_process(data: Vec<T>): Vec<R>
     var chunks := data.chunks(chunk_size)
     
     var futures Vec<Future<Vec<R>>> := []
-    loop: chunks
+    loop: chunk in chunks
         futures.push(async process_chunk(chunk))
     end loop
     
     var results Vec<R> := []
-    loop: futures
+    loop: future in futures
         results.extend(await future)
     end loop
     
@@ -2133,9 +2140,9 @@ end fn
 // Timeout handling
 async fn fetch_with_timeout(url: ustring, timeout_ms: i32): Result<ustring, TimeoutError>
     match get --timeout timeout_ms < url
-        Ok(response) => return Ok(response)
-        Timeout => return Error(TimeoutError::TimedOut)
-        Error(e) => return Error(TimeoutError::NetworkError(e))
+        Ok(response), return Ok(response)
+        Timeout, return Error(TimeoutError::TimedOut)
+        Error(e), return Error(TimeoutError::NetworkError(e))
     end match
 end fn
 ~~~
@@ -2264,9 +2271,9 @@ put "Color: " + color
 
 // Input with timeout
 match get --timeout 3000
-    Ok(input) => put "You typed: " + input
-    Timeout => put "Too slow!"
-    Error(e) => error "Error: " + e
+    Ok(input), put "You typed: " + input
+    Timeout, put "Too slow!"
+    Error(e), error "Error: " + e
 end match
 
 // Input with validation
@@ -2315,9 +2322,9 @@ var csv_line ustring := get --until unicode ","
 
 // Read with timeout
 match get --timeout 5000
-    Ok(input) => process(input)
-    Timeout => error "Input timeout"
-    Error(e) => error "Error: " + e
+    Ok(input), process(input)
+    Timeout, error "Input timeout"
+    Error(e), error "Error: " + e
 end match
 
 // Read structured input
@@ -2344,8 +2351,8 @@ end loop
 ~~~poly
 // Input can fail (returns Result)
 match get
-    Ok(line) => process(line)
-    Error(e) => put unicode "Error reading input: " + e
+    Ok(line), process(line)
+    Error(e), put unicode "Error reading input: " + e
 end match
 
 // Using try for error propagation
@@ -2357,9 +2364,9 @@ end fn
 
 // Timeout handling
 match get --timeout 1000
-    Ok(input) => process(input)
-    Timeout => put unicode "Input timeout"
-    Error(e) => put unicode "Error: " + e
+    Ok(input), process(input)
+    Timeout, put unicode "Input timeout"
+    Error(e), put unicode "Error: " + e
 end match
 ~~~
 
@@ -2387,9 +2394,9 @@ var email ustring := get with validate |email| is_valid_email(email)
 
 // Timeout with default fallback
 var input ustring := match get --timeout 5000
-    Ok(input) => input
-    Timeout => unicode "default"
-    Error(e) => unicode "default"
+    Ok(input), input
+    Timeout, unicode "default"
+    Error(e), unicode "default"
 end match
 
 // Masked input with validation
@@ -2409,14 +2416,14 @@ var config Config := get as Config
 var valid_input i32 := loop
     put unicode "Enter a positive number: "
     match get
-        Ok(input) =>
+        Ok(input),
             var num i32 := input.parse::<i32>()
             if num > 0,
                 break num
             else
                 put unicode "Please enter a positive number"
             end if
-        Error(e) => put unicode "Invalid input: " + e
+        Error(e), put unicode "Invalid input: " + e
     end match
 end loop
 
@@ -2941,11 +2948,11 @@ my_poly_project/
 | `end while` | `}` |
 | `loop` | `loop {` |
 | `end loop` | `}` |
-| `loop: 0..10` | `for i in 0..10 {` |
-| `loop: items` | `for item in items {` |
+| `loop: i 0..10` | `for i in 0..=10 {` |
+| `loop: item in items` | `for item in items {` |
 | `end loop` | `}` |
 | `match x` | `match x {` |
-| `pattern => expr` | `pattern => expr,` |
+| `pattern, expr` | `pattern => expr,` |
 | `end match` | `}` |
 | **Structs** | |
 | `struct Foo { }` | `struct Foo { }` |
@@ -3132,7 +3139,7 @@ my_poly_project/
 
 <match_stmt> ::= "match" <expr> <match_arm>* "end" "match"
 
-<match_arm> ::= <pattern> "=>" <expr>
+<match_arm> ::= <pattern> "," <expr>
 
 <pattern> ::= <literal>
             | <identifier>

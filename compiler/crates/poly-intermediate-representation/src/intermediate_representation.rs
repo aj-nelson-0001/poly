@@ -300,6 +300,7 @@ pub enum Expr {
         inclusive: bool,
     },
     LoopRange {
+        variable: String,
         ranges: Vec<LoopRangePart>,
         body: Vec<Statement>,
     },
@@ -309,6 +310,8 @@ pub enum Expr {
         iterable: Box<Expr>,
         body: Vec<Statement>,
     },
+    /// Infinite loop: `loop` ... `end loop`.
+    InfiniteLoop(Vec<Statement>),
     Try(Box<Expr>),
     As {
         expr: Box<Expr>,

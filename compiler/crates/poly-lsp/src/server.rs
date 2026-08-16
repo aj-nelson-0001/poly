@@ -250,10 +250,19 @@ impl Server {
         if let Some(uri) = uri {
             if let Some(source) = self.documents.get(uri) {
                 let line_text = source.lines().nth(line).unwrap_or("");
-                let prefix = line_text
-                    .chars()
-                    .take(character)
-                    .collect::<String>()
+                // LSP `character` is measured in UTF-16 code units; walk the
+                // line counting units so non-ASCII text does not shift the
+                // completion prefix.
+                let mut prefix_chars = String::new();
+                let mut units = 0usize;
+                for ch in line_text.chars() {
+                    if units >= character {
+                        break;
+                    }
+                    prefix_chars.push(ch);
+                    units += ch.len_utf16();
+                }
+                let prefix = prefix_chars
                     .split(|c: char| !c.is_alphanumeric() && c != '_')
                     .next_back()
                     .unwrap_or("")
@@ -674,6 +683,9 @@ fn hover_at(source: &str, _uri: &str, line: usize, character: usize) -> Option<J
                 })
         })?;
     let markdown = format!("```poly\n{}\n```\n\n**{}**", symbol.detail, symbol.name);
+    // `word_at` reports char indexes; the LSP range must use UTF-16 units.
+    let start_units = char_index_to_utf16(line_text, word_start);
+    let end_units = char_index_to_utf16(line_text, word_end);
     Some(Json::obj(vec![
         (
             "range",
@@ -682,14 +694,14 @@ fn hover_at(source: &str, _uri: &str, line: usize, character: usize) -> Option<J
                     "start",
                     Json::obj(vec![
                         ("line", Json::num(line as f64)),
-                        ("character", Json::num(word_start as f64)),
+                        ("character", Json::num(start_units as f64)),
                     ]),
                 ),
                 (
                     "end",
                     Json::obj(vec![
                         ("line", Json::num(line as f64)),
-                        ("character", Json::num(word_end as f64)),
+                        ("character", Json::num(end_units as f64)),
                     ]),
                 ),
             ]),
@@ -704,6 +716,36 @@ fn hover_at(source: &str, _uri: &str, line: usize, character: usize) -> Option<J
     ]))
 }
 
+/// Convert a `char` index within `line_text` into an LSP UTF-16 position.
+fn char_index_to_utf16(line_text: &str, char_index: usize) -> usize {
+    line_text
+        .chars()
+        .take(char_index)
+        .map(|ch| ch.len_utf16())
+        .sum()
+}
+
+/// Convert an LSP UTF-16 `character` into a `char` index within `line_text`.
+///
+/// A position that falls inside a multi-unit character (e.g. the second half
+/// of an astral pair) still resolves to that character.
+fn utf16_to_char_index(line_text: &str, character: usize) -> usize {
+    let mut units = 0usize;
+    for (index, ch) in line_text.chars().enumerate() {
+        if units >= character {
+            return index;
+        }
+        units += ch.len_utf16();
+        // A multi-unit character (é, astral pairs) can contain the cursor;
+        // single-unit characters land exactly on the boundary and must let
+        // the next character own that position.
+        if units > character {
+            return index;
+        }
+    }
+    line_text.chars().count()
+}
+
 /// Return the identifier (or keyword) containing `character` in `line_text`,
 /// with its character range.
 fn word_at(line_text: &str, character: usize) -> Option<(String, usize, usize)> {
@@ -711,7 +753,8 @@ fn word_at(line_text: &str, character: usize) -> Option<(String, usize, usize)> 
     if characters.is_empty() {
         return None;
     }
-    let character = character.min(characters.len());
+    let char_index = utf16_to_char_index(line_text, character);
+    let character = char_index.min(characters.len().saturating_sub(1));
     let is_word = |c: char| c.is_alphanumeric() || c == '_';
     if !is_word(characters[character]) {
         return None;
@@ -966,6 +1009,21 @@ mod tests {
         assert_eq!(word_at("put 42", 0), Some(("put".to_string(), 0, 3)));
         assert_eq!(word_at("put 42", 3), None);
         assert_eq!(word_at("  put 42", 2), Some(("put".to_string(), 2, 5)));
+    }
+
+    #[test]
+    fn word_at_counts_utf16_units_not_chars() {
+        // "caf😀 helper" — 😀 (U+1F600) is one char but two UTF-16 units, so
+        // the cursor for the `h` of `helper` sits at character 6, not 5.
+        assert_eq!(
+            word_at("caf😀 helper", 6),
+            Some(("helper".to_string(), 5, 11))
+        );
+        // An astral char (😀 = 2 UTF-16 units) shifts positions the same way.
+        assert_eq!(word_at("x😀helper", 4), Some(("helper".to_string(), 2, 8)));
+        // A character index that is not a UTF-16 boundary still lands on the
+        // correct word (cursor inside the second unit of an astral letter).
+        assert_eq!(word_at("a𐐀bc xyz", 2), Some(("a𐐀bc".to_string(), 0, 4)));
     }
 
     #[test]

@@ -13,14 +13,14 @@ This guide covers best practices for using the new Poly I/O and error handling s
 ~~~poly
 // Good: Progress indicator
 put -n "Loading"
-loop: 0..10
+loop: i 0..10
     put -n "."
     sleep(100)
 end loop
 put " Done!"
 
 // Bad: Newlines in progress
-loop: 0..10
+loop: i 0..10
     put "Loading..."  // Creates multiple lines
 end loop
 ~~~
@@ -84,9 +84,9 @@ var color ustring := get  // Forces user to enter something
 ~~~poly
 // Good: Prevent hanging
 match get --timeout 5000
-    Ok(input) => process(input)
-    Timeout => warn "Input timeout, using default"
-    Error(e) => error "Input error: " + e
+    Ok(input), process(input)
+    Timeout, warn "Input timeout, using default"
+    Error(e), error "Input error: " + e
 end match
 
 // Bad: No timeout
@@ -154,12 +154,12 @@ end fn
 // Bad: Handle every error manually
 fn process_config(): Result<ustring, FileError>
     match read_file(unicode "config.txt")
-        Ok(content) =>
+        Ok(content),
             match validate_config(content)
-                Ok(validated) => return Ok(validated)
-                Error(e) => return Error(e)
+                Ok(validated), return Ok(validated)
+                Error(e), return Error(e)
             end match
-        Error(e) => return Error(e)
+        Error(e), return Error(e)
     end match
 end fn
 ~~~
@@ -169,10 +169,10 @@ end fn
 ~~~poly fragment
 // Good: Pattern matching
 match read_file(unicode "config.txt")
-    Ok(content) => process(content)
-    Error(FileError::NotFound) => create_default_config()
-    Error(FileError::PermissionDenied) => request_permissions()
-    Error(e) => error "Unexpected error: " + e
+    Ok(content), process(content)
+    Error(FileError::NotFound), create_default_config()
+    Error(FileError::PermissionDenied), request_permissions()
+    Error(e), error "Unexpected error: " + e
 end match
 
 // Bad: If-else chains
@@ -193,17 +193,17 @@ end if
 ~~~poly
 // Good: Catch-all for unknown errors
 match validate_name(input)
-    Ok(name) => put "Valid: " + name
-    Error(EmptyInput) => error "Name cannot be empty"
-    Error(TooShort(min)) => error "Name too short"
-    Error(_) => error "Validation failed"  // Catches any other error
+    Ok(name), put "Valid: " + name
+    Error(EmptyInput), error "Name cannot be empty"
+    Error(TooShort(min)), error "Name too short"
+    Error(_), error "Validation failed"  // Catches any other error
 end match
 
 // Bad: Exhaustive matching without catch-all
 match validate_name(input)
-    Ok(name) => put "Valid: " + name
-    Error(EmptyInput) => error "Name cannot be empty"
-    Error(TooShort(min)) => error "Name too short"
+    Ok(name), put "Valid: " + name
+    Error(EmptyInput), error "Name cannot be empty"
+    Error(TooShort(min)), error "Name too short"
     // Missing Error(TooLong) and Error(InvalidFormat)
 end match
 ~~~
@@ -259,16 +259,16 @@ end fn
 
 fn main()
     match read_config()
-        Ok(config) => process(config)
-        Error(e) => error "Failed to load config: " + e
+        Ok(config), process(config)
+        Error(e), error "Failed to load config: " + e
     end match
 end fn
 
 // Bad: Handle errors too early
 fn read_config(): Result<ustring, FileError>
     match read_file(unicode "config.txt")
-        Ok(content) => return Ok(content)
-        Error(e) =>
+        Ok(content), return Ok(content)
+        Error(e),
             error "Failed to read config"  // Too early
             return Error(e)
     end match
@@ -283,13 +283,13 @@ end fn
 
 ~~~poly
 // Good: Efficient progress updates
-loop: 0..1000
+loop: i 0..1000
     put -n "\rProcessing: " + i.to_string()
 end loop
 put ""
 
 // Bad: Inefficient output
-loop: 0..1000
+loop: i 0..1000
     put "Processing: " + i.to_string()  // Creates 1000 lines
 end loop
 ~~~
@@ -299,13 +299,13 @@ end loop
 ~~~poly
 // Good: Buffer output
 var output ustring := ""
-loop: items
+loop: item in items
     add output, item.to_string() + "\n"
 end loop
 put output
 
 // Bad: Frequent output
-loop: items
+loop: item in items
     put item.to_string()  // Multiple system calls
 end loop
 ~~~
@@ -355,9 +355,9 @@ var email ustring := get  // Could be invalid
 ~~~poly
 // Good: Timeout for network
 match get --timeout 5000
-    Ok(data) => process(data)
-    Timeout => warn "Network timeout"
-    Error(e) => error "Network error: " + e
+    Ok(data), process(data)
+    Timeout, warn "Network timeout"
+    Error(e), error "Network error: " + e
 end match
 
 // Bad: No timeout
@@ -375,16 +375,16 @@ var data ustring := get  // Can hang forever
 fn test_validation()
     // Test empty input
     match validate_name(unicode "")
-        Ok(_) => fail("Should not succeed")
-        Error(EmptyInput) => pass("Correctly caught empty input")
-        Error(_) => fail("Wrong error type")
+        Ok(_), fail("Should not succeed")
+        Error(EmptyInput), pass("Correctly caught empty input")
+        Error(_), fail("Wrong error type")
     end match
     
     // Test short input
     match validate_name(unicode "a")
-        Ok(_) => fail("Should not succeed")
-        Error(TooShort(_)) => pass("Correctly caught short input")
-        Error(_) => fail("Wrong error type")
+        Ok(_), fail("Should not succeed")
+        Error(TooShort(_)), pass("Correctly caught short input")
+        Error(_), fail("Wrong error type")
     end match
 end fn
 ~~~

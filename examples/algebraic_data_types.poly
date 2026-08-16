@@ -32,17 +32,17 @@ end enum
 
 fn describe_color(color: Color): String
     match color
-        Red => "The color is red"
-        Green => "The color is green"
-        Blue => "The color is blue"
+        Red, "The color is red"
+        Green, "The color is green"
+        Blue, "The color is blue"
     end match
 end fn
 
 fn area(shape: Shape): f64
     match shape
-        Circle(r) => 3.14 * r * r
-        Rectangle(w, h) => w * h
-        Triangle(a, b, c) =>
+        Circle(r), 3.14 * r * r
+        Rectangle(w, h), w * h
+        Triangle(a, b, c),
             let s := (a + b + c) / 2.0
             return (s * (s - a) * (s - b) * (s - c))
     end match
@@ -50,10 +50,10 @@ end fn
 
 fn process_message(msg: Message): String
     match msg
-        Quit => "Quitting"
-        Move(x, y) => "Moving to (" + x + ", " + y + ")"
-        Write(text) => "Writing: " + text
-        ChangeColor(r, g, b) => "Changing color to RGB(" + r + ", " + g + ", " + b + ")"
+        Quit, "Quitting"
+        Move(x, y), "Moving to (" + x + ", " + y + ")"
+        Write(text), "Writing: " + text
+        ChangeColor(r, g, b), "Changing color to RGB(" + r + ", " + g + ", " + b + ")"
     end match
 end fn
 
@@ -90,26 +90,26 @@ end enum
 
 fn evaluate(expr: Expr): f32
     match expr
-        Num(n) => n
-        Add(l, r) => evaluate(l) + evaluate(r)
-        Mul(l, r) => evaluate(l) * evaluate(r)
-        Neg(e) => -evaluate(e)
+        Num(n), n
+        Add(l, r), evaluate(l) + evaluate(r)
+        Mul(l, r), evaluate(l) * evaluate(r)
+        Neg(e), -evaluate(e)
     end match
 end fn
 
 fn simplify(expr: Expr): Expr
     match expr
-        Add(Num(0), e) => simplify(e)
-        Add(e, Num(0)) => simplify(e)
-        Mul(Num(1), e) => simplify(e)
-        Mul(e, Num(1)) => simplify(e)
-        Mul(Num(0), _) => Num(0.0)
-        Mul(_, Num(0)) => Num(0.0)
-        Neg(Neg(e)) => simplify(e)
-        Add(l, r) => Add(simplify(l), simplify(r))
-        Mul(l, r) => Mul(simplify(l), simplify(r))
-        Neg(e) => Neg(simplify(e))
-        _ => expr
+        Add(Num(0), e), simplify(e)
+        Add(e, Num(0)), simplify(e)
+        Mul(Num(1), e), simplify(e)
+        Mul(e, Num(1)), simplify(e)
+        Mul(Num(0), _), Num(0.0)
+        Mul(_, Num(0)), Num(0.0)
+        Neg(Neg(e)), simplify(e)
+        Add(l, r), Add(simplify(l), simplify(r))
+        Mul(l, r), Mul(simplify(l), simplify(r))
+        Neg(e), Neg(simplify(e))
+        _, expr
     end match
 end fn
 
@@ -124,15 +124,15 @@ end enum
 
 fn length(list: List): i32
     match list
-        Cons(_, tail) => 1 + length(tail)
-        Nil => 0
+        Cons(_, tail), 1 + length(tail)
+        Nil, 0
     end match
 end fn
 
 fn sum(list: List): i32
     match list
-        Cons(head, tail) => head + sum(tail)
-        Nil => 0
+        Cons(head, tail), head + sum(tail)
+        Nil, 0
     end match
 end fn
 
@@ -150,21 +150,21 @@ end enum
 
 fn tree_sum(tree: Tree): i32
     match tree
-        Node(val, left, right) => val + tree_sum(left) + tree_sum(right)
-        Leaf => 0
+        Node(val, left, right), val + tree_sum(left) + tree_sum(right)
+        Leaf, 0
     end match
 end fn
 
 fn tree_depth(tree: Tree): i32
     match tree
-        Node(_, left, right) => 1 + max(tree_depth(left), tree_depth(right))
-        Leaf => 0
+        Node(_, left, right), 1 + max(tree_depth(left), tree_depth(right))
+        Leaf, 0
     end match
 end fn
 
 fn tree_insert(tree: Tree, val: i32): Tree
     match tree
-        Node(n, left, right) =>
+        Node(n, left, right),
             if val < n,
                 return Node(n, tree_insert(left, val), right)
             end if
@@ -172,7 +172,7 @@ fn tree_insert(tree: Tree, val: i32): Tree
                 return Node(n, left, tree_insert(right, val))
             end if
             return Node(n, left, right)
-        Leaf => Node(val, Leaf, Leaf)
+        Leaf, Node(val, Leaf, Leaf)
     end match
 end fn
 

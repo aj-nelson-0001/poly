@@ -161,12 +161,16 @@ fn fold_expr(expr: &mut Expr) -> bool {
                     BinaryOp::BitXor => Some(left_value ^ right_value),
                     BinaryOp::Shl => Some(left_value << right_value),
                     BinaryOp::Shr => Some(left_value >> right_value),
-                    BinaryOp::Eq => Some((left_value == right_value) as i64),
-                    BinaryOp::NotEq => Some((left_value != right_value) as i64),
-                    BinaryOp::Lt => Some((left_value < right_value) as i64),
-                    BinaryOp::Gt => Some((left_value > right_value) as i64),
-                    BinaryOp::LtEq => Some((left_value <= right_value) as i64),
-                    BinaryOp::GtEq => Some((left_value >= right_value) as i64),
+                    // Comparisons on integers yield booleans, so fold them to
+                    // `Bool` literals.  Folding to an integer here produced
+                    // `let flag: bool = 1;` for `var flag bool := 1 < 2`, which
+                    // does not compile.
+                    BinaryOp::Eq => return fold_bool(left_value == right_value, expr),
+                    BinaryOp::NotEq => return fold_bool(left_value != right_value, expr),
+                    BinaryOp::Lt => return fold_bool(left_value < right_value, expr),
+                    BinaryOp::Gt => return fold_bool(left_value > right_value, expr),
+                    BinaryOp::LtEq => return fold_bool(left_value <= right_value, expr),
+                    BinaryOp::GtEq => return fold_bool(left_value >= right_value, expr),
                     BinaryOp::And | BinaryOp::Or => None, // booleans, handled below
                 };
                 if let Some(folded) = folded {
@@ -174,11 +178,14 @@ fn fold_expr(expr: &mut Expr) -> bool {
                     return true;
                 }
             }
-            // Boolean algebra on literal bools
+            // Boolean algebra on literal bools, and comparisons where both
+            // operands are literal booleans (`true == false`).
             if let (Some(left_value), Some(right_value)) = (as_bool(left), as_bool(right)) {
                 let folded = match *op {
                     BinaryOp::And => Some(left_value && right_value),
                     BinaryOp::Or => Some(left_value || right_value),
+                    BinaryOp::Eq => Some(left_value == right_value),
+                    BinaryOp::NotEq => Some(left_value != right_value),
                     _ => None,
                 };
                 if let Some(folded) = folded {
@@ -207,10 +214,13 @@ fn fold_expr(expr: &mut Expr) -> bool {
         Expr::UnaryOp { op, expr: inner } => {
             changed |= fold_expr(inner);
             if let Some(value) = as_i64(inner) {
+                // Bitwise-not folds over integers; logical `not` is boolean
+                // only (folding `not 5` via bitwise negation produced `-6`
+                // instead of the logical value).
                 let folded = match op {
                     UnaryOp::Neg => Some(-value),
-                    UnaryOp::Not | UnaryOp::BitNot => Some(!value),
-                    UnaryOp::Deref => None,
+                    UnaryOp::BitNot => Some(!value),
+                    UnaryOp::Not | UnaryOp::Deref => None,
                 };
                 if let Some(folded) = folded {
                     *expr = Expr::Literal(Literal::Int(folded.to_string()));
@@ -291,7 +301,7 @@ fn fold_expr(expr: &mut Expr) -> bool {
             changed |= fold_expr(start);
             changed |= fold_expr(end);
         }
-        Expr::LoopRange { ranges, body } => {
+        Expr::LoopRange { ranges, body, .. } => {
             for part in ranges.iter_mut() {
                 match part {
                     LoopRangePart::Range {
@@ -312,6 +322,7 @@ fn fold_expr(expr: &mut Expr) -> bool {
             changed |= fold_expr(iterable);
             changed |= fold_statements(body);
         }
+        Expr::InfiniteLoop(body) => changed |= fold_statements(body),
         Expr::Try(inner) => changed |= fold_expr(inner),
         Expr::As { expr: inner, .. } => changed |= fold_expr(inner),
         Expr::Get(get) => {
@@ -343,6 +354,12 @@ fn as_i64(expr: &Expr) -> Option<i64> {
         Expr::Literal(Literal::Int(value)) => value.parse().ok(),
         _ => None,
     }
+}
+
+/// Replace `expr` with a boolean literal and signal that folding changed it.
+fn fold_bool(value: bool, expr: &mut Expr) -> bool {
+    *expr = Expr::Literal(Literal::Bool(value));
+    true
 }
 
 fn as_bool(expr: &Expr) -> Option<bool> {
@@ -532,7 +549,13 @@ fn optimize_loops(statements: &mut Vec<Statement>) -> bool {
                 changed |= optimize_loops(body);
                 i += 1;
             }
-            Statement::Expression(Expr::LoopRange { body, ranges }) => {
+            Statement::Expression(Expr::InfiniteLoop(body)) => {
+                // An empty infinite loop still never terminates, so keep it;
+                // only recurse into the body for further loop optimization.
+                changed |= optimize_loops(body);
+                i += 1;
+            }
+            Statement::Expression(Expr::LoopRange { body, ranges, .. }) => {
                 // Remove step == 1 (redundant: it is the default anyway).
                 for part in ranges.iter_mut() {
                     if let LoopRangePart::Range {
@@ -622,6 +645,19 @@ impl OptimizationPass for Inlining {
 
 fn is_inlinable(function: &Function) -> bool {
     if function.is_async {
+        return false;
+    }
+    // Functions that return closures cannot be inlined: the substitution
+    // pass does not rewrite inside closure bodies, so inlining `make_adder(5)`
+    // would leave the captured `n` dangling at the call site.
+    if matches!(function.return_type, Some(Type::Function { .. })) {
+        return false;
+    }
+    if function
+        .body
+        .iter()
+        .any(|statement| matches!(statement, Statement::Return(Some(Expr::Closure { .. }))))
+    {
         return false;
     }
     let mut returns = 0;
@@ -787,7 +823,7 @@ fn inline_in_expr(expr: &mut Expr, inlinable: &HashMap<String, Function>) -> boo
             changed |= inline_in_expr(start, inlinable);
             changed |= inline_in_expr(end, inlinable);
         }
-        Expr::LoopRange { ranges, body } => {
+        Expr::LoopRange { ranges, body, .. } => {
             for part in ranges.iter_mut() {
                 match part {
                     LoopRangePart::Range {
@@ -808,6 +844,7 @@ fn inline_in_expr(expr: &mut Expr, inlinable: &HashMap<String, Function>) -> boo
             changed |= inline_in_expr(iterable, inlinable);
             changed |= inline_in_statements(body, inlinable);
         }
+        Expr::InfiniteLoop(body) => changed |= inline_in_statements(body, inlinable),
         Expr::Try(inner) => changed |= inline_in_expr(inner, inlinable),
         Expr::As { expr: inner, .. } => changed |= inline_in_expr(inner, inlinable),
         Expr::Get(get) => {
@@ -944,7 +981,7 @@ mod tests {
 
     #[test]
     fn simplifies_redundant_step() {
-        let mut program = parse_to_ir("loop: 0..10 step 1\n    put i\nend loop");
+        let mut program = parse_to_ir("loop: i 0..10 step 1\n    put i\nend loop");
         LoopOptimizations.run(&mut program);
 
         match &program.main_body[0] {
@@ -958,7 +995,7 @@ mod tests {
 
     #[test]
     fn removes_empty_loops() {
-        let mut program = parse_to_ir("loop: 0..10\nend loop\nput 42");
+        let mut program = parse_to_ir("loop: i 0..10\nend loop\nput 42");
         LoopOptimizations.run(&mut program);
 
         assert_eq!(program.main_body.len(), 1);
@@ -1017,6 +1054,95 @@ mod tests {
                 value: Some(value), ..
             } => assert_eq!(int_value(value), 42),
             other => panic!("expected var decl, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn comparison_folds_to_boolean_literal() {
+        let mut program = parse_to_ir("var flag bool := 1 < 2");
+        ConstantFolding.run(&mut program);
+
+        match &program.main_body[0] {
+            Statement::VarDecl {
+                value: Some(Expr::Literal(Literal::Bool(true))),
+                ..
+            } => {}
+            other => panic!("expected folded boolean, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn equality_folds_to_boolean_literal() {
+        let mut program = parse_to_ir("var flag bool := 2 == 3");
+        ConstantFolding.run(&mut program);
+
+        match &program.main_body[0] {
+            Statement::VarDecl {
+                value: Some(Expr::Literal(Literal::Bool(false))),
+                ..
+            } => {}
+            other => panic!("expected folded boolean, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn logical_not_folds_only_booleans() {
+        let mut program = parse_to_ir("var flag bool := not true");
+        ConstantFolding.run(&mut program);
+
+        match &program.main_body[0] {
+            Statement::VarDecl {
+                value: Some(Expr::Literal(Literal::Bool(false))),
+                ..
+            } => {}
+            other => panic!("expected folded boolean, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn bitwise_not_folds_integers() {
+        let mut program = parse_to_ir("var x := ~0");
+        ConstantFolding.run(&mut program);
+
+        match &program.main_body[0] {
+            Statement::VarDecl {
+                value: Some(value), ..
+            } => assert_eq!(int_value(value), -1),
+            other => panic!("expected var decl, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn closure_returning_function_is_not_inlined() {
+        let mut program = parse_to_ir(
+            "fn make_adder(n: i32): |x: i32| i32\n    return |x| x + n\nend fn\nvar add5 := make_adder(5)",
+        );
+        Inlining.run(&mut program);
+
+        match &program.main_body[0] {
+            Statement::VarDecl {
+                value: Some(Expr::Call { .. }),
+                ..
+            } => {}
+            other => panic!("expected the call to be left intact, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn closure_typed_return_function_is_not_inlined() {
+        // Same as above, but the closure is returned through a variable; the
+        // declared function-typed return must also block inlining.
+        let mut program = parse_to_ir(
+            "fn make(n: i32): |x: i32| i32\n    var f := |x: i32| x + n\n    return f\nend fn\nvar g := make(1)",
+        );
+        Inlining.run(&mut program);
+
+        match &program.main_body[0] {
+            Statement::VarDecl {
+                value: Some(Expr::Call { .. }),
+                ..
+            } => {}
+            other => panic!("expected the call to be left intact, got {other:?}"),
         }
     }
 }

@@ -73,9 +73,9 @@ put "Password length: " + password.len()
 put "\n=== Test 10: Input with Timeout ==="
 put -n "Quick! Type something within 3 seconds: "
 match get --timeout 3000
-    Ok(input) => put "You typed: " + input
-    Timeout => warn "Too slow!"
-    Error(e) => error "Error: " + e
+    Ok(input), put "You typed: " + input
+    Timeout, warn "Too slow!"
+    Error(e), error "Error: " + e
 end match
 
 # Test 11: Input with validation
@@ -125,14 +125,10 @@ put "You chose: " + command
 
 # Test 18: Structured input
 put "\n=== Test 18: Structured Input ==="
-struct Person
-    var name: ustring
-    var age: i32
-end struct
-
 put -n "Enter person as 'name,age' (e.g., Alice,30): "
-var person Person := get --as Person
-put "Name: " + person.name + ", Age: " + person.age
+var input ustring := get
+var parts := input.split(unicode ",")
+put "Name: " + parts[0] + ", Age: " + parts[1]
 
 # Test 19: Input loop
 put "\n=== Test 19: Input Loop ==="
@@ -140,31 +136,26 @@ put "Enter numbers (type 'quit' to exit):"
 var inputs Vec<ustring> := []
 loop
     var input ustring := get
-    if input = unicode "quit" then
+    if input = unicode "quit",
         break
     end if
-    inputs.push(input)
     put "Stored: " + input
+    inputs.push(input)
 end loop
 put "You entered " + inputs.len() + " numbers."
 
 # Test 20: Error recovery
 put "\n=== Test 20: Error Recovery ==="
-var valid_number i32 := loop
+loop
     put -n "Enter a positive number: "
-    match get
-        Ok(input) =>
-            // parse::<i32>() is a standard library method for string parsing
-            var num i32 := input.parse::<i32>()
-            if num > 0 then
-                break num
-            else
-                warn "Please enter a positive number"
-            end if
-        Error(e) => error "Invalid input: " + e
-    end match
+    var num i32 := get --as i32
+    if num > 0,
+        put "You entered: " + num.to_string()
+        break
+    else
+        warn "Please enter a positive number"
+    end if
 end loop
-put "You entered: " + valid_number
 
 # ============================================================
 # COMBINED TESTS
@@ -174,9 +165,9 @@ put "You entered: " + valid_number
 put "\n=== Test 21: Combined Flags ==="
 put -n "Enter a number (will timeout in 5 seconds): "
 match get --timeout 5000 --default unicode "0"
-    Ok(input) => put "You entered: " + input
-    Timeout => warn "Timeout, using default"
-    Error(e) => error "Error: " + e
+    Ok(input), put "You entered: " + input
+    Timeout, warn "Timeout, using default"
+    Error(e), error "Error: " + e
 end match
 
 # Test 22: Multiple outputs with different flags

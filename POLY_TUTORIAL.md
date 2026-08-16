@@ -92,7 +92,8 @@ put "Color: " + color
 
 ### Password Input
 
-Use `--mask` to hide input:
+Use `--mask` to hide input *(experimental: the flag parses but masking is not
+implemented yet — the compiler emits a warning)*:
 
 ~~~poly
 put -n "Enter password: "
@@ -106,9 +107,9 @@ Use `--timeout` to prevent hanging:
 
 ~~~poly
 match get --timeout 3000
-    Ok(input) => put "You typed: " + input
-    Timeout => warn "Too slow!"
-    Error(e) => error "Error: " + e
+    Ok(input), put "You typed: " + input
+    Timeout, warn "Too slow!"
+    Error(e), error "Error: " + e
 end match
 ~~~
 
@@ -122,7 +123,8 @@ var age i32 := get with validate |x| x >= 1 && x <= 150
 
 ### Delimiter-Based Input
 
-Use `--until` to read until a delimiter:
+Use `--until` to read until a delimiter *(experimental: the flag parses but
+input is read to the end of the line — the compiler emits a warning)*:
 
 ~~~poly
 put -n "Enter CSV line: "
@@ -156,8 +158,8 @@ fn divide(a: f64, b: f64): Result<f64, ustring>
 end fn
 
 match divide(10.0, 2.0)
-    Ok(result) => put "Result: " + result.to_string()
-    Error(e) => error "Error: " + e
+    Ok(result), put "Result: " + result.to_string()
+    Error(e), error "Error: " + e
 end match
 ~~~
 
@@ -213,10 +215,10 @@ fn validate_name(name: ustring): Result<ustring, ValidationError>
 end fn
 
 match validate_name(unicode "John")
-    Ok(valid_name) => put "Valid: " + valid_name
-    Error(EmptyInput) => error "Name cannot be empty"
-    Error(TooShort(min)) => error "Name too short, minimum " + min.to_string()
-    Error(TooLong(max)) => error "Name too long, maximum " + max.to_string()
+    Ok(valid_name), put "Valid: " + valid_name
+    Error(EmptyInput), error "Name cannot be empty"
+    Error(TooShort(min)), error "Name too short, minimum " + min.to_string()
+    Error(TooLong(max)), error "Name too long, maximum " + max.to_string()
 end match
 ~~~
 
@@ -226,8 +228,8 @@ Use `_` to catch any error:
 
 ~~~poly
 match validate_name(input)
-    Ok(name) => put "Valid: " + name
-    Error(_) => error "Validation failed"  # Catches any error
+    Ok(name), put "Valid: " + name
+    Error(_), error "Validation failed"  # Catches any error
 end match
 ~~~
 
@@ -250,7 +252,7 @@ fn main()
     put -n "Enter your email: "
     var email ustring := get with validate |e| e.contains(unicode "@")
     
-    # Get password with mask
+    # Get password (mask is experimental: parses but is not applied)
     put -n "Enter password: "
     var password ustring := get --mask unicode "*" with validate |p| p.len() >= 8
     
@@ -269,16 +271,16 @@ end fn
 
 ### Basic Ranges
 
-Poly's `loop` command with colon syntax supports flexible iteration inspired by Sinclair QL SuperBASIC:
+Poly's `loop` command with colon syntax supports flexible iteration inspired by Sinclair QL SuperBASIC. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`:
 
 ~~~poly
 # Simple range
-loop: 0..10
+loop: i 0..10
     put i
 end loop
 
 # Inclusive range
-loop: 0..=10
+loop: i 0..=10
     put i
 end loop
 ~~~
@@ -289,17 +291,17 @@ The real power comes from combining multiple ranges and specific values:
 
 ~~~poly
 # Multiple ranges and specific values
-loop: 1..3, 7, 19..21
+loop: i 1..3, 7, 19..21
     put i  # Iterates: 1, 2, 3, 7, 19, 20, 21
 end loop
 
 # Specific values only
-loop: 1, 5, 10, 100
+loop: i 1, 5, 10, 100
     put i  # Iterates: 1, 5, 10, 100
 end loop
 
 # Complex mix
-loop: 1..5, 10, 20..25 step 2, 100
+loop: i 1..5, 10, 20..25 step 2, 100
     put i  # Iterates: 1, 2, 3, 4, 5, 10, 20, 22, 24, 100
 end loop
 ~~~
@@ -310,12 +312,12 @@ Use `step` to control the increment:
 
 ~~~poly
 # Positive step
-loop: 0..10 step 2
-    put i  # Iterates: 0, 2, 4, 6, 8
+loop: i 0..10 step 2
+    put i  # Iterates: 0, 2, 4, 6, 8, 10
 end loop
 
 # Negative step (counting down)
-loop: 10..1 step -1
+loop: i 10..1 step -1
     put i  # Iterates: 10, 9, 8, ..., 1
 end loop
 ~~~
@@ -327,7 +329,7 @@ Iterate over collections and with indices:
 ~~~poly
 # Iterate over collection
 var fruits Vec<ustring> := [unicode "apple", unicode "banana", unicode "cherry"]
-loop: fruits
+loop: fruit in fruits
     put fruit
 end loop
 
@@ -342,9 +344,9 @@ end loop
 ~~~poly
 # Multiplication table
 put "Multiplication Table (1..5)"
-loop: 1..5
+loop: i 1..5
     var row ustring := ""
-    loop: 1..5
+    loop: j 1..5
         add row, (i * j).to_string().pad_left(4)
     end loop
     put row

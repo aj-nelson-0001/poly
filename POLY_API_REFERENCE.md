@@ -136,9 +136,9 @@ var x := get --timeout milliseconds
 **Examples:**
 ~~~poly
 match get --timeout 3000
-    Ok(input) => process(input)
-    Timeout => warn "Too slow!"
-    Error(e) => error "Error: " + e
+    Ok(input), process(input)
+    Timeout, warn "Too slow!"
+    Error(e), error "Error: " + e
 end match
 ~~~
 
@@ -163,7 +163,11 @@ var count i32 := get --default 0
 
 ---
 
-#### `--mask` - Read with Input Mask
+#### `--mask` - Read with Input Mask *(experimental)*
+
+> **Status:** not implemented yet. `get --mask ...` parses and type-checks, but
+> the generated code reads plain input without masking; the compiler emits a
+> warning when the flag is used.
 
 ~~~poly
 var x := get --mask mask_char
@@ -172,7 +176,7 @@ var x := get --mask mask_char
 **Parameters:**
 - `mask_char`: Character to display (e.g., `unicode "*"`)
 
-**Returns:** Hidden input value
+**Returns:** Hidden input value *(planned)*
 
 **Examples:**
 ~~~poly
@@ -200,7 +204,11 @@ var person Person := get --as Person
 
 ---
 
-#### `--until` - Delimiter-Based Input
+#### `--until` - Delimiter-Based Input *(experimental)*
+
+> **Status:** not implemented yet. `get --until ...` parses and type-checks, but
+> the generated code reads to the end of the line; the compiler emits a
+> warning when the flag is used.
 
 ~~~poly
 var x := get --until delimiter
@@ -209,7 +217,7 @@ var x := get --until delimiter
 **Parameters:**
 - `delimiter`: Delimiter string
 
-**Returns:** Input until delimiter
+**Returns:** Input until delimiter *(planned)*
 
 **Examples:**
 ~~~poly
@@ -335,18 +343,18 @@ end fn
 
 ~~~poly
 match result
-    Ok(value) => handle_success(value)
-    Error(e) => handle_error(e)
+    Ok(value), handle_success(value)
+    Error(e), handle_error(e)
 end match
 ~~~
 
 **Examples:**
 ~~~poly
 match read_file(unicode "config.txt")
-    Ok(content) => process(content)
-    Error(FileError::NotFound) => error "File not found"
-    Error(FileError::PermissionDenied) => error "Permission denied"
-    Error(e) => error "Unknown error"
+    Ok(content), process(content)
+    Error(FileError::NotFound), error "File not found"
+    Error(FileError::PermissionDenied), error "Permission denied"
+    Error(e), error "Unknown error"
 end match
 ~~~
 
@@ -356,8 +364,8 @@ end match
 
 ~~~poly
 match result
-    Ok(value) => process(value)
-    Error(_) => error "Something went wrong"
+    Ok(value), process(value)
+    Error(_), error "Something went wrong"
 end match
 ~~~
 

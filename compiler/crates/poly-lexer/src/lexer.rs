@@ -967,7 +967,7 @@ mod tests {
 
     #[test]
     fn test_match_expression() {
-        let source = "match x\n    0 => put \"zero\"\n    _ => put \"other\"\nend match";
+        let source = "match x\n    0, put \"zero\"\n    _, put \"other\"\nend match";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Match);

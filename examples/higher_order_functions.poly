@@ -1,0 +1,44 @@
+# Poly Example: Higher-Order Functions
+#
+# Functions are values: accept closures through function-typed parameters,
+# return closures that capture locals, and transform vectors with
+# map/filter/reduce.
+
+fn apply(f: |x: i32| i32, v: i32): i32
+    return f(v)
+end fn
+
+fn make_adder(n: i32): |x: i32| i32
+    return |x| x + n
+end fn
+
+fn main()
+    put "apply(|x| x * 2, 21):"
+    put apply(|x| x * 2, 21)
+    put "apply(|x| x + 1, 41):"
+    put apply(|x| x + 1, 41)
+
+    var add5 := make_adder(5)
+    put "add5(10):"
+    put add5(10)
+    put "make_adder(100)(1):"
+    put make_adder(100)(1)
+
+    var xs := [1, 2, 3, 4, 5]
+    put "doubled (first and last):"
+    put xs.map(|x| x * 2)[0]
+    put xs.map(|x| x * 2)[4]
+    put "evens:"
+    var evens := xs.filter(|x| x % 2 == 0)
+    for v in evens
+        put v
+    end for
+    put "sum:"
+    put xs.reduce(0, |acc, x| acc + x)
+    put "product:"
+    put xs.reduce(1, |acc, x| acc * x)
+    put "sorted (descending):"
+    put xs.sort_by(|a, b| a > b)
+    put "string chars:"
+    put "hello".map(|c| c)
+end fn

@@ -69,8 +69,8 @@ Fixed codegen for match arms (removed extra semicolons):
 
 ~~~poly
 match x
-    1 => put "One"
-    _ => put "Other"
+    1, put "One"
+    _, put "Other"
 end match
 ~~~
 
@@ -87,7 +87,7 @@ match x {
 Loop variables now work correctly for collection iteration:
 
 ~~~poly
-loop: records
+loop: record in records
     put record
 end loop
 ~~~

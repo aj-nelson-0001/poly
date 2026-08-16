@@ -94,9 +94,9 @@ var input ustring := get  // Program hangs
 ~~~poly
 // Solution 1: Use timeout
 match get --timeout 5000
-    Ok(input) => process(input)
-    Timeout => warn "Input timeout"
-    Error(e) => error "Input error: " + e
+    Ok(input), process(input)
+    Timeout, warn "Input timeout"
+    Error(e), error "Input error: " + e
 end match
 
 // Solution 2: Check if input is available
@@ -166,8 +166,8 @@ var input ustring := get_env("INPUT") or unicode "default"
 **Symptoms:**
 ~~~poly
 match result
-    Ok(value) => process(value)
-    Error(e) => handle_error(e)  // Error not caught
+    Ok(value), process(value)
+    Error(e), handle_error(e)  // Error not caught
 end match
 ~~~
 
@@ -175,22 +175,22 @@ end match
 ~~~poly
 // Solution 1: Check error type
 match result
-    Ok(value) => process(value)
-    Error(FileError::NotFound) => error "File not found"
-    Error(FileError::PermissionDenied) => error "Permission denied"
-    Error(e) => error "Unknown error: " + e.to_string()
+    Ok(value), process(value)
+    Error(FileError::NotFound), error "File not found"
+    Error(FileError::PermissionDenied), error "Permission denied"
+    Error(e), error "Unknown error: " + e.to_string()
 end match
 
 // Solution 2: Use wildcard pattern
 match result
-    Ok(value) => process(value)
-    Error(_) => error "An error occurred"
+    Ok(value), process(value)
+    Error(_), error "An error occurred"
 end match
 
 // Solution 3: Log error details
 match result
-    Ok(value) => process(value)
-    Error(e) =>
+    Ok(value), process(value)
+    Error(e),
         error "Error: " + e.to_string()
         info "Error type: " + type_of(e)
         info "Stack trace: " + get_stack_trace()
@@ -218,8 +218,8 @@ end fn
 // Solution 2: Use match instead of try
 fn risky_operation(): Result<ustring, ustring>
     match other_operation()
-        Ok(result) => return Ok(result)
-        Error(e) => return Error(e)
+        Ok(result), return Ok(result)
+        Error(e), return Error(e)
     end match
 end fn
 
@@ -244,8 +244,8 @@ var value := result.unwrap()  // Panics if error
 ~~~poly fragment
 // Solution 1: Use match
 match result
-    Ok(value) => process(value)
-    Error(e) => handle_error(e)
+    Ok(value), process(value)
+    Error(e), handle_error(e)
 end match
 
 // Solution 2: Use unwrap_or
@@ -277,8 +277,8 @@ end if
 
 // Solution 2: Use error handling
 match get < "file.txt"
-    Ok(content) => process(content)
-    Error(e) => error "File error: " + e
+    Ok(content), process(content)
+    Error(e), error "File error: " + e
 end match
 
 // Solution 3: Use default value
@@ -323,7 +323,7 @@ end while
 
 // Solution 2: Use streaming
 var stream := open_stream("large_file.txt")
-loop: stream
+loop: line in stream
     process(line)
 end loop
 
@@ -339,7 +339,7 @@ var data bytes := get < "large_file.bin" --bytes 1024
 
 **Symptoms:**
 ~~~poly
-loop: 0..10000
+loop: i 0..10000
     put "Line " + i.to_string()  // Very slow
 end loop
 ~~~
@@ -348,19 +348,19 @@ end loop
 ~~~poly
 // Solution 1: Buffer output
 var buffer Vec<ustring> := []
-loop: 0..10000
+loop: i 0..10000
     buffer.push("Line " + i.to_string())
 end loop
 put buffer.join("\n")
 
 // Solution 2: Use -n for progress
-loop: 0..10000
+loop: i 0..10000
     put -n "\rProgress: " + i.to_string()
 end loop
 put ""
 
 // Solution 3: Write to file
-loop: 0..10000
+loop: i 0..10000
     put "Line " + i.to_string() >> "output.txt"
 end loop
 ~~~
@@ -376,9 +376,9 @@ var input ustring := get  // Very slow
 ~~~poly
 // Solution 1: Use timeout
 match get --timeout 5000
-    Ok(input) => process(input)
-    Timeout => warn "Timeout"
-    Error(e) => error e
+    Ok(input), process(input)
+    Timeout, warn "Timeout"
+    Error(e), error e
 end match
 
 // Solution 2: Use default value
@@ -399,24 +399,24 @@ var large_string ustring := "a".repeat(1000000)  // High memory usage
 ~~~poly
 // Solution 1: Use streaming
 var stream := open_stream("large_file.txt")
-loop: stream
+loop: line in stream
     process(line)  // Process line by line
 end loop
 
 // Solution 2: Use chunks
 var chunks := large_string.chunks(1024)
-loop: chunks
+loop: chunk in chunks
     process(chunk)
 end loop
 
 // Solution 3: Use generators
 fn generate_data(): Iterator<ustring>
-    loop: 0..1000000
+    loop: i 0..1000000
         yield "Line " + i.to_string()
     end loop
 end fn
 
-loop: generate_data()
+loop: line in generate_data()
     process(line)
 end loop
 ~~~
@@ -436,9 +436,9 @@ var response := get < "https://api.example.com"  // Timeout
 ~~~poly fragment
 // Solution 1: Use timeout
 match get --timeout 5000 < "https://api.example.com"
-    Ok(response) => process(response)
-    Timeout => warn "Connection timeout"
-    Error(e) => error "Connection error: " + e
+    Ok(response), process(response)
+    Timeout, warn "Connection timeout"
+    Error(e), error "Connection error: " + e
 end match
 
 // Solution 2: Use retry logic
@@ -504,8 +504,8 @@ info "x = " + x.to_string()
 // Log function results
 var result := risky_operation()
 match result
-    Ok(value) => info "Success: " + value.to_string()
-    Error(e) => error "Error: " + e.to_string()
+    Ok(value), info "Success: " + value.to_string()
+    Error(e), error "Error: " + e.to_string()
 end match
 ~~~
 

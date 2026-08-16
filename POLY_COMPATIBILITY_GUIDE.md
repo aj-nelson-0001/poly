@@ -176,8 +176,8 @@ end enum
 
 fn read_file(path: ustring): Result<ustring, FileError>
     match platform_read(path)
-        Ok(content) => return Ok(content)
-        Error(e) =>
+        Ok(content), return Ok(content)
+        Error(e),
             if is_windows() && e.code == 5,
                 return Error(FileError::AccessDenied)
             else if is_unix() && e.code == 24,
@@ -195,10 +195,10 @@ end fn
 // Good: Cross-platform error messages
 fn get_error_message(error: FileError): ustring
     match error
-        NotFound => return unicode "File not found"
-        PermissionDenied => return unicode "Permission denied"
-        AccessDenied => return unicode "Access denied"  // Windows
-        TooManyOpenFiles => return unicode "Too many open files"  // Unix
+        NotFound, return unicode "File not found"
+        PermissionDenied, return unicode "Permission denied"
+        AccessDenied, return unicode "Access denied"  // Windows
+        TooManyOpenFiles, return unicode "Too many open files"  // Unix
     end match
 end fn
 ~~~

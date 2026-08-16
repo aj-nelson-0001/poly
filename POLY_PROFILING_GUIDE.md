@@ -17,7 +17,7 @@ This guide covers profiling and performance analysis techniques for Poly program
 fn benchmark(name: ustring, iterations: i32, fn: () -> T): BenchmarkResult
     var times Vec<i64> := []
     
-    loop: iterations
+    loop: iteration in iterations
         var start := time_now()
         fn()
         var duration := time_now() - start
@@ -51,7 +51,7 @@ put "Max: " + result.max_ms.to_string() + "ms"
 fn detect_leaks(iterations: i32)
     var initial_memory := get_memory_usage()
     
-    loop: iterations
+    loop: iteration in iterations
         // Code that might leak memory
         var data := allocate_large_array()
         // ... process data
@@ -90,7 +90,7 @@ fn profile_calls(fn: () -> T, iterations: i32): ProfileResult
         return result
     }
     
-    loop: iterations
+    loop: iteration in iterations
         profiled_fn()
     end loop
     
@@ -115,7 +115,7 @@ put "Average: " + result.avg_time_ms.to_string() + "ms"
 fn detect_hotspots(functions: Vec<(ustring, fn() -> T)>): Vec<Hotspot>
     var hotspots Vec<Hotspot> := []
     
-    loop: functions
+    loop: function in functions
         var result := benchmark(name, 100, func)
         hotspots.push(Hotspot {
             name: name,
@@ -126,7 +126,7 @@ fn detect_hotspots(functions: Vec<(ustring, fn() -> T)>): Vec<Hotspot>
     
     // Calculate percentages
     var total_time := hotspots.iter().map(|h| h.avg_ms).sum()
-    loop: hotspots.iter_mut()
+    loop: hotspot in hotspots.iter_mut()
         set hotspot.percentage to (hotspot.avg_ms as f64) / (total_time as f64) * 100.0
     end loop
     
@@ -148,7 +148,7 @@ end fn
 fn profile_file_io(filename: ustring, iterations: i32): FileIOProfile
     // Profile writes
     var write_times Vec<i64> := []
-    loop: iterations
+    loop: iteration in iterations
         var start := time_now()
         put "test data" > filename
         var duration := time_now() - start
@@ -157,7 +157,7 @@ fn profile_file_io(filename: ustring, iterations: i32): FileIOProfile
     
     // Profile reads
     var read_times Vec<i64> := []
-    loop: iterations
+    loop: iteration in iterations
         var start := time_now()
         var content ustring := get < filename
         var duration := time_now() - start
@@ -181,13 +181,13 @@ fn profile_network(url: ustring, iterations: i32): NetworkProfile
     var times Vec<i64> := []
     var errors i32 := 0
     
-    loop: iterations
+    loop: iteration in iterations
         var start := time_now()
         match get --timeout 5000 < url
-            Ok(_) => 
+            Ok(_),
                 var duration := time_now() - start
                 times.push(duration)
-            Error(_) => errors = errors + 1
+            Error(_), errors = errors + 1
         end match
     end loop
     
@@ -212,7 +212,7 @@ fn profile_threads(iterations: i32): ThreadProfile
     var thread_count i32 := 0
     var creation_times Vec<i64> := []
     
-    loop: iterations
+    loop: iteration in iterations
         var start := time_now()
         spawn(|| {
             // Thread work
@@ -238,7 +238,7 @@ fn profile_locks(iterations: i32): LockProfile
     var contention_count i32 := 0
     var wait_times Vec<i64> := []
     
-    loop: iterations
+    loop: iteration in iterations
         var start := time_now()
         lock.lock()
         var duration := time_now() - start
@@ -283,7 +283,7 @@ fn generate_report(results: Vec<ProfileResult>): ustring
     add report, "| Test | Time (ms) | Status |\n"
     add report, "|------|-----------|--------|\n"
     
-    loop: results
+    loop: result in results
         var status := if result.passed,"PASS" else "FAIL" end if
         add report, "| " + result.name + " | " + result.time_ms.to_string() + " | " + status + " |\n"
     end loop
@@ -305,7 +305,7 @@ end fn
 fn analyze_results(results: Vec<ProfileResult>): Vec<Recommendation>
     var recommendations Vec<Recommendation> := []
     
-    loop: results
+    loop: result in results
         // Check for slow operations
         if result.time_ms > 1000,
             recommendations.push(Recommendation {

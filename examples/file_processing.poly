@@ -39,7 +39,7 @@ fn main()
         unicode "Charlie,35,charlie@example.com"
     ]
     
-    loop: records
+    loop: record in records
         put record >> "contacts.csv"
     end loop
     put "CSV file created."
@@ -51,7 +51,7 @@ fn main()
     var lines Vec<ustring> := csv_content.split(unicode "\n")
     
     var i i32 := 0
-    loop: lines
+    loop: line in lines
         if i > 0, # Skip header
             var fields Vec<ustring> := line.split(unicode ",")
             if fields.len() >= 2,

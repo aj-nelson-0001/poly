@@ -38,6 +38,10 @@ pub enum PolyType {
     Array(Box<PolyType>, usize),
     Tuple(Vec<PolyType>),
     Vec(Box<PolyType>),
+    /// Hash map `Map<K, V>`.
+    Map(Box<PolyType>, Box<PolyType>),
+    /// Hash set `Set<T>`.
+    Set(Box<PolyType>),
     Option(Box<PolyType>),
     Result(Box<PolyType>, Box<PolyType>),
 
@@ -95,6 +99,8 @@ impl std::fmt::Display for PolyType {
                 write!(f, ")")
             }
             PolyType::Vec(inner) => write!(f, "Vec<{}>", inner),
+            PolyType::Map(key, value) => write!(f, "Map<{}, {}>", key, value),
+            PolyType::Set(inner) => write!(f, "Set<{}>", inner),
             PolyType::Option(inner) => write!(f, "Option<{}>", inner),
             PolyType::Result(ok, err) => write!(f, "Result<{}, {}>", ok, err),
             PolyType::Reference(mutable, inner) => {

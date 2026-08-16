@@ -21,10 +21,10 @@ end enum
 
 fn build_project(mode: BuildMode): Result<ustring, BuildError>
     match mode
-        Debug =>
+        Debug,
             put "Building in debug mode..."
             return try compile_with_debug()
-        Release =>
+        Release,
             put "Building in release mode..."
             return try compile_with_optimizations()
     end match
@@ -96,8 +96,8 @@ end fn
 
 // Usage
 match load_config()
-    Ok(config) => start_server(config)
-    Error(e) => error "Failed to load config: " + e.to_string()
+    Ok(config), start_server(config)
+    Error(e), error "Failed to load config: " + e.to_string()
 end match
 ~~~
 
@@ -113,19 +113,19 @@ end enum
 
 fn get_config(env: Environment): Config
     match env
-        Development =>
+        Development,
             return Config {
                 database_url: unicode "localhost:5432/dev",
                 debug: true,
                 log_level: unicode "debug"
             }
-        Staging =>
+        Staging,
             return Config {
                 database_url: unicode "staging-db:5432/staging",
                 debug: false,
                 log_level: unicode "info"
             }
-        Production =>
+        Production,
             return Config {
                 database_url: unicode "prod-db:5432/prod",
                 debug: false,
@@ -145,11 +145,11 @@ end fn
 // Logging setup
 fn setup_logging(level: ustring)
     match level
-        unicode "debug" => set_log_level(LogLevel::Debug)
-        unicode "info" => set_log_level(LogLevel::Info)
-        unicode "warn" => set_log_level(LogLevel::Warn)
-        unicode "error" => set_log_level(LogLevel::Error)
-        _ => set_log_level(LogLevel::Info)
+        unicode "debug", set_log_level(LogLevel::Debug)
+        unicode "info", set_log_level(LogLevel::Info)
+        unicode "warn", set_log_level(LogLevel::Warn)
+        unicode "error", set_log_level(LogLevel::Error)
+        _, set_log_level(LogLevel::Info)
     end match
 end fn
 
@@ -195,16 +195,16 @@ fn health_check(): Result<HealthStatus, ustring>
 
     // Check database
     match check_database()
-        Ok(_) => status.checks.push(unicode "database: ok")
-        Error(e) =>
+        Ok(_), status.checks.push(unicode "database: ok")
+        Error(e),
             status.checks.push(unicode "database: " + e)
             status.status = unicode "unhealthy"
     end match
 
     // Check cache
     match check_cache()
-        Ok(_) => status.checks.push(unicode "cache: ok")
-        Error(e) =>
+        Ok(_), status.checks.push(unicode "cache: ok")
+        Error(e),
             status.checks.push(unicode "cache: " + e)
             status.status = unicode "degraded"
     end match
@@ -265,15 +265,15 @@ end struct
 
 fn circuit_breaker_call(cb: CircuitBreaker, service: fn(): Result<T, E>): Result<T, E>
     match cb.state
-        Closed =>
+        Closed,
             match service()
-                Ok(result) =>
+                Ok(result),
                     cb.success_count = cb.success_count + 1
                     if cb.success_count >= 5,
                         cb.failure_count = 0
                     end if
                     return Ok(result)
-                Error(e) =>
+                Error(e),
                     cb.failure_count = cb.failure_count + 1
                     cb.last_failure_time = get_timestamp()
                     if cb.failure_count >= 3,
@@ -281,20 +281,20 @@ fn circuit_breaker_call(cb: CircuitBreaker, service: fn(): Result<T, E>): Result
                     end if
                     return Error(e)
             end match
-        Open =>
+        Open,
             if get_timestamp() - cb.last_failure_time > 30000,
                 cb.state = HalfOpen
                 return circuit_breaker_call(cb, service)
             else
                 return Error(unicode "Circuit breaker is open")
             end if
-        HalfOpen =>
+        HalfOpen,
             match service()
-                Ok(result) =>
+                Ok(result),
                     cb.state = Closed
                     cb.failure_count = 0
                     return Ok(result)
-                Error(e) =>
+                Error(e),
                     cb.state = Open
                     cb.last_failure_time = get_timestamp()
                     return Error(e)
@@ -318,14 +318,14 @@ end struct
 
 fn cache_get<T>(cache: Cache<T>, key: ustring): Option<T>
     match cache.data.get(key)
-        Some((value, expiry)) =>
+        Some((value, expiry)),
             if get_timestamp() < expiry,
                 return Some(value)
             else
                 cache.data.remove(key)
                 return None
             end if
-        None => return None
+        None, return None
     end match
 end fn
 
@@ -454,7 +454,7 @@ fn deploy_rolling(new_version: ustring, batch_size: i32): Result<(), DeployError
     var instances := get_all_instances()
     var batches := instances.chunks(batch_size)
 
-    loop: batches
+    loop: batch in batches
         put "Deploying batch: " + batch.to_string()
 
         // Deploy to batch

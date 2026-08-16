@@ -354,7 +354,12 @@ fn gen_expr(expr: &ast::Expression) -> Expr {
                 .as_ref()
                 .map(|data| data.iter().map(gen_expr).collect()),
         },
-        ast::Expression::LoopRange { ranges, body } => Expr::LoopRange {
+        ast::Expression::LoopRange {
+            variable,
+            ranges,
+            body,
+        } => Expr::LoopRange {
+            variable: variable.clone(),
             ranges: ranges.iter().map(gen_loop_range_part).collect(),
             body: body
                 .iter()
@@ -373,6 +378,11 @@ fn gen_expr(expr: &ast::Expression) -> Expr {
                 .map(|spanned| gen_statement(&spanned.node))
                 .collect(),
         },
+        ast::Expression::InfiniteLoop(body) => Expr::InfiniteLoop(
+            body.iter()
+                .map(|spanned| gen_statement(&spanned.node))
+                .collect(),
+        ),
         ast::Expression::AsExpression { expr, ty } => Expr::As {
             expr: Box::new(gen_expr(expr)),
             ty: gen_type(ty),

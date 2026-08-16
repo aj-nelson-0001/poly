@@ -167,14 +167,14 @@ var content ustring := get < "config.txt"  // Could be malicious
 ~~~poly
 // Good: Generic error messages
 match read_file(unicode "config.txt")
-    Ok(content) => process(content)
-    Error(_) => error "Failed to load configuration"  // Generic message
+    Ok(content), process(content)
+    Error(_), error "Failed to load configuration"  // Generic message
 end match
 
 // Bad: Expose sensitive information
 match read_file(unicode "config.txt")
-    Ok(content) => process(content)
-    Error(e) => error "Error: " + e.to_string()  // Could expose file paths, etc.
+    Ok(content), process(content)
+    Error(e), error "Error: " + e.to_string()  // Could expose file paths, etc.
 end match
 ~~~
 
@@ -207,8 +207,8 @@ end fn
 
 // Don't panic on errors
 match process_data()
-    Ok(data) => use(data)
-    Error(e) => 
+    Ok(data), use(data)
+    Error(e),
         error "Processing failed"
         return Default::default()  // Return sensible default
 end match
@@ -229,9 +229,9 @@ end fn
 ~~~poly
 // Good: Prevent DoS attacks
 match get --timeout 5000
-    Ok(input) => process(input)
-    Timeout => warn "Input timeout"
-    Error(e) => error "Input error"
+    Ok(input), process(input)
+    Timeout, warn "Input timeout"
+    Error(e), error "Input error"
 end match
 
 // Bad: No timeout
@@ -342,7 +342,7 @@ store_plain(sensitive_data)  // Insecure!
 fn generate_token(length: i32): ustring
     var chars ustring := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     var token ustring := ""
-    loop: 0..length
+    loop: i 0..length
         add token, chars[random(chars.len())]
     end loop
     return token

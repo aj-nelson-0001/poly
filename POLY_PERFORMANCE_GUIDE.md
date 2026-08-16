@@ -12,13 +12,13 @@ This guide covers performance optimization techniques for the new Poly I/O and e
 
 ~~~poly
 // Good: Efficient progress updates
-loop: 0..10000
+loop: i 0..10000
     put -n "\\rProcessing: " + i.to_string()
 end loop
 put ""
 
 // Bad: Inefficient output
-loop: 0..10000
+loop: i 0..10000
     put "Processing: " + i.to_string()  // Creates 10000 lines
 end loop
 ~~~
@@ -28,13 +28,13 @@ end loop
 ~~~poly
 // Good: Buffer output
 var output ustring := ""
-loop: items
+loop: item in items
     add output, item.to_string() + "\n"
 end loop
 put output
 
 // Bad: Frequent output
-loop: items
+loop: item in items
     put item.to_string()  // Multiple system calls
 end loop
 ~~~
@@ -44,7 +44,7 @@ end loop
 ~~~poly
 // Good: Build string efficiently
 var parts Vec<ustring> := []
-loop: 0..1000
+loop: i 0..1000
     parts.push(i.to_string())
 end loop
 var result ustring := parts.join(", ")
@@ -52,7 +52,7 @@ put result
 
 // Bad: String concatenation in loop
 var result ustring := ""
-loop: 0..1000
+loop: i 0..1000
     add result, i.to_string() + ", "// O(n²) complexity
 end loop
 ~~~
@@ -102,9 +102,9 @@ end if
 ~~~poly
 // Good: Prevent hanging
 match get --timeout 5000
-    Ok(input) => process(input)
-    Timeout => warn "Timeout, using default"
-    Error(e) => error e
+    Ok(input), process(input)
+    Timeout, warn "Timeout, using default"
+    Error(e), error e
 end match
 
 // Bad: No timeout
@@ -138,13 +138,13 @@ end while
 ~~~poly
 // Good: Buffered writes
 var buffer Vec<ustring> := []
-loop: 0..10000
+loop: i 0..10000
     buffer.push("Line " + i.to_string())
 end loop
 put buffer.join("\n") > "output.txt"
 
 // Bad: Unbuffered writes
-loop: 0..10000
+loop: i 0..10000
     put "Line " + i.to_string() >> "output.txt"  // 10000 file operations
 end loop
 ~~~
@@ -191,12 +191,12 @@ end fn
 // Bad: Handle every error
 fn process(): Result<ustring, Error>
     match read_file("config.txt")
-        Ok(data) =>
+        Ok(data),
             match validate(data)
-                Ok(validated) => return Ok(validated)
-                Error(e) => return Error(e)
+                Ok(validated), return Ok(validated)
+                Error(e), return Error(e)
             end match
-        Error(e) => return Error(e)
+        Error(e), return Error(e)
     end match
 end fn
 ~~~
@@ -206,8 +206,8 @@ end fn
 ~~~poly fragment
 // Good: Pattern matching
 match result
-    Ok(value) => process(value)
-    Error(e) => handle_error(e)
+    Ok(value), process(value)
+    Error(e), handle_error(e)
 end match
 
 // Bad: If-else chains
@@ -262,14 +262,14 @@ end fn
 ~~~poly
 // Good: Reuse buffer
 var buffer Vec<ustring> := []
-loop: 0..1000
+loop: i 0..1000
     buffer.clear()  // Reuse buffer
     buffer.push(i.to_string())
     process(buffer)
 end loop
 
 // Bad: Create new buffer each time
-loop: 0..1000
+loop: i 0..1000
     var buffer Vec<ustring> := [i.to_string()]  // New allocation
     process(buffer)
 end loop
@@ -312,7 +312,7 @@ var result ustring := "".repeat(1000)
 
 // Bad: Dynamic growth
 var result ustring := ""
-loop: 0..1000
+loop: i 0..1000
     add result, "a"// Multiple reallocations
 end loop
 ~~~
@@ -354,13 +354,13 @@ var map Vec<(ustring, i32)> := []  // Vector for map
 // Good: Pre-allocate
 var list Vec<i32> := []
 list.reserve(1000)  // Pre-allocate space
-loop: 0..1000
+loop: i 0..1000
     list.push(i)
 end loop
 
 // Bad: Dynamic growth
 var list Vec<i32> := []
-loop: 0..1000
+loop: i 0..1000
     list.push(i)  // Multiple reallocations
 end loop
 ~~~
@@ -373,7 +373,7 @@ var sum i32 := list.iter().sum()
 
 // Bad: Manual iteration
 var sum i32 := 0
-loop: list
+loop: item in list
     add sum, item
 end loop
 ~~~
@@ -390,7 +390,7 @@ var results Vec<i32> := list.par_iter().map(|x| x * 2).collect()
 
 // Bad: Sequential processing
 var results Vec<i32> := []
-loop: list
+loop: item in list
     results.push(item * 2)
 end loop
 ~~~

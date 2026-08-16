@@ -158,9 +158,9 @@ end enum
 
 fn area(shape: Shape): f32
     match shape
-        Circle(r) => 3.14 * r * r
-        Rectangle(w, h) => w * h
-        Triangle(a, b, c) =>
+        Circle(r), 3.14 * r * r
+        Rectangle(w, h), w * h
+        Triangle(a, b, c),
             let s := (a + b + c) / 2.0
             return (s * (s - a) * (s - b) * (s - c))
     end match
@@ -235,9 +235,9 @@ end enum
 
 fn area(shape: Shape): f32
     match shape
-        Circle(r) => 3.14 * r * r
-        Rectangle(w, h) => w * h
-        Triangle(a, b, c) =>
+        Circle(r), 3.14 * r * r
+        Rectangle(w, h), w * h
+        Triangle(a, b, c),
             let s := (a + b + c) / 2.0
             return (s * (s - a) * (s - b) * (s - c))
     end match
@@ -443,9 +443,9 @@ end enum
 
 fn eval(e: Expr): f32
     match e
-        Num(n) => n
-        Add(l, r) => eval(l) + eval(r)
-        Mul(l, r) => eval(l) * eval(r)
+        Num(n), n
+        Add(l, r), eval(l) + eval(r)
+        Mul(l, r), eval(l) * eval(r)
     end match
 end fn
 "#;

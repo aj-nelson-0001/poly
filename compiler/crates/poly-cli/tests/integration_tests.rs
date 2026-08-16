@@ -88,6 +88,49 @@ fn test_transpile_loop_ranges() {
 }
 
 #[test]
+fn test_loop_ranges_include_all_endpoints_at_runtime() {
+    let source =
+        "fn main()\n    loop: value 1..3, 7, 19..20\n        put value\n    end loop\nend fn";
+    let rust_code = Transpiler::new().transpile(source).unwrap();
+    let unique = format!(
+        "poly_loop_runtime_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let directory = std::env::temp_dir().join(unique);
+    std::fs::create_dir_all(&directory).unwrap();
+    let source_path = directory.join("main.rs");
+    let binary_path = directory.join("loop_program");
+    std::fs::write(&source_path, rust_code).unwrap();
+
+    let compile = std::process::Command::new("rustc")
+        .arg("--edition")
+        .arg("2021")
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .unwrap();
+    assert!(
+        compile.status.success(),
+        "generated loop program failed to compile: {}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+
+    let run = std::process::Command::new(&binary_path).output().unwrap();
+    assert!(
+        run.status.success(),
+        "generated loop program failed to run: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "1\n2\n3\n7\n19\n20\n");
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn test_all_examples_transpile() {
     let t = Transpiler::new();
 
@@ -182,8 +225,8 @@ fn test_string_match_compiles_to_valid_rust() {
     let source = r#"
 var value := "hello"
 match value
-    "hello" => put "matched"
-    _ => put "other"
+    "hello", put "matched"
+    _, put "other"
 end match
 "#;
     let rust_code = Transpiler::new().transpile(source).unwrap();
@@ -197,6 +240,15 @@ fn test_representative_generated_rust_codegen_compiles() {
     let rust_code = Transpiler::new().transpile(source).unwrap();
     verify_rust_codegen_compiles(&rust_code)
         .unwrap_or_else(|error| panic!("representative generated Rust failed codegen: {error}"));
+}
+
+#[test]
+fn test_returned_closure_binding_compiles() {
+    let source =
+        "fn make_adder(n: i32): |x: i32| i32\n    var f := |x| x + n\n    return f\nend fn";
+    let rust_code = Transpiler::new().transpile(source).unwrap();
+    verify_rust_compiles(&rust_code)
+        .unwrap_or_else(|error| panic!("returned closure binding generated invalid Rust: {error}"));
 }
 
 #[test]
@@ -222,11 +274,13 @@ fn test_all_examples_compile_to_valid_rust() {
 
                 match t.transpile(&source) {
                     Ok(rust_code) => {
-                        // Async programs using #[tokio::main] need Cargo to
-                        // provide the tokio dependency; the release example
-                        // sweep performs that dependency-aware build. Keep the
-                        // direct rustc check for dependency-free output here.
-                        if rust_code.contains("#[tokio::main]") {
+                        // Async programs using #[tokio::main] (or referencing
+                        // tokio directly, e.g. `delay` lowering to
+                        // `tokio::time::sleep`) need Cargo to provide the tokio
+                        // dependency; the release example sweep performs that
+                        // dependency-aware build. Keep the direct rustc check
+                        // for dependency-free output here.
+                        if rust_code.contains("#[tokio::main]") || rust_code.contains("tokio::") {
                             assert!(
                                 rust_code.contains("async fn"),
                                 "{} has a tokio entry point without async code",

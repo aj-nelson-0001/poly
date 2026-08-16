@@ -48,11 +48,11 @@ put "Line 4" >> "test_output.txt"
 put "Done."
 
 # ============================================================
-# Test 6: Capture Output
+# Test 6: String Concatenation
 # ============================================================
-put "\n=== Test 6: Capture Output ==="
-var output ustring := capture put "Computed: " + (2 + 2)
-put "Captured: " + output
+put "\n=== Test 6: String Concatenation ==="
+var output ustring := "Computed: " + (2 + 2).to_string()
+put "Computed: " + output
 
 # ============================================================
 # Test 7: Multiple Outputs with Different Flags

@@ -21,7 +21,7 @@ async fn fetch_with_retry(url: ustring, max_retries: i32): Result<ustring, ustri
     var attempt i32 := 0
     
     while attempt < max_retries
-        add attempt
+        attempt := attempt + 1
         put unicode "Attempt " + attempt.to_string() + unicode "..."
         
         match http_get(url).await
@@ -50,7 +50,7 @@ impl Database
     async fn connect(self): Result<ustring, ustring>
         put unicode "Connecting to database..."
         var conn := tcp_connect(self.connection_string).await
-        set self.connected to true
+        self.connected := true
         return Ok(unicode "Connected!")
     end fn
     
@@ -67,7 +67,7 @@ impl Database
     async fn close(self)
         if self.connected,
             put unicode "Closing connection..."
-            set self.connected to false
+            self.connected := false
         end if
     end fn
 end impl

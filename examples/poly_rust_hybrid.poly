@@ -1,0 +1,80 @@
+# ============================================================
+# Poly 2.0 Example: Poly + Rust Hybrid
+# ============================================================
+# Foreign block: provide data structures and algorithms in Rust
+# These are DECLARATIONS ONLY — no executable code.
+
+#rust
+fn fibonacci(n: u32) -> u64 {
+    if n <= 1 { return n as u64; }
+    let mut a: u64 = 0;
+    let mut b: u64 = 1;
+    for _ in 2..=n {
+        let temp = b;
+        b = a + b;
+        a = temp;
+    }
+    b
+}
+
+fn is_prime(n: i32) -> bool {
+    if n <= 1 { return false; }
+    if n <= 3 { return true; }
+    if n % 2 == 0 || n % 3 == 0 { return false; }
+    let mut i = 5;
+    while i * i <= n {
+        if n % i == 0 || n % (i + 2) == 0 { return false; }
+        i += 6;
+    }
+    true
+}
+
+fn make_greeting(name: String) -> String {
+    format!("Hello, {}! Welcome to Poly.", name)
+}
+#endrust
+
+# Poly: orchestrate the program
+# All the logic, loops, and I/O happen in Poly.
+
+put "=== Poly 2.0 + Rust Hybrid Demo ==="
+put ""
+
+# Call Rust functions from Poly
+var name ustring := unicode "World"
+var greeting := make_greeting(name)
+put greeting
+put ""
+
+# Use Rust fibonacci
+put "Fibonacci numbers:"
+loop i 1..10
+    var fib := fibonacci(i)
+    put "  fib(" + i + ") = " + fib
+end loop
+put ""
+
+# Use Rust is_prime with Poly loops
+put "Prime numbers under 50:"
+var count i32 := 0
+loop n 2..50
+    if is_prime(n),
+        put "  " + n
+        count := count + 1
+    end if
+end loop
+put "Found " + count + " primes."
+put ""
+
+# Poly-native operations
+var total i32 := 0
+loop i 1..100
+    total := total + 1
+end loop
+put "Sum of 1..100 = " + total
+
+# File I/O in Poly
+put "Writing results to output.txt..."
+put "Fibonacci(10) = " + fibonacci(10) to "output.txt"
+put "Sum 1..100 = " + total to "output.txt" -append
+put "Done! Check output.txt."

@@ -15,9 +15,9 @@ fn find_min_index(arr: Vec<i32>, start: i32): i32
     var i := start + 1
     while i < arr.len()
         if arr[i] < arr[min_idx],
-            set min_idx to i
+            min_idx := i
         end if
-        add i
+        i := i + 1
     end while
     return min_idx
 end fn

@@ -17,6 +17,8 @@ pub struct SourceLocation {
 /// A complete intermediate representation program.
 #[derive(Debug, Clone, Default)]
 pub struct Program {
+    /// Module-scope declarations are separated from executable statements so
+    /// codegen can emit valid target-language item order.
     pub functions: Vec<Function>,
     pub structs: Vec<Struct>,
     pub enums: Vec<Enum>,
@@ -26,18 +28,27 @@ pub struct Program {
     pub constants: Vec<Constant>,
     pub type_aliases: Vec<TypeAlias>,
     pub uses: Vec<String>,
+    /// Statements that become the generated entry point body.
     pub main_body: Vec<Statement>,
+    /// Raw Rust blocks from `#rust ... #endrust`, emitted verbatim at
+    /// the top level of the generated Rust file.
+    pub top_level_rust_blocks: Vec<String>,
 }
 
 /// intermediate representation function.
 #[derive(Debug, Clone)]
 pub struct Function {
+    /// The target-language symbol name; foreign calls are resolved by the
+    /// native compiler, while Poly functions are generated from this field.
     pub name: String,
     pub params: Vec<Parameter>,
     pub return_type: Option<Type>,
     pub body: Vec<Statement>,
+    /// Async is retained until codegen because it changes both the signature
+    /// and the generated entry-point/runtime dependencies.
     pub is_async: bool,
     pub generics: Vec<GenericParam>,
+    /// Optional source origin reserved for span-precise IR diagnostics.
     pub source_location: Option<SourceLocation>,
 }
 
@@ -133,6 +144,9 @@ pub struct TypeAlias {
 /// intermediate representation statement.
 #[derive(Debug, Clone)]
 pub enum Statement {
+    // Statements are deliberately target-neutral. Backends decide how a
+    // supported operation lowers, while opaque foreign blocks remain visible
+    // for selection but are never optimized as Poly syntax.
     VarDecl {
         name: String,
         ty: Option<Type>,
@@ -156,7 +170,6 @@ pub enum Statement {
     Break,
     Continue,
     Put {
-        no_newline: bool,
         expr: Expr,
         redirect: Option<Redirect>,
     },
@@ -178,6 +191,12 @@ pub enum Statement {
     /// Nested function declared inside another function body.  Rust emits
     /// nested items as inner `fn` declarations.
     NestedFunction(Function),
+    /// Raw foreign-language block (`#rust`, `#c`, etc.), emitted by a
+    /// target-specific backend.
+    ForeignBlock {
+        language: String,
+        content: String,
+    },
 }
 
 /// intermediate representation mutation operator.
@@ -268,6 +287,10 @@ pub enum Expr {
     FieldAccess {
         object: Box<Expr>,
         field: String,
+    },
+    TupleIndex {
+        object: Box<Expr>,
+        index: usize,
     },
     Parenthesized(Box<Expr>),
     If {
@@ -408,6 +431,8 @@ pub enum WithClause {
 /// intermediate representation type annotation.
 #[derive(Debug, Clone)]
 pub enum Type {
+    /// Named types remain unresolved here so the checker/native compiler can
+    /// own foreign signatures and user-defined target-language types.
     Named(String),
     Array(Box<Type>, Box<Expr>),
     Tuple(Vec<Type>),

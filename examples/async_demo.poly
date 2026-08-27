@@ -1,0 +1,86 @@
+# Comprehensive Async/Await Demo for Poly
+# Demonstrates async functions, await, spawn, and delay.
+# Note: async programs use `async fn main()` explicitly.
+
+# Foreign block: async runtime support
+#rust
+use std::time::Duration;
+#endrust
+
+# Regular async function: simulates a network fetch
+async fn fetch_data(url: ustring): ustring
+    put "  Fetching from " + url + "..."
+    delay(100).await
+    return unicode "Response data from " + url
+end fn
+
+# Async function that calls another async function
+async fn get_user(): ustring
+    var data := fetch_data(unicode "https://api.example.com/user").await
+    put "  Got data: " + data
+    return data
+end fn
+
+# Async function with multiple awaits
+async fn process_pipeline(): ustring
+    var step1 := fetch_data(unicode "https://step1.com").await
+    put "  Step 1 complete"
+    var step2 := fetch_data(unicode "https://step2.com").await
+    put "  Step 2 complete"
+    return unicode "Pipeline done: " + step1 + " + " + step2
+end fn
+
+# Async function that returns a computed value
+async fn compute_async(x: i32): i32
+    delay(50).await
+    return x * x
+end fn
+
+# Async function demonstrating sequential awaits
+async fn sequential_await_demo()
+    put "  Starting sequential awaits..."
+    var r1 := compute_async(3).await
+    put "  compute_async(3) = " + r1.to_string()
+    var r2 := compute_async(5).await
+    put "  compute_async(5) = " + r2.to_string()
+    var r3 := compute_async(7).await
+    put "  compute_async(7) = " + r3.to_string()
+    put "  All sequential awaits done"
+end fn
+
+# Main async entry point
+async fn main()
+    put "==========================================="
+    put "  Async/Await Demo"
+    put "==========================================="
+    put ""
+
+    # Simple async call
+    put "-- Simple async fetch --"
+    var result := get_user().await
+    put "  Final result: " + result
+    put ""
+
+    # Pipeline of async operations
+    put "-- Async pipeline --"
+    var pipeline_result := process_pipeline().await
+    put "  " + pipeline_result
+    put ""
+
+    # Sequential awaits
+    put "-- Sequential awaits --"
+    sequential_await_demo().await
+    put ""
+
+    # Multiple independent async calls
+    put "-- Independent async calls --"
+    var a := compute_async(10).await
+    var b := compute_async(20).await
+    var c := compute_async(30).await
+    put "  a=" + a.to_string() + ", b=" + b.to_string() + ", c=" + c.to_string()
+    put ""
+
+    put "==========================================="
+    put "  Async demo complete!"
+    put "==========================================="
+end fn

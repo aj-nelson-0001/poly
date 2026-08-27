@@ -58,6 +58,18 @@ struct FunctionSignature {
     // calls (`Type::method`) can skip it for arity checking.
     has_self: bool,
     return_type: Option<PolyType>,
+    // Generic parameter names (`T` in `fn identity<T>(x: T): T`) declared by
+    // this function. `declared_params`/`declared_return` keep those names as
+    // `PolyType::Named` markers (instead of lowering them to `Unknown`) so call
+    // sites can substitute the concrete argument types into the return type.
+    generics: Vec<String>,
+    declared_params: Vec<PolyType>,
+    declared_return: Option<PolyType>,
+    // True for functions supplied by a foreign target block or declaration.
+    is_foreign: bool,
+    // Explicit `extern <target> fn ...` declarations opt into Poly-side
+    // arity/type validation while the native compiler remains authoritative.
+    has_explicit_signature: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -101,6 +113,10 @@ pub struct TypeChecker {
     // Generic type parameter names currently in scope (e.g. `T` in `fn id<T>`).
     // They lower to an unresolved, polymorphic type.
     type_variables: std::collections::HashSet<String>,
+    // While true, `annotation_type_for_owner` keeps type-variable names as
+    // `PolyType::Named(name)` markers instead of `Unknown`, so declared
+    // function signatures can be unified against concrete argument types.
+    keep_type_variable_names: bool,
 }
 
 impl TypeChecker {
@@ -117,6 +133,7 @@ impl TypeChecker {
             return_types: Vec::new(),
             loop_depth: 0,
             type_variables: std::collections::HashSet::new(),
+            keep_type_variable_names: false,
         }
     }
 
@@ -141,9 +158,14 @@ impl TypeChecker {
 
     /// Check a complete program with a reusable checker instance.
     pub fn check_program(&mut self, program: &Program) {
+        // Register functions defined in #rust blocks so the checker
+        // accepts calls to them without type information.
+        let statements: Vec<&Statement> = program.statements.iter().map(|s| &s.node).collect();
+        self.register_foreign_functions(&statements);
+        self.register_extern_functions(&statements);
+
         // Declaration collection is intentionally a separate pass: expression
         // checking can then resolve forward references and recursive functions.
-        let statements: Vec<&Statement> = program.statements.iter().map(|s| &s.node).collect();
         self.collect_declarations(&statements);
 
         for statement in statements {
@@ -188,6 +210,109 @@ impl TypeChecker {
                     self.check_program_statements(&refs)
                 }
                 _ => self.check_statement(statement),
+            }
+        }
+    }
+
+    /// Extract function names from `#rust` blocks and register them as
+    /// known functions with `Unknown` types. This allows Poly code to call
+    /// functions defined in foreign blocks without type-checking errors.
+    fn register_foreign_functions(&mut self, statements: &[&Statement]) {
+        for statement in statements {
+            if let Statement::ForeignBlock {
+                language: _,
+                content,
+            } = statement
+            {
+                // Register simple function declarations from any selected
+                // foreign backend. Their native signatures remain opaque to
+                // Poly; the target compiler validates the call itself.
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    let name = if let Some(after_fn) = trimmed
+                        .strip_prefix("pub fn ")
+                        .or_else(|| trimmed.strip_prefix("async fn "))
+                        .or_else(|| trimmed.strip_prefix("fn "))
+                    {
+                        after_fn
+                            .chars()
+                            .take_while(|c| c.is_alphanumeric() || *c == '_')
+                            .collect()
+                    } else if trimmed.contains('(')
+                        && !trimmed.starts_with("if ")
+                        && !trimmed.starts_with("for ")
+                        && !trimmed.starts_with("while ")
+                        && !trimmed.starts_with("switch ")
+                    {
+                        trimmed[..trimmed.find('(').unwrap_or(0)]
+                            .split_whitespace()
+                            .last()
+                            .unwrap_or("")
+                            .chars()
+                            .take_while(|c| c.is_alphanumeric() || *c == '_')
+                            .collect()
+                    } else {
+                        String::new()
+                    };
+                    if !name.is_empty() && name != "main" {
+                        self.functions.insert(
+                            name,
+                            FunctionSignature {
+                                params: vec![],
+                                has_self: false,
+                                return_type: Some(PolyType::Unknown),
+                                generics: vec![],
+                                declared_params: vec![],
+                                declared_return: Some(PolyType::Unknown),
+                                is_foreign: true,
+                                has_explicit_signature: false,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    fn register_extern_functions(&mut self, statements: &[&Statement]) {
+        for statement in statements {
+            if let Statement::ExternFunctionDeclaration(declaration) = statement {
+                let signature = FunctionSignature {
+                    params: declaration
+                        .params
+                        .iter()
+                        .map(|parameter| self.annotation_type(&parameter.ty))
+                        .collect(),
+                    has_self: false,
+                    return_type: declaration
+                        .return_type
+                        .as_ref()
+                        .map(|ty| self.annotation_type(ty)),
+                    generics: Vec::new(),
+                    declared_params: declaration
+                        .params
+                        .iter()
+                        .map(|parameter| self.annotation_type(&parameter.ty))
+                        .collect(),
+                    declared_return: declaration
+                        .return_type
+                        .as_ref()
+                        .map(|ty| self.annotation_type(ty)),
+                    is_foreign: true,
+                    has_explicit_signature: true,
+                };
+                match self.functions.get(&declaration.name) {
+                    Some(existing) if existing.is_foreign && !existing.has_explicit_signature => {
+                        self.functions.insert(declaration.name.clone(), signature);
+                    }
+                    Some(_) => self.error(TypeCheckError::new(format!(
+                        "duplicate foreign function declaration `{}`",
+                        declaration.name
+                    ))),
+                    None => {
+                        self.functions.insert(declaration.name.clone(), signature);
+                    }
+                }
             }
         }
     }
@@ -312,6 +437,7 @@ impl TypeChecker {
                     let refs: Vec<&Statement> = module.statements.iter().map(|s| &s.node).collect();
                     self.collect_declarations(&refs)
                 }
+                Statement::ExternFunctionDeclaration(_) => {}
                 _ => {}
             }
         }
@@ -361,30 +487,10 @@ impl TypeChecker {
                 let ty = self.check_expression(value);
                 self.declare(name, ty);
             }
-            Statement::Set { target, value } => {
+            Statement::Assignment { target, value } => {
                 let target_type = self.check_lvalue(target);
                 let value_type = self.check_expression(value);
                 self.require_compatible(&value_type, &target_type, "assignment".to_string());
-            }
-            Statement::Mutation { target, op, value } => {
-                let target_type = self.check_lvalue(target);
-                if !is_numeric(&target_type) {
-                    self.error(TypeCheckError::new(format!(
-                        "cannot apply {:?} mutation to {}; expected a numeric value",
-                        op, target_type
-                    )));
-                }
-                if let Some(value) = value {
-                    let value_type = self.check_expression(value);
-                    if !is_numeric(&value_type) {
-                        self.error(TypeCheckError::new(format!(
-                            "mutation amount must be numeric, got {}",
-                            value_type
-                        )));
-                    } else {
-                        self.require_compatible(&value_type, &target_type, "mutation".to_string());
-                    }
-                }
             }
             Statement::ReturnStatement(value) => self.check_return(value.as_ref()),
             Statement::BreakStatement | Statement::ContinueStatement => {
@@ -490,7 +596,9 @@ impl TypeChecker {
             | Statement::TraitDeclaration(_)
             | Statement::ImplDeclaration(_)
             | Statement::UseDeclaration(_)
-            | Statement::TypeDeclaration(_) => {}
+            | Statement::TypeDeclaration(_)
+            | Statement::ForeignBlock { .. }
+            | Statement::ExternFunctionDeclaration(_) => {}
         }
     }
 
@@ -565,6 +673,7 @@ impl TypeChecker {
                 }),
             Expression::FieldAccess { object, field } => self.check_field_access(object, field),
             Expression::Index { object, index } => self.check_index(object, index),
+            Expression::TupleIndex { object, index } => self.check_tuple_index(object, *index),
             _ => {
                 self.error(TypeCheckError::new("assignment target is not writable"));
                 self.check_expression(expression)
@@ -638,6 +747,7 @@ impl TypeChecker {
             } => self.check_method_call(object, method, args),
             Expression::Index { object, index } => self.check_index(object, index),
             Expression::FieldAccess { object, field } => self.check_field_access(object, field),
+            Expression::TupleIndex { object, index } => self.check_tuple_index(object, *index),
             Expression::Parenthesized(expression) => self.check_expression(expression),
             Expression::IfExpression {
                 condition,
@@ -752,14 +862,36 @@ impl TypeChecker {
             } => {
                 // `for x in collection` binds `x` to the element type of the
                 // iterable, then checks the body like any other loop.
+                // `for (a, b) in collection` destructures tuple elements, so
+                // each name is declared with the matching component type (the
+                // same handling as `loop: (a, b) in ...`).
                 let iterable_type = self.check_expression(iterable);
                 let element_type = match &iterable_type {
                     PolyType::Vec(inner) => (**inner).clone(),
+                    PolyType::Iterator(inner) => (**inner).clone(),
                     PolyType::String => PolyType::Char,
                     _ => PolyType::Unknown,
                 };
                 self.push_scope();
-                self.declare(variable, element_type);
+                let binding_names = split_loop_binding(variable);
+                if binding_names.len() == 1 {
+                    self.declare(&binding_names[0], element_type);
+                } else {
+                    match &element_type {
+                        PolyType::Tuple(components) => {
+                            for (index, name) in binding_names.iter().enumerate() {
+                                let component =
+                                    components.get(index).cloned().unwrap_or(PolyType::Unknown);
+                                self.declare(name, component);
+                            }
+                        }
+                        _ => {
+                            for name in &binding_names {
+                                self.declare(name, PolyType::Unknown);
+                            }
+                        }
+                    }
+                }
                 self.loop_depth += 1;
                 for statement in body {
                     self.check_statement(&statement.node);
@@ -812,6 +944,7 @@ impl TypeChecker {
                             let value_type = self.check_expression(value);
                             let element_type = match value_type {
                                 PolyType::Vec(inner) => *inner,
+                                PolyType::Iterator(inner) => *inner,
                                 PolyType::String => PolyType::Char,
                                 other => other,
                             };
@@ -1035,8 +1168,43 @@ impl TypeChecker {
             .collect();
         if let Expression::Identifier(name) = function {
             if let Some(signature) = self.functions.get(name).cloned() {
-                self.check_arguments(name, &signature, &argument_types);
-                return signature.return_type.unwrap_or(PolyType::Unknown);
+                if signature.generics.is_empty() {
+                    self.check_arguments(name, &signature, &argument_types);
+                    return signature.return_type.unwrap_or(PolyType::Unknown);
+                }
+                // Generic function: unify the declared parameter types with the
+                // concrete argument types, then substitute the bindings into
+                // the declared return type so `identity(42)` yields `i32`
+                // instead of an opaque `Unknown`.
+                let mut bindings: HashMap<String, PolyType> = HashMap::new();
+                for (declared, actual) in
+                    signature.declared_params.iter().zip(argument_types.iter())
+                {
+                    unify_declared(declared, actual, &signature.generics, &mut bindings);
+                }
+                // Opaque foreign functions remain permissive. Explicit extern
+                // declarations are checked like Poly signatures.
+                if !signature.is_foreign || signature.has_explicit_signature {
+                    if signature.declared_params.len() != argument_types.len() {
+                        self.error(TypeCheckError::new(format!(
+                            "function `{name}` expects {} arguments, got {}",
+                            signature.declared_params.len(),
+                            argument_types.len()
+                        )));
+                    }
+                    // Check each argument against its substituted declared type.
+                    for (declared, actual) in
+                        signature.declared_params.iter().zip(argument_types.iter())
+                    {
+                        let expected = substitute_generic(declared, &signature.generics, &bindings);
+                        self.require_compatible(actual, &expected, format!("argument to `{name}`"));
+                    }
+                }
+                return signature
+                    .declared_return
+                    .as_ref()
+                    .map(|ret| substitute_generic(ret, &signature.generics, &bindings))
+                    .unwrap_or(PolyType::Unknown);
             }
             // A closure or function-typed variable may be called through its
             // name; resolve it through the current scope before falling back
@@ -1114,22 +1282,25 @@ impl TypeChecker {
             }
             "sleep" => PolyType::Unknown,
             "delay" => PolyType::Unknown,
-            // Network/database builtins are experimental placeholders: they
-            // type-check and compile, but the generated code returns empty
-            // values.  Warn so users do not build on top of them silently.
-            "http_get" => {
-                self.warn("`http_get` is an experimental stub and always returns empty data");
+            // Network/database builtins: `http_get` and `tcp_connect` are real
+            // (minimal) tokio TCP implementations, and `db_execute` runs SQL
+            // against a shared in-memory SQLite database (rusqlite), returning
+            // one string per row. Programs using it need the rusqlite crate in
+            // the generated project.
+            "http_get" => PolyType::Result(Box::new(PolyType::String), Box::new(PolyType::String)),
+            "tcp_connect" => {
                 PolyType::Result(Box::new(PolyType::String), Box::new(PolyType::String))
             }
-            "tcp_connect" => {
-                self.warn(
-                    "`tcp_connect` is an experimental stub and always returns an empty string",
-                );
-                PolyType::String
-            }
             "db_execute" => {
-                self.warn(
-                    "`db_execute` is an experimental stub and always returns an empty result set",
+                if args.len() != 1 {
+                    self.error(TypeCheckError::new(
+                        "`db_execute` expects one query argument",
+                    ));
+                }
+                self.require_compatible(
+                    args.first().unwrap_or(&PolyType::Unknown),
+                    &PolyType::String,
+                    "`db_execute` query".to_string(),
                 );
                 PolyType::Vec(Box::new(PolyType::String))
             }
@@ -1144,12 +1315,38 @@ impl TypeChecker {
                 .cloned()
                 .reduce(|left, right| numeric_join(&left, &right))
                 .unwrap_or(PolyType::Unknown),
-            "spawn_task" => {
-                self.warn("`spawn` is not implemented yet; the spawned task never runs");
+            "assert" => {
+                // `assert(cond)` fails the program when the condition is
+                // false; the argument must be a boolean expression.
+                if args.len() != 1 {
+                    self.error(TypeCheckError::new("`assert` expects one boolean argument"));
+                }
+                self.require_compatible(
+                    args.first().unwrap_or(&PolyType::Unknown),
+                    &PolyType::Bool,
+                    "`assert` condition".to_string(),
+                );
                 PolyType::Unknown
             }
-            "process_config" => {
-                self.warn("`process_config` is not implemented yet");
+            "pass" | "fail" => {
+                // Mini test-framework helpers: `pass(msg)` prints a PASS
+                // marker, `fail(msg)` prints FAIL and exits non-zero.
+                if args.len() != 1 {
+                    self.error(TypeCheckError::new(format!(
+                        "`{name}` expects one message argument"
+                    )));
+                }
+                self.require_compatible(
+                    args.first().unwrap_or(&PolyType::Unknown),
+                    &PolyType::String,
+                    format!("`{name}` message"),
+                );
+                PolyType::Unknown
+            }
+            "spawn_task" => {
+                // `spawn <expr>` lowers to `tokio::spawn(<expr>)`, which yields
+                // a `JoinHandle`; nothing in the language consumes it, so the
+                // call site type is opaque.
                 PolyType::Unknown
             }
             "exit" => PolyType::Unknown,
@@ -1207,6 +1404,11 @@ impl TypeChecker {
     }
 
     fn check_arguments(&mut self, name: &str, signature: &FunctionSignature, args: &[PolyType]) {
+        // Opaque foreign functions remain permissive; explicit extern
+        // declarations opt into normal interface checking.
+        if signature.is_foreign && !signature.has_explicit_signature {
+            return;
+        }
         if signature.params.len() != args.len() {
             self.error(TypeCheckError::new(format!(
                 "function `{name}` expects {} arguments, got {}",
@@ -1323,6 +1525,48 @@ impl TypeChecker {
         }
     }
 
+    /// Validate a `map` callback on an iterator and return its result type.
+    fn check_iterator_map(&mut self, element: &PolyType, args: &[Expression]) -> Option<PolyType> {
+        if args.len() != 1 {
+            self.error(TypeCheckError::new("`map` expects one callback argument"));
+            return None;
+        }
+        args.first().and_then(|arg| {
+            self.check_hof_callback(
+                "map",
+                &PolyType::Function {
+                    params: vec![element.clone()],
+                    ret: Box::new(PolyType::Unknown),
+                },
+                arg,
+                1,
+            )
+        })
+    }
+
+    /// Validate a `filter` callback on an iterator (must return `bool`).
+    fn check_iterator_filter(&mut self, element: &PolyType, args: &[Expression]) {
+        if args.len() != 1 {
+            self.error(TypeCheckError::new(
+                "`filter` expects one callback argument",
+            ));
+            return;
+        }
+        if let Some(ret) = args.first().and_then(|arg| {
+            self.check_hof_callback(
+                "filter",
+                &PolyType::Function {
+                    params: vec![element.clone()],
+                    ret: Box::new(PolyType::Bool),
+                },
+                arg,
+                1,
+            )
+        }) {
+            self.require_compatible(&ret, &PolyType::Bool, "filter callback".to_string());
+        }
+    }
+
     /// Check a single callback argument against an expected function type and
     /// return its return type, enforcing the expected parameter count.
     fn check_hof_callback(
@@ -1375,6 +1619,36 @@ impl TypeChecker {
         if matches!(method, "map" | "filter" | "reduce" | "sort_by") {
             match &object_type {
                 PolyType::Vec(inner) => return self.check_hof_method(method, inner, args),
+                // Iterator map/filter stay lazy iterators (the chain is
+                // consumed by a later `.sum()`/`.collect()` or a loop).
+                PolyType::Iterator(inner) => match method {
+                    "map" => {
+                        if args.len() != 1 {
+                            self.error(TypeCheckError::new("`map` expects one callback argument"));
+                            return PolyType::Unknown;
+                        }
+                        return self
+                            .check_iterator_map(inner, args)
+                            .map(|t| PolyType::Iterator(Box::new(t)))
+                            .unwrap_or(PolyType::Unknown);
+                    }
+                    "filter" => {
+                        if args.len() != 1 {
+                            self.error(TypeCheckError::new(
+                                "`filter` expects one callback argument",
+                            ));
+                            return PolyType::Unknown;
+                        }
+                        self.check_iterator_filter(inner, args);
+                        return PolyType::Iterator(Box::new((**inner).clone()));
+                    }
+                    _ => {
+                        for arg in args {
+                            self.check_expression(arg);
+                        }
+                        return self.unknown_method(method, &object_type);
+                    }
+                },
                 PolyType::String if method != "sort_by" => {
                     return self.check_hof_method(method, &PolyType::Char, args);
                 }
@@ -1434,6 +1708,18 @@ impl TypeChecker {
                     self.expect_argument_count(method, &argument_types, 1);
                     PolyType::String
                 }
+                "repeat" => {
+                    self.expect_argument_count(method, &argument_types, 1);
+                    if let Some(count) = argument_types.first() {
+                        if !is_integer(count) {
+                            self.error(TypeCheckError::new(format!(
+                                "`repeat` count must be an integer, got {}",
+                                count
+                            )));
+                        }
+                    }
+                    PolyType::String
+                }
                 "trim" | "to_uppercase" | "to_lowercase" | "chars" | "bytes" => {
                     self.expect_no_arguments(method, &argument_types, PolyType::String)
                 }
@@ -1445,10 +1731,44 @@ impl TypeChecker {
                     self.expect_argument_count(method, &argument_types, 2);
                     PolyType::String
                 }
+                // Checked (non-panicking) indexing: `text.get(i)` returns
+                // `Option<char>` instead of panicking on a bad index.
+                "get" => {
+                    self.expect_argument_count(method, &argument_types, 1);
+                    if let Some(index) = argument_types.first() {
+                        if !is_integer(index) {
+                            self.error(TypeCheckError::new(format!(
+                                "`get` index must be an integer, got {}",
+                                index
+                            )));
+                        }
+                    }
+                    PolyType::Option(Box::new(PolyType::Char))
+                }
                 _ => self.unknown_method(method, &object_type),
             },
             PolyType::Vec(inner) => match method {
+                // `xs.iter()` yields an iterator over owned elements (codegen
+                // emits `iter().cloned()`), so chained `.map`/`.filter`/
+                // `.sum` and `loop: x in xs.iter()` all see the element type.
+                "iter" => {
+                    self.expect_no_arguments(method, &argument_types, PolyType::Unknown);
+                    PolyType::Iterator(Box::new((**inner).clone()))
+                }
                 "len" => self.expect_no_arguments(method, &argument_types, PolyType::I32),
+                "clear" => self.expect_no_arguments(method, &argument_types, PolyType::Unknown),
+                "reserve" => {
+                    self.expect_argument_count(method, &argument_types, 1);
+                    if let Some(argument) = argument_types.first() {
+                        if !is_integer(argument) {
+                            self.error(TypeCheckError::new(format!(
+                                "`reserve` capacity must be an integer, got {}",
+                                argument
+                            )));
+                        }
+                    }
+                    PolyType::Unknown
+                }
                 "push" => {
                     self.expect_argument_count(method, &argument_types, 1);
                     if let Some(argument) = argument_types.first() {
@@ -1457,6 +1777,65 @@ impl TypeChecker {
                     PolyType::Unknown
                 }
                 "enumerate" => PolyType::Unknown,
+                "join" => {
+                    self.expect_argument_count(method, &argument_types, 1);
+                    if let Some(separator) = argument_types.first() {
+                        self.require_compatible(
+                            separator,
+                            &PolyType::String,
+                            "`join` separator".to_string(),
+                        );
+                    }
+                    PolyType::String
+                }
+                // Checked (non-panicking) indexing: `xs.get(i)` returns
+                // `Option<T>` instead of panicking on an out-of-bounds index.
+                "get" => {
+                    self.expect_argument_count(method, &argument_types, 1);
+                    if let Some(index) = argument_types.first() {
+                        if !is_integer(index) {
+                            self.error(TypeCheckError::new(format!(
+                                "`get` index must be an integer, got {}",
+                                index
+                            )));
+                        }
+                    }
+                    PolyType::Option(Box::new((**inner).clone()))
+                }
+                _ => self.unknown_method(method, &object_type),
+            },
+            PolyType::Iterator(inner) => match method {
+                // Iterator chains over owned elements: `.sum()` collapses to
+                // the element type, `.collect()` materializes a vector.
+                "sum" => {
+                    self.expect_no_arguments(method, &argument_types, PolyType::Unknown);
+                    if !is_numeric(inner) {
+                        self.error(TypeCheckError::new(format!(
+                            "`sum` requires a numeric element type, got {}",
+                            inner
+                        )));
+                    }
+                    (**inner).clone()
+                }
+                "collect" => {
+                    self.expect_no_arguments(method, &argument_types, PolyType::Unknown);
+                    PolyType::Vec(Box::new((**inner).clone()))
+                }
+                "enumerate" => PolyType::Unknown,
+                _ => self.unknown_method(method, &object_type),
+            },
+            PolyType::Result(ok, _error) => match method {
+                // Test-framework accessors on `Result` values.
+                "is_ok" => self.expect_no_arguments(method, &argument_types, PolyType::Bool),
+                "is_error" => self.expect_no_arguments(method, &argument_types, PolyType::Bool),
+                "unwrap" => self.expect_no_arguments(method, &argument_types, (**ok).clone()),
+                "unwrap_or" => {
+                    self.expect_argument_count(method, &argument_types, 1);
+                    if let Some(fallback) = argument_types.first() {
+                        self.require_compatible(fallback, ok, "`unwrap_or` fallback".to_string());
+                    }
+                    (**ok).clone()
+                }
                 _ => self.unknown_method(method, &object_type),
             },
             PolyType::Map(key_type, value_type) => match method {
@@ -1567,6 +1946,29 @@ impl TypeChecker {
             )));
             PolyType::Unknown
         })
+    }
+
+    fn check_tuple_index(&mut self, object: &Expression, index: usize) -> PolyType {
+        let object_type = self.check_expression(object);
+        if let PolyType::Tuple(types) = &object_type {
+            if let Some(ty) = types.get(index) {
+                return ty.clone();
+            }
+            self.error(TypeCheckError::new(format!(
+                "tuple index {index} out of bounds (has {} elements)",
+                types.len()
+            )));
+            return PolyType::Unknown;
+        }
+        if matches!(object_type, PolyType::Unknown) {
+            PolyType::Unknown
+        } else {
+            self.error(TypeCheckError::new(format!(
+                "type {} is not a tuple and cannot be indexed with `.{index}`",
+                object_type
+            )));
+            PolyType::Unknown
+        }
     }
 
     fn check_field_access(&mut self, object: &Expression, field: &str) -> PolyType {
@@ -1718,12 +2120,7 @@ impl TypeChecker {
         }
     }
 
-    fn check_pattern(
-        &mut self,
-        pattern: &Pattern,
-        scrutinee_type: &PolyType,
-        top_level: bool,
-    ) {
+    fn check_pattern(&mut self, pattern: &Pattern, scrutinee_type: &PolyType, top_level: bool) {
         // Pattern checking validates both the pattern's shape and any literal
         // or enum payload types against the match scrutinee.
         match pattern {
@@ -1980,13 +2377,23 @@ impl TypeChecker {
                     self.require_compatible(&ty, &PolyType::String, "default value".to_string());
                 }
                 GetFlag::Mask(value) => {
-                    self.check_expression(value);
-                    self.warn("`--mask` is not implemented yet; input is not masked");
+                    let ty = self.check_expression(value);
+                    // The mask character may be a string (e.g. `unicode "*"`)
+                    // or a char literal; the generated code suppresses terminal
+                    // echo on Unix and falls back to a plain read elsewhere.
+                    if !matches!(ty, PolyType::String | PolyType::Char | PolyType::Unknown) {
+                        self.error(TypeCheckError::new(format!(
+                            "`--mask` expects a character, got {}",
+                            ty
+                        )));
+                    }
                 }
                 GetFlag::Until(value) => {
-                    self.check_expression(value);
-                    self.warn(
-                        "`--until` is not implemented yet; input is read to the end of the line",
+                    let ty = self.check_expression(value);
+                    self.require_compatible(
+                        &ty,
+                        &PolyType::String,
+                        "`--until` delimiter".to_string(),
                     );
                 }
                 GetFlag::As(ty) => return self.annotation_type(ty),
@@ -2011,10 +2418,25 @@ impl TypeChecker {
     }
 
     fn function_signature(
-        &self,
+        &mut self,
         function: &FunctionDecl,
         owner: Option<&str>,
     ) -> FunctionSignature {
+        // The ordinary signature lowers type variables to `Unknown` so generic
+        // bodies stay permissive. The declared signature keeps the names as
+        // `Named("T")` markers so a call site can substitute the concrete
+        // argument types into the return type.
+        self.keep_type_variable_names = true;
+        let declared_params: Vec<PolyType> = function
+            .params
+            .iter()
+            .map(|parameter| self.annotation_type_for_owner(&parameter.ty, owner))
+            .collect();
+        let declared_return: Option<PolyType> = function
+            .return_type
+            .as_ref()
+            .map(|ty| self.annotation_type_for_owner(ty, owner));
+        self.keep_type_variable_names = false;
         FunctionSignature {
             params: function
                 .params
@@ -2029,6 +2451,15 @@ impl TypeChecker {
                 .return_type
                 .as_ref()
                 .map(|ty| self.annotation_type_for_owner(ty, owner)),
+            generics: function
+                .generics
+                .iter()
+                .map(|generic| generic.name.clone())
+                .collect(),
+            declared_params,
+            declared_return,
+            is_foreign: false,
+            has_explicit_signature: false,
         }
     }
 
@@ -2059,6 +2490,14 @@ impl TypeChecker {
                     return PolyType::Unknown;
                 }
                 if self.type_variables.contains(name) {
+                    // Inside a generic declaration the name is a type
+                    // parameter; keep it as a marker when building declared
+                    // signatures so call sites can substitute the concrete
+                    // argument type, otherwise treat it as an opaque
+                    // polymorphic type for body checking.
+                    if self.keep_type_variable_names {
+                        return PolyType::Named(name.clone());
+                    }
                     return PolyType::Unknown;
                 }
                 let type_value = match name.as_str() {
@@ -2215,11 +2654,6 @@ impl TypeChecker {
         self.errors.push(error);
     }
 
-    fn warn(&mut self, message: impl Into<String>) {
-        // Warnings are informational and never fail the check.
-        self.warnings.push(message.into());
-    }
-
     fn expect_argument_count(&mut self, method: &str, args: &[PolyType], expected: usize) {
         if args.len() != expected {
             self.error(TypeCheckError::new(format!(
@@ -2264,6 +2698,123 @@ pub fn check_program_with_warnings(
     program: &Program,
 ) -> (Result<(), Vec<TypeCheckError>>, Vec<String>) {
     TypeChecker::check_with_warnings(program)
+}
+
+/// Unify a declared generic type against a concrete argument type, recording
+/// each type-variable binding (`T -> i32`) in `bindings`.
+///
+/// Only declared types that mention a generic parameter (directly or inside a
+/// container like `Vec<T>`) produce bindings; unrelated shapes are ignored so
+/// compatibility checking can report the mismatch.
+fn unify_declared(
+    declared: &PolyType,
+    actual: &PolyType,
+    generics: &[String],
+    bindings: &mut HashMap<String, PolyType>,
+) {
+    if let PolyType::Named(name) = declared {
+        if generics.iter().any(|generic| generic == name) {
+            bindings.insert(name.clone(), actual.clone());
+            return;
+        }
+    }
+    match (declared, actual) {
+        (PolyType::Vec(a), PolyType::Vec(b)) => unify_declared(a, b, generics, bindings),
+        (PolyType::Map(ak, av), PolyType::Map(bk, bv)) => {
+            unify_declared(ak, bk, generics, bindings);
+            unify_declared(av, bv, generics, bindings);
+        }
+        (PolyType::Set(a), PolyType::Set(b)) => unify_declared(a, b, generics, bindings),
+        (PolyType::Option(a), PolyType::Option(b)) => unify_declared(a, b, generics, bindings),
+        (PolyType::Result(a_ok, a_err), PolyType::Result(b_ok, b_err)) => {
+            unify_declared(a_ok, b_ok, generics, bindings);
+            unify_declared(a_err, b_err, generics, bindings);
+        }
+        (PolyType::Array(a, _), PolyType::Array(b, _)) => unify_declared(a, b, generics, bindings),
+        (PolyType::Tuple(a), PolyType::Tuple(b)) if a.len() == b.len() => {
+            for (a, b) in a.iter().zip(b.iter()) {
+                unify_declared(a, b, generics, bindings);
+            }
+        }
+        (PolyType::Reference(_, a), PolyType::Reference(_, b)) => {
+            unify_declared(a, b, generics, bindings)
+        }
+        (
+            PolyType::Function {
+                params: a_params,
+                ret: a_ret,
+            },
+            PolyType::Function {
+                params: b_params,
+                ret: b_ret,
+            },
+        ) => {
+            for (a, b) in a_params.iter().zip(b_params.iter()) {
+                unify_declared(a, b, generics, bindings);
+            }
+            unify_declared(a_ret, b_ret, generics, bindings);
+        }
+        _ => {}
+    }
+}
+
+/// Replace type-variable markers in `ty` with the concrete types gathered at a
+/// call site. Unbound variables stay as `Named(name)` markers so downstream
+/// checks treat them as opaque polymorphic types (same as the `Unknown`
+/// lowering used inside generic bodies).
+fn substitute_generic(
+    ty: &PolyType,
+    generics: &[String],
+    bindings: &HashMap<String, PolyType>,
+) -> PolyType {
+    match ty {
+        PolyType::Named(name) => {
+            if generics.iter().any(|generic| generic == name) {
+                bindings.get(name).cloned().unwrap_or_else(|| ty.clone())
+            } else {
+                ty.clone()
+            }
+        }
+        PolyType::Vec(inner) => {
+            PolyType::Vec(Box::new(substitute_generic(inner, generics, bindings)))
+        }
+        PolyType::Map(key, value) => PolyType::Map(
+            Box::new(substitute_generic(key, generics, bindings)),
+            Box::new(substitute_generic(value, generics, bindings)),
+        ),
+        PolyType::Set(inner) => {
+            PolyType::Set(Box::new(substitute_generic(inner, generics, bindings)))
+        }
+        PolyType::Option(inner) => {
+            PolyType::Option(Box::new(substitute_generic(inner, generics, bindings)))
+        }
+        PolyType::Result(ok, err) => PolyType::Result(
+            Box::new(substitute_generic(ok, generics, bindings)),
+            Box::new(substitute_generic(err, generics, bindings)),
+        ),
+        PolyType::Array(inner, size) => PolyType::Array(
+            Box::new(substitute_generic(inner, generics, bindings)),
+            *size,
+        ),
+        PolyType::Tuple(types) => PolyType::Tuple(
+            types
+                .iter()
+                .map(|inner| substitute_generic(inner, generics, bindings))
+                .collect(),
+        ),
+        PolyType::Reference(mutable, inner) => PolyType::Reference(
+            *mutable,
+            Box::new(substitute_generic(inner, generics, bindings)),
+        ),
+        PolyType::Function { params, ret } => PolyType::Function {
+            params: params
+                .iter()
+                .map(|inner| substitute_generic(inner, generics, bindings))
+                .collect(),
+            ret: Box::new(substitute_generic(ret, generics, bindings)),
+        },
+        other => other.clone(),
+    }
 }
 
 fn compatible(actual: &PolyType, expected: &PolyType) -> bool {
@@ -2415,9 +2966,52 @@ mod tests {
     }
 
     #[test]
+    fn accepts_iterator_chains() {
+        assert!(check(
+            "fn main()\n    var xs := [1, 2, 3]\n    var s i32 := xs.iter().sum()\n    var d := xs.iter().map(|x| x * 2).collect()\n    var e := xs.iter().filter(|x| x % 2 = 0).collect()\n    loop x in xs.iter()\n        put x\n    end loop\nend fn"
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_sum_over_non_numeric_iterator() {
+        let errors =
+            check("fn main()\n    var xs := [\"a\", \"b\"]\n    var s := xs.iter().sum()\nend fn")
+                .unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.message.contains("sum` requires a numeric")),
+            "expected numeric-sum error, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn rejects_iterator_map_with_non_function_argument() {
+        let errors = check(
+            "fn main()\n    var xs := [1, 2, 3]\n    var d := xs.iter().map(42).collect()\nend fn",
+        )
+        .unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.message.contains("expects a function callback")),
+            "expected callback error, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn accepts_clear_and_reserve_on_vectors() {
+        assert!(check(
+            "fn main()\n    var list Vec<i32> := []\n    list.reserve(100)\n    list.clear()\nend fn"
+        )
+        .is_ok());
+    }
+
+    #[test]
     fn accepts_explicit_loop_variable() {
         assert!(check(
-            "fn main()\n    loop: value 1..3, 7\n        put value\n    end loop\nend fn"
+            "fn main()\n    loop value 1..3, 7\n        put value\n    end loop\nend fn"
         )
         .is_ok());
     }
@@ -2425,7 +3019,7 @@ mod tests {
     #[test]
     fn accepts_tuple_destructured_collection_loop() {
         assert!(check(
-            "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop: (index, fruit) in pairs.enumerate()\n        put index\n        put fruit\n    end loop\nend fn"
+            "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop (index, fruit) in pairs.enumerate()\n        put index\n        put fruit\n    end loop\nend fn"
         )
         .is_ok());
     }
@@ -2433,9 +3027,76 @@ mod tests {
     #[test]
     fn tuple_destructured_loop_declares_typed_bindings() {
         assert!(check(
-            "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop: (index, fruit) in pairs\n        var n i32 := index\n        var s ustring := fruit\n    end loop\nend fn"
+            "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop (index, fruit) in pairs\n        var n i32 := index\n        var s ustring := fruit\n    end loop\nend fn"
         )
         .is_ok());
+    }
+
+    #[test]
+    fn tuple_index_access_has_element_type() {
+        // `pair.1` must resolve to the tuple's element type, so assigning it
+        // to a `String` fails while `pair.0` (an i32) is fine.
+        let source = "fn main()\n    var pair := (10, true)\n    var n i32 := pair.0\n    var b bool := pair.1\nend fn";
+        assert!(check(source).is_ok());
+
+        let errors =
+            check("fn main()\n    var pair := (10, true)\n    var s ustring := pair.1\nend fn")
+                .unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("expected String, got bool")));
+    }
+
+    #[test]
+    fn for_loop_tuple_destructuring_declares_typed_bindings() {
+        // `for (a, b) in vec_of_tuples` must declare `a`/`b` with the element
+        // types so the body type-checks against them.
+        let source = "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    for (num, label) in pairs\n        var n i32 := num\n        var s ustring := label\n    end for\nend fn";
+        assert!(check(source).is_ok());
+    }
+
+    #[test]
+    fn for_loop_enumerate_single_binding_type_checks() {
+        // `for pair in xs.enumerate()` binds a tuple; reading its elements
+        // must type-check (the element type is Unknown, so reads are lenient).
+        let source = "fn main()\n    var xs := [1, 2]\n    for pair in xs.enumerate()\n        put pair.0\n    end for\nend fn";
+        assert!(check(source).is_ok());
+    }
+
+    #[test]
+    fn tuple_element_assignment_checks_types() {
+        // Assigning a compatible value to `pair.0` is fine; a wrong type is
+        // rejected.
+        let source =
+            "fn main()\n    var pair := (10, true)\n    pair.0 := 99\n    pair.1 := false\nend fn";
+        assert!(check(source).is_ok());
+
+        let errors =
+            check("fn main()\n    var pair := (10, true)\n    pair.0 := unicode \"oops\"\nend fn")
+                .unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("expected i32")));
+    }
+
+    #[test]
+    fn rejects_out_of_bounds_and_non_tuple_index() {
+        let errors =
+            check("fn main()\n    var pair := (10, true)\n    put pair.2\nend fn").unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("tuple index 2 out of bounds")));
+
+        let errors = check("fn main()\n    var x := 42\n    put x.0\nend fn").unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("type i32 is not a tuple")));
+    }
+
+    #[test]
+    fn nested_tuple_index_access_type_checks() {
+        let source = "fn main()\n    var nested := (1, (2, 3))\n    var a i32 := nested.1.0\n    var b i32 := nested.1.1\nend fn";
+        assert!(check(source).is_ok());
     }
 
     #[test]
@@ -2456,14 +3117,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_boolean_conditions_and_bad_mutation() {
-        let errors = check("var value i32 := 1\nif value\n    value += true\nend if").unwrap_err();
+    fn rejects_non_boolean_conditions() {
+        let errors = check("var value i32 := 1\nif value\n    put 1\nend if").unwrap_err();
         assert!(errors
             .iter()
             .any(|error| format!("{error}").contains("if condition")));
-        assert!(errors
-            .iter()
-            .any(|error| error.message.contains("mutation amount")));
+    }
+
+    #[test]
+    fn allows_string_append_mutation() {
+        // String concatenation via `:=` works;
+        assert!(check("var output ustring := \"\"\noutput := output + \"abc\"\n").is_ok());
     }
 
     #[test]
@@ -2483,7 +3147,7 @@ mod tests {
     #[test]
     fn accepts_infinite_loop_with_break() {
         assert!(check(
-            "fn main()\n    var count i32 := 0\n    loop\n        count += 1\n        if count = 3,\n            break\n        end if\n    end loop\nend fn"
+            "fn main()\n    var count i32 := 0\n    loop\n        count := count + 1\n        if count = 3,\n            break\n        end if\n    end loop\nend fn"
         )
         .is_ok());
     }
@@ -2498,8 +3162,8 @@ mod tests {
 
     #[test]
     fn accepts_break_and_continue_inside_while_loops() {
-        let source = "var i i32 := 0\nwhile i < 3\n    break\n    i += 1\nend while\n\
-                      while i < 5\n    if i = 1,\n        continue\n    end if\n    i += 1\nend while";
+        let source = "var i i32 := 0\nwhile i < 3\n    break\n    i := i + 1\nend while\n\
+                      while i < 5\n    if i = 1,\n        continue\n    end if\n    i := i + 1\nend while";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
     }
 
@@ -2592,7 +3256,7 @@ mod tests {
 
     #[test]
     fn accepts_vec_higher_order_methods() {
-        let source = "fn main()\n    var xs := [1, 2, 3, 4, 5]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x % 2 == 0)\n    put xs.reduce(0, |acc, x| acc + x)\n    put xs.reduce(1, |acc, x| acc * x)\nend fn";
+        let source = "fn main()\n    var xs := [1, 2, 3, 4, 5]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x % 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\n    put xs.reduce(1, |acc, x| acc * x)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
     }
 
@@ -2748,7 +3412,7 @@ mod tests {
     #[test]
     fn rejects_zero_loop_step() {
         let errors =
-            check("fn main()\n    loop: i 0..10 step 0\n        put i\n    end loop\nend fn")
+            check("fn main()\n    loop i 0..10 step 0\n        put i\n    end loop\nend fn")
                 .unwrap_err();
         assert!(errors
             .iter()
@@ -2756,7 +3420,9 @@ mod tests {
     }
 
     #[test]
-    fn warns_on_experimental_runtime_builtins() {
+    fn no_warning_for_real_network_builtins() {
+        // `http_get`/`tcp_connect`/`spawn` are real tokio implementations and
+        // `db_execute` runs SQL against SQLite; none of them should warn.
         let (tokens, lexer_errors) = Lexer::lex(
             "fn main()\n    var data := http_get(unicode \"http://example.com\").await\n    put data\nend fn",
         );
@@ -2765,22 +3431,153 @@ mod tests {
         let program = parser.parse().expect("source should parse");
         let (result, warnings) = TypeChecker::check_with_warnings(&program);
         assert!(result.is_ok());
-        assert!(warnings
+        assert!(!warnings
             .iter()
             .any(|warning| warning.contains("`http_get` is an experimental stub")));
     }
 
     #[test]
-    fn warns_on_get_mask_flag() {
-        let (tokens, lexer_errors) =
-            Lexer::lex("fn main()\n    var pw := get --mask unicode \"*\"\n    put pw\nend fn");
+    fn db_execute_no_longer_warns() {
+        // `db_execute` runs SQL against SQLite now; it must type-check without
+        // the old "experimental stub" warning.
+        let source = "fn main()\n    var rows := db_execute(unicode \"SELECT 1\").await\n    put rows\nend fn";
+        let (tokens, lexer_errors) = Lexer::lex(source);
         assert!(lexer_errors.is_empty());
         let mut parser = Parser::new(&tokens);
         let program = parser.parse().expect("source should parse");
         let (result, warnings) = TypeChecker::check_with_warnings(&program);
-        assert!(result.is_ok());
-        assert!(warnings
+        assert!(result.is_ok(), "{:?}", result.err());
+        assert!(!warnings
+            .iter()
+            .any(|warning| warning.contains("`db_execute` is an experimental stub")));
+    }
+
+    #[test]
+    fn db_execute_requires_string_query() {
+        let source = "fn main()\n    var rows := db_execute(42).await\n    put rows\nend fn";
+        let errors = check(source).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("expected String, got i32")));
+    }
+
+    #[test]
+    fn explicit_extern_signature_checks_arguments_and_return_type() {
+        let valid = "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc\nfn main()\n    var result i32 := double(21)\n    put result\nend fn";
+        assert!(check(valid).is_ok(), "{:?}", check(valid).err());
+
+        let invalid = "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc\nfn main()\n    var result i32 := double(unicode \"wrong\")\n    put result\nend fn";
+        let errors = check(invalid).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("expected i32, got String")));
+    }
+
+    #[test]
+    fn unknown_compatibility_builtin_is_rejected() {
+        let source = "fn main()\n    process_config(unicode \"config\")\nend fn";
+        let errors = check(source).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("unknown function `process_config`")));
+    }
+
+    #[test]
+    fn generic_call_infers_return_type_at_call_site() {
+        // `identity(42)` must resolve `T = i32` and return `i32`, so assigning
+        // the result to a `String` fails instead of silently passing as
+        // `Unknown`.
+        let source = "fn identity<T>(value: T): T\n    return value\nend fn\n\nfn main()\n    var s ustring := identity(42)\n    put s\nend fn";
+        let errors = check(source).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("expected String, got i32")));
+    }
+
+    #[test]
+    fn generic_call_infers_nested_container_types() {
+        // `first(xs)` with `xs: Vec<i32>` must bind `T = i32` through the
+        // container and return `i32`.
+        let source = "fn first<T>(xs: Vec<T>): T\n    return xs[0]\nend fn\n\nfn main()\n    var xs Vec<i32> := [1, 2, 3]\n    var head i32 := first(xs)\n    put head.to_string()\nend fn";
+        assert!(check(source).is_ok(), "{:?}", check(source).err());
+    }
+
+    #[test]
+    fn generic_call_accepts_correct_argument_type() {
+        let source = "fn identity<T>(value: T): T\n    return value\nend fn\n\nfn main()\n    var n i32 := identity(42)\n    put n.to_string()\nend fn";
+        assert!(check(source).is_ok(), "{:?}", check(source).err());
+    }
+
+    #[test]
+    fn mask_and_until_flags_are_implemented() {
+        // `--mask` and `--until` are real now: they must type-check without
+        // the old "not implemented" warnings.
+        let source = "fn main()\n    var pw := get --mask unicode \"*\"\n    put pw\n    var field := get --until unicode \",\"\n    put field\nend fn";
+        let (tokens, lexer_errors) = Lexer::lex(source);
+        assert!(lexer_errors.is_empty());
+        let mut parser = Parser::new(&tokens);
+        let program = parser.parse().expect("source should parse");
+        let (result, warnings) = TypeChecker::check_with_warnings(&program);
+        assert!(result.is_ok(), "{:?}", result.err());
+        assert!(!warnings
             .iter()
             .any(|warning| warning.contains("`--mask` is not implemented")));
+        assert!(!warnings
+            .iter()
+            .any(|warning| warning.contains("`--until` is not implemented")));
+    }
+
+    #[test]
+    fn assert_and_test_helpers_type_check() {
+        let source = "fn main()\n    var x i32 := 4\n    assert(x > 3)\n    pass(unicode \"x is positive\")\nend fn";
+        assert!(check(source).is_ok(), "{:?}", check(source).err());
+    }
+
+    #[test]
+    fn assert_requires_boolean() {
+        let source = "fn main()\n    assert(42)\nend fn";
+        let errors = check(source).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("expected bool, got i32")));
+    }
+
+    #[test]
+    fn checked_index_get_returns_option() {
+        // `xs.get(i)` must resolve to `Option<T>` and reject non-integer
+        // indexes, so the result is usable with `match`/`if` patterns.
+        let source = "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    match xs.get(0)\n        Some(value), put value.to_string()\n        None, put \"empty\"\n    end match\n    match unicode \"abc\".get(1)\n        Some(c), put c\n        None, put \"none\"\n    end match\nend fn";
+        assert!(check(source).is_ok(), "{:?}", check(source).err());
+    }
+
+    #[test]
+    fn checked_index_get_rejects_non_integer() {
+        let source =
+            "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    put xs.get(unicode \"zero\")\nend fn";
+        let errors = check(source).unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|error| error.message.contains("`get` index must be an integer")));
+    }
+
+    #[test]
+    fn result_accessors_type_check() {
+        let source = "fn main()\n    var result := http_get(unicode \"http://example.com\").await\n    assert(result.is_ok())\n    if result.is_ok(),\n        put result.unwrap()\n    end if\nend fn";
+        assert!(check(source).is_ok(), "{:?}", check(source).err());
+    }
+
+    #[test]
+    fn string_interpolation_type_checks() {
+        let source = "fn main()\n    var name ustring := unicode \"Alice\"\n    var age i32 := 30\n    put \"Name: {name}, Age: {age}\"\nend fn";
+        assert!(check(source).is_ok(), "{:?}", check(source).err());
+    }
+
+    #[test]
+    fn interpolation_keeps_literal_braces_when_unparseable() {
+        // `{` that does not form a parseable expression stays literal text,
+        // so strings containing JSON-style braces still compile.
+        let source =
+            "fn main()\n    var json ustring := \"{{\\\"a\\\": 1}}\"\n    put json\nend fn";
+        assert!(check(source).is_ok(), "{:?}", check(source).err());
     }
 }

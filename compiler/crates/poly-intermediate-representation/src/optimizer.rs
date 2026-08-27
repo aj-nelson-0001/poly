@@ -18,6 +18,9 @@ pub trait OptimizationPass {
 
 /// Runs a sequence of passes to a fixpoint.
 pub fn optimize(program: &mut Program) -> Vec<String> {
+    // The fixed pass order matters: folding exposes dead code, loop cleanup
+    // simplifies later inlining, and the final cleanup removes newly unreachable
+    // statements without requiring a general fixpoint engine.
     let passes: Vec<Box<dyn OptimizationPass>> = vec![
         Box::new(ConstantFolding),
         Box::new(DeadCodeElimination),
@@ -78,6 +81,8 @@ impl OptimizationPass for ConstantFolding {
 }
 
 fn fold_statements(statements: &mut [Statement]) -> bool {
+    // Recurse through every Poly-owned expression, but leave foreign text
+    // opaque so target-language syntax is never rewritten accidentally.
     let mut changed = false;
     for statement in statements.iter_mut() {
         match statement {
@@ -137,6 +142,8 @@ fn fold_statements(statements: &mut [Statement]) -> bool {
             // Nested function bodies are folded when the outer body is
             // processed; treat the declaration itself as opaque here.
             Statement::NestedFunction(_) => {}
+            // Rust blocks are opaque to the optimizer.
+            Statement::ForeignBlock { .. } => {}
         }
     }
     changed
@@ -250,6 +257,7 @@ fn fold_expr(expr: &mut Expr) -> bool {
             changed |= fold_expr(index);
         }
         Expr::FieldAccess { object, .. } => changed |= fold_expr(object),
+        Expr::TupleIndex { object, .. } => changed |= fold_expr(object),
         Expr::Parenthesized(inner) => changed |= fold_expr(inner),
         Expr::If {
             condition,
@@ -731,6 +739,7 @@ fn inline_in_statements(
             Statement::Block(statements) => changed |= inline_in_statements(statements, inlinable),
             Statement::Break | Statement::Continue | Statement::Return(None) => {}
             Statement::NestedFunction(_) => {}
+            Statement::ForeignBlock { .. } => {}
         }
     }
     changed
@@ -770,6 +779,7 @@ fn inline_in_expr(expr: &mut Expr, inlinable: &HashMap<String, Function>) -> boo
             changed |= inline_in_expr(index, inlinable);
         }
         Expr::FieldAccess { object, .. } => changed |= inline_in_expr(object, inlinable),
+        Expr::TupleIndex { object, .. } => changed |= inline_in_expr(object, inlinable),
         Expr::Parenthesized(inner) => changed |= inline_in_expr(inner, inlinable),
         Expr::If {
             condition,
@@ -981,7 +991,7 @@ mod tests {
 
     #[test]
     fn simplifies_redundant_step() {
-        let mut program = parse_to_ir("loop: i 0..10 step 1\n    put i\nend loop");
+        let mut program = parse_to_ir("loop i 0..10 step 1\n    put i\nend loop");
         LoopOptimizations.run(&mut program);
 
         match &program.main_body[0] {
@@ -995,7 +1005,7 @@ mod tests {
 
     #[test]
     fn removes_empty_loops() {
-        let mut program = parse_to_ir("loop: i 0..10\nend loop\nput 42");
+        let mut program = parse_to_ir("loop i 0..10\nend loop\nput 42");
         LoopOptimizations.run(&mut program);
 
         assert_eq!(program.main_body.len(), 1);
@@ -1073,7 +1083,7 @@ mod tests {
 
     #[test]
     fn equality_folds_to_boolean_literal() {
-        let mut program = parse_to_ir("var flag bool := 2 == 3");
+        let mut program = parse_to_ir("var flag bool := 2 = 3");
         ConstantFolding.run(&mut program);
 
         match &program.main_body[0] {

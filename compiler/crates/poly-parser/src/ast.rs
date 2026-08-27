@@ -10,6 +10,8 @@ pub struct Spanned<T> {
 }
 
 impl<T> Spanned<T> {
+    /// Attach one source range to a parsed node so diagnostics do not need to
+    /// rediscover the node by scanning the original source text.
     pub fn new(node: T, span: Span) -> Self {
         Self { node, span }
     }
@@ -24,6 +26,8 @@ impl<T> Spanned<T> {
 /// point at precise columns.
 #[derive(Debug, Clone)]
 pub struct Program {
+    /// Source order is preserved because declarations and executable items can
+    /// affect target filtering, diagnostics, and generated ordering differently.
     pub statements: Block,
 }
 
@@ -46,24 +50,18 @@ pub enum Statement {
         ty: Option<TypeAnnotation>,
         value: Option<Expression>,
     },
-    /// Let declaration: `let x: i32 = 0`
+    /// Let declaration: `let x: i32 := 0` (the type annotation is optional).
     LetDeclaration {
         name: String,
         ty: Option<TypeAnnotation>,
         value: Expression,
     },
-    /// Constant declaration: `const MAX = 100`
+    /// Constant declaration: `const MAX := 100`
     ConstDeclaration { name: String, value: Expression },
-    /// Explicit reassignment: `set x to 5`.
-    Set {
+    /// Assignment: `x := expr`; `=` is reserved for equality comparisons.
+    Assignment {
         target: Expression,
         value: Expression,
-    },
-    /// Explicit mutation command such as `add x` or `sub x, 2`.
-    Mutation {
-        target: Expression,
-        op: MutationOp,
-        value: Option<Expression>,
     },
     /// Function declaration
     FunctionDeclaration(FunctionDecl),
@@ -91,7 +89,6 @@ pub enum Statement {
     ContinueStatement,
     /// Put statement (output)
     PutStatement {
-        no_newline: bool,
         expr: Expression,
         redirect: Option<Redirect>,
     },
@@ -103,24 +100,33 @@ pub enum Statement {
     InfoStatement(Expression),
     /// Block of statements (produced by macro expansion and explicit blocks).
     Block(Block),
+    /// Raw foreign-language block (`#rust`, `#c`, etc.), emitted verbatim by
+    /// the selected backend.
+    ForeignBlock { language: String, content: String },
+    /// Target-aware signature for an opaque function supplied by a foreign
+    /// block, such as `extern rust fn parse(value: ustring): i32`.
+    ExternFunctionDeclaration(ExternFunctionDecl),
 }
 
-/// Redirect for file I/O.
+/// A target-aware foreign function signature. The declaration is consumed by
+/// Poly's checker and never emitted; the native target compiler still validates
+/// the actual foreign definition and call ABI.
+#[derive(Debug, Clone)]
+pub struct ExternFunctionDecl {
+    pub target: String,
+    pub name: String,
+    pub params: Vec<Parameter>,
+    pub return_type: Option<TypeAnnotation>,
+}
+
+/// Redirect for file I/O. The parser keeps the path separate from the
+/// output expression so backends can reject or lower file writes explicitly.
 #[derive(Debug, Clone)]
 pub enum Redirect {
-    /// Write: `> "file"`
+    /// Write: `put value to "file"`
     Write(Expression),
-    /// Append: `>> "file"`
+    /// Append: `put value to "file" -append`
     Append(Expression),
-}
-
-/// Explicit mutation commands.
-#[derive(Debug, Clone)]
-pub enum MutationOp {
-    Add,
-    Sub,
-    Inc,
-    Dec,
 }
 
 /// Type annotation.
@@ -196,6 +202,11 @@ pub enum Expression {
     FieldAccess {
         object: Box<Expression>,
         field: String,
+    },
+    /// Tuple index access (`tuple.0`)
+    TupleIndex {
+        object: Box<Expression>,
+        index: usize,
     },
     /// Parenthesized expression
     Parenthesized(Box<Expression>),
@@ -363,9 +374,15 @@ pub enum LoopRangePart {
 /// Get expression (input from stdin/files).
 #[derive(Debug, Clone)]
 pub struct GetExpr {
+    /// An optional prompt is kept separate so backends can render terminal and
+    /// file input with different runtime mechanisms.
     pub prompt: Option<Box<Expression>>,
-    pub source: Option<Box<Expression>>, // input redirection: < "file"
+    /// A source expression selects file input; `None` means stdin.
+    pub source: Option<Box<Expression>>,
+    /// Flags remain structured until code generation so each target can reject
+    /// or lower unsupported input behavior explicitly.
     pub flags: Vec<GetFlag>,
+    /// Optional validation/completion/encoding behavior for the Rust runtime.
     pub with_clause: Option<WithClause>,
 }
 

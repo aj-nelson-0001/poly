@@ -42,8 +42,11 @@ const RESULT_BLOCK_SIZE: usize = PTR_SIZE * 2 + 4;
 
 /// A contiguous writable region of the wasm heap.
 struct Buffer {
+    /// Raw pointer into linear memory owned by the caller/result block.
     ptr: *mut u8,
+    /// Capacity of the writable region; writes truncate instead of overrunning.
     len: usize,
+    /// Sequential write position used for the fixed result-block layout.
     cursor: usize,
 }
 
@@ -131,6 +134,8 @@ pub unsafe extern "C" fn transpile(ptr: *const u8, len: usize) -> *mut u8 {
 
 /// Run the real Poly pipeline: lex → parse → type-check → generate Rust.
 fn run_pipeline(source: &str) -> Result<String, String> {
+    // Keep the WASM API on the same checked pipeline as the CLI so browser
+    // diagnostics and command-line diagnostics cannot disagree.
     let transpiler = poly_transpiler::Transpiler::new();
     transpiler.transpile_checked(source)
 }

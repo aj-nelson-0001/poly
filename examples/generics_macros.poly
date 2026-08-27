@@ -6,8 +6,8 @@
 # parameter identifiers replaced by the call arguments.
 macro swap_values(a, b)
     var temp := a
-    set a to b
-    set b to temp
+    a := b
+    b := temp
 end macro
 
 # Macros can wrap control flow and error reporting.

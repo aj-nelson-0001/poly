@@ -13,6 +13,8 @@ pub struct ParseError {
 }
 
 impl ParseError {
+    /// Create an error without a migration hint. The span remains attached so
+    /// CLI and editor clients can render the diagnostic against source text.
     pub fn new(message: impl Into<String>, span: Span) -> Self {
         Self {
             message: message.into(),
@@ -21,6 +23,9 @@ impl ParseError {
         }
     }
 
+    /// Create an error with a targeted replacement suggestion. Keeping the
+    /// suggestion on the error avoids duplicating syntax-specific wording in
+    /// every caller that displays parser failures.
     pub fn with_suggestion(
         message: impl Into<String>,
         span: Span,
@@ -50,8 +55,8 @@ impl ParseError {
             Some("Function declarations need a name: fn my_function(...)".to_string())
         } else if msg.contains("expected ':'") && msg.contains("parameter") {
             Some("Parameters need type annotations: fn foo(x: i32)".to_string())
-        } else if msg.contains("Comma") && msg.contains("Expected") {
-            Some("If statements require comma: if condition, ... end if".to_string())
+        } else if msg.contains("comma") && msg.contains("expected") {
+            Some("If statements use `if condition ... end if`; a comma is accepted for compatibility.".to_string())
         } else if msg.contains("expected 'in'") {
             Some("For loops use 'in': for item in collection ... end for".to_string())
         } else if msg.contains("unexpected token") && msg.contains("return") {
@@ -61,9 +66,9 @@ impl ParseError {
         } else if msg.contains("expected ','") {
             Some("Separate parameters/arguments with commas: fn foo(a: i32, b: i32)".to_string())
         } else if msg.contains("expected '='") && msg.contains("let") {
-            Some("'let' declarations require initialization: let x = value".to_string())
+            Some("Declarations require initialization with `:=`: let x := value".to_string())
         } else if msg.contains("expected '") && msg.contains("struct") {
-            Some("Struct fields: var field_name: type".to_string())
+            Some("Struct fields use `var field_name: type` inside the struct body".to_string())
         } else if msg.contains("expected '") && msg.contains("enum") {
             Some("Enum variants: VariantName or VariantName(type)".to_string())
         } else {

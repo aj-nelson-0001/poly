@@ -13,7 +13,7 @@ fn main()
         put "3. Password test"
         put "4. Exit"
         put ""
-        put -n "Choose an option (1-4): "
+        put "Choose an option (1-4): "
         
         var choice i32 := get
         
@@ -23,7 +23,7 @@ fn main()
             3, password_test()
             4,
                 put "Goodbye!"
-                set running to false
+                running := false
             _, warn "Invalid choice. Please try again."
         end match
         
@@ -32,19 +32,19 @@ fn main()
 end fn
 
 fn greet_user()
-    put -n "Enter your name: "
+    put "Enter your name: "
     var name ustring := get --default unicode "World"
     put "Hello, " + name + "!"
 end fn
 
 fn calculator()
-    put -n "Enter first number: "
+    put "Enter first number: "
     var a f64 := get
     
-    put -n "Enter second number: "
+    put "Enter second number: "
     var b f64 := get
     
-    put -n "Choose operation (+, -, *, /): "
+    put "Choose operation (+, -, *, /): "
     var op ustring := get --default unicode "+"
     
     var result f64 := match op

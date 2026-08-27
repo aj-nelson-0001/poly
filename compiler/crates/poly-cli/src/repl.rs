@@ -1029,8 +1029,8 @@ mod tests {
         assert!(!input_is_complete("if x > 0,", 1));
         assert!(!input_is_complete("if x > 0,\n    put x", 2));
         assert!(input_is_complete("if x > 0,\n    put x\nend if", 3));
-        assert!(!input_is_complete("loop: i 0..5", 1));
-        assert!(input_is_complete("loop: i 0..5\n    put i\nend loop", 3));
+        assert!(!input_is_complete("loop i 0..5", 1));
+        assert!(input_is_complete("loop i 0..5\n    put i\nend loop", 3));
     }
 
     #[test]

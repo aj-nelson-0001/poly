@@ -1,0 +1,166 @@
+# Poly C Target Demo
+# Demonstrates the supported C backend features:
+# - Scalar variables and primitives
+# - Functions (no generics, no async)
+# - Arithmetic and bitwise operations
+# - Conditionals (if/else)
+# - Loops (numeric ranges)
+# - stdout/stderr output (put, error, warn, info)
+# - Foreign C functions via #c blocks
+#
+# C target limitations (not shown):
+# - No .to_string() (use raw values with put)
+# - No >> in put (use separate variable)
+# - No file I/O, stdin/get, vectors, tuples
+# - No enums, closures, async, pattern matching
+# - No struct literals
+
+# Foreign C helpers (used when targeting C)
+#c
+int c_multiply(int a, int b) {
+    return a * b;
+}
+
+int c_square(int x) {
+    return x * x;
+}
+#endc
+
+# Foreign Rust stubs (used when targeting Rust)
+#rust
+fn c_multiply(a: i32, b: i32) -> i32 {
+    a * b
+}
+
+fn c_square(x: i32) -> i32 {
+    x * x
+}
+#endrust
+
+# Poly functions
+fn add(a: i32, b: i32): i32
+    return a + b
+end fn
+
+fn factorial(n: i32): i32
+    if n <= 1,
+        return 1
+    end if
+    return n * factorial(n - 1)
+end fn
+
+# ===========================================
+#  C target demo: executable statements
+# ===========================================
+
+put "==========================================="
+put "  Poly C Target Demo"
+put "==========================================="
+put ""
+
+# Arithmetic
+put "-- Arithmetic --"
+var x i32 := 10
+var y i32 := 3
+put add(x, y)
+put x - y
+put x * y
+put x / y
+put x % y
+put ""
+
+# Bitwise operations (avoid >> in put)
+put "-- Bitwise ops --"
+var a i32 := 10
+var b i32 := 12
+var band i32 := a & b
+put band
+var bor i32 := a | b
+put bor
+var bxor i32 := a ^ b
+put bxor
+var lshift i32 := a << 2
+put lshift
+var rshift i32 := a >> 1
+put rshift
+put ""
+
+# Functions
+put "-- Functions --"
+put factorial(6)
+put factorial(10)
+put ""
+
+# Conditionals
+put "-- Conditionals --"
+var score i32 := 85
+if score >= 90,
+    put "Grade: A"
+else if score >= 80,
+    put "Grade: B"
+else if score >= 70,
+    put "Grade: C"
+else,
+    put "Grade: F"
+end if
+put ""
+
+# While loop
+put "-- While loop --"
+var countdown i32 := 5
+while countdown > 0
+    put countdown
+    countdown := countdown - 1
+end while
+put "Liftoff!"
+put ""
+
+# Numeric range loop
+put "-- Loop range (0..10) --"
+loop i 0..10
+    put i
+end loop
+put ""
+
+# Step loop
+put "-- Loop range with step (0..20 step 4) --"
+loop i 0..20 step 4
+    put i
+end loop
+put ""
+
+# Foreign function calls
+put "-- Foreign C functions --"
+put c_multiply(6, 7)
+put c_square(9)
+put ""
+
+# Accumulation pattern
+put "-- Accumulation --"
+var total i32 := 0
+loop i 1..6
+    total := total + i
+end loop
+put total
+put ""
+
+# Logging
+put "-- Logging --"
+info "This is an info message"
+warn "This is a warning"
+error "This is an error"
+put ""
+
+# Mutation
+put "-- Mutation --"
+var counter i32 := 0
+counter := counter + 1
+counter := counter + 1
+counter := counter + 1
+counter := counter - 1
+put counter
+put ""
+
+put "==========================================="
+put "  C target demo complete!"
+put "==========================================="

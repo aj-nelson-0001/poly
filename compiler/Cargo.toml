@@ -9,14 +9,15 @@ members = [
     "crates/poly-cli",
     "crates/poly-lsp",
     "crates/poly-wasm",
+    "crates/poly-c-codegen",
 ]
 
 [workspace.package]
-version = "1.7.3"
+version = "2.0.0-preview.1"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/poly-lang/poly"
-description = "A minimalist, assembly-inspired systems programming language that transpiles to Rust"
+description = "A minimal systems-language syntax layer with Rust and C backends"
 
 [workspace.dependencies]
 poly-lexer = { path = "crates/poly-lexer" }
@@ -27,5 +28,6 @@ poly-transpiler = { path = "crates/poly-transpiler" }
 poly-cli = { path = "crates/poly-cli" }
 poly-lsp = { path = "crates/poly-lsp" }
 poly-wasm = { path = "crates/poly-wasm" }
+poly-c-codegen = { path = "crates/poly-c-codegen" }
 thiserror = "2"
 anyhow = "1"

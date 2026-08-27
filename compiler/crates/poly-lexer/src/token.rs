@@ -89,6 +89,7 @@ pub enum TokenKind {
     Impl,
     Module,
     Use,
+    Extern,
     Pub,
     As,
     Where,
@@ -106,18 +107,12 @@ pub enum TokenKind {
     Deref,
     Step,
     Capture,
-    Set,
     To,
-
-    // Assembly-style operations
-    Add,
-    Sub,
-    Inc,
-    Dec,
 
     // I/O commands
     Put,
     Get,
+    From,
     Error,
     Warn,
     Info,
@@ -186,18 +181,6 @@ pub enum TokenKind {
     LtLt,  // <<
     GtGt,  // >>
 
-    // Compound mutation operators (legacy syntax, rejected by the parser)
-    PlusEq,    // +=
-    MinusEq,   // -=
-    StarEq,    // *=
-    SlashEq,   // /=
-    PercentEq, // %=
-    AmpEq,     // &=
-    PipeEq,    // |=
-    CaretEq,   // ^=
-    LtLtEq,    // <<=
-    GtGtEq,    // >>=
-
     // Arrow & fat arrow
     Arrow,    // ->
     FatArrow, // =>
@@ -230,6 +213,11 @@ pub enum TokenKind {
     Newline,
     /// EOF
     Eof,
+    /// Raw foreign-language block: content between `#<language>` and its end marker.
+    ForeignBlock {
+        language: String,
+        content: String,
+    },
 }
 
 impl fmt::Display for TokenKind {
@@ -282,6 +270,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Impl => write!(f, "impl"),
             TokenKind::Module => write!(f, "module"),
             TokenKind::Use => write!(f, "use"),
+            TokenKind::Extern => write!(f, "extern"),
             TokenKind::Pub => write!(f, "pub"),
             TokenKind::As => write!(f, "as"),
             TokenKind::Where => write!(f, "where"),
@@ -299,17 +288,12 @@ impl fmt::Display for TokenKind {
             TokenKind::Deref => write!(f, "deref"),
             TokenKind::Step => write!(f, "step"),
             TokenKind::Capture => write!(f, "capture"),
-            TokenKind::Set => write!(f, "set"),
             TokenKind::To => write!(f, "to"),
-
-            // Assembly ops
-            TokenKind::Add => write!(f, "add"),
-            TokenKind::Sub => write!(f, "sub"),
-            TokenKind::Inc => write!(f, "inc"),
-            TokenKind::Dec => write!(f, "dec"),
+            TokenKind::From => write!(f, "from"),
 
             // I/O
             TokenKind::Put => write!(f, "put"),
+
             TokenKind::Get => write!(f, "get"),
             TokenKind::Error => write!(f, "error"),
             TokenKind::Warn => write!(f, "warn"),
@@ -371,16 +355,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Tilde => write!(f, "~"),
             TokenKind::LtLt => write!(f, "<<"),
             TokenKind::GtGt => write!(f, ">>"),
-            TokenKind::PlusEq => write!(f, "+="),
-            TokenKind::MinusEq => write!(f, "-="),
-            TokenKind::StarEq => write!(f, "*="),
-            TokenKind::SlashEq => write!(f, "/="),
-            TokenKind::PercentEq => write!(f, "%="),
-            TokenKind::AmpEq => write!(f, "&="),
-            TokenKind::PipeEq => write!(f, "|="),
-            TokenKind::CaretEq => write!(f, "^="),
-            TokenKind::LtLtEq => write!(f, "<<="),
-            TokenKind::GtGtEq => write!(f, ">>="),
+
             TokenKind::Arrow => write!(f, "->"),
             TokenKind::FatArrow => write!(f, "=>"),
             TokenKind::DotDot => write!(f, ".."),
@@ -403,6 +378,9 @@ impl fmt::Display for TokenKind {
             // Special
             TokenKind::Newline => write!(f, "\\n"),
             TokenKind::Eof => write!(f, "EOF"),
+            TokenKind::ForeignBlock { language, content } => {
+                write!(f, "#{language} {content} #end{language}")
+            }
         }
     }
 }
@@ -434,6 +412,7 @@ impl TokenKind {
                 | TokenKind::Impl
                 | TokenKind::Module
                 | TokenKind::Use
+                | TokenKind::Extern
                 | TokenKind::Pub
                 | TokenKind::As
                 | TokenKind::Where
@@ -451,8 +430,8 @@ impl TokenKind {
                 | TokenKind::Deref
                 | TokenKind::Step
                 | TokenKind::Capture
-                | TokenKind::Set
                 | TokenKind::To
+                | TokenKind::From
                 | TokenKind::Unicode
         )
     }
@@ -497,23 +476,6 @@ impl TokenKind {
                 | TokenKind::UnicodeCharLiteral(_)
                 | TokenKind::ByteLiteral(_)
                 | TokenKind::BoolLiteral(_)
-        )
-    }
-
-    /// Check if this token is a legacy compound mutation operator.
-    pub fn is_compound_mutation_op(&self) -> bool {
-        matches!(
-            self,
-            TokenKind::PlusEq
-                | TokenKind::MinusEq
-                | TokenKind::StarEq
-                | TokenKind::SlashEq
-                | TokenKind::PercentEq
-                | TokenKind::AmpEq
-                | TokenKind::PipeEq
-                | TokenKind::CaretEq
-                | TokenKind::LtLtEq
-                | TokenKind::GtGtEq
         )
     }
 }

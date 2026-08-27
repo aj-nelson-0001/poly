@@ -10,11 +10,14 @@ use std::fmt::Write as _;
 /// not needed; `Vec` preserves order and the server only does lookups.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
+    /// JSON-RPC uses null for absent optional values and empty results.
     Null,
     Bool(bool),
     Number(f64),
     String(String),
     Array(Vec<Json>),
+    /// A vector preserves insertion order, which keeps server responses stable
+    /// without introducing a map dependency or sorting protocol fields.
     Object(Vec<(String, Json)>),
 }
 
@@ -114,6 +117,8 @@ impl Json {
     }
 }
 
+/// Escape JSON control characters and quotes without depending on a general
+/// serialization crate; this is sufficient for the server's fixed LSP shapes.
 fn write_json_string(out: &mut String, text: &str) {
     out.push('"');
     for character in text.chars() {
@@ -137,7 +142,10 @@ fn write_json_string(out: &mut String, text: &str) {
 /// A JSON parsing error.
 #[derive(Debug, Clone, PartialEq)]
 pub struct JsonError {
+    /// Human-readable parse detail for protocol logs and test failures.
     pub message: String,
+    /// Byte offset, rather than a character index, matches the parser's input
+    /// representation and lets callers highlight the exact invalid frame.
     pub position: usize,
 }
 
@@ -151,6 +159,8 @@ impl std::error::Error for JsonError {}
 
 /// Parse a JSON document from a string.
 pub fn parse(text: &str) -> Result<Json, JsonError> {
+    // Parse exactly one value and reject trailing bytes so malformed LSP frames
+    // cannot be accepted as a valid request with an ignored suffix.
     let mut parser = Parser {
         bytes: text.as_bytes(),
         position: 0,
@@ -167,6 +177,8 @@ pub fn parse(text: &str) -> Result<Json, JsonError> {
 }
 
 struct Parser<'a> {
+    // JSON-RPC arrives as UTF-8 bytes. Tracking a byte cursor keeps framing
+    // and error offsets exact; string parsing reconstructs Unicode explicitly.
     bytes: &'a [u8],
     position: usize,
 }

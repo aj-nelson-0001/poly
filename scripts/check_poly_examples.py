@@ -9,6 +9,7 @@ examples, including fragments, still undergo the canonical syntax policy check.
 
 from __future__ import annotations
 
+import argparse
 import re
 import subprocess
 import sys
@@ -38,15 +39,22 @@ class PolyExample:
     fragment: bool
 
 
-def markdown_files():
+def markdown_files(selected: list[Path] | None = None):
+    if selected:
+        for path in selected:
+            resolved = path if path.is_absolute() else ROOT / path
+            if resolved.is_file() and resolved.suffix == ".md":
+                yield resolved
+        return
+
     for path in sorted(ROOT.rglob("*.md")):
         if ".git" not in path.parts and "target" not in path.parts:
             yield path
 
 
-def extract_examples() -> list[PolyExample]:
+def extract_examples(selected: list[Path] | None = None) -> list[PolyExample]:
     examples: list[PolyExample] = []
-    for path in markdown_files():
+    for path in markdown_files(selected):
         lines = path.read_text(encoding="utf-8").splitlines()
         in_poly = False
         fragment = False
@@ -109,19 +117,30 @@ def parse_examples(examples: list[PolyExample]) -> list[tuple[PolyExample, str]]
         for index, example in enumerate(examples):
             source_path = directory_path / f"example-{index:04d}.poly"
             source_path.write_text(example.source, encoding="utf-8")
+            # Complete examples must parse *and* type-check, and the generated
+            # Rust must compile. Fragments are exempt from this step.
+            target = "c" if re.search(r"^\s*#c\s*$", example.source, re.MULTILINE) else "rust"
             result = subprocess.run(
-                [str(BINARY), "--ast", str(source_path)],
+                [str(BINARY), "--target", target, "--check", str(source_path)],
                 capture_output=True,
                 text=True,
             )
             if result.returncode:
                 message = (result.stderr or result.stdout).splitlines()
-                failures.append((example, message[0] if message else "parse failed"))
+                failures.append((example, message[0] if message else "check failed"))
     return failures
 
 
 def main() -> int:
-    examples = extract_examples()
+    argument_parser = argparse.ArgumentParser(description=__doc__)
+    argument_parser.add_argument(
+        "paths",
+        nargs="*",
+        type=Path,
+        help="optional Markdown files to audit; defaults to the whole repository",
+    )
+    arguments = argument_parser.parse_args()
+    examples = extract_examples(arguments.paths or None)
     policy_errors = [error for example in examples for error in validate_policy(example)]
     if policy_errors:
         print("Poly documentation policy check failed:")
@@ -133,9 +152,9 @@ def main() -> int:
 
     print(
         f"Poly documentation audit: {len(examples)} blocks, "
-        f"{len(complete_examples) - len(failures)} parsed, "
+        f"{len(complete_examples) - len(failures)} passed, "
         f"{sum(example.fragment for example in examples)} marked fragments, "
-        f"{len(failures)} unmarked parse failures."
+        f"{len(failures)} unmarked check failures."
     )
     for example, message in failures[:20]:
         print(f"- {example.path}:{example.line}: {message}")

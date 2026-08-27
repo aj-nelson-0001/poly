@@ -9,31 +9,89 @@ use std::process;
 
 use anyhow::{bail, Context, Result};
 
+/// Supported compilation targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Rust,
+    C,
+}
+
+impl Target {
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "rust" | "rs" => Ok(Target::Rust),
+            "c" => Ok(Target::C),
+            other => bail!("Unknown target '{}'. Supported targets: rust, c", other),
+        }
+    }
+
+    fn extension(&self) -> &str {
+        match self {
+            Target::Rust => "rs",
+            Target::C => "c",
+        }
+    }
+
+    fn language_name(&self) -> &str {
+        match self {
+            Target::Rust => "rust",
+            Target::C => "c",
+        }
+    }
+}
+
+/// Extract and remove `--target <lang>` from the argument list.
+/// The target is handled before subcommand dispatch so every CLI mode, including
+/// `--check`, `--emit-*`, and project generation, selects the same backend.
+fn extract_target(args: &[String]) -> Result<(Target, Vec<String>)> {
+    let mut target = Target::Rust;
+    let mut filtered = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == "--target" {
+            i += 1;
+            if i >= args.len() {
+                bail!("--target requires a language argument (e.g. --target rust)");
+            }
+            target = Target::from_str(&args[i])?;
+        } else {
+            filtered.push(args[i].clone());
+        }
+        i += 1;
+    }
+    Ok((target, filtered))
+}
+
 fn main() -> Result<()> {
     // Keep argument parsing dependency-free: the CLI is also used as a small
     // standalone binary in generated-project and integration-test workflows.
-    let args: Vec<String> = std::env::args().collect();
+    let raw_args: Vec<String> = std::env::args().collect();
+    let (target, args) = extract_target(&raw_args)?;
 
     if args.len() < 2 {
         eprintln!("Poly Language Compiler v{}", env!("CARGO_PKG_VERSION"));
         eprintln!();
-        eprintln!("Usage: poly <file.poly>");
+        eprintln!("Usage: poly [options] <file.poly>");
         eprintln!();
         eprintln!("Options:");
-        eprintln!("  --tokens    Print tokens and exit");
-        eprintln!("  --ast       Print AST and exit");
-        eprintln!("  --check     Validate code and verify Rust compilation");
-        eprintln!("  --emit-rust  Print transpiled Rust instead of compiling");
-        eprintln!("  --intermediate-representation  Print the intermediate representation pipeline output (optimized Rust)");
+        eprintln!("  --target <lang>   Target language (default: rust; options: rust, c)");
+        eprintln!("  --tokens          Print tokens and exit");
+        eprintln!("  --ast             Print AST and exit");
+        eprintln!("  --check           Validate code and verify compilation");
+        eprintln!("  --emit-rust       Print transpiled Rust instead of compiling");
+        eprintln!("  --emit-c          Print transpiled C instead of compiling");
+        eprintln!("  --intermediate-representation  Print the IR pipeline output");
         eprintln!("  --ir                           Alias for --intermediate-representation");
-        eprintln!("  --source-map  Print the generated source map");
-        eprintln!("  --format    Format output with rustfmt");
-        eprintln!("  --diff      Show diff between unformatted and formatted");
-        eprintln!("  --watch     Watch file and re-transpile on changes");
-        eprintln!("  --project   Generate a Cargo project (usage: --project <dir> <file.poly>)");
-        eprintln!("  --repl      Start interactive REPL");
-        eprintln!("  --help      Show this help message");
-        eprintln!("  --version   Show version information");
+        eprintln!("  --source-map      Print the generated source map");
+        eprintln!("  --format          Format output with rustfmt");
+        eprintln!("  --diff            Show diff between unformatted and formatted");
+        eprintln!("  --watch           Watch file and re-transpile on changes");
+        eprintln!(
+            "  --project         Generate a Cargo project (usage: --project <dir> <file.poly>)"
+        );
+        eprintln!("  --repl            Start interactive REPL");
+        eprintln!("  --help            Show this help message");
+        eprintln!("  --version         Show version information");
         process::exit(1);
     }
 
@@ -41,21 +99,29 @@ fn main() -> Result<()> {
         "--help" | "-h" => {
             println!("Poly Language Compiler v{}", env!("CARGO_PKG_VERSION"));
             println!();
-            println!("Usage: poly <file.poly>");
+            println!("Usage: poly [options] <file.poly>");
             println!();
             println!("Options:");
-            println!("  --tokens    Print tokens and exit");
-            println!("  --ast       Print AST and exit");
-            println!("  --check     Validate code and verify Rust compilation");
-            println!("  --emit-rust  Print transpiled Rust instead of compiling");
-            println!("  --intermediate-representation  Print the intermediate representation pipeline output (optimized Rust)");
+            println!("  --target <lang>   Target language (default: rust; options: rust, c)");
+            println!("  --tokens          Print tokens and exit");
+            println!("  --ast             Print AST and exit");
+            println!("  --check           Validate code and verify compilation");
+            println!("  --emit-rust       Print transpiled Rust instead of compiling");
+            println!("  --emit-c          Print transpiled C instead of compiling");
+            println!("  --intermediate-representation  Print the IR pipeline output");
             println!("  --ir                           Alias for --intermediate-representation");
-            println!("  --source-map  Print the generated source map");
-            println!("  --format    Format output with rustfmt");
-            println!("  --project   Generate a Cargo project (usage: --project <dir> <file.poly>)");
-            println!("  --repl      Start interactive REPL");
-            println!("  --help      Show this help message");
-            println!("  --version   Show version information");
+            println!("  --source-map      Print the generated source map");
+            println!("  --format          Format output with rustfmt");
+            println!(
+                "  --project         Generate a Cargo project (usage: --project <dir> <file.poly>)"
+            );
+            println!("  --repl            Start interactive REPL");
+            println!("  --help            Show this help message");
+            println!("  --version         Show version information");
+            println!();
+            println!("Targets:");
+            println!("  rust              Transpile to Rust (default)");
+            println!("  c                 Transpile to C (C11 subset)");
             Ok(())
         }
         "--version" | "-v" => {
@@ -132,9 +198,8 @@ fn main() -> Result<()> {
             Ok(())
         }
         "--check" => {
-            // `--check` intentionally runs every compiler phase, including
-            // rustc, so success means the source is semantically and
-            // code-generation-wise buildable rather than merely parseable.
+            // `--check` runs every compiler phase and the selected native
+            // compiler, so success means the target output is buildable.
             if args.len() < 3 {
                 eprintln!("Error: --check requires a file argument");
                 process::exit(1);
@@ -182,10 +247,22 @@ fn main() -> Result<()> {
                     has_errors = true;
                 }
 
+                let selected_program = match poly_transpiler::Transpiler::parse_target(
+                    &source,
+                    target.language_name(),
+                ) {
+                    Ok(program) => program,
+                    Err(error) => {
+                        eprintln!("Target parse error: {}", error);
+                        has_errors = true;
+                        program.clone()
+                    }
+                };
+
                 // Run semantic type checking before transpilation.
                 if !has_errors {
                     let (check_result, warnings) =
-                        poly_transpiler::check_program_with_warnings(&program);
+                        poly_transpiler::check_program_with_warnings(&selected_program);
                     for warning in warnings {
                         eprintln!("Warning: {}", warning);
                     }
@@ -201,18 +278,24 @@ fn main() -> Result<()> {
                 // Run transpiler to check for transpilation errors
                 if !has_errors {
                     let transpiler = poly_transpiler::Transpiler::new();
-                    match transpiler.transpile(&source) {
-                        Ok(rust_code) => {
-                            // Verify generated Rust code compiles
-                            match verify_rust_compiles(&rust_code) {
-                                Ok(_) => {
-                                    println!(
-                                        "OK: {} statements parsed, Rust code compiles",
-                                        program.statements.len()
-                                    );
-                                }
+                    match transpiler.transpile_target(&source, target.language_name()) {
+                        Ok(code) => {
+                            let compile_result = match target {
+                                Target::Rust => verify_rust_compiles(&code),
+                                Target::C => verify_c_compiles(&code),
+                            };
+                            match compile_result {
+                                Ok(_) => println!(
+                                    "OK: {} statements parsed, {} code compiles",
+                                    selected_program.statements.len(),
+                                    target.language_name()
+                                ),
                                 Err(e) => {
-                                    eprintln!("Rust compilation error: {}", e);
+                                    eprintln!(
+                                        "{} compilation error: {}",
+                                        target.language_name(),
+                                        e
+                                    );
                                     has_errors = true;
                                 }
                             }
@@ -231,9 +314,9 @@ fn main() -> Result<()> {
 
             Ok(())
         }
-        "--emit-rust" => {
+        "--emit-rust" | "--emit-c" => {
             if args.len() < 3 {
-                eprintln!("Error: --emit-rust requires a file argument");
+                eprintln!("Error: emit option requires a file argument");
                 process::exit(1);
             }
             let path = PathBuf::from(&args[2]);
@@ -241,11 +324,16 @@ fn main() -> Result<()> {
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
             let transpiler = poly_transpiler::Transpiler::new();
-            let rust_code = transpiler
-                .transpile(&source)
+            let requested_target = if args[1] == "--emit-c" { "c" } else { "rust" };
+            let code = transpiler
+                .transpile_target(&source, requested_target)
                 .map_err(|e| anyhow::anyhow!(e))?;
-            let formatted = format_with_rustfmt(&rust_code).unwrap_or(rust_code);
-            println!("{}", formatted);
+            if requested_target == "rust" {
+                let formatted = format_with_rustfmt(&code).unwrap_or(code);
+                println!("{}", formatted);
+            } else {
+                println!("{}", code);
+            }
             Ok(())
         }
         "--intermediate-representation" | "--ir" => {
@@ -306,12 +394,24 @@ fn main() -> Result<()> {
 
             let output_dir = PathBuf::from(&args[2]);
             let source_path = PathBuf::from(&args[3]);
-            generate_cargo_project(&source_path, &output_dir)?;
-            println!(
-                "Generated Cargo project at {} (source: {})",
-                output_dir.display(),
-                source_path.display()
-            );
+            match target {
+                Target::Rust => {
+                    generate_cargo_project(&source_path, &output_dir)?;
+                    println!(
+                        "Generated Cargo project at {} (source: {})",
+                        output_dir.display(),
+                        source_path.display()
+                    );
+                }
+                Target::C => {
+                    generate_c_project(&source_path, &output_dir)?;
+                    println!(
+                        "Generated C project at {} (source: {})",
+                        output_dir.display(),
+                        source_path.display()
+                    );
+                }
+            }
             Ok(())
         }
         "--diff" => {
@@ -372,17 +472,35 @@ fn main() -> Result<()> {
         }
         file if file.ends_with(".poly") => {
             let path = PathBuf::from(file);
-            let output_dir = default_cargo_output_dir(&path);
-
-            generate_cargo_project_inner(&path, &output_dir, false)?;
-            build_cargo_project(&output_dir)?;
-
-            let binary_path = cargo_binary_path(&output_dir, &path);
-            println!(
-                "Generated and built {} -> {}",
-                path.display(),
-                binary_path.display()
-            );
+            match target {
+                Target::Rust => {
+                    let output_dir = default_cargo_output_dir(&path);
+                    generate_cargo_project_inner(&path, &output_dir, false)?;
+                    build_cargo_project(&output_dir)?;
+                    let binary_path = cargo_binary_path(&output_dir, &path);
+                    println!(
+                        "Generated and built {} -> {}",
+                        path.display(),
+                        binary_path.display()
+                    );
+                }
+                Target::C => {
+                    let output_path = default_c_output_path(&path);
+                    let source = std::fs::read_to_string(&path)
+                        .with_context(|| format!("Failed to read file: {}", path.display()))?;
+                    let code = poly_transpiler::Transpiler::new()
+                        .transpile_c_checked(&source)
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                    std::fs::write(&output_path, &code)
+                        .with_context(|| format!("Failed to write {}", output_path.display()))?;
+                    compile_c_binary(&output_path, &c_binary_path(&path))?;
+                    println!(
+                        "Generated and built {} -> {}",
+                        path.display(),
+                        c_binary_path(&path).display()
+                    );
+                }
+            }
             Ok(())
         }
         other => {
@@ -391,6 +509,43 @@ fn main() -> Result<()> {
             process::exit(1);
         }
     }
+}
+
+/// Generate a standalone C project from a Poly source file.
+fn generate_c_project(source_path: &Path, output_dir: &Path) -> Result<()> {
+    if source_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        != Some("poly")
+    {
+        bail!(
+            "Source file must have a .poly extension: {}",
+            source_path.display()
+        );
+    }
+    let source = std::fs::read_to_string(source_path)
+        .with_context(|| format!("Failed to read source file: {}", source_path.display()))?;
+    let code = poly_transpiler::Transpiler::new()
+        .transpile_c_checked(&source)
+        .map_err(|error| anyhow::anyhow!(error))?;
+    if output_dir.exists() && output_dir.read_dir()?.next().is_some() {
+        bail!(
+            "Refusing to overwrite existing files in {}",
+            output_dir.display()
+        );
+    }
+    std::fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "Failed to create project directory: {}",
+            output_dir.display()
+        )
+    })?;
+    let source_path_out = output_dir.join("main.c");
+    let binary_path = output_dir.join(format!("main{}", std::env::consts::EXE_SUFFIX));
+    std::fs::write(&source_path_out, &code)
+        .with_context(|| format!("Failed to write {}", source_path_out.display()))?;
+    compile_c_binary(&source_path_out, &binary_path)?;
+    Ok(())
 }
 
 /// Generate a standalone Cargo project from a Poly source file.
@@ -467,7 +622,11 @@ fn generate_cargo_project_inner(
         .with_context(|| format!("Failed to create project directory: {}", src_dir.display()))?;
 
     let package_name = cargo_package_name(output_dir, source_path);
-    let manifest = cargo_manifest(&package_name, rust_code.contains("#[tokio::main]"));
+    let manifest = cargo_manifest(
+        &package_name,
+        rust_code.contains("#[tokio::main]") || rust_code.contains("tokio::"),
+        rust_code.contains("rusqlite::"),
+    );
 
     std::fs::write(&manifest_path, manifest)
         .with_context(|| format!("Failed to write {}", manifest_path.display()))?;
@@ -587,13 +746,19 @@ fn cargo_package_name(output_dir: &Path, source_path: &Path) -> String {
 }
 
 /// Build the manifest for a generated Cargo project.
-fn cargo_manifest(package_name: &str, needs_tokio: bool) -> String {
-    let dependencies = if needs_tokio {
-        // "time" enables `tokio::time::sleep`, used by `delay`.
-        "tokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\"] }\n"
-    } else {
-        ""
-    };
+fn cargo_manifest(package_name: &str, needs_tokio: bool, needs_rusqlite: bool) -> String {
+    let mut dependencies = String::new();
+    if needs_tokio {
+        // "time" enables `tokio::time::sleep` (used by `delay`); "net" and
+        // "io-util" back the `http_get`/`tcp_connect`/`spawn` builtins.
+        dependencies.push_str(
+            "tokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\", \"net\", \"io-util\"] }\n",
+        );
+    }
+    if needs_rusqlite {
+        // "bundled" compiles SQLite from source so no system library is needed.
+        dependencies.push_str("rusqlite = { version = \"0.31\", features = [\"bundled\"] }\n");
+    }
 
     format!(
         "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"2021\"\n\n[dependencies]\n{}\n[workspace]\n",
@@ -753,6 +918,100 @@ fn install_compiled_binary(temp_output: &Path, output_path: &Path) -> Result<()>
     }
 }
 
+fn default_c_output_path(source_path: &Path) -> PathBuf {
+    let mut output = source_path.to_path_buf();
+    output.set_extension(Target::C.extension());
+    output
+}
+
+fn c_binary_path(source_path: &Path) -> PathBuf {
+    let mut output = source_path.to_path_buf();
+    output.set_extension(std::env::consts::EXE_EXTENSION);
+    output
+}
+
+fn verify_c_compiles(code: &str) -> Result<()> {
+    let unique_id = format!(
+        "{}-{}",
+        process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
+    let temp_dir = std::env::temp_dir();
+    let source_path = temp_dir.join(format!("poly_check_{unique_id}.c"));
+    let output_path = temp_dir.join(format!("poly_check_{unique_id}"));
+    std::fs::write(&source_path, code).context("Failed to write temporary C source")?;
+    let mut compiler = c_compiler_command()?;
+    let output = compiler
+        .arg("-std=c11")
+        .arg("-Wall")
+        .arg("-Werror")
+        .arg("-fsyntax-only")
+        .arg(&source_path)
+        .output()
+        .context("Failed to run the configured C compiler");
+    let _ = std::fs::remove_file(&source_path);
+    let _ = std::fs::remove_file(&output_path);
+    let output = output?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            String::from_utf8_lossy(&output.stderr).to_string()
+        ))
+    }
+}
+
+fn c_compiler_command() -> Result<std::process::Command> {
+    use std::process::Command;
+
+    if let Ok(configured) = std::env::var("POLY_CC") {
+        if configured.trim().is_empty() {
+            bail!("POLY_CC is set but empty; configure it to a C11 compiler executable");
+        }
+        return Ok(Command::new(configured));
+    }
+
+    let candidates = if cfg!(windows) {
+        ["gcc", "clang", "cc"]
+    } else {
+        ["cc", "clang", "gcc"]
+    };
+    for candidate in candidates {
+        if Command::new(candidate).arg("--version").output().is_ok() {
+            return Ok(Command::new(candidate));
+        }
+    }
+
+    bail!("No C compiler found; install C11 cc/clang/gcc or set POLY_CC to its executable")
+}
+
+fn compile_c_binary(source_path: &Path, output_path: &Path) -> Result<()> {
+    let mut compiler = c_compiler_command()?;
+    let output = compiler
+        .arg("-std=c11")
+        .arg(source_path)
+        .arg("-o")
+        .arg(output_path)
+        .output()
+        .with_context(|| {
+            format!(
+                "Failed to run the configured C compiler for {}",
+                source_path.display()
+            )
+        })?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        bail!(
+            "C compilation failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 /// Verify generated Rust without running LLVM code generation.
 ///
 /// Metadata emission preserves the compiler checks needed by `--check` while
@@ -782,10 +1041,11 @@ fn verify_rust_compiles(code: &str) -> Result<()> {
             .as_nanos()
     );
 
-    // A program needs the tokio-backed Cargo project when it emits
-    // `#[tokio::main]` or references tokio directly (e.g. `delay` lowers to
-    // `tokio::time::sleep` inside async functions even when main stays sync).
-    if code.contains("#[tokio::main]") || code.contains("tokio::") {
+    // A program needs the Cargo project when it emits `#[tokio::main]` or
+    // references tokio directly (e.g. `delay` lowers to `tokio::time::sleep`
+    // inside async functions even when main stays sync), or when `db_execute`
+    // references the rusqlite crate.
+    if code.contains("#[tokio::main]") || code.contains("tokio::") || code.contains("rusqlite::") {
         return verify_async_rust_compiles(code, &unique_id);
     }
 
@@ -830,7 +1090,15 @@ fn verify_async_rust_compiles(code: &str, unique_id: &str) -> Result<()> {
     let project_dir = temp_dir.join(format!("poly_check_async_{unique_id}"));
     let src_dir = project_dir.join("src");
     std::fs::create_dir_all(&src_dir).context("Failed to create temp Cargo project")?;
-    let manifest = "[package]\nname = \"poly_check_async\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\"] }\n[workspace]\n";
+    let rusqlite = if code.contains("rusqlite::") {
+        // "bundled" compiles SQLite from source so no system library is needed.
+        "rusqlite = { version = \"0.31\", features = [\"bundled\"] }\n"
+    } else {
+        ""
+    };
+    let manifest = format!(
+        "[package]\nname = \"poly_check_async\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\", \"net\", \"io-util\"] }}\n{rusqlite}[workspace]\n"
+    );
     std::fs::write(project_dir.join("Cargo.toml"), manifest)
         .context("Failed to write temp Cargo.toml")?;
     std::fs::write(src_dir.join("main.rs"), code).context("Failed to write temp main.rs")?;
@@ -965,15 +1233,28 @@ mod tests {
     }
 
     #[test]
+    fn target_parsing_supports_rust_and_c() {
+        assert_eq!(Target::from_str("rust").unwrap(), Target::Rust);
+        assert_eq!(Target::from_str("c").unwrap(), Target::C);
+        assert!(Target::from_str("cpp").is_err());
+        assert_eq!(Target::C.extension(), "c");
+    }
+
+    #[test]
     fn cargo_manifest_adds_tokio_only_for_async_programs() {
-        let synchronous = cargo_manifest("demo", false);
+        let synchronous = cargo_manifest("demo", false, false);
         assert!(synchronous.contains("name = \"demo\""));
         assert!(!synchronous.contains("tokio"));
+        assert!(!synchronous.contains("rusqlite"));
         assert!(synchronous.contains("[workspace]"));
 
-        let asynchronous = cargo_manifest("demo", true);
+        let asynchronous = cargo_manifest("demo", true, false);
         assert!(asynchronous.contains("tokio = { version = \"1\""));
         assert!(asynchronous.contains("\"time\""));
+        assert!(!asynchronous.contains("rusqlite"));
+
+        let with_db = cargo_manifest("demo", false, true);
+        assert!(with_db.contains("rusqlite = { version = \"0.31\""));
     }
 
     #[test]
@@ -1037,10 +1318,12 @@ mod tests {
 
     #[test]
     fn executable_path_replaces_poly_extension() {
-        assert_eq!(
-            executable_path(Path::new("examples/hello.poly")),
+        let expected = if cfg!(windows) {
+            PathBuf::from("examples/hello.exe")
+        } else {
             PathBuf::from("examples/hello")
-        );
+        };
+        assert_eq!(executable_path(Path::new("examples/hello.poly")), expected);
     }
 
     #[test]

@@ -324,8 +324,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "poly-c-codegen"
+version = "2.0.0-preview.1"
+dependencies = [
+ "poly-lexer",
+ "poly-parser",
+]
+
+[[package]]
 name = "poly-cli"
-version = "1.7.3"
+version = "2.0.0-preview.1"
 dependencies = [
  "anyhow",
  "criterion",
@@ -337,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "poly-intermediate-representation"
-version = "1.7.3"
+version = "2.0.0-preview.1"
 dependencies = [
  "poly-lexer",
  "poly-parser",
@@ -346,14 +354,14 @@ dependencies = [
 
 [[package]]
 name = "poly-lexer"
-version = "1.7.3"
+version = "2.0.0-preview.1"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "poly-lsp"
-version = "1.7.3"
+version = "2.0.0-preview.1"
 dependencies = [
  "poly-lexer",
  "poly-parser",
@@ -362,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "poly-parser"
-version = "1.7.3"
+version = "2.0.0-preview.1"
 dependencies = [
  "poly-lexer",
  "thiserror",
@@ -370,8 +378,9 @@ dependencies = [
 
 [[package]]
 name = "poly-transpiler"
-version = "1.7.3"
+version = "2.0.0-preview.1"
 dependencies = [
+ "poly-c-codegen",
  "poly-intermediate-representation",
  "poly-lexer",
  "poly-parser",
@@ -381,14 +390,14 @@ dependencies = [
 
 [[package]]
 name = "poly-types"
-version = "1.7.3"
+version = "2.0.0-preview.1"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "poly-wasm"
-version = "1.7.3"
+version = "2.0.0-preview.1"
 dependencies = [
  "poly-lexer",
  "poly-parser",

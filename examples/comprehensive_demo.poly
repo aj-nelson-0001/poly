@@ -1,0 +1,375 @@
+# Comprehensive Poly Language Demo
+# This file demonstrates all major Poly language features in one place.
+# Note: Poly generates fn main() automatically — do NOT define it yourself.
+# Functions, structs, and foreign blocks go at top level.
+# Executable statements (put, var, loops) go at top level and become main().
+
+# Foreign blocks: provide definitions in the target language
+#rust
+use std::collections::HashMap;
+
+struct Config {
+    name: String,
+    version: u32,
+}
+
+fn rust_helper(x: i32) -> i32 {
+    x * 2
+}
+#endrust
+
+# Constants
+const PI := 3.14159
+const MAX_RETRIES := 3
+
+# Variables at module scope
+var counter i32 := 0
+var name ustring := unicode "Poly"
+var pi_approx f64 := PI
+
+# Structs
+struct Point
+    x: f64
+    y: f64
+end struct
+
+struct Person
+    name: ustring
+    age: i32
+end struct
+
+# Functions
+fn add(a: i32, b: i32): i32
+    return a + b
+end fn
+
+fn greet(name: ustring)
+    put "Hello, " + name + "!"
+end fn
+
+fn factorial(n: i32): i32
+    if n <= 1,
+        return 1
+    end if
+    return n * factorial(n - 1)
+end fn
+
+fn fibonacci(n: i32): i32
+    if n <= 0,
+        return 0
+    else if n = 1,
+        return 1
+    end if
+    var a i32 := 0
+    var b i32 := 1
+    loop i 2..n+1
+        var temp := a + b
+        a := b
+        b := temp
+    end loop
+    return b
+end fn
+
+fn classify_temperature(temp: f64): string
+    if temp > 40.0,
+        return "Extremely Hot"
+    else if temp > 30.0,
+        return "Hot"
+    else if temp > 20.0,
+        return "Warm"
+    else if temp > 10.0,
+        return "Cool"
+    else,
+        return "Freezing"
+    end if
+end fn
+
+# ===========================================
+#  Executable code (becomes fn main() body)
+# ===========================================
+
+put "==========================================="
+put "   Comprehensive Poly Language Demo"
+put "==========================================="
+put ""
+
+# String interpolation
+put "Language: {name}"
+put "PI = {pi_approx}"
+put ""
+
+# Arithmetic
+put "-- Arithmetic --"
+var x i32 := 10
+var y i32 := 3
+var sum i32 := add(x, y)
+put "10 + 3 = " + sum.to_string()
+put "10 - 3 = " + (x - y).to_string()
+put "10 * 3 = " + (x * y).to_string()
+put "10 / 3 = " + (x / y).to_string()
+put "10 % 3 = " + (x % y).to_string()
+put ""
+
+# Mutation ops
+put "-- Mutation ops --"
+var ctr i32 := 0
+ctr := ctr + 1
+ctr := ctr + 1
+ctr := ctr - 1
+put "Counter after +1/+1/-1: " + ctr.to_string()
+ctr := ctr + 1
+ctr := ctr - 1
+put "Counter after further mutation: " + ctr.to_string()
+put ""
+
+# If / Else chains
+put "-- Conditionals --"
+var score i32 := 85
+var grade string := ""
+if score >= 90,
+    grade := "A"
+else if score >= 80,
+    grade := "B"
+else if score >= 70,
+    grade := "C"
+else,
+    grade := "F"
+end if
+put "Score {score} -> Grade {grade}"
+
+var temp_class string := classify_temperature(25.0)
+put "25C -> " + temp_class
+temp_class := classify_temperature(42.0)
+put "42C -> " + temp_class
+put ""
+
+# While loop (countdown)
+put "-- While loop (countdown) --"
+var countdown i32 := 5
+while countdown > 0
+    put "  T-minus " + countdown.to_string()
+    countdown := countdown - 1
+end while
+put "  Liftoff!"
+put ""
+
+# Loop ranges
+put "-- Loop ranges --"
+put "  Simple (0..5):"
+loop i 0..5
+    put "    " + i.to_string()
+end loop
+
+put "  With step (0..10 step 3):"
+loop i 0..10 step 3
+    put "    " + i.to_string()
+end loop
+
+put "  Multiple ranges (1..3, 10, 20..22):"
+loop i 1..3, 10, 20..22
+    put "    " + i.to_string()
+end loop
+
+put "  Counting down (5..1 step -1):"
+loop i 5..1 step -1
+    put "    " + i.to_string()
+end loop
+put ""
+
+# Collection iteration
+put "-- Collection iteration --"
+var colors Vec<ustring> := [unicode "red", unicode "green", unicode "blue"]
+loop color in colors
+    put "  Color: " + color
+end loop
+put ""
+
+# Nested loops (multiplication table)
+put "-- Multiplication table (1..4) --"
+put "      1    2    3    4"
+put "  -------------------"
+loop i 1..4
+    var row ustring := "  " + i.to_string() + " |"
+    loop j 1..4
+        var product i32 := i * j
+        row := row + " " + product.to_string()
+    end loop
+    put row
+end loop
+put ""
+
+# Recursion
+put "-- Recursion --"
+var fact_val i32 := factorial(6)
+put "  factorial(6) = " + fact_val.to_string()
+var fib_val i32 := fibonacci(10)
+put "  fibonacci(10) = " + fib_val.to_string()
+put ""
+
+# Bitwise operations
+put "-- Bitwise ops --"
+var a i32 := 10
+var b i32 := 12
+put "  a & b  = " + (a & b).to_string()
+put "  a | b  = " + (a | b).to_string()
+put "  a ^ b  = " + (a ^ b).to_string()
+put "  a << 2 = " + (a << 2).to_string()
+put "  a >> 1 = " + (a >> 1).to_string()
+put ""
+
+# Foreign function call
+put "-- Foreign (Rust) function --"
+var result i32 := rust_helper(21)
+put "  rust_helper(21) = " + result.to_string()
+put ""
+
+# File I/O
+put "-- File I/O --"
+put "Hello from Poly!" to "demo_output.txt"
+put "Appended line" to "demo_output.txt" -append
+var file_content ustring := get from "demo_output.txt"
+put "  File contents: " + file_content
+put ""
+
+# Logging
+put "-- Logging --"
+info "This is an info message"
+warn "This is a warning"
+error "This is an error"
+put ""
+
+# Break / Continue
+put "-- Break & Continue --"
+put "  Even numbers 0..10:"
+loop i 0..10
+    if i % 2 != 0,
+        continue
+    end if
+    put "    " + i.to_string()
+end loop
+put ""
+
+put "  First number > 7 in 0..20:"
+loop i 0..20
+    if i > 7,
+        put "    Found: " + i.to_string()
+        break
+    end if
+end loop
+put ""
+
+# Enums
+enum Color
+    Red
+    Green
+    Blue
+end enum
+
+enum Direction
+    North(f64)
+    South(f64)
+    East(f64)
+    West(f64)
+end enum
+
+fn describe_color(c: Color): string
+    match c
+        Color::Red, return "Red"
+        Color::Green, return "Green"
+        Color::Blue, return "Blue"
+    end match
+end fn
+
+# Closures
+fn apply_to_five(f: |i32| i32): i32
+    return f(5)
+end fn
+
+fn make_adder(n: i32): |i32| i32
+    return |x| x + n
+end fn
+
+# Match expressions
+fn classify_day(day: i32): string
+    match day
+        1, return "Monday"
+        2, return "Tuesday"
+        3, return "Wednesday"
+        4, return "Thursday"
+        5, return "Friday"
+        6, return "Saturday"
+        7, return "Sunday"
+        _, return "Invalid"
+    end match
+end fn
+
+fn describe_direction(d: Direction): string
+    match d
+        Direction::North(val), return "North at " + val.to_string()
+        Direction::South(val), return "South at " + val.to_string()
+        Direction::East(val), return "East at " + val.to_string()
+        Direction::West(val), return "West at " + val.to_string()
+    end match
+end fn
+
+# ===========================================
+#  New features demo (appended)
+# ===========================================
+
+# Enums
+put "-- Enums --"
+var my_color := Color::Red
+put "  Color: " + describe_color(my_color)
+my_color := Color::Blue
+put "  Color: " + describe_color(my_color)
+put ""
+
+# Enum with data
+put "-- Enum with data --"
+var dir := Direction::North(45.0)
+put "  Direction: " + describe_direction(dir)
+dir := Direction::South(12.5)
+put "  Direction: " + describe_direction(dir)
+put ""
+
+# Match expressions
+put "-- Match expressions --"
+var day_num i32 := 3
+var day_name string := classify_day(day_num)
+put "  Day " + day_num.to_string() + " = " + day_name
+day_num := 6
+day_name := classify_day(day_num)
+put "  Day " + day_num.to_string() + " = " + day_name
+put ""
+
+# Closures
+put "-- Closures --"
+var double := |x: i32| x * 2
+var doubled i32 := double(21)
+put "  double(21) = " + doubled.to_string()
+
+var triple := |x: i32| x * 3
+var tripled i32 := triple(7)
+put "  triple(7) = " + tripled.to_string()
+
+var add_five := make_adder(5)
+var result i32 := add_five(10)
+put "  make_adder(5)(10) = " + result.to_string()
+
+var result2 i32 := apply_to_five(double)
+put "  apply_to_five(double) = " + result2.to_string()
+put ""
+
+# Higher-order functions with closures
+put "-- Higher-order functions --"
+var nums Vec<i32> := [1, 2, 3, 4, 5]
+var sum i32 := 0
+loop n in nums
+    sum := sum + n
+end loop
+put "  Sum of [1,2,3,4,5] = " + sum.to_string()
+put ""
+
+put "==========================================="
+put "  Demo complete!"
+put "==========================================="

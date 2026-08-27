@@ -242,15 +242,15 @@ fn main()
     # Test tree operations
     var tree := Leaf
     var next_tree_5 := tree_insert(tree, 5)
-    set tree to next_tree_5
+    tree := next_tree_5
     var next_tree_3 := tree_insert(tree, 3)
-    set tree to next_tree_3
+    tree := next_tree_3
     var next_tree_7 := tree_insert(tree, 7)
-    set tree to next_tree_7
+    tree := next_tree_7
     var next_tree_1 := tree_insert(tree, 1)
-    set tree to next_tree_1
+    tree := next_tree_1
     var next_tree_4 := tree_insert(tree, 4)
-    set tree to next_tree_4
+    tree := next_tree_4
     
     put "Tree sum: "
     put tree_sum(tree)

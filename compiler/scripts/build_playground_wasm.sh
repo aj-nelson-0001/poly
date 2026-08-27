@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 # (hundreds of KB of dead weight in the browser); errors are returned as Result
 # values by the transpiler, so panics are true bugs and abort is fine.
 # Note: --config requires Cargo 1.63+.
-cargo build -p poly-wasm --release --target wasm32-unknown-unknown \
+cargo build --locked -p poly-wasm --release --target wasm32-unknown-unknown \
   --config 'profile.release.opt-level="z"' \
   --config 'profile.release.lto=true' \
   --config 'profile.release.codegen-units=1' \

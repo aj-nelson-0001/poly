@@ -34,7 +34,7 @@ fn main()
     
     # Test 5: Delimiter-based input
     put "Test 5: CSV parsing"
-    put -n "Enter CSV line (e.g., Alice,30,alice@email.com): "
+    put "Enter CSV line (e.g., Alice,30,alice@email.com): "
     var csv_line ustring := get --until unicode ","
     put "First field: " + csv_line
     put ""
@@ -47,7 +47,7 @@ fn main()
     
     # Test 7: Type conversion (--as flag)
     put "Test 7: Type conversion"
-    put -n "Enter a number: "
+    put "Enter a number: "
     var num i32 := get --as i32
     put "You entered: " + num.to_string()
     put "Doubled: " + (num * 2).to_string()
@@ -56,9 +56,9 @@ fn main()
     # Test 8: Read specific number of bytes (--bytes flag)
     put "Test 8: Read specific bytes"
     put "Creating test file..."
-    put "Hello, World!" > "test_bytes.txt"
+    put "Hello, World!" to "test_bytes.txt"
     put "Reading first 5 bytes..."
-    var first_five bytes := get < "test_bytes.txt" --bytes 5
+    var first_five bytes := get from "test_bytes.txt" --bytes 5
     put "First 5 bytes: " + first_five.len().to_string() + " bytes"
     put ""
     
@@ -74,9 +74,9 @@ fn is_valid_email(email: ustring): bool
     
     # Check for @ symbol
     var has_at bool := false
-    loop: i 0..email.len() - 1
+    loop i 0..email.len() - 1
         if email[i] = unicode '@',
-            set has_at to true
+            has_at := true
             break
         end if
     end loop
@@ -88,11 +88,11 @@ fn is_valid_email(email: ustring): bool
     # Check for . after @
     var has_dot bool := false
     var after_at bool := false
-    loop: i 0..email.len() - 1
+    loop i 0..email.len() - 1
         if email[i] = unicode '@',
-            set after_at to true
+            after_at := true
         else if after_at && email[i] = unicode '.',
-            set has_dot to true
+            has_dot := true
         end if
     end loop
     

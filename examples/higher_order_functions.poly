@@ -29,7 +29,7 @@ fn main()
     put xs.map(|x| x * 2)[0]
     put xs.map(|x| x * 2)[4]
     put "evens:"
-    var evens := xs.filter(|x| x % 2 == 0)
+    var evens := xs.filter(|x| x % 2 = 0)
     for v in evens
         put v
     end for

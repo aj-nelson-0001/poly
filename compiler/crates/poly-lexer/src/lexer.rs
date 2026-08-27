@@ -112,6 +112,11 @@ impl<'a> Lexer<'a> {
                     self.advance();
                 }
                 '#' => {
+                    // Foreign block openings must reach `scan_token`; ordinary
+                    // `#` comments remain whitespace to the parser.
+                    if self.foreign_block_language_at_current().is_some() {
+                        break;
+                    }
                     self.skip_comment();
                 }
                 '/' if self.peek_next() == '*' || self.peek_next() == '/' => {
@@ -232,43 +237,17 @@ impl<'a> Lexer<'a> {
             'a'..='z' | 'A'..='Z' | '_' => self.scan_identifier_or_keyword(start),
 
             // Operators
-            '+' => {
-                if self.match_char('=') {
-                    self.add_token(TokenKind::PlusEq, start);
-                } else {
-                    self.add_token(TokenKind::Plus, start);
-                }
-            }
+            '+' => self.add_token(TokenKind::Plus, start),
             '-' => {
                 if self.match_char('>') {
                     self.add_token(TokenKind::Arrow, start);
-                } else if self.match_char('=') {
-                    self.add_token(TokenKind::MinusEq, start);
                 } else {
                     self.add_token(TokenKind::Minus, start);
                 }
             }
-            '*' => {
-                if self.match_char('=') {
-                    self.add_token(TokenKind::StarEq, start);
-                } else {
-                    self.add_token(TokenKind::Star, start);
-                }
-            }
-            '/' => {
-                if self.match_char('=') {
-                    self.add_token(TokenKind::SlashEq, start);
-                } else {
-                    self.add_token(TokenKind::Slash, start);
-                }
-            }
-            '%' => {
-                if self.match_char('=') {
-                    self.add_token(TokenKind::PercentEq, start);
-                } else {
-                    self.add_token(TokenKind::Percent, start);
-                }
-            }
+            '*' => self.add_token(TokenKind::Star, start),
+            '/' => self.add_token(TokenKind::Slash, start),
+            '%' => self.add_token(TokenKind::Percent, start),
             '=' => {
                 if self.match_char('=') {
                     self.add_token(TokenKind::EqEq, start);
@@ -289,11 +268,7 @@ impl<'a> Lexer<'a> {
                 if self.match_char('=') {
                     self.add_token(TokenKind::LtEq, start);
                 } else if self.match_char('<') {
-                    if self.match_char('=') {
-                        self.add_token(TokenKind::LtLtEq, start);
-                    } else {
-                        self.add_token(TokenKind::LtLt, start);
-                    }
+                    self.add_token(TokenKind::LtLt, start);
                 } else {
                     self.add_token(TokenKind::Lt, start);
                 }
@@ -302,11 +277,7 @@ impl<'a> Lexer<'a> {
                 if self.match_char('=') {
                     self.add_token(TokenKind::GtEq, start);
                 } else if self.match_char('>') {
-                    if self.match_char('=') {
-                        self.add_token(TokenKind::GtGtEq, start);
-                    } else {
-                        self.add_token(TokenKind::GtGt, start);
-                    }
+                    self.add_token(TokenKind::GtGt, start);
                 } else {
                     self.add_token(TokenKind::Gt, start);
                 }
@@ -314,8 +285,6 @@ impl<'a> Lexer<'a> {
             '&' => {
                 if self.match_char('&') {
                     self.add_token(TokenKind::AndAnd, start);
-                } else if self.match_char('=') {
-                    self.add_token(TokenKind::AmpEq, start);
                 } else {
                     self.add_token(TokenKind::Amp, start);
                 }
@@ -323,17 +292,21 @@ impl<'a> Lexer<'a> {
             '|' => {
                 if self.match_char('|') {
                     self.add_token(TokenKind::OrOr, start);
-                } else if self.match_char('=') {
-                    self.add_token(TokenKind::PipeEq, start);
                 } else {
                     self.add_token(TokenKind::Pipe, start);
                 }
             }
-            '^' => {
-                if self.match_char('=') {
-                    self.add_token(TokenKind::CaretEq, start);
+            '^' => self.add_token(TokenKind::Caret, start),
+
+            // Foreign passthrough block: #<language> ... #end<language>
+            '#' => {
+                if let Some(language) = self.foreign_block_language_at_current() {
+                    self.scan_foreign_block(start, language);
                 } else {
-                    self.add_token(TokenKind::Caret, start);
+                    // Regular Poly comment — consume to end of line.
+                    while !self.is_at_end() && self.current() != '\n' {
+                        self.advance();
+                    }
                 }
             }
 
@@ -357,6 +330,87 @@ impl<'a> Lexer<'a> {
         // source from the first character through the final consumed character.
         self.tokens
             .push(Token::new(kind, Span::new(start, self.pos)));
+    }
+
+    /// Return the language after `#` when the marker is a standalone block
+    /// opener. This is called after `#` has already been consumed.
+    fn foreign_block_language_at_current(&self) -> Option<String> {
+        let marker_start = if self.current() == '#' {
+            self.pos + 1
+        } else {
+            self.pos
+        };
+        let line_end = self
+            .chars
+            .iter()
+            .enumerate()
+            .skip(marker_start)
+            .find_map(|(index, ch)| (*ch == '\n').then_some(index))
+            .unwrap_or(self.chars.len());
+        let marker: String = self.chars[marker_start..line_end].iter().collect();
+        let language = ["rust", "cpp", "c"]
+            .iter()
+            .find(|language| marker.starts_with(**language))?;
+        if marker[language.len()..].trim().is_empty() {
+            Some((*language).to_string())
+        } else {
+            None
+        }
+    }
+
+    /// Scan a `#<language> ... #end<language>` block. The opening `#` has
+    /// already been consumed. End markers are recognized only at line starts,
+    /// so strings and comments inside foreign code remain opaque.
+    fn scan_foreign_block(&mut self, start: usize, language: String) {
+        for _ in 0..language.chars().count() {
+            self.advance();
+        }
+        while !self.is_at_end() && self.current() != '\n' {
+            self.advance();
+        }
+        if !self.is_at_end() {
+            self.advance();
+        }
+
+        let mut content = String::new();
+        let block_start = self.pos;
+        let end_marker = format!("#end{language}");
+        while !self.is_at_end() {
+            let mut line_start = self.pos;
+            while line_start > 0 && self.chars[line_start - 1] != '\n' {
+                line_start -= 1;
+            }
+            let at_line_start = self.chars[line_start..self.pos]
+                .iter()
+                .all(|ch| ch.is_whitespace());
+            if at_line_start {
+                let remaining: String = self.chars[self.pos..].iter().collect();
+                let marker_end = end_marker.chars().count();
+                if remaining.starts_with(&end_marker)
+                    && remaining
+                        .chars()
+                        .nth(marker_end)
+                        .is_none_or(|ch| ch == '\n' || ch == '\r')
+                {
+                    for _ in 0..marker_end {
+                        self.advance();
+                    }
+                    while !self.is_at_end() && self.current() != '\n' {
+                        self.advance();
+                    }
+                    self.add_token(TokenKind::ForeignBlock { language, content }, start);
+                    return;
+                }
+            }
+            content.push(self.advance());
+        }
+
+        self.errors.push(LexerError::new(
+            LexerErrorKind::UnterminatedComment,
+            Span::new(block_start, self.pos),
+            format!("Unterminated foreign block; missing {end_marker}"),
+        ));
+        self.add_token(TokenKind::ForeignBlock { language, content }, start);
     }
 
     // === Scanners ===
@@ -530,8 +584,14 @@ impl<'a> Lexer<'a> {
             self.advance();
         }
 
+        // A number that directly follows a `.` is a tuple index (`pair.0`,
+        // `nested.1.0`), so the following dot must not be consumed as a
+        // decimal point — exactly like Rust's lexer, where `t.1.0` lexes as
+        // `t`, `.`, `1`, `.`, `0`.
+        let after_dot = matches!(self.tokens.last().map(|t| &t.kind), Some(TokenKind::Dot));
+
         // Look for decimal point
-        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
+        if !after_dot && self.peek() == '.' && self.peek_next().is_ascii_digit() {
             self.advance(); // consume '.'
             while !self.is_at_end() && self.current().is_ascii_digit() {
                 self.advance();
@@ -649,12 +709,8 @@ impl<'a> Lexer<'a> {
             "for" => TokenKind::For,
             "in" => TokenKind::In,
             "match" => TokenKind::Match,
-            "set" => TokenKind::Set,
             "to" => TokenKind::To,
-            "add" => TokenKind::Add,
-            "sub" => TokenKind::Sub,
-            "inc" => TokenKind::Inc,
-            "dec" => TokenKind::Dec,
+            "from" => TokenKind::From,
             "break" => TokenKind::Break,
             "continue" => TokenKind::Continue,
             "return" => TokenKind::Return,
@@ -664,6 +720,7 @@ impl<'a> Lexer<'a> {
             "impl" => TokenKind::Impl,
             "module" => TokenKind::Module,
             "use" => TokenKind::Use,
+            "extern" => TokenKind::Extern,
             "pub" => TokenKind::Pub,
             "as" => TokenKind::As,
             "where" => TokenKind::Where,
@@ -855,21 +912,16 @@ mod tests {
     }
 
     #[test]
-    fn test_compound_mutation_operators_are_lexed_for_diagnostics() {
-        let source = "x += 5 -= 3 *= 2 /= 4 %= 3";
+    fn test_compound_operators_are_separate_tokens() {
+        // Compound operators like += are no longer single tokens;
+        // they lex as two separate tokens: + and =
+        let source = "x + = 5";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Identifier("x".to_string()));
-        assert_eq!(tokens[1].kind, TokenKind::PlusEq);
-        assert_eq!(tokens[2].kind, TokenKind::IntLiteral("5".to_string()));
-        assert_eq!(tokens[3].kind, TokenKind::MinusEq);
-        assert_eq!(tokens[4].kind, TokenKind::IntLiteral("3".to_string()));
-        assert_eq!(tokens[5].kind, TokenKind::StarEq);
-        assert_eq!(tokens[6].kind, TokenKind::IntLiteral("2".to_string()));
-        assert_eq!(tokens[7].kind, TokenKind::SlashEq);
-        assert_eq!(tokens[8].kind, TokenKind::IntLiteral("4".to_string()));
-        assert_eq!(tokens[9].kind, TokenKind::PercentEq);
-        assert_eq!(tokens[10].kind, TokenKind::IntLiteral("3".to_string()));
+        assert_eq!(tokens[1].kind, TokenKind::Plus);
+        assert_eq!(tokens[2].kind, TokenKind::Eq);
+        assert_eq!(tokens[3].kind, TokenKind::IntLiteral("5".to_string()));
     }
 
     #[test]
@@ -945,6 +997,21 @@ mod tests {
     }
 
     #[test]
+    fn test_tuple_index_after_dot_is_integer_not_float() {
+        // `nested.1.0` must lex as `nested`, `.`, `1`, `.`, `0` — the dot after
+        // a field-access dot must not be consumed as a float decimal point.
+        let source = "put nested.1.0";
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty());
+        let kinds: Vec<&TokenKind> = tokens.iter().map(|t| &t.kind).collect();
+        assert_eq!(kinds[1], &TokenKind::Identifier("nested".to_string()));
+        assert_eq!(kinds[2], &TokenKind::Dot);
+        assert_eq!(kinds[3], &TokenKind::IntLiteral("1".to_string()));
+        assert_eq!(kinds[4], &TokenKind::Dot);
+        assert_eq!(kinds[5], &TokenKind::IntLiteral("0".to_string()));
+    }
+
+    #[test]
     fn test_struct_declaration() {
         let source = "struct Point\n    var x: f32\n    var y: f32\nend struct";
         let (tokens, errors) = Lexer::lex(source);
@@ -1010,6 +1077,30 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Var);
+    }
+
+    #[test]
+    fn test_foreign_blocks_are_line_delimited_and_language_tagged() {
+        let source = "#rust\nconst VALUE: i32 = 1;\nlet text = \"#endrust\";\n#endrust\n#c\nint answer(void) { return 42; }\n#endc";
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(matches!(
+            tokens.first().map(|token| &token.kind),
+            Some(TokenKind::ForeignBlock { language, content })
+                if language == "rust" && content.contains("#endrust")
+        ));
+        assert!(matches!(
+            tokens.get(1).map(|token| &token.kind),
+            Some(TokenKind::ForeignBlock { language, .. }) if language == "c"
+        ));
+    }
+
+    #[test]
+    fn test_foreign_end_marker_must_start_a_line() {
+        let source = "#rust\nlet x = \"#endrust\";\n#endrust\nput 1";
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(tokens.len(), 4);
     }
 
     #[test]

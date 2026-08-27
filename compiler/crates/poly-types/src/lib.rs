@@ -8,6 +8,8 @@ use std::collections::HashMap;
 /// A Poly type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolyType {
+    /// The checker keeps target-neutral types here; backend-specific spellings
+    /// are chosen later by Rust or C code generation.
     /// Primitive types
     I8,
     U8,
@@ -44,6 +46,10 @@ pub enum PolyType {
     Set(Box<PolyType>),
     Option(Box<PolyType>),
     Result(Box<PolyType>, Box<PolyType>),
+
+    /// Iterator over owned elements (from `xs.iter()`), used only
+    /// internally by the checker for `map`/`filter`/`sum` chains.
+    Iterator(Box<PolyType>),
 
     /// Reference types
     Reference(bool, Box<PolyType>), // (mutable, inner)
@@ -103,6 +109,7 @@ impl std::fmt::Display for PolyType {
             PolyType::Set(inner) => write!(f, "Set<{}>", inner),
             PolyType::Option(inner) => write!(f, "Option<{}>", inner),
             PolyType::Result(ok, err) => write!(f, "Result<{}, {}>", ok, err),
+            PolyType::Iterator(inner) => write!(f, "Iterator<{}>", inner),
             PolyType::Reference(mutable, inner) => {
                 if *mutable {
                     write!(f, "&mut {}", inner)
@@ -130,7 +137,10 @@ impl std::fmt::Display for PolyType {
 /// A type error.
 #[derive(Debug, Clone)]
 pub struct TypeError {
+    /// Human-readable semantic failure shared by compiler and editor clients.
     pub message: String,
+    /// Optional byte span; `None` is retained for errors from the reusable
+    /// type core when no AST node is available.
     pub span: Option<(usize, usize)>,
 }
 
@@ -162,6 +172,8 @@ pub struct TypeSystem {
 
 impl TypeSystem {
     /// Create a new type system instance.
+    /// Create a checker with one module scope. Additional scopes are managed
+    /// by callers while checking functions and nested blocks.
     pub fn new() -> Self {
         Self {
             env: HashMap::new(),
@@ -172,6 +184,8 @@ impl TypeSystem {
     }
 
     /// Create a fresh type variable.
+    /// Allocate a monotonically numbered inference variable so unresolved
+    /// types can be unified without relying on source names.
     pub fn fresh_type_var(&mut self) -> PolyType {
         let id = self.next_var_id;
         self.next_var_id += 1;
@@ -179,6 +193,8 @@ impl TypeSystem {
     }
 
     /// Register a variable with a type.
+    /// Register a binding in the reusable environment used by expression
+    /// consumers that do not operate on the full AST checker.
     pub fn register_var(&mut self, name: String, ty: PolyType) {
         self.env.insert(name, ty);
     }
@@ -317,6 +333,8 @@ impl TypeSystem {
     }
 
     /// Clear all errors.
+    /// Discard diagnostics so the same type-system instance can check a new
+    /// independent fragment without leaking prior failures.
     pub fn clear_errors(&mut self) {
         self.errors.clear();
     }

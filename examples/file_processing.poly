@@ -7,15 +7,15 @@ fn main()
     
     # Create a sample file
     put "Creating sample file..."
-    put "Line 1: Hello, World!" > "sample.txt"
-    put "Line 2: Poly is awesome" >> "sample.txt"
-    put "Line 3: File I/O is easy" >> "sample.txt"
+    put "Line 1: Hello, World!" to "sample.txt"
+    put "Line 2: Poly is awesome" to "sample.txt" -append
+    put "Line 3: File I/O is easy" to "sample.txt" -append
     put "Sample file created."
     put ""
     
     # Read entire file
     put "Reading entire file:"
-    var content ustring := get < "sample.txt"
+    var content ustring := get from "sample.txt"
     put content
     put ""
     
@@ -26,7 +26,7 @@ fn main()
     while !file.eof()
         var line ustring := file.get_line()
         put "Line " + line_num.to_string() + ": " + line
-        add line_num
+        line_num := line_num + 1
     end while
     put ""
     
@@ -39,39 +39,39 @@ fn main()
         unicode "Charlie,35,charlie@example.com"
     ]
     
-    loop: record in records
-        put record >> "contacts.csv"
+    loop record in records
+        put record to "contacts.csv" -append
     end loop
     put "CSV file created."
     put ""
     
     # Read and process CSV
     put "Processing CSV file:"
-    var csv_content ustring := get < "contacts.csv"
+    var csv_content ustring := get from "contacts.csv"
     var lines Vec<ustring> := csv_content.split(unicode "\n")
     
     var i i32 := 0
-    loop: line in lines
+    loop line in lines
         if i > 0, # Skip header
             var fields Vec<ustring> := line.split(unicode ",")
             if fields.len() >= 2,
                 put "Name: " + fields[0] + ", Age: " + fields[1]
             end if
         end if
-        add i
+        i := i + 1
     end loop
     put ""
     
     # Binary file example
     put "Writing binary file..."
     var data bytes := [0x48, 0x65, 0x6C, 0x6C, 0x6F]  # "Hello" in bytes
-    data > "binary.bin"
+    put data to "binary.bin"
     put "Binary file created."
     put ""
     
     # Read binary file
     put "Reading binary file:"
-    var binary_data bytes := get < "binary.bin"
+    var binary_data bytes := get from "binary.bin"
     put "Binary size: " + binary_data.len().to_string() + " bytes"
     put ""
     

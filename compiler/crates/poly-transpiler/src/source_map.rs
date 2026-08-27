@@ -8,6 +8,8 @@ use std::collections::HashMap;
 /// A single mapping from target (Rust) line to source (Poly) line.
 #[derive(Debug, Clone)]
 pub struct SourceMapping {
+    /// Target/source line pairs are stored independently of generated text so
+    /// diagnostics can work even after formatting changes the Rust output.
     /// Line number in the target (Rust) output (1-based)
     pub target_line: usize,
     /// Line number in the source (Poly) input (1-based)
@@ -26,6 +28,8 @@ pub struct SourceMapping {
 /// keeps columns and symbol locations available for a future span-precise pass.
 #[derive(Debug, Clone)]
 pub struct SourceMap {
+    /// The map owns both texts because error rendering must remain stable even
+    /// when the caller has discarded its original source buffers.
     /// The original Poly source code
     source: String,
     /// The transpiled Rust code
@@ -54,7 +58,8 @@ pub struct SourceLocation {
 }
 
 impl SourceMap {
-    /// Create a new source map from source and target code.
+    /// Create a new source map from source and target code. Line offsets are
+    /// precomputed once because editor diagnostics may query many positions.
     pub fn new(source: &str, target: &str) -> Self {
         let source_line_offsets = Self::compute_line_offsets(source);
         let target_line_offsets = Self::compute_line_offsets(target);
@@ -83,7 +88,8 @@ impl SourceMap {
         offsets
     }
 
-    /// Add a mapping from target line to source line.
+    /// Add a coarse line mapping. Code generation uses this fast path for
+    /// statements that do not carry column-level lowering information.
     pub fn add_mapping(&mut self, target_line: usize, source_line: usize) {
         self.mappings.push(SourceMapping {
             target_line,
@@ -148,6 +154,8 @@ impl SourceMap {
     }
 
     /// Look up the source location for a target position (line and column).
+    /// The current lookup is line-based; retaining the column argument keeps
+    /// the public API ready for a span-precise mapping pass.
     pub fn lookup_target_position(
         &self,
         target_line: usize,

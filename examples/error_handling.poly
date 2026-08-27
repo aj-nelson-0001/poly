@@ -67,7 +67,7 @@ fn load_application()
     match read_config(unicode "config.txt")
         Ok(config),
             put "Config loaded"
-            process_config(config)
+            put "Config processed: " + config
         Error(e),
             error "Failed to load config"
             exit(1)
@@ -187,7 +187,7 @@ fn retry_operation(max_retries: i32): Result<ustring, AppError>
         # Simulate a risky operation
         if attempt < 2,
             warn "Attempt " + attempt.to_string() + " failed"
-            add attempt
+            attempt := attempt + 1
         else
             return Ok(unicode "Success on attempt " + attempt.to_string())
         end if

@@ -11,6 +11,8 @@ use crate::intermediate_representation::*;
 
 /// Convert a parsed Poly program into intermediate representation.
 pub fn generate(program: &ast::Program) -> Program {
+    // Keep this pass structural: semantic meaning belongs to the checker and
+    // target-specific lowering belongs to codegen, which keeps the IR reusable.
     let mut intermediate_representation = Program::default();
     for spanned in &program.statements {
         let statement = &spanned.node;
@@ -66,6 +68,15 @@ pub fn generate(program: &ast::Program) -> Program {
                 }
                 intermediate_representation.uses.push(path);
             }
+            // Rust blocks are hoisted because Rust items cannot appear inside
+            // the generated `main`; target selection has already removed C/C++.
+            ast::Statement::ForeignBlock { language, content } if language == "rust" => {
+                intermediate_representation
+                    .top_level_rust_blocks
+                    .push(content.clone());
+            }
+            ast::Statement::ForeignBlock { .. } => {}
+            ast::Statement::ExternFunctionDeclaration(_) => {}
             _ => {
                 intermediate_representation
                     .main_body
@@ -205,19 +216,9 @@ fn gen_statement(statement: &ast::Statement) -> Statement {
         ast::Statement::ConstDeclaration { .. } => {
             unreachable!("constants are collected first")
         }
-        ast::Statement::Set { target, value } => Statement::Assignment {
+        ast::Statement::Assignment { target, value } => Statement::Assignment {
             target: gen_expr(target),
             value: gen_expr(value),
-        },
-        ast::Statement::Mutation { target, op, value } => Statement::Mutation {
-            target: gen_expr(target),
-            op: match op {
-                ast::MutationOp::Add => MutationOp::Add,
-                ast::MutationOp::Sub => MutationOp::Sub,
-                ast::MutationOp::Inc => MutationOp::Inc,
-                ast::MutationOp::Dec => MutationOp::Dec,
-            },
-            value: value.as_ref().map(gen_expr),
         },
         ast::Statement::FunctionDeclaration(function) => {
             Statement::NestedFunction(gen_function(function))
@@ -233,12 +234,7 @@ fn gen_statement(statement: &ast::Statement) -> Statement {
         ast::Statement::ReturnStatement(value) => Statement::Return(value.as_ref().map(gen_expr)),
         ast::Statement::BreakStatement => Statement::Break,
         ast::Statement::ContinueStatement => Statement::Continue,
-        ast::Statement::PutStatement {
-            no_newline,
-            expr,
-            redirect,
-        } => Statement::Put {
-            no_newline: *no_newline,
+        ast::Statement::PutStatement { expr, redirect } => Statement::Put {
             expr: gen_expr(expr),
             redirect: redirect.as_ref().map(|redirect| match redirect {
                 ast::Redirect::Write(path) => Redirect::Write(gen_expr(path)),
@@ -254,6 +250,13 @@ fn gen_statement(statement: &ast::Statement) -> Statement {
                 .map(|spanned| gen_statement(&spanned.node))
                 .collect(),
         ),
+        ast::Statement::ForeignBlock { language, content } => Statement::ForeignBlock {
+            language: language.clone(),
+            content: content.clone(),
+        },
+        ast::Statement::ExternFunctionDeclaration(_) => {
+            unreachable!("extern declarations are consumed by the checker")
+        }
     }
 }
 
@@ -303,6 +306,10 @@ fn gen_expr(expr: &ast::Expression) -> Expr {
         ast::Expression::FieldAccess { object, field } => Expr::FieldAccess {
             object: Box::new(gen_expr(object)),
             field: field.clone(),
+        },
+        ast::Expression::TupleIndex { object, index } => Expr::TupleIndex {
+            object: Box::new(gen_expr(object)),
+            index: *index,
         },
         ast::Expression::Parenthesized(expr) => Expr::Parenthesized(Box::new(gen_expr(expr))),
         ast::Expression::IfExpression {

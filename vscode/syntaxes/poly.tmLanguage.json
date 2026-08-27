@@ -38,6 +38,27 @@
             {
               "name": "constant.character.escape.poly",
               "match": "\\\\(n|r|t|0|\\\"|\\\\|u\\{[0-9a-fA-F]+\\})"
+            },
+            {
+              "name": "meta.interpolation.poly",
+              "begin": "\\{",
+              "end": "\\}",
+              "beginCaptures": {
+                "0": { "name": "punctuation.definition.interpolation.begin.poly" }
+              },
+              "endCaptures": {
+                "0": { "name": "punctuation.definition.interpolation.end.poly" }
+              },
+              "patterns": [
+                {
+                  "name": "variable.other.poly",
+                  "match": "\\b[a-z_][a-zA-Z0-9_]*\\b"
+                },
+                {
+                  "name": "constant.numeric.integer.poly",
+                  "match": "\\b[0-9][0-9_]*\\b"
+                }
+              ]
             }
           ]
         },
@@ -47,7 +68,30 @@
           "end": "\\\"",
           "beginCaptures": {
             "0": { "name": "keyword.other.unicode.poly" }
-          }
+          },
+          "patterns": [
+            {
+              "name": "meta.interpolation.poly",
+              "begin": "\\{",
+              "end": "\\}",
+              "beginCaptures": {
+                "0": { "name": "punctuation.definition.interpolation.begin.poly" }
+              },
+              "endCaptures": {
+                "0": { "name": "punctuation.definition.interpolation.end.poly" }
+              },
+              "patterns": [
+                {
+                  "name": "variable.other.poly",
+                  "match": "\\b[a-z_][a-zA-Z0-9_]*\\b"
+                },
+                {
+                  "name": "constant.numeric.integer.poly",
+                  "match": "\\b[0-9][0-9_]*\\b"
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -228,7 +272,7 @@
         },
         {
           "name": "keyword.operator.pipe.poly",
-          "match": "->|=>|\\|>|<\\||\\.\\."
+          "match": "->|\\|>|<\\||\\.\\."
         }
       ]
     }

@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use poly_lexer::token::{Span, Token, TokenKind};
+use poly_lexer::Lexer;
 
 use crate::ast::*;
 use crate::error::ParseError;
@@ -22,6 +23,8 @@ pub struct Parser<'a> {
     // While parsing `get` flag values, a `--` starts the next flag, so a
     // binary minus must not swallow it: `get --timeout 5000 --default 0`.
     stop_at_double_minus: bool,
+    // Foreign blocks are only valid at program scope.
+    block_depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -34,6 +37,124 @@ impl<'a> Parser<'a> {
             if_depth: 0,
             macros: HashMap::new(),
             stop_at_double_minus: false,
+            block_depth: 0,
+        }
+    }
+
+    /// Scan the token stream for removed syntax and emit helpful migration hints.
+    fn detect_old_syntax(&mut self) {
+        let mut i = 0;
+        while i < self.tokens.len() {
+            match &self.tokens[i].kind {
+                // `loop:` → suggest `loop` without colon
+                TokenKind::Loop
+                    if i + 1 < self.tokens.len()
+                        && matches!(self.tokens[i + 1].kind, TokenKind::Colon) =>
+                {
+                    let span = Span::new(self.tokens[i].span.start, self.tokens[i + 1].span.end);
+                    self.errors.push(ParseError::with_suggestion(
+                        "`loop:` syntax has been removed".to_string(),
+                        span,
+                        "Use `loop` without the colon: `loop i 0..10 ... end loop`".to_string(),
+                    ));
+                    i += 2;
+                }
+                // `set x to y` → suggest `x := y`
+                TokenKind::Identifier(name) if name == "set" && i + 3 < self.tokens.len() => {
+                    if let TokenKind::Identifier(_) = &self.tokens[i + 1].kind {
+                        if matches!(&self.tokens[i + 2].kind, TokenKind::Identifier(t) if t == "to")
+                        {
+                            let span =
+                                Span::new(self.tokens[i].span.start, self.tokens[i].span.end);
+                            self.errors.push(ParseError::with_suggestion(
+                                "`set x to y` syntax has been removed".to_string(),
+                                span,
+                                "Use `x := y` instead of `set x to y`".to_string(),
+                            ));
+                        }
+                    }
+                    i += 1;
+                }
+                // `put ... > "file"` → suggest `to "file"`
+                TokenKind::Put => {
+                    // Scan ahead for `> "..."` or `>> "..."` (but NOT `to>>` or `from>>`)
+                    let mut j = i + 1;
+                    while j < self.tokens.len()
+                        && !matches!(self.tokens[j].kind, TokenKind::Eof | TokenKind::Newline)
+                    {
+                        if matches!(self.tokens[j].kind, TokenKind::Gt | TokenKind::GtGt) {
+                            // Skip operators that belong to an explicit `to`/`from` clause;
+                            // migration diagnostics should only flag the retired standalone form.
+                            let prev_is_to_or_from = j > 0
+                                && matches!(
+                                    self.tokens[j - 1].kind,
+                                    TokenKind::To | TokenKind::From
+                                );
+                            if !prev_is_to_or_from
+                                && j + 1 < self.tokens.len()
+                                && matches!(self.tokens[j + 1].kind, TokenKind::StringLiteral(_))
+                            {
+                                let op = if matches!(self.tokens[j].kind, TokenKind::GtGt) {
+                                    ">>"
+                                } else {
+                                    ">"
+                                };
+                                let suggestion = if op == ">>" {
+                                    "Use `put expr to \"file\" -append` to append to a file"
+                                } else {
+                                    "Use `put expr to \"file\"` to write to a file"
+                                };
+                                let span = Span::new(
+                                    self.tokens[i].span.start,
+                                    self.tokens[j + 1].span.end,
+                                );
+                                self.errors.push(ParseError::with_suggestion(
+                                    format!("`put ... {} \"file\"` syntax has been removed", op),
+                                    span,
+                                    suggestion.to_string(),
+                                ));
+                                break;
+                            }
+                        }
+                        j += 1;
+                    }
+                    i += 1;
+                }
+                // `get < "file"` → suggest `from "file"`
+                TokenKind::Get => {
+                    let mut j = i + 1;
+                    while j < self.tokens.len()
+                        && !matches!(self.tokens[j].kind, TokenKind::Eof | TokenKind::Newline)
+                    {
+                        if matches!(self.tokens[j].kind, TokenKind::Lt | TokenKind::LtLt)
+                            && j + 1 < self.tokens.len()
+                            && matches!(self.tokens[j + 1].kind, TokenKind::StringLiteral(_))
+                        {
+                            let op = if matches!(self.tokens[j].kind, TokenKind::LtLt) {
+                                "<<"
+                            } else {
+                                "<"
+                            };
+                            let suggestion = if op == "<<" {
+                                "Use `get from \"file\"` (input append is not supported)"
+                            } else {
+                                "Use `get from \"file\"` to read from a file"
+                            };
+                            let span =
+                                Span::new(self.tokens[i].span.start, self.tokens[j + 1].span.end);
+                            self.errors.push(ParseError::with_suggestion(
+                                format!("`get {} \"file\"` syntax has been removed", op),
+                                span,
+                                suggestion.to_string(),
+                            ));
+                            break;
+                        }
+                        j += 1;
+                    }
+                    i += 1;
+                }
+                _ => i += 1,
+            }
         }
     }
 
@@ -42,6 +163,9 @@ impl<'a> Parser<'a> {
     /// This compatibility entry point preserves the historical first-error API;
     /// tools that want all diagnostics should call `parse_with_recovery`.
     pub fn parse(&mut self) -> Result<Program, ParseError> {
+        // Detect removed syntax before parsing to give helpful migration hints.
+        self.detect_old_syntax();
+
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
@@ -69,6 +193,9 @@ impl<'a> Parser<'a> {
     /// A partially built program is returned alongside diagnostics so the CLI
     /// and editor integrations can continue analyzing valid later statements.
     pub fn parse_with_recovery(&mut self) -> (Program, Vec<ParseError>) {
+        // Detect removed syntax before parsing to give helpful migration hints.
+        self.detect_old_syntax();
+
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
@@ -131,11 +258,6 @@ impl<'a> Parser<'a> {
                 | TokenKind::Return
                 | TokenKind::Break
                 | TokenKind::Continue
-                | TokenKind::Set
-                | TokenKind::Add
-                | TokenKind::Sub
-                | TokenKind::Inc
-                | TokenKind::Dec
                 | TokenKind::Put
                 | TokenKind::Error
                 | TokenKind::Warn
@@ -271,6 +393,9 @@ impl<'a> Parser<'a> {
             TokenKind::Module => self
                 .parse_module_declaration()
                 .map(Statement::ModuleDeclaration),
+            TokenKind::Extern => self
+                .parse_extern_function_declaration()
+                .map(Statement::ExternFunctionDeclaration),
             TokenKind::Use => self.parse_use_declaration().map(Statement::UseDeclaration),
             TokenKind::Type => self
                 .parse_type_declaration()
@@ -286,10 +411,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Statement::ContinueStatement)
             }
-            TokenKind::Set => self.parse_set_statement(),
-            TokenKind::Add | TokenKind::Sub | TokenKind::Inc | TokenKind::Dec => {
-                self.parse_mutation_statement()
-            }
+
             TokenKind::Put => self.parse_put_statement(),
             TokenKind::Error => {
                 self.advance();
@@ -321,6 +443,18 @@ impl<'a> Parser<'a> {
                     func: Box::new(Expression::Identifier("spawn_task".into())),
                     args: vec![expr],
                 }))
+            }
+            TokenKind::ForeignBlock { language, content } => {
+                if self.block_depth > 0 {
+                    return Err(ParseError::new(
+                        "Foreign language blocks must appear at program scope",
+                        self.current().span,
+                    ));
+                }
+                let language = language.clone();
+                let content = content.clone();
+                self.advance(); // consume the foreign block token
+                Ok(Statement::ForeignBlock { language, content })
             }
             _ => {
                 if self.starts_assignment_statement() {
@@ -439,57 +573,9 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn parse_set_statement(&mut self) -> Result<Statement, ParseError> {
-        self.advance(); // consume `set`
-        let target = self.parse_expression()?;
-        self.expect(&TokenKind::To)?;
-        let value = self.parse_expression()?;
-
-        if expression_contains_target(&value, &target) {
-            return Err(ParseError::new(
-                format!(
-                    "Self-reference in `set {}` is not allowed; use an explicit mutation command",
-                    expression_description(&target)
-                ),
-                self.current().span,
-            ));
-        }
-
-        Ok(Statement::Set { target, value })
-    }
-
-    fn parse_mutation_statement(&mut self) -> Result<Statement, ParseError> {
-        let op = match self.peek() {
-            TokenKind::Add => MutationOp::Add,
-            TokenKind::Sub => MutationOp::Sub,
-            TokenKind::Inc => MutationOp::Inc,
-            TokenKind::Dec => MutationOp::Dec,
-            _ => {
-                return Err(ParseError::new(
-                    format!("Expected mutation command, got {:?}", self.peek()),
-                    self.current().span,
-                ));
-            }
-        };
-        self.advance();
-        let target = self.parse_expression()?;
-        let value = if self.match_token(&TokenKind::Comma) {
-            Some(self.parse_expression()?)
-        } else {
-            None
-        };
-        if matches!(op, MutationOp::Inc | MutationOp::Dec) && value.is_some() {
-            return Err(ParseError::new(
-                "`inc` and `dec` do not take a value; use `add` or `sub` for a custom amount",
-                self.current().span,
-            ));
-        }
-        Ok(Statement::Mutation { target, op, value })
-    }
-
-    /// Accept the conventional `=` initializer and the legacy `:=` spelling.
+    /// Accept only `:=` as the initializer operator.
     fn match_initializer(&mut self) -> bool {
-        self.match_token(&TokenKind::Eq) || self.match_token(&TokenKind::ColonEq)
+        self.match_token(&TokenKind::ColonEq)
     }
 
     fn expect_initializer(&mut self) -> Result<(), ParseError> {
@@ -497,7 +583,7 @@ impl<'a> Parser<'a> {
             Ok(())
         } else {
             Err(ParseError::new(
-                format!("Expected `=` after declaration, got {:?}", self.peek()),
+                format!("Expected `:=` after declaration, got {:?}", self.peek()),
                 self.current().span,
             ))
         }
@@ -520,7 +606,9 @@ impl<'a> Parser<'a> {
                     index += 1;
                     if !matches!(
                         self.tokens.get(index).map(|token| &token.kind),
-                        Some(TokenKind::Identifier(_)) | Some(TokenKind::Await)
+                        Some(TokenKind::Identifier(_))
+                            | Some(TokenKind::Await)
+                            | Some(TokenKind::IntLiteral(_))
                     ) {
                         return false;
                     }
@@ -545,19 +633,7 @@ impl<'a> Parser<'a> {
 
         matches!(
             self.tokens.get(index).map(|token| &token.kind),
-            Some(
-                TokenKind::Eq
-                    | TokenKind::PlusEq
-                    | TokenKind::MinusEq
-                    | TokenKind::StarEq
-                    | TokenKind::SlashEq
-                    | TokenKind::PercentEq
-                    | TokenKind::AmpEq
-                    | TokenKind::PipeEq
-                    | TokenKind::CaretEq
-                    | TokenKind::LtLtEq
-                    | TokenKind::GtGtEq
-            )
+            Some(TokenKind::ColonEq)
         )
     }
 
@@ -569,6 +645,22 @@ impl<'a> Parser<'a> {
             match self.peek() {
                 TokenKind::Dot => {
                     self.advance();
+                    // Tuple element assignment: `pair.0 = value`.
+                    if let TokenKind::IntLiteral(text) = self.peek().clone() {
+                        let index_span = self.current().span;
+                        self.advance();
+                        let index = text.parse::<usize>().map_err(|_| {
+                            ParseError::new(
+                                format!("tuple index `{text}` is not a valid non-negative integer"),
+                                index_span,
+                            )
+                        })?;
+                        target = Expression::TupleIndex {
+                            object: Box::new(target),
+                            index,
+                        };
+                        continue;
+                    }
                     let field = self.expect_identifier()?;
                     target = Expression::FieldAccess {
                         object: Box::new(target),
@@ -593,130 +685,49 @@ impl<'a> Parser<'a> {
 
     fn parse_assignment_statement(&mut self) -> Result<Statement, ParseError> {
         let target = self.parse_assignment_target()?;
-        let operator = self.advance().kind.clone();
+        self.expect(&TokenKind::ColonEq)?;
         let value = self.parse_expression()?;
-
-        match operator {
-            TokenKind::Eq => Ok(Statement::Set { target, value }),
-            TokenKind::PlusEq => Ok(Statement::Mutation {
-                target,
-                op: MutationOp::Add,
-                value: Some(value),
-            }),
-            TokenKind::MinusEq => Ok(Statement::Mutation {
-                target,
-                op: MutationOp::Sub,
-                value: Some(value),
-            }),
-            TokenKind::StarEq => Ok(Statement::Set {
-                target: target.clone(),
-                value: Expression::BinaryOp {
-                    op: BinaryOp::Mul,
-                    left: Box::new(target),
-                    right: Box::new(value),
-                },
-            }),
-            TokenKind::SlashEq => Ok(Statement::Set {
-                target: target.clone(),
-                value: Expression::BinaryOp {
-                    op: BinaryOp::Div,
-                    left: Box::new(target),
-                    right: Box::new(value),
-                },
-            }),
-            TokenKind::PercentEq => Ok(Statement::Set {
-                target: target.clone(),
-                value: Expression::BinaryOp {
-                    op: BinaryOp::Mod,
-                    left: Box::new(target),
-                    right: Box::new(value),
-                },
-            }),
-            TokenKind::AmpEq => Ok(Statement::Set {
-                target: target.clone(),
-                value: Expression::BinaryOp {
-                    op: BinaryOp::BitAnd,
-                    left: Box::new(target),
-                    right: Box::new(value),
-                },
-            }),
-            TokenKind::PipeEq => Ok(Statement::Set {
-                target: target.clone(),
-                value: Expression::BinaryOp {
-                    op: BinaryOp::BitOr,
-                    left: Box::new(target),
-                    right: Box::new(value),
-                },
-            }),
-            TokenKind::CaretEq => Ok(Statement::Set {
-                target: target.clone(),
-                value: Expression::BinaryOp {
-                    op: BinaryOp::BitXor,
-                    left: Box::new(target),
-                    right: Box::new(value),
-                },
-            }),
-            TokenKind::LtLtEq => Ok(Statement::Set {
-                target: target.clone(),
-                value: Expression::BinaryOp {
-                    op: BinaryOp::Shl,
-                    left: Box::new(target),
-                    right: Box::new(value),
-                },
-            }),
-            TokenKind::GtGtEq => Ok(Statement::Set {
-                target: target.clone(),
-                value: Expression::BinaryOp {
-                    op: BinaryOp::Shr,
-                    left: Box::new(target),
-                    right: Box::new(value),
-                },
-            }),
-            _ => Err(ParseError::new(
-                "Expected assignment operator",
-                self.current().span,
-            )),
-        }
+        Ok(Statement::Assignment { target, value })
     }
 
     fn parse_put_statement(&mut self) -> Result<Statement, ParseError> {
+        // `put` always emits an LF at the end (like Rust's println!).
         self.advance(); // consume 'put'
-        let no_newline = if self.peek() == &TokenKind::Minus {
-            match self.tokens.get(self.pos + 1).map(|token| &token.kind) {
-                Some(TokenKind::Identifier(name)) if name == "n" => {
-                    self.advance(); // consume '-'
-                    self.advance(); // consume 'n'
-                    true
-                }
-                Some(TokenKind::Identifier(name)) if name == "u" => {
-                    // `-u "..."` is no longer a valid Unicode literal. Leave
-                    // it for parse_expression so it receives a migration error.
-                    false
-                }
-                _ => {
-                    return Err(ParseError::with_suggestion(
-                        "Unknown `put` flag",
-                        self.current().span,
-                        "Use `put -n value` for no-newline output or `put unicode \"text\"` for Unicode text",
-                    ));
-                }
-            }
-        } else {
-            false
-        };
+
+        if self.peek() == &TokenKind::Minus
+            && matches!(
+                self.tokens.get(self.pos + 1).map(|token| &token.kind),
+                Some(TokenKind::Identifier(name)) if name == "n"
+            )
+        {
+            return Err(ParseError::with_suggestion(
+                "The put command no longer accepts the -n flag",
+                self.current().span,
+                "Use `put value` without `-n`; it always adds a newline",
+            ));
+        }
         let expr = self.parse_expression()?;
-        let redirect = if self.match_token(&TokenKind::Gt) {
-            Some(Redirect::Write(self.parse_expression()?))
-        } else if self.match_token(&TokenKind::GtGt) {
-            Some(Redirect::Append(self.parse_expression()?))
+        let redirect = if self.match_token(&TokenKind::To) {
+            // Parse only the primary expression for the file path so that
+            // `-append` is not consumed as a binary subtraction operator.
+            let file_expr = self.parse_primary()?;
+            // Check for `-append` flag after `to "file"`
+            let is_append = self.peek() == &TokenKind::Minus
+                && matches!(
+                    self.tokens.get(self.pos + 1).map(|token| &token.kind),
+                    Some(TokenKind::Identifier(name)) if name == "append"
+                );
+            if is_append {
+                self.advance(); // consume `-`
+                self.advance(); // consume `append`
+                Some(Redirect::Append(file_expr))
+            } else {
+                Some(Redirect::Write(file_expr))
+            }
         } else {
             None
         };
-        Ok(Statement::PutStatement {
-            no_newline,
-            expr,
-            redirect,
-        })
+        Ok(Statement::PutStatement { expr, redirect })
     }
 
     // === Declaration parsing ===
@@ -1077,16 +1088,62 @@ impl<'a> Parser<'a> {
         self.advance(); // consume 'module'
         let name = self.expect_identifier()?;
         let mut statements = Block::new();
+        self.block_depth += 1;
 
         while !self.match_token(&TokenKind::End) {
             let start = self.pos;
-            let statement = self.parse_statement()?;
+            let statement = match self.parse_statement() {
+                Ok(statement) => statement,
+                Err(error) => {
+                    self.block_depth -= 1;
+                    return Err(error);
+                }
+            };
             statements.push(Spanned::new(statement, self.statement_span(start)));
         }
+        self.block_depth -= 1;
         // consume 'module'
         self.expect(&TokenKind::Module)?;
 
         Ok(ModuleDecl { name, statements })
+    }
+
+    /// Parse a target-aware foreign signature declaration.
+    ///
+    /// The declaration is intentionally separate from `#rust`/`#c` content:
+    /// Poly can validate the interface while the native compiler remains the
+    /// authority for the foreign definition itself.
+    fn parse_extern_function_declaration(&mut self) -> Result<ExternFunctionDecl, ParseError> {
+        if self.block_depth > 0 {
+            return Err(ParseError::new(
+                "Extern function declarations must appear at program scope",
+                self.current().span,
+            ));
+        }
+        self.advance(); // consume `extern`
+        let target = self.expect_identifier()?;
+        if target != "rust" && target != "c" {
+            return Err(ParseError::new(
+                format!("Unsupported extern target `{target}`; use `rust` or `c`"),
+                self.current().span,
+            ));
+        }
+        self.expect(&TokenKind::Fn)?;
+        let name = self.expect_identifier()?;
+        self.expect(&TokenKind::LParen)?;
+        let params = self.parse_params()?;
+        self.expect(&TokenKind::RParen)?;
+        let return_type = if self.match_token(&TokenKind::Colon) {
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+        Ok(ExternFunctionDecl {
+            target,
+            name,
+            params,
+            return_type,
+        })
     }
 
     fn parse_use_declaration(&mut self) -> Result<UseDecl, ParseError> {
@@ -1431,7 +1488,7 @@ impl<'a> Parser<'a> {
         let mut left = self.parse_bitwise_or()?;
         loop {
             match self.peek() {
-                TokenKind::Eq | TokenKind::EqEq => {
+                TokenKind::Eq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
                     left = Expression::BinaryOp {
@@ -1439,6 +1496,13 @@ impl<'a> Parser<'a> {
                         left: Box::new(left),
                         right: Box::new(right),
                     };
+                }
+                TokenKind::EqEq => {
+                    return Err(ParseError::with_suggestion(
+                        "`==` is legacy equality syntax and is rejected",
+                        self.current().span,
+                        "Use `=` for equality comparisons",
+                    ));
                 }
                 TokenKind::NotEq => {
                     self.advance();
@@ -1752,11 +1816,34 @@ impl<'a> Parser<'a> {
     fn parse_loop_expression(&mut self) -> Result<Expression, ParseError> {
         self.advance(); // consume 'loop'
 
-        // Check for range loop: loop: i 0..10 or loop: i 1..3, 7, 19..21 step 2
-        if self.peek() == &TokenKind::Colon {
-            self.advance(); // consume ':'
+        // Check for range loop: `loop i 0..10` or `loop i 1..3, 7, 19..21 step 2`
+        // A range loop starts with an identifier followed by a range op, `in`,
+        // or a number (then comma-separated parts). An infinite loop starts
+        // with a statement.
+        let is_range_loop = match self.peek() {
+            TokenKind::LParen => true, // tuple destructuring: `loop (a, b) in ...`
+            TokenKind::Identifier(_) => {
+                // Look ahead: identifier followed by `..`, `..=`, `in`, or a
+                // number (then comma) → range loop.  If followed by `:=`, it
+                // is a `var`-less declaration inside an infinite loop body.
+                let saved = self.pos;
+                self.advance(); // peek at identifier
+                let next_is_range = matches!(
+                    self.peek(),
+                    TokenKind::DotDot
+                        | TokenKind::DotDotEq
+                        | TokenKind::In
+                        | TokenKind::IntLiteral(_)
+                        | TokenKind::FloatLiteral(_)
+                );
+                self.pos = saved;
+                next_is_range
+            }
+            _ => false,
+        };
 
-            // Check for tuple destructuring: loop: (a, b) in collection
+        if is_range_loop {
+            // Check for tuple destructuring: `loop (a, b) in collection`
             if *self.peek() == TokenKind::LParen {
                 // Parse tuple destructuring variables
                 self.advance(); // (
@@ -1780,9 +1867,6 @@ impl<'a> Parser<'a> {
                 self.expect(&TokenKind::End)?;
                 self.expect(&TokenKind::Loop)?;
 
-                // The tuple pattern travels in the loop variable; the checker
-                // registers each destructured name and codegen emits it as a
-                // Rust tuple pattern: `for (a, b) in collection.iter() { ... }`.
                 return Ok(Expression::LoopRange {
                     variable: format!("({})", vars.join(", ")),
                     ranges: vec![LoopRangePart::Value(Box::new(collection))],
@@ -1790,12 +1874,10 @@ impl<'a> Parser<'a> {
                 });
             }
 
-            // The loop variable is explicit: `loop: i 1..3, 7, 19..21`.
+            // The loop variable is explicit: `loop i 1..3, 7, 19..21`.
             let variable = self.expect_identifier()?;
 
-            // `loop: item in collection` is the collection form of the same
-            // syntax; keep it explicit rather than deriving a name from the
-            // collection identifier.
+            // `loop item in collection` is the collection form.
             if self.match_token(&TokenKind::In) {
                 let collection = self.parse_expression()?;
                 let body = self.parse_block()?;
@@ -1890,7 +1972,23 @@ impl<'a> Parser<'a> {
 
     fn parse_for_expression(&mut self) -> Result<Expression, ParseError> {
         self.advance(); // consume 'for'
-        let variable = self.expect_identifier()?;
+                        // `for (a, b) in collection` destructures tuple elements. The pattern
+                        // travels in the variable string exactly like `loop: (a, b) in` so the
+                        // checker and codegen can share the same handling.
+        let variable = if *self.peek() == TokenKind::LParen {
+            self.advance(); // consume '('
+            let mut vars = Vec::new();
+            loop {
+                vars.push(self.expect_identifier()?);
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.expect(&TokenKind::RParen)?;
+            format!("({})", vars.join(", "))
+        } else {
+            self.expect_identifier()?
+        };
         self.expect(&TokenKind::In)?;
         let iter = self.parse_expression()?;
         let body = self.parse_block()?;
@@ -1919,6 +2017,20 @@ impl<'a> Parser<'a> {
                             object: Box::new(expr),
                             method: "await".into(),
                             args: vec![],
+                        };
+                    } else if let TokenKind::IntLiteral(text) = self.peek().clone() {
+                        // Tuple index access: `pair.0`, `nested.1.0`.
+                        let index_span = self.current().span;
+                        self.advance();
+                        let index = text.parse::<usize>().map_err(|_| {
+                            ParseError::new(
+                                format!("tuple index `{text}` is not a valid non-negative integer"),
+                                index_span,
+                            )
+                        })?;
+                        expr = Expression::TupleIndex {
+                            object: Box::new(expr),
+                            index,
                         };
                     } else {
                         let field = self.expect_field_name()?;
@@ -2017,7 +2129,7 @@ impl<'a> Parser<'a> {
             }
             TokenKind::StringLiteral(val) => {
                 self.advance();
-                Ok(Expression::StringLiteral(val))
+                self.parse_interpolated_string(val, false)
             }
             TokenKind::UnicodeStringLiteral(_) => Err(ParseError::with_suggestion(
                 "The legacy Unicode string syntax is no longer accepted",
@@ -2169,7 +2281,7 @@ impl<'a> Parser<'a> {
         match self.peek().clone() {
             TokenKind::StringLiteral(value) => {
                 self.advance();
-                Ok(Expression::UnicodeStringLiteral(value))
+                self.parse_interpolated_string(value, true)
             }
             TokenKind::UnicodeCharLiteral(value) => {
                 self.advance();
@@ -2185,6 +2297,112 @@ impl<'a> Parser<'a> {
                 "Use `unicode \"text\"` or `unicode 'c'`",
             )),
         }
+    }
+
+    /// Parse a string literal, handling `{expr}` interpolation.
+    ///
+    /// `"Name: {name}, Age: {age}"` becomes a left-folded chain of `+`
+    /// concatenations: `"Name: " + name + ", Age: " + age`. The checker's
+    /// existing `String + <displayable>` rules and the codegen's `format!`
+    /// path handle the result, so no IR changes are needed. Literal braces
+    /// that do not form a parseable expression are kept as text.
+    fn parse_interpolated_string(
+        &self,
+        value: String,
+        unicode: bool,
+    ) -> Result<Expression, ParseError> {
+        if !value.contains('{') {
+            return Ok(if unicode {
+                Expression::UnicodeStringLiteral(value)
+            } else {
+                Expression::StringLiteral(value)
+            });
+        }
+
+        let mut parts: Vec<Expression> = Vec::new();
+        let mut literal = String::new();
+        let chars: Vec<char> = value.chars().collect();
+        let mut index = 0;
+        while index < chars.len() {
+            if chars[index] == '{' {
+                // Find the matching close brace, honoring nesting.
+                let mut depth = 1usize;
+                let mut close = index + 1;
+                while close < chars.len() && depth > 0 {
+                    match chars[close] {
+                        '{' => depth += 1,
+                        '}' => depth -= 1,
+                        _ => {}
+                    }
+                    if depth > 0 {
+                        close += 1;
+                    }
+                }
+                if depth == 0 {
+                    let inner: String = chars[index + 1..close].iter().collect();
+                    if let Some(expression) = self.parse_embedded_expression(&inner) {
+                        if !literal.is_empty() {
+                            parts.push(
+                                self.string_literal_expr(std::mem::take(&mut literal), unicode),
+                            );
+                        }
+                        parts.push(expression);
+                        index = close + 1;
+                        continue;
+                    }
+                }
+                // Unbalanced or unparseable braces stay literal text.
+                literal.push('{');
+                index += 1;
+            } else {
+                literal.push(chars[index]);
+                index += 1;
+            }
+        }
+        if !literal.is_empty() {
+            parts.push(self.string_literal_expr(literal, unicode));
+        }
+        if parts.is_empty() {
+            return Ok(self.string_literal_expr(String::new(), unicode));
+        }
+
+        // Fold `[a, b, c]` into `((a + b) + c)`.
+        let mut iter = parts.into_iter();
+        let mut result = iter.next().expect("non-empty parts");
+        for part in iter {
+            result = Expression::BinaryOp {
+                op: BinaryOp::Add,
+                left: Box::new(result),
+                right: Box::new(part),
+            };
+        }
+        Ok(result)
+    }
+
+    fn string_literal_expr(&self, value: String, unicode: bool) -> Expression {
+        if unicode {
+            Expression::UnicodeStringLiteral(value)
+        } else {
+            Expression::StringLiteral(value)
+        }
+    }
+
+    /// Lex and parse `text` as a single expression. Used for `{expr}`
+    /// interpolation; returns `None` when the text does not form a complete,
+    /// parseable expression (so stray braces stay literal).
+    fn parse_embedded_expression(&self, text: &str) -> Option<Expression> {
+        let (tokens, errors) = Lexer::lex(text);
+        if !errors.is_empty() {
+            return None;
+        }
+        let mut parser = Parser::new(&tokens);
+        let expression = parser.parse_expression().ok()?;
+        // The embedded segment must be a complete expression: nothing may
+        // remain unconsumed (other than the trailing Eof token).
+        if !matches!(parser.peek(), TokenKind::Eof) {
+            return None;
+        }
+        Some(expression)
     }
 
     fn parse_if_expression(&mut self) -> Result<Expression, ParseError> {
@@ -2211,11 +2429,6 @@ impl<'a> Parser<'a> {
                 | TokenKind::Return
                 | TokenKind::Break
                 | TokenKind::Continue
-                | TokenKind::Set
-                | TokenKind::Add
-                | TokenKind::Sub
-                | TokenKind::Inc
-                | TokenKind::Dec
                 | TokenKind::Put
                 | TokenKind::Error
                 | TokenKind::Warn
@@ -2538,9 +2751,13 @@ impl<'a> Parser<'a> {
         let mut flags = Vec::new();
         let mut with_clause = None;
 
-        // Check for input redirection: < "file"
-        if *self.peek() == TokenKind::Lt {
-            self.advance(); // consume '<'
+        // Check for input redirection: `from "file"` or `from>> "file"`
+        if *self.peek() == TokenKind::From {
+            self.advance(); // consume 'from'
+                            // Check for append: `from>>` is parsed as `from` `>>` (two tokens)
+            if self.peek() == &TokenKind::GtGt {
+                self.advance(); // consume '>>'
+            }
             source = Some(Box::new(self.parse_primary()?));
         }
 
@@ -2679,19 +2896,28 @@ impl<'a> Parser<'a> {
         // closing keyword (`end if`, `end fn`, and so on).  Every nested
         // statement gets its own span, exactly like top-level statements.
         let mut stmts = Block::new();
+        self.block_depth += 1;
         while !self.is_at_end()
             && self.peek() != &TokenKind::End
             && self.peek() != &TokenKind::RBrace
             && self.peek() != &TokenKind::Else
         {
             let start = self.pos;
-            let statement = self.parse_statement()?;
+            let statement = match self.parse_statement() {
+                Ok(statement) => statement,
+                Err(error) => {
+                    self.block_depth -= 1;
+                    return Err(error);
+                }
+            };
             stmts.push(Spanned::new(statement, self.statement_span(start)));
         }
+        self.block_depth -= 1;
         Ok(stmts)
     }
 }
 
+#[allow(dead_code)]
 fn expression_description(expr: &Expression) -> String {
     match expr {
         Expression::Identifier(name) => name.clone(),
@@ -2704,6 +2930,9 @@ fn expression_description(expr: &Expression) -> String {
                 expression_description(object),
                 expression_description(index)
             )
+        }
+        Expression::TupleIndex { object, index } => {
+            format!("{}.{}", expression_description(object), index)
         }
         _ => "target".to_string(),
     }
@@ -2721,10 +2950,10 @@ fn keyword_as_field_name(token: &TokenKind) -> Option<&'static str> {
         Info => Some("info"),
         Try => Some("try"),
         Move => Some("move"),
-        Set => Some("set"),
         Step => Some("step"),
         Type => Some("type"),
         To => Some("to"),
+        From => Some("from"),
         With => Some("with"),
         Validate => Some("validate"),
         Complete => Some("complete"),
@@ -2737,6 +2966,7 @@ fn keyword_as_field_name(token: &TokenKind) -> Option<&'static str> {
     }
 }
 
+#[allow(dead_code)]
 fn expressions_match_target(left: &Expression, right: &Expression) -> bool {
     match (left, right) {
         (Expression::Identifier(left), Expression::Identifier(right)) => left == right,
@@ -2763,6 +2993,16 @@ fn expressions_match_target(left: &Expression, right: &Expression) -> bool {
             expressions_match_target(left_object, right_object)
                 && expressions_match_target(left_index, right_index)
         }
+        (
+            Expression::TupleIndex {
+                object: left_object,
+                index: left_index,
+            },
+            Expression::TupleIndex {
+                object: right_object,
+                index: right_index,
+            },
+        ) => left_index == right_index && expressions_match_target(left_object, right_object),
         (Expression::Parenthesized(left), right) => expressions_match_target(left, right),
         (left, Expression::Parenthesized(right)) => expressions_match_target(left, right),
         (Expression::IntLiteral(left), Expression::IntLiteral(right))
@@ -2779,6 +3019,7 @@ fn expressions_match_target(left: &Expression, right: &Expression) -> bool {
     }
 }
 
+#[allow(dead_code)]
 fn expression_contains_target(expr: &Expression, target: &Expression) -> bool {
     if expressions_match_target(expr, target) {
         return true;
@@ -2808,6 +3049,7 @@ fn expression_contains_target(expr: &Expression, target: &Expression) -> bool {
             expression_contains_target(object, target) || expression_contains_target(index, target)
         }
         Expression::FieldAccess { object, .. } => expression_contains_target(object, target),
+        Expression::TupleIndex { object, .. } => expression_contains_target(object, target),
         Expression::IfExpression {
             condition,
             then_block,
@@ -2908,22 +3150,13 @@ fn expression_contains_target(expr: &Expression, target: &Expression) -> bool {
     }
 }
 
+#[allow(dead_code)]
 fn statement_contains_target(stmt: &Statement, target: &Expression) -> bool {
     match stmt {
-        Statement::Set {
+        Statement::Assignment {
             target: value,
             value: expr,
         } => expression_contains_target(value, target) || expression_contains_target(expr, target),
-        Statement::Mutation {
-            target: value,
-            value: expr,
-            ..
-        } => {
-            expression_contains_target(value, target)
-                || expr
-                    .as_ref()
-                    .is_some_and(|value| expression_contains_target(value, target))
-        }
         Statement::ExpressionStatement(expr) => expression_contains_target(expr, target),
         Statement::ReturnStatement(value) => value
             .as_ref()
@@ -2979,16 +3212,9 @@ fn substitute_statement(
             name: name.clone(),
             value: substitute_expression(value, substitutions),
         },
-        Statement::Set { target, value } => Statement::Set {
+        Statement::Assignment { target, value } => Statement::Assignment {
             target: substitute_expression(target, substitutions),
             value: substitute_expression(value, substitutions),
-        },
-        Statement::Mutation { target, op, value } => Statement::Mutation {
-            target: substitute_expression(target, substitutions),
-            op: op.clone(),
-            value: value
-                .as_ref()
-                .map(|value| substitute_expression(value, substitutions)),
         },
         Statement::FunctionDeclaration(declaration) => {
             Statement::FunctionDeclaration(FunctionDecl {
@@ -3050,6 +3276,9 @@ fn substitute_statement(
         }),
         Statement::UseDeclaration(declaration) => Statement::UseDeclaration(declaration.clone()),
         Statement::TypeDeclaration(declaration) => Statement::TypeDeclaration(declaration.clone()),
+        Statement::ExternFunctionDeclaration(declaration) => {
+            Statement::ExternFunctionDeclaration(declaration.clone())
+        }
         Statement::ExpressionStatement(expression) => {
             Statement::ExpressionStatement(substitute_expression(expression, substitutions))
         }
@@ -3060,12 +3289,7 @@ fn substitute_statement(
         ),
         Statement::BreakStatement => Statement::BreakStatement,
         Statement::ContinueStatement => Statement::ContinueStatement,
-        Statement::PutStatement {
-            no_newline,
-            expr,
-            redirect,
-        } => Statement::PutStatement {
-            no_newline: *no_newline,
+        Statement::PutStatement { expr, redirect } => Statement::PutStatement {
             expr: substitute_expression(expr, substitutions),
             redirect: redirect.as_ref().map(|redirect| match redirect {
                 Redirect::Write(path) => {
@@ -3091,6 +3315,10 @@ fn substitute_statement(
                 .map(|statement| substitute_spanned_statement(statement, substitutions))
                 .collect(),
         ),
+        Statement::ForeignBlock { language, content } => Statement::ForeignBlock {
+            language: language.clone(),
+            content: content.clone(),
+        },
     }
 }
 
@@ -3219,6 +3447,10 @@ fn substitute_expression(
         Expression::FieldAccess { object, field } => Expression::FieldAccess {
             object: Box::new(substitute_expression(object, substitutions)),
             field: field.clone(),
+        },
+        Expression::TupleIndex { object, index } => Expression::TupleIndex {
+            object: Box::new(substitute_expression(object, substitutions)),
+            index: *index,
         },
         Expression::Parenthesized(inner) => {
             Expression::Parenthesized(Box::new(substitute_expression(inner, substitutions)))
@@ -3422,6 +3654,44 @@ mod tests {
     }
 
     #[test]
+    fn foreign_blocks_parse_with_language_tags() {
+        let prog =
+            parse_source("#c\nint answer(void) { return 42; }\n#endc\nput answer()").unwrap();
+        assert!(matches!(
+            &prog.statements[0].node,
+            Statement::ForeignBlock { language, content }
+                if language == "c" && content.contains("answer")
+        ));
+    }
+
+    #[test]
+    fn foreign_blocks_are_rejected_inside_poly_functions() {
+        let source = "fn outer()\n    #c\n    int answer(void) { return 42; }\n    #endc\nend fn";
+        assert!(parse_source(source).is_err());
+    }
+
+    #[test]
+    fn extern_function_declarations_parse_with_target_and_signature() {
+        let source = "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc\nput double(21)";
+        let program = parse_source(source).unwrap();
+        match &program.statements[0].node {
+            Statement::ExternFunctionDeclaration(declaration) => {
+                assert_eq!(declaration.target, "c");
+                assert_eq!(declaration.name, "double");
+                assert_eq!(declaration.params.len(), 1);
+                assert!(declaration.return_type.is_some());
+            }
+            other => panic!("expected extern declaration, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn extern_function_declarations_are_rejected_inside_poly_functions() {
+        let source = "fn outer()\n    extern c fn helper(value: i32): i32\nend fn";
+        assert!(parse_source(source).is_err());
+    }
+
+    #[test]
     fn statement_spans_cover_exact_source_ranges() {
         let source =
             "var x i32 := 42\nfn sum(a: i32, b: i32): i32\n    return a + b\nend fn\nput x";
@@ -3505,7 +3775,7 @@ mod tests {
     #[test]
     fn test_parse_macro_expansion() {
         let prog = parse_source(
-            "macro swap_values(a, b)\n    var temp := a\n    set a to b\n    set b to temp\nend macro\n\
+            "macro swap_values(a, b)\n    var temp := a\n    a := b\n    b := temp\nend macro\n\
              var x i32 := 1\nvar y i32 := 2\nswap_values(x, y)",
         )
         .unwrap();
@@ -3589,7 +3859,7 @@ mod tests {
         assert!(parse_source(r#"var greeting := unicode "Hello, 世界!""#).is_ok());
         assert!(parse_source(r#"var marker := unicode '✓'"#).is_ok());
         assert!(parse_source(r#"put unicode "Hello, 世界!""#).is_ok());
-        assert!(parse_source(r#"var file := get < "input.txt" unicode "Prompt: ""#).is_err());
+        assert!(parse_source(r#"var file := get from "input.txt" unicode "Prompt: ""#).is_err());
         assert!(parse_source(r#"var legacy_char := u'✓'"#).is_err());
         assert!(parse_source(
             r#"match unicode "yes"
@@ -3623,7 +3893,7 @@ end match"#
 
     #[test]
     fn test_parse_equality_and_assignment() {
-        let equality = parse_source("var same := x == 1").unwrap();
+        let equality = parse_source("var same := x = 1").unwrap();
         assert!(matches!(
             equality.statements.first().map(|s| &s.node),
             Some(Statement::VarDeclaration {
@@ -3634,29 +3904,23 @@ end match"#
                 ..
             })
         ));
-        assert!(parse_source("var x := 0\nx = x + 1").is_ok());
-        assert!(parse_source("var x := 0\nx += 1").is_ok());
-        assert!(parse_source("var x := 0\nset x to x + 1").is_err());
-        assert!(parse_source("var x := 0\nadd x").is_ok());
-        assert!(parse_source("var x := 0\nset x to 1").is_ok());
+        assert!(parse_source("var x := 0\nx := x + 1").is_ok());
+        assert!(parse_source("var x := 0\nx := 1").is_ok());
     }
 
     #[test]
-    fn test_parse_set_target_shapes_and_self_reference() {
-        assert!(parse_source("set total to 10").is_ok());
-        assert!(parse_source("set item.value to 10").is_ok());
-        assert!(parse_source("set items[0] to 10").is_ok());
-
-        assert!(parse_source("set item.value to item.value + 1").is_err());
-        assert!(parse_source("set items[0] to items[0] + 1").is_err());
-        assert!(parse_source("set item.value to other.value").is_ok());
+    fn test_parse_assignment_target_shapes() {
+        assert!(parse_source("total := 10").is_ok());
+        assert!(parse_source("item.value := 10").is_ok());
+        assert!(parse_source("items[0] := 10").is_ok());
     }
 
     #[test]
-    fn test_parse_accepts_conventional_equality_and_compound_mutation() {
-        assert!(parse_source("var x := a == b").is_ok());
-        assert!(parse_source("var x := 0\nx += 1").is_ok());
-        assert!(parse_source("var x := 0\nx -= 1").is_ok());
+    fn test_parse_rejects_legacy_equality() {
+        let error = parse_source("var x := a == b").unwrap_err();
+        assert!(error.message.contains("legacy equality syntax"));
+        assert!(error.suggestion.unwrap().contains("Use `=`"));
+        assert!(parse_source("var x := 0\nx := 1").is_ok());
     }
 
     #[test]
@@ -3684,17 +3948,19 @@ end match"#
         let prog = parse_source(r#"put "Hello""#).unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
-            Statement::PutStatement {
-                no_newline, expr, ..
-            } => {
-                assert!(!no_newline);
-                match expr {
-                    Expression::StringLiteral(s) => assert_eq!(s, "Hello"),
-                    _ => panic!("Expected string literal"),
-                }
-            }
+            Statement::PutStatement { expr, .. } => match expr {
+                Expression::StringLiteral(s) => assert_eq!(s, "Hello"),
+                _ => panic!("Expected string literal"),
+            },
             _ => panic!("Expected PutStatement"),
         }
+    }
+
+    #[test]
+    fn test_putl_is_now_an_identifier() {
+        // `putl` was removed from the language; it now parses as a plain identifier.
+        let prog = parse_source(r#"var putl := 42"#).unwrap();
+        assert_eq!(prog.statements.len(), 1);
     }
 
     #[test]
@@ -3724,14 +3990,9 @@ end match"#
     }
 
     #[test]
-    fn test_parse_put_no_newline() {
-        let prog = parse_source(r#"put -n "Hello""#).unwrap();
-        match &prog.statements[0].node {
-            Statement::PutStatement { no_newline, .. } => {
-                assert!(*no_newline);
-            }
-            _ => panic!("Expected PutStatement"),
-        }
+    fn test_reject_legacy_put_no_newline_flag() {
+        let err = parse_source(r#"put -n "Hello""#).unwrap_err();
+        assert!(err.message.contains("no longer accepts") || err.message.contains("Expected"));
     }
 
     #[test]
@@ -3852,7 +4113,7 @@ end match"#
 
     #[test]
     fn test_parse_loop_range() {
-        let prog = parse_source("loop: i 0..10\n    put i\nend loop").unwrap();
+        let prog = parse_source("loop i 0..10\n    put i\nend loop").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange {
@@ -3870,7 +4131,7 @@ end match"#
 
     #[test]
     fn test_parse_multi_range_loop() {
-        let prog = parse_source("loop: value 1..3, 7, 19..21\n    put value\nend loop").unwrap();
+        let prog = parse_source("loop value 1..3, 7, 19..21\n    put value\nend loop").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange {
@@ -3885,7 +4146,7 @@ end match"#
 
     #[test]
     fn test_parse_step_range() {
-        let prog = parse_source("loop: n 0..10 step 2\n    put n\nend loop").unwrap();
+        let prog = parse_source("loop n 0..10 step 2\n    put n\nend loop").unwrap();
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange { ranges, .. }) => {
@@ -3910,7 +4171,10 @@ end match"#
 
     #[test]
     fn test_parse_loop_range_requires_explicit_variable() {
-        assert!(parse_source("loop: 0..10\n    put i\nend loop").is_err());
+        // `loop 0..10` is valid: 0 is the loop variable, 0..10 is the range
+        assert!(parse_source("loop 0..10\n    put 0\nend loop").is_ok());
+        // A bare `loop` followed by a block without a variable is an infinite loop
+        assert!(parse_source("loop\n    put 1\nend loop").is_ok());
     }
 
     #[test]
@@ -3943,7 +4207,7 @@ end match"#
     #[test]
     fn test_parse_tuple_destructuring_loop() {
         let prog = parse_source(
-            "loop: (index, fruit) in fruits.enumerate()\n    put index\n    put fruit\nend loop",
+            "loop (index, fruit) in fruits.enumerate()\n    put index\n    put fruit\nend loop",
         )
         .unwrap();
         assert_eq!(prog.statements.len(), 1);
@@ -4138,6 +4402,184 @@ end match"#
                 assert_eq!(else_block.len(), 1);
             }
             _ => panic!("Expected IfExpression"),
+        }
+    }
+
+    #[test]
+    fn test_string_interpolation_splits_into_concatenation() {
+        // `"Name: {name}, Age: {age}"` must parse into a left-folded chain
+        // of `+` with the literal parts and the embedded identifiers.
+        let source = r#"fn main()
+    var name ustring := "Alice"
+    var age i32 := 30
+    put "Name: {name}, Age: {age}"
+end fn"#;
+        let prog = parse_source(source).unwrap();
+        let mut found = false;
+        for spanned in &prog.statements {
+            if let Statement::FunctionDeclaration(function) = &spanned.node {
+                for body_statement in function.body.as_ref().unwrap() {
+                    if let Statement::PutStatement { expr, .. } = &body_statement.node {
+                        if matches!(
+                            expr,
+                            Expression::BinaryOp {
+                                op: BinaryOp::Add,
+                                ..
+                            }
+                        ) {
+                            found = true;
+                        }
+                    }
+                }
+            }
+        }
+        assert!(found, "interpolated string should parse as an Add chain");
+    }
+
+    #[test]
+    fn test_string_without_braces_stays_literal() {
+        let source = r#"fn main()
+    put "plain text"
+end fn"#;
+        let prog = parse_source(source).unwrap();
+        let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
+            panic!("expected a function declaration");
+        };
+        let Statement::PutStatement { expr, .. } = &function.body.as_ref().unwrap()[0].node else {
+            panic!("expected a put statement");
+        };
+        match expr {
+            Expression::StringLiteral(value) => assert_eq!(value, "plain text"),
+            other => panic!("expected plain string literal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_interpolation_keeps_unparseable_braces_literal() {
+        // A `{` that does not form a valid expression (JSON-like text) stays
+        // literal text rather than breaking the parse.
+        let source = r#"fn main()
+    var json ustring := "{"a": 1}"
+    put json
+end fn"#;
+        assert!(parse_source(source).is_ok());
+    }
+
+    #[test]
+    fn test_parse_for_loop_tuple_destructuring() {
+        // `for (idx, val) in collection` stores the tuple pattern in the loop
+        // variable exactly like `loop: (a, b) in collection`.
+        let source = "fn main()\n    var items := [5, 6]\n    for (idx, val) in items.enumerate()\n        put idx\n        put val\n    end for\nend fn";
+        let prog = parse_source(source).unwrap();
+        let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
+            panic!("expected a function declaration");
+        };
+        let statements: Vec<&Statement> = function
+            .body
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|s| &s.node)
+            .collect();
+        let Statement::ExpressionStatement(Expression::ForLoop { variable, .. }) = statements[1]
+        else {
+            panic!("expected a ForLoop expression statement");
+        };
+        assert_eq!(variable, "(idx, val)");
+    }
+
+    #[test]
+    fn test_parse_tuple_element_assignment() {
+        // `pair.0 := 99` and `pair.1 := false` must parse as assignments
+        // whose target is a TupleIndex.
+        let source =
+            "fn main()\n    var pair := (10, true)\n    pair.0 := 99\n    pair.1 := false\nend fn";
+        let prog = parse_source(source).unwrap();
+        let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
+            panic!("expected a function declaration");
+        };
+        let statements: Vec<&Statement> = function
+            .body
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|s| &s.node)
+            .collect();
+        let Statement::Assignment {
+            target: set_target, ..
+        } = statements[1]
+        else {
+            panic!("expected an Assignment statement");
+        };
+        match set_target {
+            Expression::TupleIndex { index, .. } => assert_eq!(*index, 0),
+            other => panic!("expected TupleIndex target, got {other:?}"),
+        }
+        let Statement::Assignment {
+            target: eq_target, ..
+        } = statements[2]
+        else {
+            panic!("expected an Assignment statement");
+        };
+        match eq_target {
+            Expression::TupleIndex { index, .. } => assert_eq!(*index, 1),
+            other => panic!("expected TupleIndex target, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_tuple_index_access() {
+        // `pair.0` and chained `nested.1.0` must parse as TupleIndex nodes.
+        let source =
+            "fn main()\n    var pair := (10, true)\n    put pair.0\n    put nested.1.0\nend fn";
+        let prog = parse_source(source).unwrap();
+        let function = &prog.statements[0].node;
+        let Statement::FunctionDeclaration(function) = function else {
+            panic!("expected a function declaration");
+        };
+        let statements: Vec<&Statement> = function
+            .body
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|s| &s.node)
+            .collect();
+        let Statement::PutStatement {
+            expr: pair_expr, ..
+        } = statements[1]
+        else {
+            panic!("expected a put statement");
+        };
+        match pair_expr {
+            Expression::TupleIndex { object, index } => {
+                assert_eq!(*index, 0);
+                assert!(matches!(object.as_ref(), Expression::Identifier(name) if name == "pair"));
+            }
+            other => panic!("expected TupleIndex, got {other:?}"),
+        }
+        let Statement::PutStatement {
+            expr: nested_expr, ..
+        } = statements[2]
+        else {
+            panic!("expected a put statement");
+        };
+        match nested_expr {
+            Expression::TupleIndex {
+                object: outer_object,
+                index: outer_index,
+            } => {
+                assert_eq!(*outer_index, 0);
+                match outer_object.as_ref() {
+                    Expression::TupleIndex { object, index } => {
+                        assert_eq!(*index, 1);
+                        assert!(
+                            matches!(object.as_ref(), Expression::Identifier(name) if name == "nested")
+                        );
+                    }
+                    other => panic!("expected inner TupleIndex, got {other:?}"),
+                }
+            }
+            other => panic!("expected outer TupleIndex, got {other:?}"),
         }
     }
 }

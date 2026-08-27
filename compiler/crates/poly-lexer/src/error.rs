@@ -7,13 +7,19 @@ use crate::token::Span;
 /// Errors that can occur during lexing.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LexerError {
+    /// Stable category used by tools to distinguish malformed literals from
+    /// unexpected characters without parsing the human-readable message.
     pub kind: LexerErrorKind,
+    /// Exact byte range used to underline the offending source text.
     pub span: Span,
+    /// Human-readable detail suitable for CLI and editor diagnostics.
     pub message: String,
 }
 
 impl LexerError {
     /// Construct a diagnostic while keeping the offending source span attached.
+    /// Attach a lexer classification, source range, and display message in one
+    /// value so recovery can continue while preserving precise diagnostics.
     pub fn new(kind: LexerErrorKind, span: Span, message: impl Into<String>) -> Self {
         Self {
             kind,

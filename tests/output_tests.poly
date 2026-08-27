@@ -14,9 +14,9 @@ put true
 # Test 2: Output Without Newline (-n flag)
 # ============================================================
 put "\n=== Test 2: Output Without Newline (-n flag) ==="
-put -n "Loading"
-put -n "."
-put -n "."
+put "Loading"
+put "."
+put "."
 put "."
 put "Done!"
 
@@ -42,24 +42,24 @@ put "Pi: {3.14159:.2f}"
 # ============================================================
 put "\n=== Test 5: File Output ==="
 put "Writing to test_output.txt..."
-put "Line 1\nLine 2\nLine 3" > "test_output.txt"
+put "Line 1\nLine 2\nLine 3" to "test_output.txt"
 put "Appending to test_output.txt..."
-put "Line 4" >> "test_output.txt"
+put "Line 4" to "test_output.txt" -append
 put "Done."
 
 # ============================================================
 # Test 6: String Concatenation
 # ============================================================
 put "\n=== Test 6: String Concatenation ==="
-var output ustring := "Computed: " + (2 + 2).to_string()
-put "Computed: " + output
+var output ustring := "Computled: " + (2 + 2).to_string()
+put "Computled: " + output
 
 # ============================================================
 # Test 7: Multiple Outputs with Different Flags
 # ============================================================
 put "\n=== Test 7: Multiple Outputs with Flags ==="
 put "Normal output"
-put -n "No newline output"
+put "No newline output"
 put " (this continues on same line)"
 error "Error output"
 warn "Warning output"

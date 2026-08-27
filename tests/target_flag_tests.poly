@@ -1,0 +1,76 @@
+# ============================================================
+# Test: --target flag and #rust block integration
+# ============================================================
+# This file tests:
+# 1. #rust block declarations are emitted at module scope
+# 2. Poly can call functions defined in #rust blocks
+# 3. Multiple #rust blocks work correctly
+# 4. Structs defined in #rust blocks are usable
+# 5. The checker accepts foreign function calls
+
+# First #rust block: utility functions
+#rust
+fn double(x: i32) -> i32 {
+    x * 2
+}
+
+fn triple(x: i32) -> i32 {
+    x * 3
+}
+
+fn is_even(x: i32) -> bool {
+    x % 2 == 0
+}
+#endrust
+
+# Second #rust block: struct definition
+#rust
+struct Point {
+    x: f32,
+    y: f32,
+}
+
+fn point_distance_sq(p1x: f32, p1y: f32, p2x: f32, p2y: f32) -> f32 {
+    let dx = p2x - p1x;
+    let dy = p2y - p1y;
+    dx * dx + dy * dy
+}
+#endrust
+
+# Poly: test all the foreign functions
+put "=== Target Flag Test ==="
+put ""
+
+# Test basic function calls
+put "double(5) = " + double(5)
+put "triple(5) = " + triple(5)
+put "is_even(4) = " + is_even(4)
+put "is_even(7) = " + is_even(7)
+put ""
+
+# Test calling foreign functions in loops
+put "Even numbers from 1 to 20:"
+loop i 1..20
+    if is_even(i),
+        put "  " + i
+    end if
+end loop
+put ""
+
+# Test computed results from foreign functions
+var sum i32 := 0
+loop i 1..10
+    sum := sum + double(i)
+end loop
+put "Sum of double(1..10) = " + sum
+
+# Test struct usage (indirect through function)
+var dist := point_distance_sq(0.0, 0.0, 3.0, 4.0)
+put "Distance squared (0,0) to (3,4) = " + dist
+
+# Test nested function calls
+var result := double(triple(4))
+put "double(triple(4)) = " + result
+
+put ""
+put "All tests passed!"

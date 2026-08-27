@@ -462,7 +462,7 @@ macro_declaration ::= "macro" <identifier> "(" [<parameters>] ")"
 ### I/O Statements
 
 ```
-put_statement   ::= "put" ["-n"] <expression> [<redirect>]
+put_statement   ::= "put" <expression> [<redirect>]
 
 redirect        ::= ">" <expression>
                    | ">>" <expression>

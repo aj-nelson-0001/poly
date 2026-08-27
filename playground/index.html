@@ -437,6 +437,14 @@ put message"></textarea>
                     <h3>Higher-Order Functions</h3>
                     <p>Function types, closures as values, map/filter/reduce</p>
                 </div>
+                <div class="example-card" onclick="loadExample('interp')">
+                    <h3>Interpolation & Testing</h3>
+                    <p>String interpolation, assert/pass/fail, checked indexing</p>
+                </div>
+                <div class="example-card" onclick="loadExample('tuples')">
+                    <h3>Tuples</h3>
+                    <p>Tuple literals, index access, destructuring, element assignment</p>
+                </div>
             </div>
         </div>
 
@@ -467,7 +475,7 @@ put message"></textarea>
     </div>
 
     <footer>
-        <p>Poly Language v1.7.3 • <a href="https://github.com/aj-nelson-0001/poly">GitHub</a></p>
+        <p>Poly Language v2.0.0-preview.1 • <a href="https://github.com/aj-nelson-0001/poly">GitHub</a></p>
         <p style="margin-top: 8px; font-size: 0.85rem;">Built with ❤️ for developers who love simplicity and performance</p>
     </footer>
 
@@ -475,7 +483,7 @@ put message"></textarea>
 
     <script>
         // ------------------------------------------------------------------
-        // Examples written in the current Poly dialect (v1.7.3)
+        // Examples written in the current Poly dialect (v2.0.0-preview.1)
         // ------------------------------------------------------------------
         const examples = {
             hello: `# Hello World example
@@ -563,10 +571,10 @@ end fn
 
 fn main()
     var score := 15
-    loop: score 0..5
+    loop score 0..5
         put score
         put grade(score)
-        score += 20
+        score := score + 20
     end loop
 end fn`,
             closure: `# Closures are first-class: stored and called
@@ -609,6 +617,65 @@ fn main()
     put xs.sort_by(|a, b| a > b)
     put "string chars:"
     put "hello".map(|c| c)
+end fn`,
+            interp: `# String interpolation, checked indexing, and test helpers
+fn main()
+    var name := "Ada"
+    var age := 36
+    var score := 87.5
+    put "Hello, {name}! You are {age} and scored {score}."
+    put unicode "{name} (age {age}) is {score >= 60.0} for passing."
+
+    var xs := [10, 20, 30]
+    put "xs.get(1):"
+    put xs.get(1)
+    put "xs.get(99) (None expected):"
+    put xs.get(99)
+    put "text.get(0):"
+    put "hello".get(0)
+
+    assert(name != "")
+    pass("name is non-empty")
+    assert(age >= 18)
+    pass("age is adult")
+    assert(score >= 0.0)
+    pass("score is valid")
+    match xs.get(2)
+        Some(v), pass("checked indexing works")
+        None, fail("expected a value at index 2")
+    end match
+end fn`,
+            tuples: `# Tuples: literals, index access, destructuring, assignment
+fn make_point(): (i32, i32)
+    return (3, 4)
+end fn
+
+fn main()
+    var pair := (10, true)
+    put "pair.0 / pair.1:"
+    put pair.0
+    put pair.1
+
+    var nested := (1, (2, 3))
+    put "nested.1.0 / nested.1.1:"
+    put nested.1.0
+    put nested.1.1
+
+    put "index a function result:"
+    put make_point().0
+    put make_point().1
+
+    var items := [10, 20]
+    for (idx, val) in items.enumerate()
+        put idx
+        put val
+    end for
+
+    set pair.0 to 99
+    pair.1 = false
+    put "after assignment:"
+    put pair.0
+    put pair.1
 end fn`
         };
 

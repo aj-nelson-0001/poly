@@ -1,5 +1,7 @@
 # Poly Language Tutorial: I/O and Error Handling
 
+> **Historical tutorial:** This tutorial targets the v1 syntax. It is retained for migration context and is not normative for Poly 2.0.0-preview.1.
+
 ## Introduction
 
 This tutorial covers the fundamental I/O operations and error handling in Poly. By the end, you'll be able to read input, display output, and handle errors gracefully.
@@ -19,22 +21,19 @@ put 3.14159                    # Output float
 put true                       # Output boolean
 ~~~
 
-### Output Without Newline
+### Output
 
-Use the `-n` flag to suppress the trailing newline:
+Use `put` to print to the console. Each `put` adds a newline:
 
 ~~~poly
-put -n "Loading"
-put -n "."
-put -n "."
-put "."                        # This one adds a newline
-put "Done!"
+put "Hello, World!"
+put 42
 ~~~
 
 Output:
 ~~~
-Loading...
-Done!
+Hello, World!
+42
 ~~~
 
 ### File Output
@@ -42,8 +41,8 @@ Done!
 Write to files using redirection operators:
 
 ~~~poly
-put "Line 1" > "output.txt"    # Write (truncate)
-put "Line 2" >> "output.txt"   # Append
+put "Line 1" to "output.txt"    # Write (truncate)
+put "Line 2" >to "output.txt"   # Append
 ~~~
 
 ### Error/Warning Output
@@ -65,7 +64,7 @@ info "Debug information"       # Debug info (stderr)
 Read a line from the user:
 
 ~~~poly
-put -n "Enter your name: "
+put "Enter your name: "
 var name ustring := get
 put "Hello, " + name + "!"
 ~~~
@@ -75,7 +74,7 @@ put "Hello, " + name + "!"
 Poly automatically parses input based on the variable type:
 
 ~~~poly
-put -n "Enter your age: "
+put "Enter your age: "
 var age i32 := get
 put "In 10 years you will be: " + (age + 10)
 ~~~
@@ -85,18 +84,18 @@ put "In 10 years you will be: " + (age + 10)
 Use `--default` for optional input:
 
 ~~~poly
-put -n "Enter color (or press Enter for default): "
+put "Enter color (or press Enter for default): "
 var color ustring := get --default unicode "blue"
 put "Color: " + color
 ~~~
 
 ### Password Input
 
-Use `--mask` to hide input *(experimental: the flag parses but masking is not
-implemented yet — the compiler emits a warning)*:
+Use `--mask` to hide input; echo is suppressed while typing on Unix terminals,
+and the read falls back to plain input elsewhere:
 
 ~~~poly
-put -n "Enter password: "
+put "Enter password: "
 var password ustring := get --mask unicode "*"
 put "Password length: " + password.len()
 ~~~
@@ -123,11 +122,11 @@ var age i32 := get with validate |x| x >= 1 && x <= 150
 
 ### Delimiter-Based Input
 
-Use `--until` to read until a delimiter *(experimental: the flag parses but
-input is read to the end of the line — the compiler emits a warning)*:
+Use `--until` to read until a delimiter; input stops at the delimiter (which is
+excluded from the result), so `--until unicode ","` on `apple,banana` yields `apple`:
 
 ~~~poly
-put -n "Enter CSV line: "
+put "Enter CSV line: "
 var line ustring := get --until unicode ","
 put "First field: " + line
 ~~~
@@ -186,7 +185,7 @@ end fn
 
 Use `try` to propagate errors up the call stack:
 
-~~~poly
+~~~poly fragment
 fn process_file(): Result<ustring, FileError>
     var content := try read_file(unicode "config.txt")  # Propagates error
     return Ok(content)
@@ -226,7 +225,7 @@ end match
 
 Use `_` to catch any error:
 
-~~~poly
+~~~poly fragment
 match validate_name(input)
     Ok(name), put "Valid: " + name
     Error(_), error "Validation failed"  # Catches any error
@@ -245,15 +244,15 @@ fn main()
     put ""
     
     # Get name with validation
-    put -n "Enter your name: "
+    put "Enter your name: "
     var name ustring := get with validate |n| n.len() >= 2
     
     # Get email with validation
-    put -n "Enter your email: "
+    put "Enter your email: "
     var email ustring := get with validate |e| e.contains(unicode "@")
     
-    # Get password (mask is experimental: parses but is not applied)
-    put -n "Enter password: "
+    # Get password (mask suppresses echo on Unix terminals)
+    put "Enter password: "
     var password ustring := get --mask unicode "*" with validate |p| p.len() >= 8
     
     # Confirm registration
@@ -275,12 +274,12 @@ Poly's `loop` command with colon syntax supports flexible iteration inspired by 
 
 ~~~poly
 # Simple range
-loop: i 0..10
+loop i 0..10
     put i
 end loop
 
 # Inclusive range
-loop: i 0..=10
+loop i 0..=10
     put i
 end loop
 ~~~
@@ -291,17 +290,17 @@ The real power comes from combining multiple ranges and specific values:
 
 ~~~poly
 # Multiple ranges and specific values
-loop: i 1..3, 7, 19..21
+loop i 1..3, 7, 19..21
     put i  # Iterates: 1, 2, 3, 7, 19, 20, 21
 end loop
 
 # Specific values only
-loop: i 1, 5, 10, 100
+loop i 1, 5, 10, 100
     put i  # Iterates: 1, 5, 10, 100
 end loop
 
 # Complex mix
-loop: i 1..5, 10, 20..25 step 2, 100
+loop i 1..5, 10, 20..25 step 2, 100
     put i  # Iterates: 1, 2, 3, 4, 5, 10, 20, 22, 24, 100
 end loop
 ~~~
@@ -312,12 +311,12 @@ Use `step` to control the increment:
 
 ~~~poly
 # Positive step
-loop: i 0..10 step 2
+loop i 0..10 step 2
     put i  # Iterates: 0, 2, 4, 6, 8, 10
 end loop
 
 # Negative step (counting down)
-loop: i 10..1 step -1
+loop i 10..1 step -1
     put i  # Iterates: 10, 9, 8, ..., 1
 end loop
 ~~~
@@ -329,12 +328,12 @@ Iterate over collections and with indices:
 ~~~poly
 # Iterate over collection
 var fruits Vec<ustring> := [unicode "apple", unicode "banana", unicode "cherry"]
-loop: fruit in fruits
+loop fruit in fruits
     put fruit
 end loop
 
 # Iterate with index
-loop: (index, fruit) in fruits.enumerate()
+loop (index, fruit) in fruits.enumerate()
     put index.to_string() + ": " + fruit
 end loop
 ~~~
@@ -344,10 +343,10 @@ end loop
 ~~~poly
 # Multiplication table
 put "Multiplication Table (1..5)"
-loop: i 1..5
+loop i 1..5
     var row ustring := ""
-    loop: j 1..5
-        add row, (i * j).to_string().pad_left(4)
+    loop j 1..5
+        row := row + (i * j).to_string().pad_left(4)
     end loop
     put row
 end loop
@@ -357,12 +356,12 @@ end loop
 
 ## Summary
 
-- **Output**: Use `put` for console output, `put -n` for no newline
+- **Output**: Use `put` for console output (always adds a newline)
 - **Input**: Use `get` with flags like `--default`, `--mask`, `--timeout`, `--until`
 - **Validation**: Use `with validate` for input validation
 - **Errors**: Use `Result<T, E>` with `Ok(value)` and `Error(e)`
 - **Pattern Matching**: Use `match` to handle different cases
 - **Error Propagation**: Use `try` to propagate errors
-- **Loop Ranges**: Use `loop:` with ranges, multiple values, and steps
+- **Loop Ranges**: Use `loop` with ranges, multiple values, and steps
 
 Practice these concepts by building small programs that read user input, validate it, and handle errors gracefully.

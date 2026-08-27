@@ -16,10 +16,10 @@ We're excited to announce that **async/await support** is now available in the P
 
 Declare asynchronous functions using the `async fn` keyword:
 
-~~~poly
+~~~poly fragment
 async fn fetch_data(url: ustring): Result<ustring, ustring>
     var response := http_get(url).await
-    return Ok(response)
+    return response
 end fn
 ~~~
 
@@ -36,7 +36,7 @@ async fn fetch_data(url: String) -> Result<String, String> {
 
 Use the `.await` postfix syntax to wait for async operations:
 
-~~~poly
+~~~poly fragment
 var data := fetch_data(unicode "https://api.example.com").await
 ~~~
 
@@ -46,7 +46,7 @@ The postfix notation makes the code read naturally: "fetch data,,await the resul
 
 Traits can now have async method signatures:
 
-~~~poly
+~~~poly fragment
 trait DataFetcher
     async fn fetch(self, key: ustring): Result<ustring, ustring>
 end trait

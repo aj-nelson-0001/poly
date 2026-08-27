@@ -1,34 +1,101 @@
 # Poly
 
-**A minimalist, assembly-inspired systems programming language that transpiles to safe, idiomatic Rust.**
+**A minimal, assembly-inspired meta-language for any systems language.**
 
-![Version](https://img.shields.io/badge/version-1.7.3-green)
+![Version](https://img.shields.io/badge/version-2.0--preview-green)
 ![Status](https://img.shields.io/badge/status-Active%20Development-blue)
-![Backend](https://img.shields.io/badge/backend-Rust-black)
+![Backend](https://img.shields.io/badge/backends-Rust%20%7C%20C-black)
 
 ---
 
 ## Overview
 
-Poly is designed as a minimalist, low-overhead system programming language with a clean, highly explicit syntax reminiscent of assembly language. It provides fine-grained control over low-level memory and ASCII/Unicode data primitives while transpiling directly into safe, idiomatic Rust.
+Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with an assembly-inspired syntax. For target-specific or advanced work, users provide definitions in foreign language blocks (`#rust` or `#c`). The parser models additional Rust-oriented constructs, but the supported backend and target determine what is runnable.
+
+**Key principle:** Foreign blocks provide target-language definitions. Poly provides the orchestration. Foreign blocks must be top-level; the native compiler validates their contents.
+
+**One Poly source file → one complete source file in the selected target language → compiled by the target compiler.**
 
 ### Core Principles
 
-1. **Explicit is Better than Implicit** — All operations are clear and predictable
+1. **Poly does the simple stuff. Target languages do the complex stuff.** — No feature creep
 2. **Assembly-Inspired Syntax** — Familiar to systems programmers
-3. **Safe Transpilation** — Leverages Rust's memory safety guarantees
-4. **Zero-Cost Abstractions** — High-level features compile to efficient Rust
-5. **Gradual Complexity** — Simple features for beginners, powerful features for experts
+3. **Zero Runtime** — Poly adds no overhead; it's just syntax sugar
+4. **Explicit is Better than Implicit** — All operations are clear and predictable
+5. **Passthrough Architecture** — Selected foreign blocks are emitted verbatim
 
 ---
 
-## What's New in v1.7.3
+## Foreign Language Blocks
 
-🎉 **Higher-order functions!** Functions can return closures (`fn make_adder(n: i32): |x: i32| i32`), vectors and strings support `map`/`filter`/`reduce`/`sort_by`, and closure literals can be stored in variables and passed around.
+Poly's key innovation is the `#rust` block. Provide definitions in Rust, and orchestrate them in Poly:
 
-Match arms use comma syntax: `Ok(data), put data` (previously `=>`). Loop ranges are inclusive and require an explicit binding: `loop: i 0..10`. `get` supports real `--timeout`/`--default`/`--as` behavior, file reading (`get_line`/`eof`) works, and vectors print with `{:?}` formatting.
+~~~poly fragment
+#rust
+use std::collections::HashMap;
 
-See [CHANGELOG.md](CHANGELOG.md) for the full history, including v1.7.0 (LSP + in-browser wasm transpiler), v1.7.1 (closure type annotations), and v1.6.0 (explicit `:=`/`=`/`==` syntax).
+fn process_data(input: &str) -> HashMap<String, Vec<i32>> {
+    // Declaration only — Poly calls this
+    todo!()
+}
+#endrust
+
+# Poly: orchestrate the calls
+var name ustring := unicode "Alice"
+put "Hello, " + name + "!"
+# The target compiler validates the foreign function signature.
+var result := process_data(name)
+put result
+~~~
+
+Foreign blocks provide target-language definitions at file scope. Poly does not parse their bodies; the selected native compiler validates them. Poly owns the generated entry point (`fn main()` for Rust or `int main(void)` for C).
+
+This model currently supports `#rust` for Rust and `#c` for C. Optional `extern rust fn ...` and `extern c fn ...` declarations add Poly-side interface checks for foreign calls. `#cpp` syntax is reserved and rejected until a C++ backend is designed.
+
+See [POLY_SPEC_v2.md](POLY_SPEC_v2.md) for the full specification, [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the frozen target contract, and [POLY_ROADMAP_v2.md](POLY_ROADMAP_v2.md) for the implementation plan.
+
+---
+
+## What's New in v2.0 Preview
+
+Poly 2.0 adds target selection with `--target rust` and `--target c`. Rust and C
+foreign blocks are selected by the target, emitted at file scope, and kept
+opaque to Poly's type checker; the native target compiler validates them.
+
+~~~poly fragment
+#c
+int double_value(int x) { return x * 2; }
+#endc
+
+var answer i32 := double_value(21)
+put answer
+~~~
+
+Use `poly --target c --check program.poly` to validate generated C, or
+`poly --target c program.poly` to emit and compile the C executable.
+
+## Historical Release Notes
+
+The v1.x notes below describe prior releases and are retained for migration context. They are not the v2 preview contract.
+
+## What's New in v1.8.0
+
+🔁 **Tuple power-ups.** Assign to tuple elements (`pair.0 := 99`,
+`pair.1 = false`), destructure in `for` loops (`for (idx, val) in
+items.enumerate()`), and read them by position (`pair.0`, `nested.1.0`).
+
+## What's New in v1.7.6
+
+🧩 **Tuple index access.** Read tuple elements by position: `pair.0`, and
+chained `nested.1.0` — the lexer handles `.N` after a dot exactly like Rust.
+
+## What's New in v1.7.5
+
+🛠️ **The remaining input stubs are real.** `get --until unicode ","` reads up to the delimiter (returns everything before it) and `get --mask unicode "*"` suppresses terminal echo while typing (best-effort on Unix, plain-read fallback elsewhere). A mini test framework (`assert(cond)`, `pass(msg)`, `fail(msg)`), checked indexing (`xs.get(i)` → `Option<T>`, `"text".get(i)` → `Option<char>`), `Result` accessors (`is_ok()`/`is_error()`/`unwrap()`/`unwrap_or(v)`), and string interpolation (`put "Name: {name}, Age: {age}"`) all work now. CI gained a `cargo audit` dependency job.
+
+🌐 **Historical v1.7.5 note.** Network builtins and async task support described here belong to the v1 implementation history. In v2, consult the target-specific compiler behavior and use `#rust` or `#c` helpers when a backend does not support the operation.
+
+See [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md) for the maintained v2 documents. Older release notes remain historical and are not normative for v2.
 
 ---
 
@@ -40,6 +107,29 @@ See [CHANGELOG.md](CHANGELOG.md) for the full history, including v1.7.0 (LSP + i
 put "Hello, World!"
 ~~~
 
+### Poly + Foreign Definitions
+
+~~~poly fragment
+#rust
+use std::collections::HashMap;
+
+fn complex_algorithm(data: &[i32]) -> Vec<i32> {
+    data.iter().filter(|&&x| x > 0).map(|&x| x * 2).collect()
+}
+#endrust
+
+# Poly orchestrates the calls
+var count i32 := 0
+loop i 0..5
+    add count
+end loop
+put "Count: " + count
+
+var data := [1, -2, 3, 4, -5]
+var result := complex_algorithm(data)
+put "Rust result: " + result
+~~~
+
 ### Variables & Output
 
 ~~~poly
@@ -48,24 +138,24 @@ var version i32 := 1
 put "Language: " + name + ", Version: " + version
 ~~~
 
-### Input with Validation
+### Typed Input
 
 ~~~poly
-put -n "Enter your age: "
-var age i32 := get with validate |x| x > 0 && x < 150
+put "Enter your age: "
+var age i32 := get --as i32
 put "You are " + age + " years old."
 ~~~
 
 ### Error Handling
 
-~~~poly
+~~~poly fragment
 enum FileError
     NotFound
     PermissionDenied
 end enum
 
 fn read_config(path: ustring): Result<ustring, FileError>
-    var content := try open_file(path)
+    var content := try read_file(path)  // `read_file` returns a Result
     return Ok(content)
 end fn
 
@@ -78,22 +168,22 @@ end match
 
 ### Loop Ranges (SuperBASIC-inspired)
 
-The loop variable must be named explicitly after `loop:`: `loop: <var_name> <ranges>`.
-Collection iteration uses `loop: <var_name> in <collection>`. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`; `..=` is accepted but redundant for `loop:` ranges.
+The loop variable must be named explicitly after `loop`: `loop <var_name> <ranges>`. `loop` without a variable is not part of the current v2 syntax.
+Collection iteration uses `loop <var_name> in <collection>`. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`; `..=` is accepted but redundant for `loop` ranges.
 
 ~~~poly
 # Simple range
-loop: i 0..10
+loop i 0..10
     put i
 end loop
 
 # Multiple ranges and specific values
-loop: value 1..3, 7, 19..20
+loop value 1..3, 7, 19..20
     put value  # Iterates: 1, 2, 3, 7, 19, 20
 end loop
 
 # With step
-loop: i 0..10 step 2
+loop i 0..10 step 2
     put i  # Iterates: 0, 2, 4, 6, 8, 10
 end loop
 ~~~
@@ -102,14 +192,23 @@ end loop
 
 ## Features
 
+### Foreign Language Blocks
+
+| Feature | Syntax | Description |
+|---------|--------|-------------|
+| Rust block | `#rust ... #endrust` | Rust definitions emitted at module scope |
+| C block | `#c ... #endc` | C declarations emitted at file scope |
+| C++ block | `#cpp ... #endcpp` | Reserved; rejected until a backend exists |
+
+**Rule:** Foreign blocks are top-level target-language definitions and are opaque to Poly. Poly always generates `fn main()` for Rust or `int main(void)` for C. The native compiler validates foreign contents.
+
 ### I/O System
 
 | Feature | Syntax | Description |
 |---------|--------|-------------|
 | Basic output | `put expr` | Print with newline (vectors print with `{:?}` debug formatting) |
-| No newline | `put -n expr` | Print without newline |
-| File write | `put expr > "file"` | Write/overwrite file |
-| File append | `put expr >> "file"` | Append to file |
+| File write | `put expr to "file"` | Write/overwrite file |
+| File append | `put expr to "file" -append` | Append to file |
 | Error output | `error expr` | Print to stderr with `[ERROR]` |
 | Warning output | `warn expr` | Print to stderr with `[WARN]` |
 | Debug output | `info expr` | Print to stderr with `[INFO]` |
@@ -118,10 +217,10 @@ end loop
 | Default value | `get --default unicode "value"` | Fallback on empty input |
 | Masked input | `get --mask unicode "*"` | Hide password input |
 | Timeout | `get --timeout 3000` | Timeout in milliseconds |
-| Validation | `get with validate \|x\| x > 0` | Validate with closure |
-| Completion | `get with complete [unicode "a", unicode "b"]` | Autocomplete options |
-| File input | `var x := get < "file"` | Read from file |
-| Binary input | `var x bytes := get < "file"` | Read as bytes |
+| Type conversion | `get --as i32` | Parse input as a target type |
+| Delimited input | `get --until unicode ","` | Read through a delimiter |
+| File input | `var x := get from "file"` | Read from file |
+| Binary input | `var x bytes := get from "file"` | Read as bytes |
 
 ### Types
 
@@ -135,8 +234,8 @@ end loop
 | `i128` / `u128` | 16 bytes | `i128` / `u128` |
 | `f32` | 4 bytes | `f32` |
 | `f64` | 8 bytes | `f64` |
-| `char` | 1 byte | `u8` |
-| `string` | 1 byte/char | `Vec<u8>` / `&[u8]` |
+| `char` | 4 bytes | `char` |
+| `string` | byte-oriented | `Vec<u8>` / `&[u8]` |
 | `uchar` | 4 bytes | `char` |
 | `ustring` | 1-4 bytes/char | `String` / `&str` |
 | `byte` | 1 byte | `u8` |
@@ -145,10 +244,10 @@ end loop
 
 ### Language Constructs
 
-- **Variables**: `var name Type := value` (mutable; type optional), `let name: Type = value` (immutable)
-- **Constants**: `const NAME = value`
-- **Operators**: `==` compares values; assignment uses `name = value`; mutation uses `+=` and `-=`
-- **Functions**: `fn name(params): ReturnType ... end fn`, with generic parameters: `fn identity<T>(value: T): T`
+- **Variables**: `var name Type := value` (mutable; type optional), `let name: Type := value` (immutable)
+- **Constants**: `const NAME := value`
+- **Operators**: `=` compares values; `:=` initializes and assigns; `==` is rejected legacy syntax
+- **Functions**: `fn name(params): ReturnType ... end fn`; generic syntax is modeled for Rust-oriented programs
 - **Structs**: `struct Name ... end struct`, with generic parameters: `struct Wrapper<T>`
 - **Enums**: `enum Name ... end enum`
 - **Traits**: `trait Name ... end trait`
@@ -158,13 +257,10 @@ end loop
 - **Closures**: `|params| expr` or `|params| ... end`
 - **Function types**: `fn apply(f: |x: i32| i32, v: i32): i32` — closures as
   typed parameters; `fn make_adder(n: i32): |x: i32| i32` returns a closure
-- **Higher-order methods**: `xs.map(|x| x * 2)`, `xs.filter(|x| x % 2 == 0)`,
-  `xs.reduce(0, |acc, x| acc + x)`, `xs.sort_by(|a, b| a > b)` — callbacks
-  receive owned elements; strings iterate their characters (`"hi".map(|c| c)`
-  yields `Vec<char>`); `sort_by` returns a sorted copy
+- **Rust-oriented higher-order methods**: vector iterator chains are supported by the Rust backend; use `#c` helpers for C-specific collection algorithms
 - **If/Else**: `if cond ... else ... end if`
 - **While**: `while cond ... end while`
-- **Loop**: `loop ... end loop` (infinite), `loop: variable range ... end loop` (range), `loop: variable in collection ... end loop`
+- **Loop**: `loop ... end loop` (infinite), `loop variable range ... end loop` (range), `loop variable in collection ... end loop`
 - **Match**: `match expr ... pattern, expr ... end match`
 - **Error handling**: `Result<T, E>` with `Ok(val)` / `Error(err)`, `try` for propagation
 - **Math functions**: `abs`, `sqrt`, `pow`, `min`, `max`
@@ -246,18 +342,18 @@ Poly/
 
 ## Transpilation
 
-Poly transpiles to Rust. Every Poly construct has a direct Rust equivalent:
+Poly currently targets Rust by default and supports a documented C11 orchestration subset with `--target c`. Every supported Poly construct has a direct equivalent in the selected target:
 
 | Poly | Rust |
 |------|------|
 | `var x i32 := 0` | `let mut x: i32 = 0;` |
-| `const MAX = 100` | `const MAX: i32 = 100;` |
-| `x = value` | `x = value;` |
-| `x += 1` | `x += 1;` |
+| `const MAX := 100` | `const MAX: i32 = 100;` |
+| `x := value` | `x = value;` |
+| `x := x + 1` | `x += 1;` |
 | `put "hello"` | `println!("{}", "hello");` |
 | `get` | Standard input reading |
 | `if x > 0` | `if x > 0 {` |
-| `loop: i 0..10` | `for i in 0..=10 {` |
+| `loop i 0..10` | `for i in 0..=10 {` |
 | `fn add(a: i32, b: i32): i32` | `fn add(a: i32, b: i32) -> i32` |
 | `struct Point` | `struct Point` |
 | `enum Shape` | `enum Shape` |
@@ -270,14 +366,14 @@ Poly transpiles to Rust. Every Poly construct has a direct Rust equivalent:
 
 ### Prime Numbers
 
-~~~poly
+~~~poly fragment
 fn is_prime(n: i32): bool
     if n <= 1,
         return false
     end if
     var i i32 := 2
     while i * i <= n
-        if n % i == 0
+        if n % i = 0
             return false
         end if
         i += 1
@@ -287,7 +383,7 @@ end fn
 
 put unicode "First 20 prime numbers:"
 var count i32 := 0
-loop: num 2..200
+loop num 2..200
     if is_prime(num)
         put num
         count += 1
@@ -300,18 +396,18 @@ end loop
 
 ### Interactive Menu
 
-~~~poly
+~~~poly fragment
 fn main()
     var running bool := true
     while running
         put "Menu:"
         put "1. Greet user"
         put "2. Exit"
-        put -n "Choose: "
+        put "Choose: "
         var choice i32 := get
         match choice
             1, greet_user()
-            2, running = false
+            2, running := false
             _, warn "Invalid choice"
         end match
     end while
@@ -339,7 +435,7 @@ fn main()
     put add5(10)                      # 15
     var xs := [1, 2, 3, 4, 5]
     put xs.map(|x| x * 2)             # [2, 4, 6, 8, 10] (vectors print with {:?})
-    put xs.filter(|x| x % 2 == 0)     # [2, 4]
+    put xs.filter(|x| x % 2 = 0)     # [2, 4]
     put xs.reduce(0, |acc, x| acc + x)  # 15
     put xs.sort_by(|a, b| a > b)      # [5, 4, 3, 2, 1]
     put "hello".map(|c| c)            # ['h', 'e', 'l', 'l', 'o']
@@ -378,17 +474,21 @@ Use `poly --emit-rust file.poly` when you want the generated Rust on stdout. Asy
 | `poly <file.poly>` | Generate and build `rust_output/<program>/` with Cargo |
 | `poly --tokens <file>` | Print tokens and exit |
 | `poly --ast <file>` | Print AST and exit |
-| `poly --check <file>` | Validate code and verify generated Rust compilation |
+| `poly --check <file>` | Validate code and verify the selected target compilation |
 | `poly --emit-rust <file>` | Print generated Rust to stdout |
 | `poly --intermediate-representation <file>` | Print the intermediate representation pipeline output (optimized Rust); `--ir` is an alias |
 | `poly --source-map <file>` | Print the generated Poly→Rust source map |
 | `poly --format <file>` | Format output with rustfmt |
 | `poly --diff <file>` | Show diff between unformatted and formatted |
 | `poly --watch <file>` | Watch file and re-transpile on changes |
-| `poly --project <dir> <file>` | Generate `<dir>/Cargo.toml` and `<dir>/src/main.rs` |
+| `poly --project <dir> <file>` | Generate a Rust Cargo project or a C project with `--target c` |
 | `poly --repl` | Start interactive REPL |
 | `poly --help` | Show help message |
 | `poly --version` | Show version information |
+| `poly --target rust --check file.poly` | Validate the Rust backend |
+| `poly --target c --emit-c file.poly` | Emit C source to stdout |
+| `poly --target c --check file.poly` | Validate the C backend |
+| `poly --target c file.poly` | Generate and build a C program |
 
 ---
 

@@ -1,5 +1,7 @@
 # Poly Language External Services Integration Guide
 
+> **Historical guide:** Integration examples describe the earlier Rust-focused runtime. They are retained for context and are not normative for the v2 C subset.
+
 ## Overview
 
 This guide covers integrating with external services in Poly applications using the new I/O and error handling syntax.
@@ -12,10 +14,10 @@ This guide covers integrating with external services in Poly applications using 
 
 ### Basic HTTP Requests
 
-~~~poly
+~~~poly fragment
 // HTTP client
 fn http_get(url: ustring): Result<ustring, HttpError>
-    match get --timeout 10000 < url
+    match get from  url --timeout 10000
         Ok(response), return Ok(response)
         Timeout, return Error(HttpError::Timeout)
         Error(e), return Error(HttpError::NetworkError(e))
@@ -81,7 +83,7 @@ end fn
 
 ### Database Connection
 
-~~~poly
+~~~poly fragment
 // Database connection
 struct Database
     connection_string: ustring
@@ -110,7 +112,7 @@ end fn
 // Usage
 var db := try connect_database(config)
 var users := try query(db, unicode "SELECT * FROM users WHERE age > ?", [unicode "18"])
-loop: user in users
+loop user in users
     put unicode "User: " + user.name
 end loop
 ~~~
@@ -194,7 +196,7 @@ end fn
 
 ### JWT Authentication
 
-~~~poly
+~~~poly fragment
 // JWT token handling
 fn create_jwt(payload: Map<ustring, ustring>, secret: ustring): ustring
     var header := unicode "{\"alg\":\"HS256\",\"typ\":\"JWT\"}"
@@ -403,7 +405,7 @@ fn s3_download(s3: S3, key: ustring): Result<bytes, S3Error>
         (unicode "Authorization", signature)
     ]
 
-    match get --timeout 30000 < url with headers headers
+    match get from  url --timeout 30000 with headers headers
         Ok(data), return Ok(data)
         Error(e), return Error(S3Error::DownloadFailed(e))
     end match

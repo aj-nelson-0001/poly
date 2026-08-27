@@ -1,523 +1,220 @@
-# Poly Language Grammar (BNF)
+# Poly Language Grammar v2 Preview
 
-**Version:** 1.5 Draft  
-**Status:** Work in Progress
+**Status:** Current preview grammar for Poly 2.0.0-preview.1
 
-This document defines the formal grammar for the Poly programming language using Extended Backus-Naur Form (EBNF) notation.
-
----
+This document describes the syntax accepted by the current lexer and parser. It is intentionally a compact grammar, not a promise that every parsed construct is supported by every target backend.
 
 ## Notation
 
-- `::=` means "is defined as"
-- `|` means "or" (alternative)
-- `{ }` means "zero or more"
-- `[ ]` means "optional"
-- `( )` means grouping
-- `"..."` means a literal token
-- `// ...` means a comment (not part of grammar)
+- `::=` defines a production.
+- `|` separates alternatives.
+- `[ ... ]` is optional.
+- `{ ... }` repeats zero or more times.
+- Quoted text is a literal token.
+- `identifier`, `integer`, and `string` are lexical categories.
 
----
-
-## Lexical Grammar
-
-### Comments
+## Lexical Structure
 
 ~~~
-comment         ::= single_line_comment
-                   | multi_line_comment
+program       ::= { top_level_item } EOF
 
-single_line_comment ::= "//" <any characters except newline> newline
-multi_line_comment  ::= "/*" <any characters> "*/"
+top_level_item ::= statement | foreign_block | extern_function_declaration
+
+foreign_block ::= "#rust" foreign_text "#endrust"
+                | "#c" foreign_text "#endc"
+                | "#cpp" foreign_text "#endcpp"
+
+extern_function_declaration ::= "extern" foreign_target "fn" identifier
+                                "(" [ parameters ] ")" [ ":" type ]
+foreign_target ::= "rust" | "c"
+
+// Foreign markers are line-oriented. Leading whitespace is allowed, but the
+// marker must occupy the line; foreign_text is opaque to the Poly lexer.
+foreign_text  ::= { any_source_character }
+
+comment       ::= "#" { any_character_except_newline }
+                | "//" { any_character_except_newline }
+                | "/*" { any_character } "*/"
+
+identifier    ::= identifier_start { identifier_continue }
+identifier_start ::= letter | "_"
+identifier_continue ::= letter | digit | "_"
+
+integer       ::= decimal | hexadecimal | binary | octal
+float         ::= digit { digit } "." digit { digit } [ exponent ]
+string        ::= '"' { string_character | escape } '"'
+unicode_string ::= "unicode" string
+unicode_char  ::= "unicode" "'" character "'"
+boolean       ::= "true" | "false"
 ~~~
 
-### Identifiers
+Outside foreign blocks, `#` starts a Poly comment. Inside a foreign block every character is copied as target-language text until a valid end marker is reached.
+
+## Statements
 
 ~~~
-identifier      ::= <ident_start> { <ident_continue> }
-ident_start     ::= "_" | <letter>
-ident_continue  ::= "_" | <letter> | <digit>
+statement ::= variable_declaration
+            | let_declaration
+            | const_declaration
+            | assignment
+            | function_declaration
+            | struct_declaration
+            | enum_declaration
+            | trait_declaration
+            | impl_declaration
+            | module_declaration
+            | use_declaration
+            | type_declaration
+            | if_statement
+            | while_statement
+            | loop_statement
+            | return_statement
+            | break_statement
+            | continue_statement
+            | put_statement
+            | diagnostic_statement
+            | expression_statement
 
-letter          ::= "a".."z" | "A".."Z"
-digit           ::= "0".."9"
+variable_declaration ::= "var" identifier [ type ] ":=" [ expression ]
+let_declaration      ::= "let" identifier [ ":" type ] ":=" expression
+const_declaration    ::= "const" identifier ":=" expression
+assignment           ::= assignment_target ":=" expression
+assignment_target    ::= identifier { "." identifier | "." integer | "[" expression "]" }
+
+function_declaration ::= [ "async" ] "fn" identifier [ generic_parameters ]
+                         "(" [ parameters ] ")" [ ":" type ] function_body
+function_body        ::= "{" { statement } "}"
+                       | { statement } "end" "fn"
+                       | "end" "fn"
+
+struct_declaration   ::= "struct" identifier { struct_field } "end" "struct"
+enum_declaration     ::= "enum" identifier { enum_variant } "end" "enum"
+trait_declaration    ::= "trait" identifier { statement } "end" "trait"
+impl_declaration     ::= "impl" { statement } "end" "impl"
+module_declaration   ::= "module" identifier { statement } "end" "module"
+use_declaration      ::= "use" use_path
+type_declaration     ::= "type" identifier "=" type
+
+return_statement     ::= "return" [ expression ]
+break_statement      ::= "break" [ expression ]
+continue_statement   ::= "continue"
 ~~~
 
-### Literals
+Foreign blocks and explicit foreign function declarations are only valid as `top_level_item`s. The parser rejects them inside functions, loops, modules, or other nested Poly blocks. `extern rust fn ...` and `extern c fn ...` declarations are checker-only metadata and are not emitted.
+
+## Types
 
 ~~~
-literal         ::= <int_literal>
-                   | <float_literal>
-                   | <string_literal>
-                   | <unicode_string_literal>
-                   | <byte_literal>
-                   | <bool_literal>
+type ::= primitive_type
+       | identifier
+       | "ptr" type
+       | "Vec" "<" type ">"
+       | "Option" "<" type ">"
+       | "Result" "<" type "," type ">"
+       | "Map" "<" type "," type ">"
+       | "Set" "<" type ">"
+       | "(" type { "," type } ")"
+       | "[" type ";" expression "]"
+       | function_type
 
-int_literal     ::= <decimal_int>
-                   | <hex_int>
-                   | <binary_int>
-                   | <octal_int>
+primitive_type ::= "bool" | "char" | "uchar" | "string" | "ustring"
+                 | "byte" | "bytes"
+                 | "i8" | "u8" | "i16" | "u16"
+                 | "i32" | "u32" | "i64" | "u64"
+                 | "i128" | "u128" | "isize" | "usize"
+                 | "f32" | "f64"
 
-decimal_int     ::= <digit> { <digit> }
-hex_int         ::= "0x" <hex_digit> { <hex_digit> }
-binary_int      ::= "0b" <binary_digit> { <binary_digit> }
-octal_int       ::= "0o" <octal_digit> { <octal_digit> }
-
-hex_digit       ::= <digit> | "a".."f" | "A".."F"
-binary_digit    ::= "0" | "1"
-octal_digit     ::= "0".."7"
-
-float_literal   ::= <digit> { <digit> } "." <digit> { <digit> }
-                   | <digit> { <digit> } "." <digit> { <digit> } ("e" | "E") ["+" | "-"] <digit> { <digit> }
-
-string_literal  ::= '"' { <string_char> } '"'
-string_char     ::= <any character except '"' and newline>
-                   | <escape_sequence>
-
-unicode_string_literal ::= "unicode" <string_literal>
-                           // Unicode string literals use a visible prefix for readability.
-
-byte_literal    ::= <hex_byte> { <hex_byte> }
-hex_byte        ::= <hex_digit> <hex_digit>
-
-bool_literal    ::= "true" | "false"
-
-escape_sequence ::= "\\" ("n" | "t" | "r" | "\\" | '"' | "'" | "0")
+function_type ::= "|" [ parameters ] "|" type
 ~~~
 
-### Operators
+The Rust backend supports the broader Poly type system. The C preview intentionally supports only primitive/scalar mappings, C-compatible plain structs, and simple pointers/references as documented in [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md).
+
+## Expressions
 
 ~~~
-operator        ::= <arithmetic_op>
-                   | <comparison_op>
-                   | <logical_op>
-                   | <bitwise_op>
+expression ::= literal
+             | identifier
+             | expression binary_operator expression
+             | unary_operator expression
+             | expression "(" [ arguments ] ")"
+             | expression "." identifier
+             | expression "." integer
+             | expression "[" expression "]"
+             | expression "as" type
+             | "(" expression ")"
+             | array_literal
+             | tuple_literal
+             | closure
+             | if_expression
+             | match_expression
+             | range_expression
+             | get_expression
 
-arithmetic_op   ::= "+" | "-" | "*" | "/" | "%"
-comparison_op   ::= "==" | "!=" | "<" | ">" | "<=" | ">="
-logical_op      ::= "&&" | "||" | "!"
-bitwise_op      ::= "&" | "|" | "^" | "~" | "<<" | ">>"
+literal ::= integer | float | string | unicode_string | unicode_char | boolean
+array_literal ::= "[" [ arguments ] "]"
+tuple_literal ::= "(" expression "," expression { "," expression } ")"
+arguments ::= expression { "," expression }
+closure ::= "|" [ parameters ] "|" expression
 
-mutation_command ::= "set" <expression> "to" <expression>
-                   | "add" <expression> ["," <expression>]
-                   | "sub" <expression> ["," <expression>]
-                   | "inc" <expression>
-                   | "dec" <expression>
+binary_operator ::= "+" | "-" | "*" | "/" | "%"
+                 | "=" | "!=" | "<" | ">" | "<=" | ">="
+                 | "&&" | "||" | "&" | "|" | "^" | "<<" | ">>"
+unary_operator ::= "-" | "!" | "~" | "*"
 ~~~
 
-### Delimiters
+`=` is the equality operator. `:=` is assignment. `==` is tokenized only to provide a migration diagnostic and is rejected by the parser.
+
+## Control Flow
 
 ~~~
-delimiter       ::= "(" | ")" | "[" | "]" | "{" | "}"
-                   | "," | ";" | ":" | "." | "::"
-                   | "->" | ".." | "..="
-                   | "<" | ">"  // for file I/O
-                   | ">>"       // for file append
+if_statement  ::= "if" expression { statement }
+                 { "else" "if" expression { statement } }
+                 [ "else" { statement } ] "end" "if"
+
+while_statement ::= "while" expression { statement } "end" "while"
+
+loop_statement ::= "loop" "end" "loop"
+                 | "loop" identifier loop_source { statement } "end" "loop"
+                 | "loop" "(" identifiers ")" "in" expression { statement } "end" "loop"
+
+loop_source   ::= "in" expression | range_list
+range_list    ::= range_part { "," range_part }
+range_part    ::= expression ".." [ "=" ] expression [ "step" expression ]
+                 | expression
+
+match_expression ::= "match" expression { pattern "," expression } "end" "match"
 ~~~
 
-### Keywords
+Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected by semantic checking.
+
+## I/O
 
 ~~~
-keyword         ::= "var" | "let" | "const" | "fn" | "end"
-                   | "unicode"
-                   | "if" | "else" | "while" | "loop"
-                   | "for" | "in" | "match" | "case" | "break"
-                   | "continue" | "return" | "struct" | "enum"
-                   | "trait" | "impl" | "for" | "module" | "use"
-                   | "pub" | "as" | "where" | "unsafe" | "async"
-                   | "await" | "spawn" | "move" | "type" | "macro"
-                   | "try" | "panic" | "null" | "addr" | "deref"
-                   | "ptr" | "add" | "sub" | "inc" | "dec"
-                   | "put" | "get" | "error" | "warn" | "info"
-                   | "with" | "validate" | "complete" | "encoding"
-                   | "timeout" | "default" | "mask" | "bytes"
-                   | "step" | "capture"
+put_statement       ::= "put" expression [ "to" expression [ "-append" ] ]
+diagnostic_statement ::= ( "error" | "warn" | "info" ) expression
+
+get_expression      ::= "get" [ "unicode" string ] { get_flag }
+                    | "get" "from" expression { get_flag }
+get_flag            ::= "--timeout" expression
+                      | "--default" expression
+                      | "--mask" expression
+                      | "--as" type
+                      | "--until" expression
+                      | "--bytes" expression
+                      | "with" "validate" closure
+                      | "with" "complete" expression
+                      | "with" "encoding" expression
 ~~~
 
----
+`put` always writes a trailing newline. `error`, `warn`, and `info` write to stderr with `[ERROR]`, `[WARN]`, and `[INFO]` prefixes. File output is implemented by the Rust backend and currently rejected by the C backend.
 
-## Syntax Grammar
+## Target Selection
 
-### Program Structure
-
-~~~
-program         ::= { <statement> } EOF
-
-statement       ::= <var_declaration>
-                   | <let_declaration>
-                   | <const_declaration>
-                   | <assignment>
-                   | <function_declaration>
-                   | <struct_declaration>
-                   | <enum_declaration>
-                   | <trait_declaration>
-                   | <impl_declaration>
-                   | <module_declaration>
-                   | <use_declaration>
-                   | <type_declaration>
-                   | <macro_declaration>
-                   | <if_expression>
-                   | <while_expression>
-                   | <loop_expression>
-                   | <match_expression>
-                   | <put_statement>
-                   | <error_statement>
-                   | <warn_statement>
-                   | <info_statement>
-                   | <return_statement>
-                   | <break_statement>
-                   | <continue_statement>
-                   | <try_expression>
-                   | <panic_expression>
-                   | <unsafe_block>
-                   | <async_block>
-                   | <expression>
+~~~bash
+poly --target rust program.poly
+poly --target c program.poly
+poly --target c --check program.poly
+poly --target c --emit-c program.poly
 ~~~
 
-### Variable Declarations
-
-~~~
-var_declaration ::= "var" <identifier> [<type>] ":=" <expression>
-                   // Type is optional and inferred when omitted; no colon is used.
-
-let_declaration ::= "let" <identifier> [":" <type>] "=" <expression>
-
-const_declaration ::= "const" <identifier> "=" <expression>
-
-assignment      ::= <mutation_command>
-~~~
-
-### Types
-
-~~~
-type            ::= <primitive_type>
-                   | <string_type>
-                   | <pointer_type>
-                   | <nullable_type>
-                   | <array_type>
-                   | <tuple_type>
-                   | <vector_type>
-                   | <option_type>
-                   | <result_type>
-                   | <function_type>
-                   | <generic_type>
-                   | <identifier>
-
-primitive_type  ::= "bool"
-                   | "i8" | "u8" | "i16" | "u16"
-                   | "i32" | "u32" | "i64" | "u64"
-                   | "i128" | "u128"
-                   | "f32" | "f64"
-                   | "isize" | "usize"
-
-string_type     ::= "char" | "string"
-                   | "uchar" | "ustring"
-                   | "byte" | "bytes"
-
-pointer_type    ::= "ptr" <type>
-
-nullable_type   ::= "?" <type>
-
-array_type      ::= "[" <type> ";" <expression> "]"
-
-tuple_type      ::= "(" <type> { "," <type> } ")"
-
-vector_type     ::= "Vec" "<" <type> ">"
-
-option_type     ::= "Option" "<" <type> ">"
-
-result_type     ::= "Result" "<" <type> "," <type> ">"
-
-function_type   ::= "fn" "(" [<type> { "," <type> }] ")" "->" <type>
-
-generic_type    ::= <identifier> "<" <type> { "," <type> } ">"
-~~~
-
-### Expressions
-
-~~~
-expression      ::= <literal>
-                   | <identifier>
-                   | <binary_expression>
-                   | <unary_expression>
-                   | <call_expression>
-                   | <method_call>
-                   | <index_expression>
-                   | <field_access>
-                   | <parenthesized_expression>
-                   | <if_expression>
-                   | <match_expression>
-                   | <closure_expression>
-                   | <array_expression>
-                   | <tuple_expression>
-                   | <struct_expression>
-                   | <enum_expression>
-                   | <as_expression>
-                   | <try_expression>
-                   | <get_expression>
-                   | <unsafe_block>
-
-binary_expression ::= <expression> <binary_op> <expression>
-binary_op       ::= <arithmetic_op> | <comparison_op>
-                   | <logical_op> | <bitwise_op>
-
-unary_expression ::= <unary_op> <expression>
-unary_op        ::= "-" | "!" | "~" | "*"
-
-call_expression ::= <expression> "(" [<arguments>] ")"
-arguments       ::= <expression> { "," <expression> }
-
-method_call     ::= <expression> "." <identifier> "(" [<arguments>] ")"
-
-index_expression ::= <expression> "[" <expression> "]"
-
-field_access    ::= <expression> "." <identifier>
-
-parenthesized_expression ::= "(" <expression> ")"
-
-as_expression   ::= <expression> "as" <type>
-
-struct_expression ::= <identifier> "{" [<struct_fields>] "}"
-struct_fields   ::= <struct_field> { "," <struct_field> }
-struct_field    ::= <identifier> ":" <expression>
-
-enum_expression ::= <identifier> "::" <identifier> ["(" <arguments> ")"]
-
-array_expression ::= "[" [<expression> { "," <expression> }] "]"
-
-tuple_expression ::= "(" <expression> { "," <expression> } ")"
-~~~
-
-### Functions
-
-~~~
-function_declaration ::= "fn" <identifier> [<type_params>] "(" [<parameters>] ")" [":" <type>]
-                         [<where_clause>]
-                         <block>
-
-type_params      ::= "<" <type_param> { "," <type_param> } ">"
-type_param       ::= <identifier> [":" <trait_bound> { "+" <trait_bound> }]
-
-parameters      ::= <parameter> { "," <parameter> }
-parameter       ::= <identifier> ":" <type> ["=" <expression>]
-
-where_clause    ::= "where" <where_item> { "," <where_item> }
-where_item      ::= <type> ":" <trait_bound> { "+" <trait_bound> }
-trait_bound     ::= <identifier>
-
-block           ::= { <statement> }
-~~~
-
-### Control Flow
-
-~~~
-if_expression   ::= "if" <expression> <block>
-                    {"else" "if" <expression> <block>}
-                    ["else" <block>]
-                    "end" "if"
-
-while_expression ::= "while" <expression> <block> "end" "while"
-
-loop_expression ::= <infinite_loop> | <range_loop> | <collection_loop>
-
-infinite_loop   ::= "loop" <block> "end" "loop"
-
-range_loop      ::= "loop" ":" <identifier> <range_list> <block> "end" "loop"
-
-collection_loop ::= "loop" ":" <identifier> "in" <expression> <block> "end" "loop"
-                   | "loop" ":" <tuple_destructuring> "in" <expression> <block> "end" "loop"
-
-// Loop ranges include both endpoints; `..=` is accepted as an explicit spelling.
-range_list      ::= <range> { "," <range> }
-range           ::= <expression> ".." <expression>
-                   | <expression> "..=" <expression>
-
-step_clause     ::= "step" <expression>
-~~~
-
-### Match Expression
-
-~~~
-match_expression ::= "match" <expression> { <match_arm> } "end" "match"
-
-match_arm       ::= <pattern> ["if" <expression>] "," <expression>
-
-pattern         ::= <literal_pattern>
-                   | <identifier_pattern>
-                   | <wildcard_pattern>
-                   | <tuple_pattern>
-                   | <struct_pattern>
-                   | <enum_pattern>
-                   | <binding_pattern>
-                   | <range_pattern>
-                   | <or_pattern>
-
-literal_pattern ::= <literal>
-
-identifier_pattern ::= <identifier>
-
-wildcard_pattern ::= "_"
-
-tuple_pattern   ::= "(" <pattern> { "," <pattern> } ")"
-
-struct_pattern  ::= <identifier> "{" <struct_pattern_field> { "," <struct_pattern_field> } "}"
-struct_pattern_field ::= <identifier> [":" <pattern>]
-
-enum_pattern    ::= <identifier> "::" <identifier> ["(" [<pattern> { "," <pattern> }] ")"]
-
-binding_pattern ::= <identifier> "@" <pattern>
-
-range_pattern   ::= <expression> ".." <expression>
-                   | <expression> "..=" <expression>
-
-or_pattern      ::= <pattern> "|" <pattern>
-~~~
-
-### Closures
-
-~~~
-closure_expression ::= <closure_start> <closure_params> [":" <type>] ["->" <type>]
-                       (<closure_body> | <block>)
-
-closure_start   ::= ["move"] "|"
-
-closure_params  ::= [<parameter> { "," <parameter> }]
-
-closure_body    ::= <expression>
-~~~
-
-### Struct Declarations
-
-~~~
-struct_declaration ::= "struct" <identifier> [<type_params>]
-                       [<struct_body> | <tuple_struct_body>]
-
-struct_body     ::= { <struct_field> } "end" "struct"
-
-struct_field    ::= ["var"] <identifier> ":" <type> ["=" <expression>]
-
-tuple_struct_body ::= "(" <type> { "," <type> } ")"
-~~~
-
-### Enum Declarations
-
-~~~
-enum_declaration ::= "enum" <identifier> [<type_params>]
-                     { <enum_variant> } "end" "enum"
-
-enum_variant    ::= <identifier> ["(" <type> { "," <type> } ")"]
-                   | <identifier> "{" <enum_field> { "," <enum_field> } "}"
-
-enum_field      ::= <identifier> ":" <type>
-~~~
-
-### Trait Declarations
-
-~~~
-trait_declaration ::= "trait" <identifier> [<type_params>]
-                      { <trait_method> } "end" "trait"
-
-trait_method    ::= "fn" <identifier> "(" [<parameters>] ")" [":" <type>]
-                    [<block>]
-~~~
-
-### Impl Declarations
-
-~~~
-impl_declaration ::= "impl" [<type_params>] <trait_bound> "for" <type>
-                     { <impl_method> } "end" "impl"
-
-impl_method     ::= "fn" <identifier> "(" [<parameters>] ")" [":" <type>]
-                    <block>
-
-trait_bound     ::= <identifier> ["+" <identifier>]
-~~~
-
-### Module Declarations
-
-~~~
-module_declaration ::= "module" <identifier>
-                       { <statement> } "end" "module"
-~~~
-
-### Use Declarations
-
-~~~
-use_declaration ::= "use" <use_path> ["as" <identifier>]
-
-use_path        ::= <identifier> { "::" <identifier> | "::" "*" }
-~~~
-
-### Type Declarations
-
-~~~
-type_declaration ::= "type" <identifier> "=" <type>
-~~~
-
-### Macro Declarations
-
-~~~
-macro_declaration ::= "macro" <identifier> "(" [<parameters>] ")"
-                      <block> "end" "macro"
-~~~
-
-### I/O Statements
-
-~~~
-put_statement   ::= "put" ["-n"] <expression> [<redirect>]
-
-redirect        ::= ">" <expression>
-                   | ">>" <expression>
-
-error_statement ::= "error" <expression>
-
-warn_statement  ::= "warn" <expression>
-
-info_statement  ::= "info" <expression>
-
-get_expression  ::= "get" ["unicode" <string_literal>] [<get_flags>] [<get_with>]
-
-get_prompt      ::= "unicode" <string_literal>
-
-get_flags       ::= { <get_flag> }
-
-get_flag        ::= "--timeout" <expression>
-                   | "--default" <expression>
-                   | "--mask" <expression>
-                   | "--as" <type>
-                   | "--until" <expression>
-                   | "--bytes" <expression>
-
-get_with        ::= "with" ("validate" <closure_expression>
-                   | "complete" <expression>
-                   | "encoding" <expression>)
-~~~
-
-### Special Expressions
-
-~~~
-try_expression  ::= "try" <expression>
-
-panic_expression ::= "panic" "(" <expression> ")"
-
-unsafe_block    ::= "unsafe" <block> "end" "unsafe"
-
-async_block     ::= "async" <block> "end" "async"
-~~~
-
----
-
-## Precedence (Lowest to Highest)
-
-1. `||` — Logical OR
-2. `&&` — Logical AND
-3. `=`, `!=`, `<`, `>`, `<=`, `>=` — Comparison
-4. `|` — Bitwise OR
-5. `^` — Bitwise XOR
-6. `&` — Bitwise AND
-7. `<<`, `>>` — Bitwise shift
-8. `+`, `-` — Addition, Subtraction
-9. `*`, `/`, `%` — Multiplication, Division, Modulo
-10. `!`, `-`, `~`, `*` — Unary operators
-11. `as` — Type cast
-12. `.`, `()`, `[]` — Field access, function call, index
-13. `<atom>` — Atoms (literals, identifiers, parenthesized expressions)
+`#rust` blocks are selected for Rust and `#c` blocks for C. A source containing `#cpp` is rejected explicitly because no C++ backend exists yet.

@@ -1,359 +1,119 @@
-# Poly Language Cheatsheet: I/O and Error Handling
+# Poly v2 Cheatsheet
 
-## `put` Command - Output
+This page describes the maintained v2 preview contract. The [documentation index](POLY_DOCUMENTATION_INDEX.md) identifies historical guides that may contain older syntax.
 
-### Basic Syntax
+## Core Syntax
+
 ~~~poly
-put expression               # Output to stdout (with newline)
-put -n expression            # Output to stdout (no newline)
-put expression > "file"      # Write to file (truncate)
-put expression >> "file"     # Append to file
-~~~
+var count i32 := 0
+let greeting: ustring := unicode "Hello"
+const limit := 3
 
-### Error/Warning Commands
-~~~poly
-error expression             # Error message to stderr
-warn expression              # Warning message to stderr
-info expression              # Debug/diagnostic info to stderr
-~~~
-
-### Examples
-~~~poly fragment
-# Simple output
-put "Hello, World!"
-put 42
-put 3.14159
-put true
-
-# Variable output
-var name ustring := unicode "Alice"
-put "Name: " + name
-
-# Formatting
-var x i32 := 42
-put "Value: {x}"
-put "Pi: {3.14159:.2f}"
-
-# Capture output to variable (capture is a keyword that redirects put output to a string)
-var output ustring := capture put "Computed: " + (2 + 2)
-// output now contains "Computed: 4"
-
-# File output
-put "Log entry" >> "app.log"
-put "Data" > "output.txt"
-
-# No newline output
-put -n "Loading..."
-
-# Error messages
-error "Error: Something went wrong"
-error "Error: File not found"
-
-# Warnings
-warn "Warning: Deprecated function"
-warn "Warning: Memory usage high"
-
-# Debug info
-info "DEBUG: Request took 42ms"
-info "DEBUG: Memory usage: 128MB"
-~~~
-
-### Transpilation to Rust
-| Poly | Rust |
-|------|------|
-| `put expr` | `println!("{}", expr);` |
-| `put -n expr` | `print!("{}", expr);` |
-| `error expr` | `eprintln!("[ERROR] {}", expr);` |
-| `warn expr` | `eprintln!("[WARN] {}", expr);` |
-| `info expr` | `eprintln!("[INFO] {}", expr);` |
-| `put expr > "f"` | `std::fs::write("f", expr);` |
-| `put expr >> "f"` | Append with `writeln!` |
-
----
-
-## `get` Command - Input
-
-### Basic Syntax
-~~~poly
-var x ustring := get                    # Read line from stdin
-var x ustring := get unicode "prompt: "        # Read with prompt
-var x i32 := get                        # Auto-parse typed input
-var x ustring := get < "file"           # Read from file
-var x bytes := get < "file"            # Read binary from file
-var x ustring := get --timeout 5000     # Read with timeout (ms)
-var x ustring := get --default unicode "val"   # Read with default value
-var x ustring := get --mask unicode "*"        # Experimental: mask parses but is not applied (warning)
-var x i32 := get --as i32               # Read and convert to type
-var x ustring := get --until unicode ","       # Experimental: until parses but reads to end of line (warning)
-~~~
-
-### Complex Options (using "with" syntax)
-~~~poly
-var x i32 := get with validate |x| x > 0    # Validation closure
-var x ustring := get with complete [unicode "a", unicode "b"]  # Completion array
-var x ustring := get with encoding unicode "utf-8"  # Encoding specification
-~~~
-
-### Examples
-~~~poly
-# Simple input
-var line ustring := get
-put "You entered: " + line
-
-# Input with prompt
-var name ustring := get unicode "What is your name? "
-put "Hello, " + name + "!"
-
-# Typed input (auto-parsing)
-put "Enter your age: "
-var age i32 := get
-put "In 10 years you will be: " + (age + 10)
-
-# Input with validation
-var age i32 := get with validate |x| x > 0 && x < 150
-
-# Input with default value
-var name ustring := get --default unicode "Anonymous"
-
-# Input with mask (password)
-var password ustring := get --mask unicode "*"  # Note: masking is not implemented yet (see API reference)
-
-# Input with timeout
-match get --timeout 3000
-    Ok(input), put "You typed: " + input
-    Timeout, put "Too slow!"
-    Error(e), error "Error: " + e
-end match
-~~~
-
----
-
-## Error Handling
-
-### Result Type
-~~~poly fragment
-enum Result<T, E>
-    Ok(T)
-    Error(E)
-end enum
-~~~
-
-### Basic Error Handling
-~~~poly
-# Define custom error types
-enum FileError
-    NotFound
-    PermissionDenied
-    InvalidData
-end enum
-
-# Function that can fail
-fn read_file(path: ustring): Result<ustring, FileError>
-    if path.len() = 0,
-        return Error(FileError::NotFound)
-    end if
-    return Ok(unicode "File content")
-end fn
-
-# Handle errors with match
-match read_file(unicode "config.txt")
-    Ok(content), process(content)
-    Error(FileError::NotFound), error "File not found"
-    Error(FileError::PermissionDenied), error "Permission denied"
-    Error(FileError::InvalidData), error "Invalid data"
-end match
-~~~
-
-### Error Propagation
-~~~poly
-fn risky_operation(): Result<T, E>
-    var result := try other_operation()  # Propagates error
-    return Ok(result)
-end fn
-~~~
-
-### Pattern Matching with Data
-~~~poly
-enum ValidationError
-    EmptyInput
-    TooShort(min: i32)
-    TooLong(max: i32)
-end enum
-
-fn validate_name(name: ustring): Result<ustring, ValidationError>
-    if name.len() = 0,
-        return Error(ValidationError::EmptyInput)
-    end if
-    if name.len() < 2,
-        return Error(ValidationError::TooShort(2))
-    end if
-    return Ok(name)
-end fn
-
-# Match with data extraction
-match validate_name(unicode "John")
-    Ok(valid_name), put "Valid: " + valid_name
-    Error(EmptyInput), error "Name cannot be empty"
-    Error(TooShort(min)), error "Name too short, minimum " + min.to_string()
-    Error(TooLong(max)), error "Name too long, maximum " + max.to_string()
-end match
-~~~
-
-### Wildcard Pattern
-~~~poly
-match validate_name(input)
-    Ok(name), put "Valid: " + name
-    Error(_), error "Validation failed"  # Catches any error
-end match
-~~~
-
-### Transpilation to Rust
-| Poly | Rust |
-|------|------|
-| `Ok(val)` | `Ok(val)` |
-| `Error(e)` | `Err(e)` |
-| `try expr` | `expr?` |
-| `match` | `match` |
-
----
-
-## Common Patterns
-
-### Interactive Menu
-~~~poly
-loop
-    put "Menu:"
-    put "1. Start"
-    put "2. Stop"
-    put "3. Exit"
-    put -n "Choose: "
-    var choice i32 := get
-    match choice
-        1, start_process()
-        2, stop_process()
-        3, break
-        _, put "Invalid choice"
-    end match
+loop i 0..limit
+    add count
 end loop
+
+if count = 4
+    put greeting
+else
+    warn unicode "Unexpected count"
+end if
+
+put "count = " + count
 ~~~
 
-### Loop Ranges (SuperBASIC-style)
+Declarations and assignments use `:=`. Equality uses `=`. The legacy `==` spelling is rejected. `put` always writes a newline; there is no `-n` flag.
 
-The loop variable must be named explicitly after `loop:`:
-`loop: <var_name> <ranges>`. Loop `..` includes both endpoints; `..=` is
-accepted but redundant. A collection loop uses
-`loop: <var_name> in <collection>`.
+## Output
 
 ~~~poly
-// Simple range
-loop: i 0..10
+put unicode "stdout"
+error unicode "error message"
+warn unicode "warning message"
+info unicode "diagnostic message"
+put unicode "replace" to "output.txt"
+put unicode "append" to "output.txt" -append
+~~~
+
+`error`, `warn`, and `info` write to stderr with `[ERROR]`, `[WARN]`, and `[INFO]` prefixes. File redirects are implemented by the Rust backend; the C backend reports an actionable unsupported-feature error.
+
+## Input: Rust Backend
+
+~~~poly
+var line ustring := get
+var prompted ustring := get unicode "Name: "
+var number i32 := get --as i32
+var defaulted ustring := get --default unicode "anonymous"
+var password ustring := get --mask unicode "*"
+var field ustring := get --until unicode ","
+var header bytes := get from "data.bin" --bytes 8
+~~~
+
+`get` is a Rust-backend feature. `--timeout`, `--default`, `--mask`, `--until`, `--bytes`, and `--as` are parsed as structured flags; the generated Rust runtime implements the supported forms. The C backend rejects `get`.
+
+## Loops
+
+~~~poly
+loop i 0..5
     put i
 end loop
 
-// Multiple ranges and specific values
-loop: value 1..3, 7, 19..20
-    put value  // Loop `..` includes its end: 1, 2, 3, 7, 19, 20
+loop i 10..1 step -1
+    put i
 end loop
 
-// With step
-loop: i 1..10 step 2
-    put i  // Iterates: 1, 3, 5, 7, 9 (10 is not on the step)
+var values := [10, 20, 30]
+loop value in values
+    put value
 end loop
 
-// Negative step (counting down)
-loop: i 10..1 step -1
-    put i  // Iterates: 10, 9, 8, ..., 1
-end loop
-~~~
-
-### Collection Iteration
-
-`items` is an ordinary variable; declare the collection before using it.
-
-~~~poly
-var items := [10, 20, 30]
-
-// Iterate over each value
-loop: item in items
-    put item
-end loop
-
-// Iterate over a string's characters
-var text := "hello"
-loop: character in text
-    put character
-end loop
-
-// Iterate with a zero-based index
-loop: (index, item) in items.enumerate()
+loop (index, value) in values.enumerate()
     put index
-    put item
+    put value
 end loop
 ~~~
 
-The indexed form pairs each value with its zero-based index:
-`(0, 10)`, `(1, 20)`, and `(2, 30)`.
+Range endpoints are inclusive. Collection loops borrow the collection. The C backend supports one numeric range per loop and scalar array iteration; complex collection types may require a `#c` helper.
 
-Collection loops borrow: iterating `items` does not consume it, so the same
-collection can be looped over again (and used afterwards) without a manual
-`.iter()`.
-
-If `enumerate()` is unavailable or a manual index is clearer, use a numeric
-range and index into the collection:
+## Foreign Blocks
 
 ~~~poly
-var items := [10, 20, 30]
-
-loop: index 0..items.len() - 1
-    put items[index]
-end loop
-~~~
-
-In Rust, iterating by value consumes a collection:
-
-~~~rust
-let items = vec![10, 20, 30];
-
-for item in items {
-    println!("{}", item);
+#rust
+fn double_value(value: i32) -> i32 {
+    value * 2
 }
+#endrust
+
+var result i32 := double_value(21)
+put result
 ~~~
 
-Borrow the collection when it must remain available afterward:
+~~~poly
+#c
+int double_value(int value) { return value * 2; }
+#endc
 
-~~~rust
-let items = vec![10, 20, 30];
-
-for item in items.iter() {
-    println!("{}", item);
-}
-
-println!("{:?}", items);
+var result i32 := double_value(21)
+put result
 ~~~
 
-Rust's indexed equivalent is:
+Foreign blocks are emitted to the selected target at file scope. The target compiler validates their contents. `#cpp` is rejected explicitly; there is no C++ backend yet.
 
-~~~rust
-let items = vec![10, 20, 30];
+## Targets
 
-for (index, item) in items.iter().enumerate() {
-    println!("{}: {}", index, item);
-}
+~~~bash
+poly --target rust --check program.poly
+poly --target c --check program.poly
+poly --emit-rust program.poly
+poly --target c --emit-c program.poly
 ~~~
 
-### Error Recovery
-~~~poly fragment
-var valid_number i32 := loop
-    put -n "Enter a positive number: "
-    match get
-        Ok(input),
-            var num i32 := input.parse::<i32>()
-            if num > 0,
-                break num
-            else
-                warn "Please enter a positive number"
-            end if
-        Error(e), error "Invalid input: " + e
-    end match
-end loop
-~~~
+Rust is the default target. The C target is a C11 orchestration subset and supports scalar declarations, calls to foreign C helpers, numeric control flow, and stdout/stderr output. Unsupported C features fail with a diagnostic instead of being silently rewritten.
+
+## Common Diagnostics
+
+- Use `:=` to initialize or assign; use `=` to compare.
+- Close blocks with their matching form, such as `end if`, `end loop`, or `end fn`.
+- Put foreign blocks at program scope.
+- Use `put value to "file" -append` for Rust file append output.
+- Use a target-language helper in `#rust` or `#c` when the Poly subset does not express the operation.

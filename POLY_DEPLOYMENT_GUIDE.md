@@ -1,5 +1,7 @@
 # Poly Language Deployment Guide
 
+> **Historical guide:** Deployment instructions describe the earlier Rust-only workflow. Use the v2 README and target-specific CLI help for current commands.
+
 ## Overview
 
 This guide covers deployment best practices for Poly applications using the new I/O and error handling syntax.
@@ -12,7 +14,7 @@ This guide covers deployment best practices for Poly applications using the new 
 
 ### Production Build
 
-~~~poly
+~~~poly fragment
 // Build configuration
 enum BuildMode
     Debug
@@ -44,7 +46,7 @@ end fn
 
 ### Build Scripts
 
-~~~poly
+~~~poly fragment
 // build.poly
 fn main()
     put "Starting build..."
@@ -103,7 +105,7 @@ end match
 
 ### Environment-Specific Configuration
 
-~~~poly
+~~~poly fragment
 // config.poly
 enum Environment
     Development
@@ -163,7 +165,7 @@ fn log_request(method: ustring, path: ustring, status: i32, duration_ms: i32)
         duration_ms: duration_ms
     }
 
-    put log_entry.to_json() >> "access.log"
+    put log_entry.to_json() >to "access.log"
 end fn
 
 // Error logging
@@ -176,7 +178,7 @@ fn log_error(error: Error, context: ustring)
         stack_trace: error.stack_trace
     }
 
-    put log_entry.to_json() >> "error.log"
+    put log_entry.to_json() >to "error.log"
     error "Error in " + context + ": " + error.message
 end fn
 ~~~
@@ -219,7 +221,7 @@ end fn
 
 ### Graceful Shutdown
 
-~~~poly
+~~~poly fragment
 // Graceful shutdown handler
 fn setup_signal_handlers()
     on_signal(Signal::SIGTERM, shutdown_handler)
@@ -337,7 +339,7 @@ end fn
 
 ### Connection Pooling
 
-~~~poly
+~~~poly fragment
 // Database connection pool
 struct ConnectionPool
     connections: Vec<Connection>
@@ -373,7 +375,7 @@ end fn
 
 ### HTTPS Configuration
 
-~~~poly
+~~~poly fragment
 // HTTPS server setup
 fn create_https_server(config: Config): Result<Server, ServerError>
     var server := try create_server(config.port)
@@ -454,7 +456,7 @@ fn deploy_rolling(new_version: ustring, batch_size: i32): Result<(), DeployError
     var instances := get_all_instances()
     var batches := instances.chunks(batch_size)
 
-    loop: batch in batches
+    loop batch in batches
         put "Deploying batch: " + batch.to_string()
 
         // Deploy to batch
@@ -497,7 +499,8 @@ fn collect_metrics(metrics: Metrics)
     put "error_rate: " + error_rate.to_string() + "%"
 
     // Response time
-    var avg_response_time := metrics.response_time_ms.iter().sum() / metrics.response_time_ms.len()
+    var sum_response := metrics.response_time_ms.reduce(0 as i64, |acc, x| acc + x)
+    var avg_response_time := (sum_response as f64) / (metrics.response_time_ms.len() as f64)
     put "avg_response_time: " + avg_response_time.to_string() + "ms"
 
     // Active connections
@@ -507,7 +510,7 @@ end fn
 
 ### Alerting
 
-~~~poly
+~~~poly fragment
 // Alert manager
 fn check_alerts(metrics: Metrics)
     // High error rate

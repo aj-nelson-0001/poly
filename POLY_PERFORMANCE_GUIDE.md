@@ -1,5 +1,7 @@
 # Poly Language Performance Optimization Guide
 
+> **Historical guide:** Performance examples target the v1 Rust-only surface and may use retired syntax. They are not normative for the v2 preview.
+
 ## Overview
 
 This guide covers performance optimization techniques for the new Poly I/O and error handling syntax.
@@ -8,33 +10,18 @@ This guide covers performance optimization techniques for the new Poly I/O and e
 
 ## 1. Output Optimization
 
-### Use `-n` for Frequent Output
-
-~~~poly
-// Good: Efficient progress updates
-loop: i 0..10000
-    put -n "\\rProcessing: " + i.to_string()
-end loop
-put ""
-
-// Bad: Inefficient output
-loop: i 0..10000
-    put "Processing: " + i.to_string()  // Creates 10000 lines
-end loop
-~~~
-
 ### Buffer Output When Possible
 
-~~~poly
+~~~poly fragment
 // Good: Buffer output
 var output ustring := ""
-loop: item in items
-    add output, item.to_string() + "\n"
+loop item in items
+    output := output + item.to_string() + "\n"
 end loop
 put output
 
 // Bad: Frequent output
-loop: item in items
+loop item in items
     put item.to_string()  // Multiple system calls
 end loop
 ~~~
@@ -44,7 +31,7 @@ end loop
 ~~~poly
 // Good: Build string efficiently
 var parts Vec<ustring> := []
-loop: i 0..1000
+loop i 0..1000
     parts.push(i.to_string())
 end loop
 var result ustring := parts.join(", ")
@@ -52,14 +39,14 @@ put result
 
 // Bad: String concatenation in loop
 var result ustring := ""
-loop: i 0..1000
-    add result, i.to_string() + ", "// O(n²) complexity
+loop i 0..1000
+    result := result + i.to_string() + ", "// O(n²) complexity
 end loop
 ~~~
 
 ### Avoid Unnecessary Formatting
 
-~~~poly
+~~~poly fragment
 // Good: Simple output
 put age.to_string()
 
@@ -99,7 +86,7 @@ end if
 
 ### Use Timeouts
 
-~~~poly
+~~~poly fragment
 // Good: Prevent hanging
 match get --timeout 5000
     Ok(input), process(input)
@@ -113,7 +100,7 @@ var input ustring := get  // Can hang forever
 
 ### Batch Input Operations
 
-~~~poly
+~~~poly fragment
 // Good: Batch reads
 var lines Vec<ustring> := []
 var file := open("data.txt")
@@ -138,14 +125,14 @@ end while
 ~~~poly
 // Good: Buffered writes
 var buffer Vec<ustring> := []
-loop: i 0..10000
+loop i 0..10000
     buffer.push("Line " + i.to_string())
 end loop
-put buffer.join("\n") > "output.txt"
+put buffer.join("\n") to "output.txt"
 
 // Bad: Unbuffered writes
-loop: i 0..10000
-    put "Line " + i.to_string() >> "output.txt"  // 10000 file operations
+loop i 0..10000
+    put "Line " + i.to_string() >to "output.txt"  // 10000 file operations
 end loop
 ~~~
 
@@ -153,7 +140,7 @@ end loop
 
 ~~~poly
 // Good: Read entire file
-var content ustring := get < "large_file.txt"
+var content ustring := get from "large_file.txt"
 var lines Vec<ustring> := content.split("\n")
 
 // Bad: Read line by line
@@ -168,10 +155,10 @@ end while
 
 ~~~poly
 // Good: Binary read for binary files
-var data bytes := get < "image.png"
+var data bytes := get from "image.png"
 
 // Bad: Text read for binary files
-var data ustring := get < "image.png"  // May corrupt data
+var data ustring := get from "image.png"  // May corrupt data
 ~~~
 
 ---
@@ -245,7 +232,7 @@ end fn
 
 ### Use References When Possible
 
-~~~poly
+~~~poly fragment
 // Good: Pass by reference
 fn process(data: &ustring)
     // Use data without copying
@@ -259,17 +246,17 @@ end fn
 
 ### Reuse Buffers
 
-~~~poly
+~~~poly fragment
 // Good: Reuse buffer
 var buffer Vec<ustring> := []
-loop: i 0..1000
+loop i 0..1000
     buffer.clear()  // Reuse buffer
     buffer.push(i.to_string())
     process(buffer)
 end loop
 
 // Bad: Create new buffer each time
-loop: i 0..1000
+loop i 0..1000
     var buffer Vec<ustring> := [i.to_string()]  // New allocation
     process(buffer)
 end loop
@@ -277,7 +264,7 @@ end loop
 
 ### Use Primitive Types
 
-~~~poly
+~~~poly fragment
 // Good: Use primitive types
 var count i32 := 42
 var flag bool := true
@@ -312,14 +299,14 @@ var result ustring := "".repeat(1000)
 
 // Bad: Dynamic growth
 var result ustring := ""
-loop: i 0..1000
-    add result, "a"// Multiple reallocations
+loop i 0..1000
+    result := result + "a"// Multiple reallocations
 end loop
 ~~~
 
 ### Use String Views
 
-~~~poly
+~~~poly fragment
 // Good: Use string views
 fn process(data: &ustring)
     // Use data without copying
@@ -354,13 +341,13 @@ var map Vec<(ustring, i32)> := []  // Vector for map
 // Good: Pre-allocate
 var list Vec<i32> := []
 list.reserve(1000)  // Pre-allocate space
-loop: i 0..1000
+loop i 0..1000
     list.push(i)
 end loop
 
 // Bad: Dynamic growth
 var list Vec<i32> := []
-loop: i 0..1000
+loop i 0..1000
     list.push(i)  // Multiple reallocations
 end loop
 ~~~
@@ -368,14 +355,24 @@ end loop
 ### Use Iterators
 
 ~~~poly
-// Good: Use iterators
-var sum i32 := list.iter().sum()
+fn main()
+    var list Vec<i32> := [1, 2, 3, 4]
 
-// Bad: Manual iteration
-var sum i32 := 0
-loop: item in list
-    add sum, item
-end loop
+    // Good: Use iterator chains
+    var sum := list.iter().sum()
+    put sum
+    var doubled := list.iter().map(|x| x * 2).collect()
+    put doubled
+    var evens := list.iter().filter(|x| x % 2 == 0).collect()
+    put evens
+
+    // Bad: Manual iteration
+    var sum2 i32 := 0
+    loop item in list
+        sum2 := sum2 + item
+    end loop
+    put sum2
+end fn
 ~~~
 
 ---
@@ -384,13 +381,13 @@ end loop
 
 ### Use Parallel Iterators
 
-~~~poly
+~~~poly fragment
 // Good: Parallel processing
 var results Vec<i32> := list.par_iter().map(|x| x * 2).collect()
 
 // Bad: Sequential processing
 var results Vec<i32> := []
-loop: item in list
+loop item in list
     results.push(item * 2)
 end loop
 ~~~
@@ -415,7 +412,7 @@ var data := read_file("large_file.txt")  // Blocks execution
 
 ### Profile Your Code
 
-~~~poly
+~~~poly fragment
 // Good: Profile critical sections
 var start := time_now()
 // Critical code here
@@ -429,7 +426,7 @@ info "Duration: " + duration.to_string() + "ms"
 
 ### Benchmark Different Approaches
 
-~~~poly
+~~~poly fragment
 // Good: Benchmark approaches
 var start1 := time_now()
 approach1()

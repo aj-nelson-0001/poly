@@ -1,5 +1,7 @@
 # Poly Language Compatibility Guide
 
+> **Historical guide:** Compatibility notes cover earlier releases. For the maintained v2 target contract, use [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md).
+
 ## Overview
 
 This guide covers platform compatibility considerations for the new Poly I/O and error handling syntax.
@@ -10,13 +12,13 @@ This guide covers platform compatibility considerations for the new Poly I/O and
 
 ### Unix/Linux
 
-~~~poly
+~~~poly fragment
 // Good: Unix-compatible output
 put "Hello, World!"  // LF line ending
 
 // Unix file paths
 var path ustring := "/home/user/file.txt"
-var content ustring := get < path
+var content ustring := get from  path
 
 // Unix permissions
 set_file_permissions("file.txt", 0o644)
@@ -24,13 +26,13 @@ set_file_permissions("file.txt", 0o644)
 
 ### Windows
 
-~~~poly
+~~~poly fragment
 // Good: Windows-compatible output
 put "Hello, World!"  // CRLF line ending handled by OS
 
 // Windows file paths
 var path ustring := "C:\\Users\\user\\file.txt"
-var content ustring := get < path
+var content ustring := get from  path
 
 // Windows permissions
 set_file_permissions("file.txt", 0o644)  // Mapped to Windows ACLs
@@ -38,13 +40,13 @@ set_file_permissions("file.txt", 0o644)  // Mapped to Windows ACLs
 
 ### macOS
 
-~~~poly
+~~~poly fragment
 // Good: macOS-compatible output
 put "Hello, World!"  // LF line ending
 
 // macOS file paths
 var path ustring := "/Users/user/file.txt"
-var content ustring := get < path
+var content ustring := get from  path
 
 // macOS permissions
 set_file_permissions("file.txt", 0o644)
@@ -62,7 +64,7 @@ var text ustring := unicode "Hello, World!"
 put text
 
 // UTF-8 file reading
-var content ustring := get < "utf8.txt" with encoding unicode "utf-8"
+var content ustring := get from "utf8.txt" with encoding unicode "utf-8"
 ~~~
 
 ### ASCII
@@ -73,7 +75,7 @@ var text ustring := "Hello, World!"  // ASCII subset
 put text
 
 // ASCII file reading
-var content ustring := get < "ascii.txt" with encoding unicode "ascii"
+var content ustring := get from "ascii.txt" with encoding unicode "ascii"
 ~~~
 
 ### Latin-1
@@ -84,7 +86,7 @@ var text ustring := unicode "café"  // Latin-1 characters
 put text
 
 // Latin-1 file reading
-var content ustring := get < "latin1.txt" with encoding unicode "latin-1"
+var content ustring := get from "latin1.txt" with encoding unicode "latin-1"
 ~~~
 
 ---
@@ -98,7 +100,7 @@ var content ustring := get < "latin1.txt" with encoding unicode "latin-1"
 put "Line 1\nLine 2"  // LF
 
 // Read Unix file
-var content ustring := get < "unix.txt"
+var content ustring := get from "unix.txt"
 var lines Vec<ustring> := content.split("\n")
 ~~~
 
@@ -109,19 +111,19 @@ var lines Vec<ustring> := content.split("\n")
 put "Line 1\r\nLine 2"  // CRLF
 
 // Read Windows file
-var content ustring := get < "windows.txt"
+var content ustring := get from "windows.txt"
 var lines Vec<ustring> := content.split("\r\n")
 ~~~
 
 ### Cross-Platform
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform line endings
 var newline ustring := if is_windows(),"\r\n" else "\n" end if
 put "Line 1" + newline + "Line 2"
 
 // Read any file
-var content ustring := get < "any.txt"
+var content ustring := get from "any.txt"
 var lines Vec<ustring> := content.split("\r?\n")  // Match either
 ~~~
 
@@ -131,14 +133,14 @@ var lines Vec<ustring> := content.split("\r?\n")  // Match either
 
 ### Absolute Paths
 
-~~~poly
+~~~poly fragment
 // Good: Absolute paths
 var path ustring := if is_windows(),
     "C:\\Users\\user\\file.txt"
 else
     "/home/user/file.txt"
 end if
-var content ustring := get < path
+var content ustring := get from  path
 ~~~
 
 ### Relative Paths
@@ -146,17 +148,17 @@ var content ustring := get < path
 ~~~poly
 // Good: Relative paths
 var path ustring := "./data/file.txt"
-var content ustring := get < path
+var content ustring := get from  path
 ~~~
 
 ### Path Separators
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform path separators
 var path ustring := join_path(["data", "file.txt"])
 // Returns "/data/file.txt" on Unix
 // Returns "\\data\\file.txt" on Windows
-var content ustring := get < path
+var content ustring := get from  path
 ~~~
 
 ---
@@ -165,7 +167,7 @@ var content ustring := get < path
 
 ### Platform-Specific Errors
 
-~~~poly
+~~~poly fragment
 // Good: Handle platform-specific errors
 enum FileError
     NotFound
@@ -209,10 +211,10 @@ end fn
 
 ### Terminal Output
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform terminal output
 put "Hello, World!"  // Works on all platforms
-put -n "Progress: "  // Works on all platforms
+put "Progress: "  // Works on all platforms
 
 // Platform-specific formatting
 if is_windows(),
@@ -224,9 +226,9 @@ end if
 
 ### Terminal Input
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform input
-put -n "Enter your name: "
+put "Enter your name: "
 var name ustring := get  // Works on all platforms
 
 // Platform-specific input handling
@@ -239,10 +241,10 @@ end if
 
 ### File I/O
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform file I/O
-var content ustring := get < "file.txt"  // Works on all platforms
-put "data" > "output.txt"  // Works on all platforms
+var content ustring := get from "file.txt"  // Works on all platforms
+put "data" to "output.txt"  // Works on all platforms
 
 // Platform-specific file operations
 if is_windows(),
@@ -258,9 +260,9 @@ end if
 
 ### Cross-Platform Networking
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform networking
-var response := get --timeout 5000 < "https://api.example.com"
+var response := get from "https://api.example.com" --timeout 5000
 
 // Platform-specific networking
 if is_windows(),
@@ -272,9 +274,9 @@ end if
 
 ### SSL/TLS
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform SSL/TLS
-var response := get < "https://api.example.com" with verify_certificate(true)
+var response := get from "https://api.example.com" with verify_certificate(true)
 
 // Platform-specific SSL/TLS
 if is_windows(),
@@ -290,7 +292,7 @@ end if
 
 ### Cross-Platform Performance
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform performance
 var start := time_now()
 // Performance-critical code
@@ -307,7 +309,7 @@ end if
 
 ### Memory Management
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform memory management
 var data Vec<ustring> := []
 data.reserve(1000)  // Pre-allocate
@@ -326,7 +328,7 @@ end if
 
 ### Cross-Platform Testing
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform tests
 fn test_file_operations()
     var test_file ustring := if is_windows(),
@@ -336,7 +338,7 @@ fn test_file_operations()
     end if
 
     put "Test content" > test_file
-    var content ustring := get < test_file
+    var content ustring := get from  test_file
     assert(content == unicode "Test content")
     delete_file(test_file)
 end fn
@@ -357,7 +359,7 @@ end fn
 
 ### Use Platform Detection
 
-~~~poly
+~~~poly fragment
 // Good: Platform detection
 if is_windows(),
     // Windows-specific code
@@ -372,7 +374,7 @@ end if
 
 ### Use Abstractions
 
-~~~poly
+~~~poly fragment
 // Good: Use abstractions
 fn read_file(path: ustring): Result<ustring, FileError>
     return platform_read(path)  // Platform-specific implementation
@@ -390,7 +392,7 @@ end fn
 
 ### Test on Multiple Platforms
 
-~~~poly
+~~~poly fragment
 // Good: Cross-platform testing
 fn test_cross_platform()
     // Test on current platform

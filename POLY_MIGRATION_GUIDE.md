@@ -1,5 +1,7 @@
 # Poly Language Migration Guide: Old to New Syntax
 
+> **Historical migration reference:** Use [POLY_MIGRATION_GUIDE_v2.md](POLY_MIGRATION_GUIDE_v2.md) for the current preview. The examples below describe earlier syntax transitions.
+
 ## Overview
 
 This guide helps you migrate from the old Poly syntax to the new syntax with flags and improved readability.
@@ -18,7 +20,7 @@ pute unicode "Error message"          # Output to stderr
 ### New Syntax
 ~~~poly fragment
 put "Hello, World!"            # Output with newline
-put -n "Enter value: "         # Output without newline
+put "Enter value: "         # Output without newline
 error "Error message"          # Error message to stderr
 warn "Warning message"         # Warning message to stderr
 info "Debug information"       # Debug info to stderr
@@ -27,7 +29,7 @@ info "Debug information"       # Debug info to stderr
 ### Changes Summary
 | Old | New | Description |
 |-----|-----|-------------|
-| `putn` | `put -n` | Use `-n` flag for no newline |
+| `putn` | `put` | Standard output with newline |
 | `pute` | `error`/`warn`/`info` | Use separate commands for different output levels |
 | `unicode "..."` | `"..."` | Unicode strings are now auto-detected |
 
@@ -42,20 +44,20 @@ var x i32 := get with validate |x| x > 0
 var x ustring := get with default unicode "value"
 var x ustring := get with mask unicode "*"
 var x ustring := get with complete [unicode "a", unicode "b"]
-var x Person := get as Person
+var x i32 := get as i32
 var x ustring := get until unicode ","
 ~~~
 
 ### New Syntax
 ~~~poly
-var x ustring := get --timeout 5000
+var x := get --timeout 5000             # -> Result
 var x i32 := get with validate |x| x > 0
 var x ustring := get --default unicode "value"
 var x ustring := get --mask unicode "*"
 var x ustring := get with complete [unicode "a", unicode "b"]
-var x Person := get --as Person
+var x i32 := get --as i32
 var x ustring := get --until unicode ","
-var x bytes := get < "file" --bytes 8
+var x bytes := get from "file" --bytes 8
 ~~~
 
 ### Changes Summary
@@ -160,7 +162,7 @@ loop
     put "1. Start"
     put "2. Stop"
     put "3. Exit"
-    put -n "Choose: "
+    put "Choose: "
     var choice i32 := get
     match choice
         1, start_process()
@@ -186,11 +188,11 @@ put unicode "Color: " + color
 
 **New Syntax:**
 ~~~poly fragment
-put -n "Enter age: "
+put "Enter age: "
 var age i32 := get with validate |x| x > 0 && x < 150
 put "Age: " + age
 
-put -n "Enter color: "
+put "Enter color: "
 var color ustring := get --default unicode "blue"
 put "Color: " + color
 ~~~
@@ -227,20 +229,20 @@ end match
 
 **Old Syntax:**
 ~~~poly fragment
-put unicode "Line 1\nLine 2" > "output.txt"
-put unicode "Appended line" >> "output.txt"
+put unicode "Line 1\nLine 2" to "output.txt"
+put unicode "Appended line" >to "output.txt"
 
-var content ustring := get < "input.txt"
-var data bytes := get < "binary.bin"
+var content ustring := get from "input.txt"
+var data bytes := get from "binary.bin"
 ~~~
 
 **New Syntax:**
 ~~~poly fragment
-put "Line 1\nLine 2" > "output.txt"
-put "Appended line" >> "output.txt"
+put "Line 1\nLine 2" to "output.txt"
+put "Appended line" >to "output.txt"
 
-var content ustring := get < "input.txt"
-var data bytes := get < "binary.bin"
+var content ustring := get from "input.txt"
+var data bytes := get from "binary.bin"
 ~~~
 
 ---
@@ -248,7 +250,7 @@ var data bytes := get < "binary.bin"
 ## Loop Syntax (New)
 
 ### Old Syntax (if applicable)
-~~~poly
+~~~poly fragment
 for i in 0..10
     put i
 end for
@@ -259,34 +261,34 @@ end for
 ~~~
 
 ### New Syntax
-~~~poly
+~~~poly fragment
 # Simple range
-loop: i 0..10
+loop i 0..10
     put i
 end loop
 
 # Multiple ranges and values (SuperBASIC-inspired)
-loop: i 1..3, 7, 19..21
+loop i 1..3, 7, 19..21
     put i  # Iterates: 1, 2, 3, 7, 19, 20, 21
 end loop
 
 # With step
-loop: i 0..10 step 2
+loop i 0..10 step 2
     put i  # Iterates: 0, 2, 4, 6, 8, 10
 end loop
 
 # Negative step (counting down)
-loop: i 10..1 step -1
+loop i 10..1 step -1
     put i  # Iterates: 10, 9, 8, ..., 1
 end loop
 
 # Iterate over collection
-loop: item in items
+loop item in items
     put item
 end loop
 
 # Iterate with index
-loop: (index, item) in items.enumerate()
+loop (index, item) in items.enumerate()
     put index.to_string() + ": " + item
 end loop
 ~~~
@@ -294,10 +296,10 @@ end loop
 ### Changes Summary
 | Old | New | Description |
 |-----|-----|-------------|
-| `for i in 0..10` | `loop: i 0..10` | Name the loop variable after `loop:`; Poly loop ranges include the end |
-| `for item in items` | `loop: item in items` | Iterate over collections |
+| `for i in 0..10` | `loop i 0..10` | Name the loop variable after `loop`; Poly loop ranges include the end |
+| `for item in items` | `loop item in items` | Iterate over collections |
 | `end for` | `end loop` | Closing keyword changed |
-| N/A | `loop: i 1..3, 7, 19..21` | New: Multiple ranges and values |
+| N/A | `loop i 1..3, 7, 19..21` | New: Multiple ranges and values |
 | N/A | `step` | New: Step support for increments |
 
 **Note:** The infinite `loop` (without colon) remains unchanged.
@@ -310,7 +312,7 @@ end loop
 | Old | New |
 |-----|-----|
 | `put unicode "text"` | `put "text"` |
-| `putn unicode "text"` | `put -n "text"` |
+| `putn unicode "text"` | `put "text"` |
 | `pute unicode "text"` | `error "text"` |
 
 ### Input
@@ -342,7 +344,7 @@ end loop
 
 ## Migration Checklist
 
-- [ ] Replace `putn` with `put -n`
+- [ ] Replace `putn` with `put`
 - [ ] Replace `pute` with `error`, `warn`, or `info`
 - [ ] Replace `with timeout` with `--timeout`
 - [ ] Replace `with default` with `--default`

@@ -1,5 +1,7 @@
 # Poly Language Testing Guide
 
+> **Historical guide:** This document describes the earlier test surface. Current verification commands are maintained in [POLY_DOCUMENTATION_STYLE_GUIDE.md](POLY_DOCUMENTATION_STYLE_GUIDE.md) and CI.
+
 ## Overview
 
 This guide covers testing strategies and best practices for the new Poly I/O and error handling syntax.
@@ -21,7 +23,7 @@ end fn
 
 // Test output without newline
 fn test_put_n()
-    var output := capture put -n "No newline"
+    var output := capture put "No newline"
     assert(output = "No newline")
     assert(not output.ends_with("\n"))
 end fn
@@ -47,20 +49,20 @@ end fn
 
 ### Testing File Output
 
-~~~poly
+~~~poly fragment
 // Test file write
 fn test_file_write()
-    put "Test content" > "test_output.txt"
-    var content ustring := get < "test_output.txt"
+    put "Test content" to "test_output.txt"
+    var content ustring := get from "test_output.txt"
     assert(content = "Test content")
     delete_file("test_output.txt")
 end fn
 
 // Test file append
 fn test_file_append()
-    put "Line 1" > "test_append.txt"
-    put "Line 2" >> "test_append.txt"
-    var content ustring := get < "test_append.txt"
+    put "Line 1" to "test_append.txt"
+    put "Line 2" >to "test_append.txt"
+    var content ustring := get from "test_append.txt"
     assert(content = "Line 1
 Line 2")
     delete_file("test_append.txt")
@@ -73,7 +75,7 @@ end fn
 
 ### Testing Basic Input
 
-~~~poly
+~~~poly fragment
 // Test typed input
 fn test_typed_input()
     var input := mock_input("42")
@@ -98,7 +100,7 @@ end fn
 
 ### Testing Input Flags
 
-~~~poly
+~~~poly fragment
 // Test default value
 fn test_default_value()
     var input := mock_input("")  // Empty input
@@ -135,11 +137,11 @@ end fn
 
 ### Testing File Input
 
-~~~poly
+~~~poly fragment
 // Test file read
 fn test_file_read()
-    put "Test content" > "test_input.txt"
-    var content ustring := get < "test_input.txt"
+    put "Test content" to "test_input.txt"
+    var content ustring := get from "test_input.txt"
     assert(content = "Test content")
     delete_file("test_input.txt")
 end fn
@@ -147,16 +149,16 @@ end fn
 // Test binary read
 fn test_binary_read()
     var data bytes := [0x48, 0x65, 0x6C, 0x6C, 0x6F]
-    data > "test_binary.bin"
-    var binary bytes := get < "test_binary.bin"
+    data to "test_binary.bin"
+    var binary bytes := get from "test_binary.bin"
     assert(binary.len() = 5)
     delete_file("test_binary.bin")
 end fn
 
 // Test bytes read
 fn test_bytes_read()
-    put "Hello, World!" > "test_bytes.txt"
-    var first_five bytes := get < "test_bytes.txt" --bytes 5
+    put "Hello, World!" to "test_bytes.txt"
+    var first_five bytes := get from "test_bytes.txt" --bytes 5
     assert(first_five.len() = 5)
     delete_file("test_bytes.txt")
 end fn
@@ -203,14 +205,17 @@ fn test_error_propagation()
     end match
 end fn
 
-// Test try unwrapping
+// Test unwrapping (match, since the test function does not return Result;
+// `try` may only be used inside a Result-returning function)
 fn safe_operation(): Result<ustring, ustring>
     return Ok(unicode "Safe result")
 end fn
 
 fn test_try_unwrap()
-    var result := try safe_operation()
-    assert(result = unicode "Safe result")
+    match safe_operation()
+        Ok(result), assert(result = unicode "Safe result")
+        Error(e), fail("Unexpected error: " + e)
+    end match
 end fn
 ~~~
 
@@ -259,7 +264,7 @@ end fn
 
 ### Testing Complete Workflows
 
-~~~poly
+~~~poly fragment
 // Test user registration workflow
 fn test_user_registration()
     var inputs := [
@@ -269,13 +274,13 @@ fn test_user_registration()
     ]
     mock_input_sequence(inputs)
     
-    put -n "Enter name: "
+    put "Enter name: "
     var name ustring := get with validate |n| n.len() >= 2
     
-    put -n "Enter email: "
+    put "Enter email: "
     var email ustring := get with validate |e| e.contains(unicode "@")
     
-    put -n "Enter password: "
+    put "Enter password: "
     var password ustring := get --mask unicode "*" with validate |p| p.len() >= 8
     
     assert(name = unicode "John")
@@ -286,15 +291,15 @@ end fn
 // Test file processing workflow
 fn test_file_workflow()
     // Create test file
-    put "Line 1\nLine 2\nLine 3" > "workflow_test.txt"
+    put "Line 1\nLine 2\nLine 3" to "workflow_test.txt"
     
     // Read file
-    var content ustring := get < "workflow_test.txt"
+    var content ustring := get from "workflow_test.txt"
     var lines Vec<ustring> := content.split(unicode "\n")
     
     // Process lines
     var processed Vec<ustring> := []
-    loop: line in lines
+    loop line in lines
         processed.push(line.to_uppercase())
     end loop
     
@@ -315,7 +320,7 @@ end fn
 
 ### Testing Boundary Conditions
 
-~~~poly
+~~~poly fragment
 // Test minimum values
 fn test_minimum_values()
     var age i32 := get with validate |x| x >= 1
@@ -348,7 +353,7 @@ end fn
 
 ### Testing Special Characters
 
-~~~poly
+~~~poly fragment
 // Test Unicode characters
 fn test_unicode()
     var input := mock_input("日本語")
@@ -379,12 +384,12 @@ end fn
 
 ### Testing Output Performance
 
-~~~poly
+~~~poly fragment
 // Test frequent output
 fn test_frequent_output()
     var start := time_now()
-    loop: i 0..1000
-        put -n "."
+    loop i 0..1000
+        put "."
     end loop
     put ""
     var duration := time_now() - start
@@ -394,8 +399,8 @@ end fn
 // Test file write performance
 fn test_file_write_performance()
     var start := time_now()
-    loop: i 0..1000
-        put "Line " + i.to_string() >> "perf_test.txt"
+    loop i 0..1000
+        put "Line " + i.to_string() >to "perf_test.txt"
     end loop
     var duration := time_now() - start
     delete_file("perf_test.txt")
@@ -405,11 +410,11 @@ end fn
 
 ### Testing Input Performance
 
-~~~poly
+~~~poly fragment
 // Test input parsing performance
 fn test_input_parsing()
     var start := time_now()
-    loop: i 0..1000
+    loop i 0..1000
         var input := mock_input(i.to_string())
         var num i32 := get
         assert(num = i)
@@ -445,32 +450,12 @@ end fn
 
 ### Assertion Functions
 
+`assert`, `pass`, and `fail` are built-in helpers:
+
 ~~~poly
-// Basic assertion
-fn assert(condition: bool)
-    if not condition,
-        error "Assertion failed"
-        exit(1)
-    end if
-end fn
-
-// Assertion with message
-fn assert(condition: bool, message: ustring)
-    if not condition,
-        error "Assertion failed: " + message
-        exit(1)
-    end if
-end fn
-
-// Test pass/fail
-fn pass(message: ustring)
-    info "PASS: " + message
-end fn
-
-fn fail(message: ustring)
-    error "FAIL: " + message
-    exit(1)
-end fn
+assert(true)
+pass("Test passed")
+fail("Test failed")   // Prints FAIL and exits non-zero
 ~~~
 
 ---
@@ -501,7 +486,7 @@ tests/
 
 ### Running Tests
 
-~~~poly
+~~~poly fragment
 // Run all tests
 fn run_all_tests()
     run_unit_tests()

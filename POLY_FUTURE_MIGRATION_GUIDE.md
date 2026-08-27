@@ -1,5 +1,7 @@
 # Poly Language Future Migration Guide
 
+> **Planning document:** This is non-normative future-work material. The current migration path is [POLY_MIGRATION_GUIDE_v2.md](POLY_MIGRATION_GUIDE_v2.md).
+
 ## Overview
 
 This guide covers strategies and best practices for migrating to future Poly syntax changes.
@@ -51,7 +53,7 @@ fn check_deprecation(feature: ustring, current_version: ustring): Option<Migrati
         unicode "putn": MigrationTimeline {
             deprecated_in: unicode "1.5",
             removed_in: unicode "2.0",
-            alternative: unicode "put -n"
+            alternative: unicode "put"
         },
         unicode "pute": MigrationTimeline {
             deprecated_in: unicode "1.5",
@@ -80,8 +82,8 @@ end fn
 fn transform_syntax(code: ustring): ustring
     var transformed := code
 
-    // Transform putn to put -n
-    transformed = transformed.replace(unicode "putn ", unicode "put -n ")
+    // Transform putn to put
+    transformed = transformed.replace(unicode "putn ", unicode "put ")
 
     // Transform pute to error/warn/info
     transformed = transformed.replace(unicode "pute ", unicode "error ")
@@ -111,7 +113,7 @@ end fn
 fn transform_directory(dir: ustring): Result<(), TransformError>
     var files := list_files(dir, unicode "*.poly")
 
-    loop: file in files
+    loop file in files
         var code := read_file(file)
         var transformed := transform_syntax(code)
         write_file(file, transformed)
@@ -164,7 +166,7 @@ end fn
 
 ### Compatibility Mode
 
-~~~poly
+~~~poly fragment
 // Compatibility mode flag
 var compatibility_mode bool := get_env("POLY_COMPAT") or unicode "false" == unicode "true"
 
@@ -175,7 +177,7 @@ fn compat_putn(expression: ustring)
         putn expression
     else
         // New syntax
-        put -n expression
+        put expression
     end if
 end fn
 
@@ -192,7 +194,7 @@ end fn
 
 ### Version Detection
 
-~~~poly
+~~~poly fragment
 // Detect Poly version
 fn get_poly_version(): ustring
     // This would be provided by the runtime
@@ -205,7 +207,7 @@ fn version_specific_code()
 
     if compare_versions(parse_version(version), parse_version(unicode "2.0")) >= 0,
         // Use new syntax
-        put -n "Loading..."
+        put "Loading..."
     else
         // Use old syntax
         putn unicode "Loading..."
@@ -242,7 +244,7 @@ end fn
 
 // Test new syntax
 fn test_new_syntax()
-    var output := capture put -n unicode "test"
+    var output := capture put unicode "test"
     assert(output == unicode "test")
 end fn
 
@@ -250,26 +252,26 @@ end fn
 fn test_syntax_transformation()
     var old_code := unicode "putn \"hello\"\npute \"error\""
     var new_code := transform_syntax(old_code)
-    assert(new_code == unicode "put -n \"hello\"\nerror \"error\"")
+    assert(new_code == unicode "put \"hello\"\nerror \"error\"")
 end fn
 ~~~
 
 ### Performance Testing
 
-~~~poly
+~~~poly fragment
 // Test performance impact
 fn test_performance_impact()
     // Benchmark old syntax
     var start := time_now()
-    loop: i 0..10000
+    loop i 0..10000
         putn unicode "test"
     end loop
     var old_duration := time_now() - start
 
     // Benchmark new syntax
     start = time_now()
-    loop: i 0..10000
-        put -n unicode "test"
+    loop i 0..10000
+        put unicode "test"
     end loop
     var new_duration := time_now() - start
 
@@ -287,7 +289,7 @@ end fn
 
 ### Update Documentation
 
-~~~poly
+~~~poly fragment
 // Update documentation for new syntax
 fn update_documentation()
     // Update README
@@ -297,7 +299,7 @@ fn update_documentation()
 
     // Update examples
     var examples := list_files(unicode "examples/", unicode "*.poly")
-    loop: example in examples
+    loop example in examples
         var code := read_file(example)
         var transformed := transform_syntax(code)
         write_file(example, transformed)
@@ -305,7 +307,7 @@ fn update_documentation()
 
     // Update tests
     var tests := list_files(unicode "tests/", unicode "*.poly")
-    loop: test in tests
+    loop test in tests
         var code := read_file(test)
         var transformed := transform_syntax(code)
         write_file(test, transformed)
@@ -324,7 +326,7 @@ fn generate_changelog(version: ustring): ustring
 
     // Add breaking changes
     changelog = changelog + "### Breaking Changes\n\n"
-    changelog = changelog + "- `putn` replaced with `put -n`\n"
+    changelog = changelog + "- `putn` replaced with `put`\n"
     changelog = changelog + "- `pute` replaced with `error`/`warn`/`info`\n"
     changelog = changelog + "- `Err(e)` replaced with `Error(e)`\n"
     changelog = changelog + "- Input flags changed from `with` to `--`\n\n"
@@ -337,7 +339,7 @@ fn generate_changelog(version: ustring): ustring
 
     // Add deprecations
     changelog = changelog + "### Deprecations\n\n"
-    changelog = changelog + "- `putn` deprecated, use `put -n` instead\n"
+    changelog = changelog + "- `putn` deprecated, use `put` instead\n"
     changelog = changelog + "- `pute` deprecated, use `error`/`warn`/`info` instead\n"
     changelog = changelog + "- `Err(e)` deprecated, use `Error(e)` instead\n\n"
 
@@ -381,7 +383,7 @@ fn revert_syntax_changes(): Result<(), RevertError>
     // Reverse transformations
     var files := list_files(unicode "src/", unicode "*.poly")
 
-    loop: file in files
+    loop file in files
         var code := read_file(file)
         var reverted := revert_syntax(code)
         write_file(file, reverted)
@@ -395,7 +397,7 @@ fn revert_syntax(code: ustring): ustring
     var reverted := code
 
     // Reverse transformations
-    reverted = reverted.replace(unicode "put -n ", unicode "putn ")
+    reverted = reverted.replace(unicode "put ", unicode "putn ")
     reverted = reverted.replace(unicode "error ", unicode "pute ")
     reverted = reverted.replace(unicode "Error(e)", unicode "Err(e)")
     reverted = reverted.replace(unicode "--timeout ", unicode "with timeout ")
@@ -422,7 +424,7 @@ fn announce_migration(version: ustring)
     put "Version " + version + " introduces syntax changes:"
     put ""
     put "Breaking Changes:"
-    put "  - `putn` -> `put -n`"
+    put "  - `putn` -> `put`"
     put "  - `pute` -> `error`/`warn`/`info`"
     put "  - `Err(e)` -> `Error(e)`"
     put "  - Input flags changed from `with` to `--`"
@@ -464,7 +466,7 @@ fn display_checklist()
     var checklist := migration_checklist()
     put "Migration Checklist:"
     put ""
-    loop: item in checklist
+    loop item in checklist
         put item
     end loop
 end fn

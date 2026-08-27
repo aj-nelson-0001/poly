@@ -21,7 +21,7 @@ end if
 ~~~
 
 ### New Syntax
-~~~poly
+~~~poly fragment
 if x > 0,
     put x
 else if x < 0,
@@ -41,20 +41,20 @@ end if
    ~~~
 
 3. **Else-if chains work seamlessly**:
-   ~~~poly
+   ~~~poly fragment
    if score >= 90,
-       set grade to "A"
+       grade := "A"
    else if score >= 80,
-       set grade to "B"
+       grade := "B"
    else if score >= 70,
-       set grade to "C"
+       grade := "C"
    else,
-       set grade to "F"
+       grade := "F"
    end if
    ~~~
 
 4. **Nested conditions**:
-   ~~~poly
+   ~~~poly fragment
    if x > 0,
        if y > 0,
            put "both positive"
@@ -174,7 +174,7 @@ end if
 ~~~
 
 **After:**
-~~~poly
+~~~poly fragment
 if temperature > 100,
     error "Too hot!"
 else if temperature < 0,

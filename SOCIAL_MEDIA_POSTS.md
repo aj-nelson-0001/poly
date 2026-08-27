@@ -76,7 +76,7 @@ end if
 ~~~
 
 **After:**
-~~~poly
+~~~poly fragment
 if x > 0,
     put x
 else if x < 0,

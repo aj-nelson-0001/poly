@@ -1,5 +1,7 @@
 # Poly Language Best Practices Guide
 
+> **Historical guide:** These practices were written for the v1 language surface. Consult [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md) for current v2 references.
+
 ## Overview
 
 This guide covers best practices for using the new Poly I/O and error handling syntax effectively.
@@ -12,22 +14,22 @@ This guide covers best practices for using the new Poly I/O and error handling s
 
 ~~~poly
 // Good: Progress indicator
-put -n "Loading"
-loop: i 0..10
-    put -n "."
+put "Loading"
+loop i 0..10
+    put "."
     sleep(100)
 end loop
 put " Done!"
 
 // Bad: Newlines in progress
-loop: i 0..10
+loop i 0..10
     put "Loading..."  // Creates multiple lines
 end loop
 ~~~
 
 ### Use Appropriate Error Levels
 
-~~~poly
+~~~poly fragment
 // Good: Use correct levels
 error "File not found: " + path           // Actual errors
 warn "Deprecated function used"           // Potential issues
@@ -40,7 +42,7 @@ error "Loading..."        // Should be info
 
 ### Format Output Consistently
 
-~~~poly
+~~~poly fragment
 // Good: Consistent formatting
 put "Name: " + name
 put "Age: " + age.to_string()
@@ -60,7 +62,7 @@ put "Email:  " + email
 
 ~~~poly
 // Good: Clear prompts
-put -n "Enter your name: "
+put "Enter your name: "
 var name ustring := get
 
 // Bad: No prompt
@@ -71,17 +73,17 @@ var name ustring := get  // User doesn't know what to enter
 
 ~~~poly
 // Good: Sensible defaults
-put -n "Enter color (default: blue): "
+put "Enter color (default: blue): "
 var color ustring := get --default unicode "blue"
 
 // Bad: No default
-put -n "Enter color: "
+put "Enter color: "
 var color ustring := get  // Forces user to enter something
 ~~~
 
 ### Set Timeouts for Interactive Input
 
-~~~poly
+~~~poly fragment
 // Good: Prevent hanging
 match get --timeout 5000
     Ok(input), process(input)
@@ -110,11 +112,11 @@ end if
 
 ~~~poly
 // Good: Mask passwords
-put -n "Enter password: "
+put "Enter password: "
 var password ustring := get --mask unicode "*"
 
 // Bad: Expose passwords
-put -n "Enter password: "
+put "Enter password: "
 var password ustring := get  // Visible on screen
 ~~~
 
@@ -143,7 +145,7 @@ end enum
 
 ### Use `try` for Error Propagation
 
-~~~poly
+~~~poly fragment
 // Good: Propagate errors
 fn process_config(): Result<ustring, FileError>
     var content := try read_file(unicode "config.txt")
@@ -190,7 +192,7 @@ end if
 
 ### Use Wildcard for Catch-All
 
-~~~poly
+~~~poly fragment
 // Good: Catch-all for unknown errors
 match validate_name(input)
     Ok(name), put "Valid: " + name
@@ -214,7 +216,7 @@ end match
 
 ### Group Related Output
 
-~~~poly
+~~~poly fragment
 // Good: Grouped output
 put "=== User Registration ==="
 put ""
@@ -230,7 +232,7 @@ put "Email: " + email
 
 ### Use Functions for Complex Logic
 
-~~~poly
+~~~poly fragment
 // Good: Function for complex validation
 fn validate_user(name: ustring, email: ustring): Result<(ustring, ustring), ValidationError>
     var valid_name := try validate_name(name)
@@ -251,10 +253,10 @@ end if
 
 ### Handle Errors at the Right Level
 
-~~~poly
-// Good: Handle errors at appropriate level
+~~~poly fragment
+// Good: Handle errors at appropriate level (propagate to caller)
 fn read_config(): Result<ustring, FileError>
-    return try read_file(unicode "config.txt")  // Propagate to caller
+    return try read_file(unicode "config.txt")  // `read_file` returns Result
 end fn
 
 fn main()
@@ -264,7 +266,7 @@ fn main()
     end match
 end fn
 
-// Bad: Handle errors too early
+// Bad: Handle errors too early (log and re-wrap instead)
 fn read_config(): Result<ustring, FileError>
     match read_file(unicode "config.txt")
         Ok(content), return Ok(content)
@@ -279,33 +281,34 @@ end fn
 
 ## 5. Performance Best Practices
 
-### Use `-n` for Frequent Output
+### Buffer Output When Possible
 
-~~~poly
-// Good: Efficient progress updates
-loop: i 0..1000
-    put -n "\rProcessing: " + i.to_string()
+~~~poly fragment
+// Good: Build output and print once
+var output ustring := ""
+loop item in items
+    output := output + item.to_string() + "\n"
 end loop
-put ""
+put output
 
-// Bad: Inefficient output
-loop: i 0..1000
-    put "Processing: " + i.to_string()  // Creates 1000 lines
+// Bad: Frequent output
+loop item in items
+    put item.to_string()  // Multiple system calls
 end loop
 ~~~
 
 ### Buffer Output When Possible
 
-~~~poly
+~~~poly fragment
 // Good: Buffer output
 var output ustring := ""
-loop: item in items
-    add output, item.to_string() + "\n"
+loop item in items
+    output := output + item.to_string() + "\n"
 end loop
 put output
 
 // Bad: Frequent output
-loop: item in items
+loop item in items
     put item.to_string()  // Multiple system calls
 end loop
 ~~~
@@ -330,11 +333,11 @@ var price ustring := get  // Then convert later
 
 ~~~poly
 // Good: Mask passwords
-put -n "Enter password: "
+put "Enter password: "
 var password ustring := get --mask unicode "*"
 
 // Bad: Expose passwords
-put -n "Enter password: "
+put "Enter password: "
 var password ustring := get
 ~~~
 
@@ -352,7 +355,7 @@ var email ustring := get  // Could be invalid
 
 ### Use Timeouts for Network Operations
 
-~~~poly
+~~~poly fragment
 // Good: Timeout for network
 match get --timeout 5000
     Ok(data), process(data)
@@ -370,7 +373,7 @@ var data ustring := get  // Can hang forever
 
 ### Test Error Cases
 
-~~~poly
+~~~poly fragment
 // Good: Test all error paths
 fn test_validation()
     // Test empty input
@@ -391,7 +394,7 @@ end fn
 
 ### Test Edge Cases
 
-~~~poly
+~~~poly fragment
 // Good: Test edge cases
 fn test_boundaries()
     // Test minimum valid age
@@ -399,14 +402,14 @@ fn test_boundaries()
     assert(age.is_ok())
     
     // Test maximum valid age
-    set age to validate_age(150)
+    age := validate_age(150)
     assert(age.is_ok())
     
     // Test out of bounds
-    set age to validate_age(0)
+    age := validate_age(0)
     assert(age.is_error())
     
-    set age to validate_age(151)
+    age := validate_age(151)
     assert(age.is_error())
 end fn
 ~~~

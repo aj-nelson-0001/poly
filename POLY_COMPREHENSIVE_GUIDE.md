@@ -1,5 +1,7 @@
 # Poly Language Comprehensive Guide
 
+> **Historical guide:** Examples and feature claims reflect the v1 documentation set. For the current v2 preview, use [POLY_SPEC_v2.md](POLY_SPEC_v2.md).
+
 ## Table of Contents
 
 1. [Introduction](#introduction)
@@ -105,7 +107,7 @@ Poly supports mutable and immutable variables:
 ~~~poly
 // Mutable variables (can be changed)
 var x := 10
-set x to 20// OK
+x := 20// OK
 
 // Immutable variables (cannot be changed)
 let y := 10
@@ -193,8 +195,8 @@ var s String := "hello"
 var us ustring := "world"
 
 // Collections
-var arr [i32; 5] := [1, 2, 3, 4, 5]
-var vec Vec<i32> := vec![1, 2, 3]
+var arr Vec<i32> := [1, 2, 3, 4, 5]   // Vector literal
+var vec Vec<i32> := [1, 2, 3]         // Equivalent
 var tuple (i32, String, bool) := (42, "hello", true)
 
 // Option and Result
@@ -264,32 +266,27 @@ end if
 var i := 0
 while i < 10
     put i
-    add i, 1
+    i := i + 1
 end while
 ~~~
 
 ### For Loops with Ranges
 
 ~~~poly
-// Simple range
-for i in 0..10
+// Simple range (inclusive endpoints)
+loop i 0..10
     put i
-end for
+end loop
 
-// Inclusive range
-for i in 0..=10
+// With step
+loop i 0..100 step 2
     put i
-end for
+end loop
 
-// Step
-for i in (0..100).step_by(2)
+// Descending (negative step)
+loop i 10..0 step -1
     put i
-end for
-
-// Reverse
-for i in (0..10).rev()
-    put i
-end for
+end loop
 ~~~
 
 ### Match Expressions
@@ -327,20 +324,20 @@ fn greet(name: String)
 end fn
 ~~~
 
-### Default Parameters
+### Multiple Parameters
 
 ~~~poly
-fn greet(name: String, greeting: String = "Hello"): String
+fn greet(name: String, greeting: String): String
     return greeting + ", " + name + "!"
 end fn
 
-put greet("Alice")                    // "Hello, Alice!"
-put greet("Bob", "Hi")                // "Hi, Bob!"
+put greet("Alice", "Hello")           // "Hello, Alice!"
+put greet("Bob", "Hi")               // "Hi, Bob!"
 ~~~
 
 ### Higher-Order Functions
 
-~~~poly
+~~~poly fragment
 fn apply(f: fn(i32) -> i32, x: i32): i32
     return f(x)
 end fn
@@ -375,27 +372,22 @@ put add5(10)   // 15
 ### Arrays
 
 ~~~poly
-// Fixed-size arrays
-var arr [i32; 5] := [1, 2, 3, 4, 5]
+// Vectors (dynamic arrays)
+var arr Vec<i32> := [1, 2, 3, 4, 5]
 put arr[0]      // 1
-put arr.length  // 5
+put arr.len()   // 5
 
-// Multi-dimensional
-var matrix [[i32; 3]; 3] := [
+// Multi-dimensional (element type inferred)
+var matrix := [
     [1, 2, 3],
     [4, 5, 6],
     [7, 8, 9]
 ]
-~~~
 
-### Vectors
-
-~~~poly
-// Dynamic arrays
-var vec Vec<i32> := vec![1, 2, 3]
+// Dynamic operations
+var vec Vec<i32> := [1, 2, 3]
 vec.push(4)
-vec.pop()
-put vec.length  // 2
+put vec.len()  // 4
 
 // Iteration
 for item in vec
@@ -410,6 +402,28 @@ var point (f64, f64) := (3.0, 4.0)
 var (x, y) := point
 put x  // 3.0
 put y  // 4.0
+
+// Access elements by position with `.N` (zero-based)
+put point.0  // 3.0
+put point.1  // 4.0
+
+// Chained access works on nested tuples
+var nested := (1, (2, 3))
+put nested.1.0  // 2
+
+// Elements are assignable
+var pair := (10, true)
+pair.0 := 99
+pair.1 = false
+add pair.0  // 99 -> 100
+
+// `for` loops destructure tuples, e.g. from enumerate()
+var items := [5, 6]
+for (idx, val) in items.enumerate()
+    put idx   // 0, 1
+    put val   // 5, 6
+end for
+put items.len()  // collection still usable (loop borrows)
 
 // Named tuples (planned)
 // var point := (x: 3.0, y: 4.0)
@@ -561,7 +575,7 @@ end fn
 ~~~poly fragment
 // Future syntax
 try
-    var content := get < "file.txt"
+    var content := get from "file.txt"
 catch FileNotFoundError
     error "File not found"
 catch PermissionError
@@ -577,11 +591,11 @@ end try
 
 ~~~poly fragment
 // Read entire file
-var content := get < "file.txt"
+var content := get from "file.txt"
 
 // Read with error handling
 try
-    var content := get < "file.txt"
+    var content := get from "file.txt"
     put content
 catch
     error "Could not read file"
@@ -592,10 +606,10 @@ end try
 
 ~~~poly
 // Write to file (overwrite)
-put "Hello, World!" > "output.txt"
+put "Hello, World!" to "output.txt"
 
 // Append to file
-put "New line" >> "output.txt"
+put "New line" >to "output.txt"
 ~~~
 
 ### Command Line Input
@@ -621,7 +635,7 @@ put add(2, 3)  // 5
 fn make_counter()
     var count := 0
     return || 
-        add count, 1
+        count := count + 1
         return count
     end fn
 end fn
@@ -658,7 +672,7 @@ end fn
 fn reduce(arr: Vec<i32>, f: fn(i32, i32) -> i32, init: i32): i32
     var acc := init
     for item in arr
-        set acc to f(acc, item)
+        acc := f(acc, item)
     end for
     return acc
 end fn
@@ -691,7 +705,7 @@ put Math.multiply(2, 3)  // 6
 
 ### Traits (Planned)
 
-~~~poly
+~~~poly fragment
 trait Printable
     fn to_string(self): String
 end trait
@@ -716,33 +730,32 @@ fn calculator()
     
     var running := true
     while running
-        put "
-Enter first number (or 'quit' to exit): "
+        put "Enter first number (or 'quit' to exit): "
         var input := get
         
         if input = "quit"
-            set running to false
+            running := false
             continue
         end if
         
-        var a := input
+        var a f64 := get --as f64
         put "Enter operator (+, -, *, /): "
         var op := get
         put "Enter second number: "
-        var b := get
+        var b f64 := get --as f64
         
         var result := 0.0
         if op = "+"
-            set result to a + b
+            result := a + b
         else if op = "-"
-            set result to a - b
+            result := a - b
         else if op = "*"
-            set result to a * b
+            result := a * b
         else if op = "/"
-            if b = 0
+            if b = 0.0
                 error "Division by zero!"
             end if
-            set result to a / b
+            result := a / b
         else
             error "Invalid operator!"
         end if
@@ -761,7 +774,7 @@ fn process_file(input_path: String, output_path: String)
     put "Processing " + input_path + "..."
     
     try
-        var content := get < input_path
+        var content := get from  input_path
         var lines := content.split("\n")
         var processed := vec![]
         
@@ -804,9 +817,9 @@ Attempts left: " + attempts
         var display := ""
         for char in word
             if guessed.contains(char)
-                add display, char
+                display := display + char
             else
-                add display, "_"
+                display := display + "_"
             end if
         end for
         put display
@@ -828,7 +841,7 @@ Attempts left: " + attempts
         
         if !word.contains(guess)
             put "Wrong!"
-            sub attempts, 1
+            attempts := attempts - 1
         end if
     end while
     
@@ -877,14 +890,14 @@ var b := true
 
 ### 2. Prefer Immutable Variables
 
-~~~poly
+~~~poly fragment
 // Good - immutable when possible
 let config := load_config()
 let user := get_current_user()
 
 // Mutable only when needed
 var counter := 0
-add counter, 1
+counter := counter + 1
 ~~~
 
 ### 3. Use Pattern Matching
@@ -916,7 +929,7 @@ end fn
 // Good
 fn read_config(path: String): String
     try
-        return get < path
+        return get from  path
     catch
         error "Failed to read config: " + path
     end try
@@ -924,13 +937,13 @@ end fn
 
 // Bad - ignoring errors
 fn read_config(path: String): String
-    return get < path  // Might panic!
+    return get from  path  // Might panic!
 end fn
 ~~~
 
 ### 5. Keep Functions Small
 
-~~~poly
+~~~poly fragment
 // Good - single responsibility
 fn validate_email(email: String): bool
     return email.contains("@") && email.contains(".")
@@ -970,14 +983,14 @@ end fn
 
 ### 2. Mutable vs Immutable
 
-~~~poly
-// Wrong - can't reassign immutable
+~~~poly fragment
+// Wrong - can't reassign an immutable `let` binding
 let x := 10
-set x to 20// Error!
+x := 20  // Compile error!
 
-// Correct
+// Correct - `var` is mutable
 var x := 10
-set x to 20// OK
+x := 20  // OK
 ~~~
 
 ### 3. Array Bounds
@@ -987,7 +1000,7 @@ var arr := [1, 2, 3]
 put arr[5]  // Panic!
 
 // Safe access
-if arr.length > 5
+if arr.len() > 5
     put arr[5]
 end if
 ~~~
@@ -1010,8 +1023,8 @@ end if  // This works!
 
 ~~~poly
 // Good - use smallest type that fits
-var small_num u8 := 255
-var big_num u64 := 18446744073709551615
+var small_num u8 := 255 as u8
+var big_num u64 := 18446744073709551615 as u64
 
 // Bad - using i64 for small values
 var small_num i64 := 255  // Wastes memory
@@ -1032,15 +1045,15 @@ end for
 
 ### 3. Avoid Unnecessary Clones
 
-~~~poly
+~~~poly fragment
 // Good - borrow when possible
-fn print_length(s: &String)
-    put s.length
+fn print_length(s: &ustring)
+    put s.len()
 end fn
 
 // Bad - cloning
-fn print_length(s: String)
-    put s.length  // s is dropped after
+fn print_length(s: ustring)
+    put s.len()  // s is dropped after
 end fn
 ~~~
 
@@ -1048,15 +1061,16 @@ end fn
 
 ~~~poly
 // Good - iterator chain
-var sum := numbers.iter().filter(|x| x > 0).sum()
+var numbers := [1, -2, 3, -4, 5]
+var sum := numbers.filter(|x| x > 0).reduce(0, |acc, x| acc + x)
 
 // Bad - manual loop
-var sum := 0
-for x in numbers
-    if x > 0
-        add sum, x
+var sum2 := 0
+loop x in numbers
+    if x > 0,
+        sum2 := sum2 + x
     end if
-end for
+end loop
 ~~~
 
 ---

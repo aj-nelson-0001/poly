@@ -51,10 +51,10 @@ File write and append operations now generate correct Rust code:
 
 ~~~poly
 # Write to file
-put "Hello, World!" > "output.txt"
+put "Hello, World!" to "output.txt"
 
 # Append to file
-put "More content" >> "output.txt"
+put "More content" >to "output.txt"
 ~~~
 
 Generates:
@@ -67,7 +67,7 @@ std::fs::write("output.txt", format!("{}", "Hello, World!")).unwrap();
 ### Match Expressions
 Fixed codegen for match arms (removed extra semicolons):
 
-~~~poly
+~~~poly fragment
 match x
     1, put "One"
     _, put "Other"
@@ -86,8 +86,8 @@ match x {
 ### Loop Variables
 Loop variables now work correctly for collection iteration:
 
-~~~poly
-loop: record in records
+~~~poly fragment
+loop record in records
     put record
 end loop
 ~~~

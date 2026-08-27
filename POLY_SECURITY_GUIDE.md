@@ -1,5 +1,7 @@
 # Poly Language Security Guide
 
+> **Historical guide:** This document predates the v2 target contract. Treat its examples as advisory and consult [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md) for current C limitations.
+
 ## Overview
 
 This guide covers security best practices for the new Poly I/O and error handling syntax.
@@ -31,8 +33,8 @@ var name ustring := get  // Could be empty or malicious
 fn sanitize(input: ustring): ustring
     // Remove potentially dangerous characters
     var sanitized ustring := input.replace(unicode "<", unicode "&lt;")
-    set sanitized to sanitized.replace(unicode ">", unicode "&gt;")
-    set sanitized to sanitized.replace(unicode "\"", unicode "&quot;")
+    sanitized := sanitized.replace(unicode ">", unicode "&gt;")
+    sanitized := sanitized.replace(unicode "\"", unicode "&quot;")
     return sanitized
 end fn
 
@@ -61,11 +63,11 @@ var username ustring := get  // No validation
 
 ~~~poly
 // Good: Mask passwords
-put -n "Enter password: "
+put "Enter password: "
 var password ustring := get --mask unicode "*"
 
 // Bad: Expose passwords
-put -n "Enter password: "
+put "Enter password: "
 var password ustring := get  // Visible on screen
 ~~~
 
@@ -87,7 +89,7 @@ var password ustring := get --mask unicode "*"  // Weak password allowed
 
 ### Never Store Plain Text Passwords
 
-~~~poly
+~~~poly fragment
 // Good: Hash passwords
 fn hash_password(password: ustring): ustring
     // Use proper hashing algorithm (e.g., bcrypt, argon2)
@@ -126,36 +128,36 @@ fn is_valid_path(path: ustring): bool
 end fn
 
 var filename ustring := get with validate |f| is_valid_path(f)
-var content ustring := get < filename
+var content ustring := get from  filename
 
 // Bad: No path validation
 var filename ustring := get
-var content ustring := get < filename  // Could access any file
+var content ustring := get from  filename  // Could access any file
 ~~~
 
 ### Use Safe File Permissions
 
-~~~poly
+~~~poly fragment
 // Good: Set restrictive permissions
-put "sensitive data" > "secret.txt"
+put "sensitive data" to "secret.txt"
 set_file_permissions("secret.txt", 0o600)  // Owner read/write only
 
 // Bad: Default permissions
-put "sensitive data" > "secret.txt"  // World-readable by default
+put "sensitive data" to "secret.txt"  // World-readable by default
 ~~~
 
 ### Validate File Content
 
 ~~~poly fragment
 // Good: Validate file content
-var content ustring := get < "config.txt" with validate |c|
+var content ustring := get from "config.txt" with validate |c|
     c.len() < 1000000 &&  // Limit file size
     not c.contains(unicode "<script") &&  // Basic XSS prevention
     not c.contains(unicode "javascript:")  // Basic XSS prevention
 end
 
 // Bad: No content validation
-var content ustring := get < "config.txt"  // Could be malicious
+var content ustring := get from "config.txt"  // Could be malicious
 ~~~
 
 ---
@@ -164,7 +166,7 @@ var content ustring := get < "config.txt"  // Could be malicious
 
 ### Don't Expose Sensitive Information
 
-~~~poly
+~~~poly fragment
 // Good: Generic error messages
 match read_file(unicode "config.txt")
     Ok(content), process(content)
@@ -185,13 +187,13 @@ end match
 fn log_error(error: ustring, context: ustring)
     var timestamp ustring := get_timestamp()
     var log_entry ustring := timestamp + " | " + context + " | " + error
-    put log_entry >> "app.log"
+    put log_entry >to "app.log"
     set_file_permissions("app.log", 0o640)
 end fn
 
 // Bad: Log to insecure location
 fn log_error(error: ustring)
-    put error >> "/tmp/error.log"  // World-readable
+    put error >to "/tmp/error.log"  // World-readable
 end fn
 ~~~
 
@@ -226,7 +228,7 @@ end fn
 
 ### Use Timeouts
 
-~~~poly
+~~~poly fragment
 // Good: Prevent DoS attacks
 match get --timeout 5000
     Ok(input), process(input)
@@ -254,9 +256,9 @@ var input ustring := get  // Could be huge, causing memory issues
 // Good: Sanitize output for HTML
 fn html_escape(input: ustring): ustring
     var output ustring := input.replace(unicode "&", unicode "&amp;")
-    set output to output.replace(unicode "<", unicode "&lt;")
-    set output to output.replace(unicode ">", unicode "&gt;")
-    set output to output.replace(unicode "\"", unicode "&quot;")
+    output := output.replace(unicode "<", unicode "&lt;")
+    output := output.replace(unicode ">", unicode "&gt;")
+    output := output.replace(unicode "\"", unicode "&quot;")
     return output
 end fn
 
@@ -274,7 +276,7 @@ put user_input  // Could contain malicious HTML
 
 ### Validate Credentials
 
-~~~poly
+~~~poly fragment
 // Good: Validate credentials
 fn authenticate(username: ustring, password: ustring): Result<User, AuthError>
     var user := try get_user(username)
@@ -319,7 +321,7 @@ end fn
 
 ### Encrypt Sensitive Data
 
-~~~poly
+~~~poly fragment
 // Good: Encrypt sensitive data
 fn encrypt_data(data: ustring, key: ustring): ustring
     // Use proper encryption (e.g., AES-256)
@@ -337,18 +339,19 @@ store_plain(sensitive_data)  // Insecure!
 
 ### Use Secure Random Generation
 
-~~~poly
-// Good: Secure random tokens
+~~~poly fragment
+// Good: Secure random tokens (requires a random-index source, e.g. from a
+// cryptographically secure RNG exposed by the runtime)
 fn generate_token(length: i32): ustring
     var chars ustring := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     var token ustring := ""
-    loop: i 0..length
-        add token, chars[random(chars.len())]
+    loop i 0..length
+        token := token + chars[random_index(chars.len())]
     end loop
     return token
 end fn
 
-// Bad: Predictable tokens
+// Bad: Predictable tokens (timestamps are guessable)
 fn generate_token(length: i32): ustring
     return get_timestamp().to_string()  // Predictable
 end fn
@@ -363,21 +366,21 @@ end fn
 ~~~poly
 // Good: Use HTTPS
 var url ustring := "https://api.example.com/data"
-var response := get --timeout 5000 < url
+var response := get from  url --timeout 5000
 
 // Bad: Use HTTP
 var url ustring := "http://api.example.com/data"  // Insecure
-var response := get < url
+var response := get from  url
 ~~~
 
 ### Validate Certificates
 
-~~~poly
+~~~poly fragment
 // Good: Validate SSL certificates
-var response := get < "https://api.example.com" with verify_certificate(true)
+var response := get from "https://api.example.com" with verify_certificate(true)
 
 // Bad: Skip certificate validation
-var response := get < "https://api.example.com" with verify_certificate(false)  // Insecure
+var response := get from "https://api.example.com" with verify_certificate(false)  // Insecure
 ~~~
 
 ---
@@ -386,7 +389,7 @@ var response := get < "https://api.example.com" with verify_certificate(false)  
 
 ### Avoid Code Injection
 
-~~~poly
+~~~poly fragment
 // Good: Use parameterized queries
 fn get_user(username: ustring): Result<User, DBError>
     var query ustring := "SELECT * FROM users WHERE username = ?"
@@ -402,7 +405,7 @@ end fn
 
 ### Validate External Data
 
-~~~poly
+~~~poly fragment
 // Good: Validate external data
 fn process_external_data(data: ustring): Result<ustring, ustring>
     // Validate data format

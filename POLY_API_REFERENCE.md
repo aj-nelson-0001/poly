@@ -1,479 +1,158 @@
-# Poly Language API Reference
+# Poly v2 API Reference
 
-## Output Commands
+This reference documents syntax implemented by the current compiler. Backend-specific behavior is called out explicitly.
 
-### `put` - Standard Output
+## Declarations and Assignment
 
 ~~~poly
-put expression               # Output with newline
-put -n expression            # Output without newline
-put expression > "file"      # Write to file (truncate)
-put expression >> "file"     # Append to file
+var count i32 := 0
+var inferred := 42
+let name: ustring := unicode "Alice"
+const limit := 10
+count := count + 1
+if count = limit
+    put unicode "done"
+end if
 ~~~
 
-**Parameters:**
-- `expression`: Any value (string, number, boolean, etc.)
-- `-n` flag: Suppress trailing newline
+`:=` initializes declarations and assigns existing bindings. `=` compares values. The legacy `==` spelling is rejected. `var` types are written without a colon; `let` type annotations use a colon.
 
-**Returns:** Nothing
+## `put`
 
-**Examples:**
 ~~~poly
-put "Hello, World!"
+put unicode "Hello"
 put 42
-put -n "Loading..."
-put "data" > "output.txt"
-put "more" >> "output.txt"
+put "value = " + 42
+put unicode "replace" to "output.txt"
+put unicode "append" to "output.txt" -append
 ~~~
 
----
+`put` writes to stdout and always adds a newline. Rust supports `to "file"` and `-append`. The C backend supports stdout output but rejects file redirects; use a `#c` helper for C file I/O.
 
-### `error` - Error Output (stderr)
+## `error`, `warn`, and `info`
 
 ~~~poly
-error expression
+error unicode "fatal diagnostic"
+warn unicode "non-fatal diagnostic"
+info unicode "debug diagnostic"
 ~~~
 
-**Parameters:**
-- `expression`: Error message
+All three commands write to stderr. The generated Rust and C backends prefix the messages with `[ERROR]`, `[WARN]`, or `[INFO]`.
 
-**Returns:** Nothing
+## `get` and Input Flags
 
-**Output:** Automatically prefixed with `[ERROR]`
-
-**Examples:**
-~~~poly
-error "File not found"
-error "Error: " + e
-~~~
-
----
-
-### `warn` - Warning Output (stderr)
+`get` is a Rust-backend input operation. The C backend rejects it.
 
 ~~~poly
-warn expression
+var line ustring := get
+var prompted ustring := get unicode "Name: "
+var from_file ustring := get from "input.txt"
+var number i32 := get --as i32
+var fallback ustring := get --default unicode "fallback"
+var hidden ustring := get --mask unicode "*"
+var field ustring := get --until unicode ","
+var header bytes := get from "input.bin" --bytes 8
 ~~~
 
-**Parameters:**
-- `expression`: Warning message
+Supported flags:
 
-**Returns:** Nothing
+| Form | Meaning |
+|------|---------|
+| `--as TYPE` | Convert input to the requested type |
+| `--default VALUE` | Use a fallback when input is empty |
+| `--mask VALUE` | Suppress terminal echo on supported Rust Unix terminals |
+| `--until VALUE` | Read through stdin until the delimiter or EOF |
+| `--bytes N` | Read a fixed number of bytes from a file |
+| `--timeout N` | Rust input timeout behavior; target support is backend-specific |
 
-**Output:** Automatically prefixed with `[WARN]`
+The parser also represents `with validate`, `with complete`, and `with encoding` clauses for compatibility with the broader language model, but they are not part of the maintained runnable v2 API. Do not use them in current examples.
 
-**Examples:**
-~~~poly
-warn "Deprecated function"
-warn "Memory usage high"
-~~~
-
----
-
-### `info` - Debug Output (stderr)
-
-~~~poly
-info expression
-~~~
-
-**Parameters:**
-- `expression`: Debug information
-
-**Returns:** Nothing
-
-**Output:** Automatically prefixed with `[INFO]`
-
-**Examples:**
-~~~poly
-info "Request took 42ms"
-info "Memory: 128MB"
-~~~
-
----
-
-## Input Commands
-
-### `get` - Read Input
+## Functions and Control Flow
 
 ~~~poly
-var x := get                          # Read line from stdin
-var x := get unicode "prompt: "               # Read with prompt
-var x Type := get                    # Auto-parse typed input
-var x := get < "file"                 # Read from file
-var x bytes := get < "file"         # Read binary from file
-var x bytes := get < "file" --bytes 8  # Read specific number of bytes
-~~~
-
-**Parameters:**
-- `"prompt: "`: Optional prompt string
-- `--bytes N`: Read N bytes (optional)
-
-**Returns:** Input value (type depends on variable)
-
-**Examples:**
-~~~poly
-var name ustring := get
-var age i32 := get
-var data bytes := get < "binary.bin"
-var header bytes := get < "image.png" --bytes 8
-~~~
-
----
-
-### Input Flags
-
-#### `--timeout` - Read with Timeout
-
-~~~poly
-var x := get --timeout milliseconds
-~~~
-
-**Parameters:**
-- `milliseconds`: Timeout in milliseconds
-
-**Returns:** `Result<T, TimeoutError>`
-
-**Examples:**
-~~~poly
-match get --timeout 3000
-    Ok(input), process(input)
-    Timeout, warn "Too slow!"
-    Error(e), error "Error: " + e
-end match
-~~~
-
----
-
-#### `--default` - Read with Default Value
-
-~~~poly
-var x := get --default value
-~~~
-
-**Parameters:**
-- `value`: Default value if input is empty
-
-**Returns:** Input value or default
-
-**Examples:**
-~~~poly
-var color ustring := get --default unicode "blue"
-var count i32 := get --default 0
-~~~
-
----
-
-#### `--mask` - Read with Input Mask *(experimental)*
-
-> **Status:** not implemented yet. `get --mask ...` parses and type-checks, but
-> the generated code reads plain input without masking; the compiler emits a
-> warning when the flag is used.
-
-~~~poly
-var x := get --mask mask_char
-~~~
-
-**Parameters:**
-- `mask_char`: Character to display (e.g., `unicode "*"`)
-
-**Returns:** Hidden input value *(planned)*
-
-**Examples:**
-~~~poly
-var password ustring := get --mask unicode "*"
-~~~
-
----
-
-#### `--as` - Type Conversion
-
-~~~poly
-var x := get --as Type
-~~~
-
-**Parameters:**
-- `Type`: Target type for conversion
-
-**Returns:** Converted value
-
-**Examples:**
-~~~poly
-var num i32 := get --as i32
-var person Person := get --as Person
-~~~
-
----
-
-#### `--until` - Delimiter-Based Input *(experimental)*
-
-> **Status:** not implemented yet. `get --until ...` parses and type-checks, but
-> the generated code reads to the end of the line; the compiler emits a
-> warning when the flag is used.
-
-~~~poly
-var x := get --until delimiter
-~~~
-
-**Parameters:**
-- `delimiter`: Delimiter string
-
-**Returns:** Input until delimiter *(planned)*
-
-**Examples:**
-~~~poly
-var csv_line ustring := get --until unicode ","
-var field ustring := get --until unicode "\n"
-~~~
-
----
-
-#### `--bytes` - Read Specific Number of Bytes
-
-~~~poly
-var x := get < "file" --bytes count
-~~~
-
-**Parameters:**
-- `count`: Number of bytes to read
-
-**Returns:** Bytes value
-
-**Examples:**
-~~~poly
-var header bytes := get < "image.png" --bytes 8
-~~~
-
----
-
-### Complex Input Options
-
-#### `with validate` - Input Validation
-
-~~~poly
-var x := get with validate closure
-~~~
-
-**Parameters:**
-- `closure`: Validation function `(value) -> bool`
-
-**Returns:** Validated value
-
-**Examples:**
-~~~poly
-var age i32 := get with validate |x| x >= 1 && x <= 150
-var email ustring := get with validate |e| e.contains(unicode "@")
-~~~
-
----
-
-#### `with complete` - Input Completion
-
-~~~poly
-var x := get with complete array
-~~~
-
-**Parameters:**
-- `array`: Array of completion options
-
-**Returns:** Selected value
-
-**Examples:**
-~~~poly
-var command ustring := get with complete [unicode "start", unicode "stop", unicode "pause"]
-~~~
-
----
-
-#### `with encoding` - Encoding Specification
-
-~~~poly
-var x := get with encoding encoding_name
-~~~
-
-**Parameters:**
-- `encoding_name`: Encoding string (e.g., `unicode "utf-8"`)
-
-**Returns:** Decoded value
-
-**Examples:**
-~~~poly
-var text ustring := get < "file.txt" with encoding unicode "utf-8"
-~~~
-
----
-
-## Error Handling
-
-### Result Type
-
-~~~poly fragment
-enum Result<T, E>
-    Ok(T)
-    Error(E)
-end enum
-~~~
-
-**Variants:**
-- `Ok(T)`: Success with value of type `T`
-- `Error(E)`: Failure with error of type `E`
-
----
-
-### Error Propagation
-
-~~~poly
-var result := try risky_operation()
-~~~
-
-**Behavior:**
-- If `Ok(value)`: Unwraps to `value`
-- If `Error(e)`: Propagates error up the call stack
-
-**Examples:**
-~~~poly
-fn process(): Result<ustring, Error>
-    var data := try read_file(unicode "config.txt")  # Propagates error
-    return Ok(data)
+fn double(value: i32): i32
+    return value * 2
 end fn
+
+var value i32 := double(21)
+
+if value > 20
+    put value
+else
+    warn unicode "small value"
+end if
+
+loop i 0..3
+    put i
+end loop
+
+loop i 10..1 step -1
+    put i
+end loop
 ~~~
 
----
+Range endpoints are inclusive. `while condition ... end while` is supported by the parser and lowers to a loop. `break` and `continue` are valid inside loops.
 
-### Pattern Matching
+Collection iteration:
 
 ~~~poly
-match result
-    Ok(value), handle_success(value)
-    Error(e), handle_error(e)
-end match
+var values := [10, 20, 30]
+loop value in values
+    put value
+end loop
+
+loop (index, value) in values.enumerate()
+    put index
+    put value
+end loop
 ~~~
 
-**Examples:**
-~~~poly
-match read_file(unicode "config.txt")
-    Ok(content), process(content)
-    Error(FileError::NotFound), error "File not found"
-    Error(FileError::PermissionDenied), error "Permission denied"
-    Error(e), error "Unknown error"
-end match
-~~~
+## Foreign Blocks
 
----
-
-### Wildcard Pattern
+Foreign blocks are selected by target and emitted at target-language scope. Keep them at program scope.
 
 ~~~poly
-match result
-    Ok(value), process(value)
-    Error(_), error "Something went wrong"
-end match
+#rust
+fn native_value() -> i32 { 42 }
+#endrust
+
+var value i32 := native_value()
+put value
 ~~~
-
----
-
-## Custom Error Types
-
-~~~poly fragment
-enum MyError
-    NotFound
-    InvalidInput(message: ustring)
-    Timeout(ms: i32)
-end enum
-
-fn validate(): Result<ustring, MyError>
-    if invalid,
-        return Error(MyError::InvalidInput(unicode "Bad data"))
-    end if
-    return Ok(unicode "valid")
-end fn
-~~~
-
----
-
-## Math Functions
-
-Poly provides a small set of numeric helper functions that lower to idiomatic Rust methods. All of them require numeric operands.
-
-### `abs` - Absolute Value
 
 ~~~poly
-var magnitude i32 := abs(-42)      # 42
-var distance f64 := abs(-3.5)      # 3.5
+#c
+int native_value(void) { return 42; }
+#endc
+
+var value i32 := native_value()
+put value
 ~~~
 
-**Parameters:** one numeric expression  
-**Returns:** the operand type  
-**Rust:** `(expr).abs()`
-
-### `sqrt` - Square Root
-
-~~~poly fragment
-var length f64 := sqrt(16.0)       # 4.0
-~~~
-
-**Parameters:** one numeric expression  
-**Returns:** the operand type  
-**Rust:** `(expr).sqrt()`  
-**Note:** `sqrt` requires a float operand (`f32`/`f64`) in Rust; annotate the variable or literal accordingly.
-
-### `pow` - Power
+`#cpp` is explicitly rejected. Foreign calls without declarations remain opaque to Poly semantic checking; Rust or C validates the actual call after generation. Add an optional target-aware declaration when you want Poly to check the interface first:
 
 ~~~poly
-var squared i32 := pow(3, 2)       # 9
-var cubed f64 := pow(2.0, 3.0)     # 8.0
+extern c fn native_value(value: i32): i32
 ~~~
 
-**Parameters:** `base`, `exponent`  
-**Returns:** the wider operand type  
-**Rust:** `(base).pow(exponent)`
+The declaration is checker-only, must match the selected target, and does not replace native compiler validation.
 
-### `min` / `max` - Extrema
+## Targets and CLI
 
-~~~poly
-var smallest i32 := min(3, 7)      # 3
-var largest i32 := max(3, 7)       # 7
+~~~bash
+poly --target rust --check program.poly
+poly --target c --check program.poly
+poly --emit-rust program.poly
+poly --target c --emit-c program.poly
+poly --tokens program.poly
+poly --ast program.poly
+poly --intermediate-representation program.poly
 ~~~
 
-**Parameters:** two numeric expressions  
-**Returns:** the wider operand type  
-**Rust:** `(a).min(b)` / `(a).max(b)`
+Rust is the default target. The C backend currently supports scalar declarations, numeric expressions and control flow, calls to foreign C helpers, and stdout/stderr diagnostics. It rejects Rust-specific input, file redirects, tuples, complex collection operations, and unsupported expression forms with diagnostics. See [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the frozen target contract.
 
----
+## Errors and Results
 
-## Transpilation Reference
+The parser and semantic checker report errors with source context. Target-native errors are returned after the generated target source is compiled. `Result` and pattern matching remain valid Poly model constructs, but only the Rust backend currently provides the complete support expected for them.
 
-### Output Commands
-
-| Poly | Rust |
-|------|------|
-| `put expr` | `println!("{}", expr);` |
-| `put -n expr` | `print!("{}", expr);` |
-| `error expr` | `eprintln!("[ERROR] {}", expr);` |
-| `warn expr` | `eprintln!("[WARN] {}", expr);` |
-| `info expr` | `eprintln!("[INFO] {}", expr);` |
-| `put expr > "f"` | `std::fs::write("f", expr);` |
-| `put expr >> "f"` | Append with `writeln!` |
-
-### Input Commands
-
-| Poly | Rust |
-|------|------|
-| `var x := get` | `stdin().read_line()` |
-| `var x i32 := get` | `read_line() + parse()` |
-| `get --timeout 5000` | Thread with timeout |
-| `get --default unicode "val"` | `unwrap_or_default()` |
-| `get --mask unicode "*"` | Terminal raw mode |
-| `get --as i32` | Type conversion |
-| `get --until unicode ","` | Read until delimiter |
-| `get --bytes 8` | Read N bytes |
-| `get with validate \|x\| ...` | Validation loop |
-| `get with complete [...]` | Line editor completion |
-
-### Error Handling
-
-| Poly | Rust |
-|------|------|
-| `Ok(val)` | `Ok(val)` |
-| `Error(e)` | `Err(e)` |
-| `try expr` | `expr?` |
-| `match` | `match` |
+Use `--check` when validating a program; use `--emit-rust` or `--emit-c` to inspect the generated target source.

@@ -21,7 +21,7 @@ This change makes Poly code more concise and familiar to developers from other l
 
 ### Examples
 
-~~~poly
+~~~poly fragment
 // Simple if
 if x > 0,
     put x
@@ -36,13 +36,13 @@ end if
 
 // If-else-if chain
 if score >= 90,
-    set grade to "A"
+    grade := "A"
 else if score >= 80,
-    set grade to "B"
+    grade := "B"
 else if score >= 70,
-    set grade to "C"
+    grade := "C"
 else,
-    set grade to "F"
+    grade := "F"
 end if
 ~~~
 
@@ -111,7 +111,7 @@ end if
 ~~~
 
 **After:**
-~~~poly
+~~~poly fragment
 if temperature > 100,
     error "Too hot!"
 else if temperature < 0,

@@ -1,210 +1,128 @@
-# Poly Language Quick Reference Card
+# Poly 2.0 Preview Quick Reference
 
-## Variables & Constants
+This card describes the current v2 preview. See [POLY_SPEC_v2.md](POLY_SPEC_v2.md) for the full contract.
 
-~~~poly
-var x := 10              // Mutable variable
-let y := 20              // Immutable variable
-const PI := 3.14159      // Constant
-var name String := "hi" // With type annotation
-~~~
-
-## Basic Types
-
-| Type | Example |
-|------|---------|
-| `i8`-`i128` | `42i32` |
-| `u8`-`u128` | `42u64` |
-| `f32`, `f64` | `3.14` |
-| `bool` | `true`, `false` |
-| `String` | `"hello"` |
-| `char` | `'a'` |
-| `[T; N]` | `[1, 2, 3]` |
-| `Vec<T>` | `vec![1, 2, 3]` |
-| `(T, U)` | `(1, "hi")` |
-
-## Operators
+## Declarations and Assignment
 
 ~~~poly
-// Arithmetic: + - * / %
-// Comparison: == != < > <= >=
-// Logical: && || !
-// Bitwise: & | ^ << >>
-// Equality: =    Initialization: :=
+var count i32 := 0
+var message ustring := unicode "hello"
+let limit: i32 := 10
+const MAX := 100
+count := count + 1
+if count = MAX
+    put "done"
+end if
 ~~~
+
+`:=` assigns. `=` compares. The legacy `==` spelling is rejected.
+
+## Output and Input
+
+~~~poly
+put "hello"
+put "log entry" to "app.log"
+put "more" to "app.log" -append
+error "failure"
+warn "warning"
+info "details"
+
+var name ustring := get
+var age i32 := get --as i32
+var field ustring := get --until unicode ","
+var password ustring := get --mask unicode "*"
+var header bytes := get from "data.bin" --bytes 8
+~~~
+
+`put` always adds a newline. Diagnostic commands write `[ERROR]`, `[WARN]`, or `[INFO]` to stderr. File redirects and the input flags above are implemented by the Rust target; the C target currently rejects redirects and stdin.
 
 ## Control Flow
 
 ~~~poly fragment
-// If/Else
-if condition
-    // ...
-else if other
-    // ...
+if count > 0
+    put count
 else
-    // ...
+    warn "empty"
 end if
 
-// While
-while condition
-    // ...
+while count < 10
+    count := count + 1
 end while
 
-// For
-for i in 0..10
-    // ...
-end for
+loop i 1..5
+    put i
+end loop
 
-for i in 0..=10      // Inclusive
-for i in (0..100).step_by(2)
-for item in collection
+loop i 10..1 step -2
+    put i
+end loop
+
+var items := [10, 20, 30]
+loop item in items
+    put item
+end loop
 ~~~
 
-## Functions
+Loop ranges include both endpoints. Collection loops borrow their source collection.
+
+## Functions and Data
 
 ~~~poly
-fn name(param: Type): ReturnType
-    // ...
-    return value
+fn add(a: i32, b: i32): i32
+    return a + b
 end fn
 
-fn greet(name: String = "World"): String
-    return "Hello, " + name + "!"
-end fn
-~~~
-
-## Data Structures
-
-~~~poly
-// Struct
 struct Point
-    var x: f64
-    var y: f64
+    var x: i32
+    var y: i32
 end struct
 
-// Enum
-enum Color
-    Red
-    Green
-    Blue
-end enum
-
-// Enum with data
-enum Shape
-    Circle(f32)
-    Rectangle(f32, f32)
-end enum
+var result := add(2, 3)
+put result
 ~~~
 
-## Pattern Matching
+The Rust target supports the broader parser/checker feature set, including enums, traits, modules, closures, generic types, async functions, matches, and collections. The C target supports scalar orchestration, simple functions, plain structs, arithmetic, conditions, loops, and stdout/stderr.
 
-~~~poly fragment
-match value
-    pattern1, expression1
-    pattern2 if guard, expression2
-    _, default
-end match
-~~~
-
-## Error Handling
+## Foreign Blocks and Targets
 
 ~~~poly
-error "Error message"     // Print error
-warn "Warning message"    // Print warning
-info "Info message"       // Print info
+#rust
+fn helper(x: i32) -> i32 { x * 2 }
+#endrust
+
+#c
+int helper(int x) { return x * 2; }
+#endc
+
+var result i32 := helper(21)
+put result
 ~~~
 
-## File I/O
+Foreign blocks must be top-level and their contents are copied as target-language text. Only the block matching the selected target is emitted. Optional `extern rust fn ...` and `extern c fn ...` declarations are top-level checker-only interface contracts.
 
-~~~poly
-var content := get < "file.txt"     // Read file
-put "text" > "file.txt"            // Write file
-put "text" >> "file.txt"           // Append file
-var input := get                     // Read stdin
+~~~bash
+poly --target rust program.poly
+poly --target c --check program.poly
+poly --target c --emit-c program.poly
+poly --target c program.poly
 ~~~
 
-## Closures
+`#cpp` is reserved and rejected until a C++ backend exists. Set `POLY_CC` when the C compiler is not named `cc`.
 
-~~~poly fragment
-var add := |x, y| x + y
-var square := |x| x * x
-~~~
+## CLI
 
-## Modules
-
-~~~poly fragment
-module Math
-    fn add(a, b): i32
-        return a + b
-    end fn
-end module
-
-use Math
-Math.add(2, 3)
-~~~
-
-## Common Patterns
-
-~~~poly
-// List processing
-var doubled := map(list, |x| x * 2)
-var evens := filter(list, |x| x % 2 == 0)
-var sum := reduce(list, |a, b| a + b, 0)
-
-// String operations
-var upper := str.to_uppercase()
-var parts := str.split(",")
-var joined := parts.join("-")
-
-// Collections
-vec.push(item)
-vec.pop()
-vec.length
-vec.contains(item)
-~~~
-
-## Built-in Functions
-
-~~~poly
-put "text"              // Print with newline
-put -n "text"           // Print without newline
-error "msg"             // Print error
-warn "msg"              // Print warning
-info "msg"              // Print info
-get                     // Read from stdin
-get < "file"            // Read from file
-~~~
-
-## Comments
-
-~~~poly
-// Single line comment
-/* Multi
-   line
-   comment */
-~~~
-
----
-
-## Complete Example
-
-~~~poly
-// Fibonacci with pattern matching
-fn fibonacci(n: i32): i32
-    match n
-        0, 0
-        1, 1
-        _, fibonacci(n - 1) + fibonacci(n - 2)
-    end match
-end fn
-
-fn main()
-    for i in 0..10
-        put "fib(" + i + ") = " + fibonacci(i)
-    end for
-end fn
-~~~
-
----
-
-**More info:** See `POLY_COMPREHENSIVE_GUIDE.md` for detailed documentation.
+| Command | Effect |
+|---|---|
+| `poly file.poly` | Generate and build a Rust Cargo project |
+| `poly --check file.poly` | Check the default Rust target |
+| `poly --target c --check file.poly` | Check generated C with the selected C11 compiler |
+| `POLY_CC=clang poly --target c --check file.poly` | Select `clang` explicitly for C checks |
+| `poly --emit-rust file.poly` | Print Rust output |
+| `poly --target c --emit-c file.poly` | Print C output |
+| `poly --project DIR file.poly` | Generate a Rust project |
+| `poly --target c --project DIR file.poly` | Generate and build a C project |
+| `poly --tokens file.poly` | Print lexer tokens |
+| `poly --ast file.poly` | Print the parsed AST |
+| `poly --ir file.poly` | Print optimized Rust IR output |
+| `poly --source-map file.poly` | Print the best-effort source map summary |
+| `poly --repl` | Start the interactive REPL |

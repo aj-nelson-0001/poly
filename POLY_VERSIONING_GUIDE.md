@@ -1,5 +1,7 @@
 # Poly Language API Versioning Guide
 
+> **Historical guide:** This guide is retained as a versioning design reference and is not a specification of the v2 preview runtime.
+
 ## Overview
 
 This guide covers API versioning best practices for Poly applications using the new I/O and error handling syntax.
@@ -68,7 +70,7 @@ end fn
 
 ### Version String Format
 
-~~~poly
+~~~poly fragment
 // Version string format: MAJOR.MINOR.PATCH
 var version ustring := unicode "1.2.3"
 
@@ -123,7 +125,7 @@ end fn
 
 ### Version Routing
 
-~~~poly
+~~~poly fragment
 // Route based on API version
 fn route_request(request: Request): Response
     var version := get_api_version(request)
@@ -183,7 +185,7 @@ end fn
 
 ### Version Compatibility Layer
 
-~~~poly
+~~~poly fragment
 // Compatibility layer for older versions
 fn compatibility_layer(request: Request, target_version: ustring): Request
     var current_version := get_api_version(request)
@@ -252,7 +254,7 @@ end fn
 
 ### URL Versioning
 
-~~~poly
+~~~poly fragment
 // URL-based versioning
 fn route_by_url(request: Request): Response
     var path := request.path
@@ -274,7 +276,7 @@ end fn
 
 ### Version Documentation
 
-~~~poly
+~~~poly fragment
 // API documentation structure
 struct APIDocumentation
     version: ustring

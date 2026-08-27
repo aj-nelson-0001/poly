@@ -1,5 +1,7 @@
 # Poly Language Tools: How-To Guide
 
+> **Historical how-to:** This guide predates the v2 target workflow. Use the current README and documentation index for maintained commands.
+
 ## Quick Start
 
 ### 1. Build the Compiler
@@ -42,7 +44,7 @@ cargo run --manifest-path rust_output/hello/Cargo.toml
 | `poly --emit-rust file.poly` | Print transpiled Rust |
 | `poly --intermediate-representation file.poly` | Print the intermediate representation pipeline output (optimized Rust); `--ir` is an alias |
 | `poly --source-map file.poly` | Print the generated Poly→Rust source map |
-| `poly --check file.poly` | Validate code and verify generated Rust compilation |
+| `poly --check file.poly` | Validate code and verify the selected target compilation |
 | `poly --tokens file.poly` | Show lexer tokens |
 | `poly --ast file.poly` | Show AST |
 | `poly --repl` | Start interactive REPL |
@@ -81,7 +83,7 @@ put result
 ### Control Flow
 
 **If/Else:**
-~~~poly
+~~~poly fragment
 if x > 0
     put "positive"
 else
@@ -94,7 +96,7 @@ end if
 var i := 0
 while i < 10
     put i
-    i += 1
+    i := i + 1
 end while
 ~~~
 
@@ -109,12 +111,12 @@ end for
 
 ~~~poly
 var x := 0
-x += 1       # increment x by one
+x := x + 1   # increment x by one
 ~~~
 
 ### Pattern Matching
 
-~~~poly
+~~~poly fragment
 match direction
     North, put "up"
     South, put "down"
@@ -136,20 +138,20 @@ put "Hello, " + name + "!"
 ### Read a File
 
 ~~~poly
-var content := get < "data.txt"
+var content := get from "data.txt"
 put content
 ~~~
 
 ### Write to a File
 
 ~~~poly
-put "Hello" > "output.txt"
-put "World" >> "output.txt"
+put "Hello" to "output.txt"
+put "World" to "output.txt" -append
 ~~~
 
 ### Error Handling
 
-~~~poly
+~~~poly fragment
 error "Something went wrong!"
 warn "This might be a problem"
 info "Debug: x = " + x

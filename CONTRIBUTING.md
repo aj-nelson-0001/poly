@@ -42,7 +42,7 @@ Please be respectful and inclusive in all interactions. We are committed to prov
 
 ### Prerequisites
 
-- Rust (latest stable)
+- Rust 1.98.0 (selected automatically by `rust-toolchain.toml`)
 - Git
 - A code editor (VS Code recommended)
 
@@ -53,7 +53,7 @@ Please be respectful and inclusive in all interactions. We are committed to prov
 git clone https://github.com/aj-nelson-0001/poly.git
 cd poly
 
-# Build the compiler
+# Build the compiler (the repository toolchain pin is applied automatically)
 cd compiler
 cargo build
 

@@ -33,11 +33,11 @@ var count i32 := 0
 var greeting := unicode "Hello"
 ~~~
 
-Use `=` for later assignment and `==` for equality comparisons:
+Use `:=` for declarations and assignment, and `=` for equality comparisons. The legacy `==` spelling is rejected:
 
-~~~poly
-count = count + 1
-if count == 1
+~~~poly fragment
+count := count + 1
+if count = 1
     put greeting
 end if
 ~~~

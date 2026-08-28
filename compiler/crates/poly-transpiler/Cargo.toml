@@ -11,4 +11,5 @@ poly-parser.workspace = true
 poly-types.workspace = true
 poly-intermediate-representation.workspace = true
 poly-c-codegen.workspace = true
+poly-asm-codegen.workspace = true
 thiserror.workspace = true

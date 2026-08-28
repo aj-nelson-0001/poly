@@ -76,13 +76,27 @@ impl Transpiler {
         poly_c_codegen::transpile(&program)
     }
 
-    /// Transpile Poly source to the selected target (`rust` or `c`).
+    /// Transpile a parsed program to x86-64 assembly after checking Poly semantics.
+    pub fn transpile_asm_checked(&self, source: &str) -> Result<String, String> {
+        let program = Self::parse_target(source, "asm")?;
+        check_program(&program).map_err(|errors| {
+            errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })?;
+        poly_asm_codegen::transpile(&program)
+    }
+
+    /// Transpile Poly source to the selected target (`rust`, `c`, or `asm`).
     pub fn transpile_target(&self, source: &str, target: &str) -> Result<String, String> {
         match target {
             "rust" | "rs" => self.transpile_checked(source),
             "c" => self.transpile_c_checked(source),
+            "asm" | "s" | "S" => self.transpile_asm_checked(source),
             other => Err(format!(
-                "Unknown target '{}'. Supported targets: rust, c",
+                "Unknown target '{}'. Supported targets: rust, c, asm",
                 other
             )),
         }
@@ -108,7 +122,7 @@ impl Transpiler {
             )
         }) {
             return Err(
-                "#cpp blocks are reserved for a future backend; supported targets are rust and c"
+                "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm"
                     .to_string(),
             );
         }
@@ -236,7 +250,7 @@ mod tests {
         let error = Transpiler::new()
             .transpile_target("put 1", "cpp")
             .unwrap_err();
-        assert!(error.contains("Supported targets: rust, c"));
+        assert!(error.contains("Supported targets: rust, c, asm"));
     }
 
     #[test]

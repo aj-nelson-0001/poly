@@ -10,6 +10,7 @@ members = [
     "crates/poly-lsp",
     "crates/poly-wasm",
     "crates/poly-c-codegen",
+    "crates/poly-asm-codegen",
 ]
 
 [workspace.package]
@@ -29,5 +30,6 @@ poly-cli = { path = "crates/poly-cli" }
 poly-lsp = { path = "crates/poly-lsp" }
 poly-wasm = { path = "crates/poly-wasm" }
 poly-c-codegen = { path = "crates/poly-c-codegen" }
+poly-asm-codegen = { path = "crates/poly-asm-codegen" }
 thiserror = "2"
 anyhow = "1"

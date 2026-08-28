@@ -14,6 +14,7 @@ use anyhow::{bail, Context, Result};
 enum Target {
     Rust,
     C,
+    Asm,
 }
 
 impl Target {
@@ -21,7 +22,8 @@ impl Target {
         match s {
             "rust" | "rs" => Ok(Target::Rust),
             "c" => Ok(Target::C),
-            other => bail!("Unknown target '{}'. Supported targets: rust, c", other),
+            "asm" | "s" | "S" => Ok(Target::Asm),
+            other => bail!("Unknown target '{}'. Supported targets: rust, c, asm", other),
         }
     }
 
@@ -29,6 +31,7 @@ impl Target {
         match self {
             Target::Rust => "rs",
             Target::C => "c",
+            Target::Asm => "S",
         }
     }
 
@@ -36,6 +39,7 @@ impl Target {
         match self {
             Target::Rust => "rust",
             Target::C => "c",
+            Target::Asm => "asm",
         }
     }
 }
@@ -74,12 +78,13 @@ fn main() -> Result<()> {
         eprintln!("Usage: poly [options] <file.poly>");
         eprintln!();
         eprintln!("Options:");
-        eprintln!("  --target <lang>   Target language (default: rust; options: rust, c)");
+        eprintln!("  --target <lang>   Target language (default: rust; options: rust, c, asm)");
         eprintln!("  --tokens          Print tokens and exit");
         eprintln!("  --ast             Print AST and exit");
         eprintln!("  --check           Validate code and verify compilation");
         eprintln!("  --emit-rust       Print transpiled Rust instead of compiling");
         eprintln!("  --emit-c          Print transpiled C instead of compiling");
+        eprintln!("  --emit-asm        Print transpiled x86-64 assembly instead of compiling");
         eprintln!("  --intermediate-representation  Print the IR pipeline output");
         eprintln!("  --ir                           Alias for --intermediate-representation");
         eprintln!("  --source-map      Print the generated source map");
@@ -102,12 +107,13 @@ fn main() -> Result<()> {
             println!("Usage: poly [options] <file.poly>");
             println!();
             println!("Options:");
-            println!("  --target <lang>   Target language (default: rust; options: rust, c)");
+            println!("  --target <lang>   Target language (default: rust; options: rust, c, asm)");
             println!("  --tokens          Print tokens and exit");
             println!("  --ast             Print AST and exit");
             println!("  --check           Validate code and verify compilation");
             println!("  --emit-rust       Print transpiled Rust instead of compiling");
             println!("  --emit-c          Print transpiled C instead of compiling");
+            println!("  --emit-asm        Print transpiled x86-64 assembly instead of compiling");
             println!("  --intermediate-representation  Print the IR pipeline output");
             println!("  --ir                           Alias for --intermediate-representation");
             println!("  --source-map      Print the generated source map");
@@ -122,6 +128,7 @@ fn main() -> Result<()> {
             println!("Targets:");
             println!("  rust              Transpile to Rust (default)");
             println!("  c                 Transpile to C (C11 subset)");
+            println!("  asm               Transpile to x86-64 assembly (Linux syscalls)");
             Ok(())
         }
         "--version" | "-v" => {
@@ -283,6 +290,7 @@ fn main() -> Result<()> {
                             let compile_result = match target {
                                 Target::Rust => verify_rust_compiles(&code),
                                 Target::C => verify_c_compiles(&code),
+                                Target::Asm => verify_asm_compiles(&code),
                             };
                             match compile_result {
                                 Ok(_) => println!(
@@ -314,7 +322,7 @@ fn main() -> Result<()> {
 
             Ok(())
         }
-        "--emit-rust" | "--emit-c" => {
+        "--emit-rust" | "--emit-c" | "--emit-asm" => {
             if args.len() < 3 {
                 eprintln!("Error: emit option requires a file argument");
                 process::exit(1);
@@ -324,7 +332,11 @@ fn main() -> Result<()> {
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
             let transpiler = poly_transpiler::Transpiler::new();
-            let requested_target = if args[1] == "--emit-c" { "c" } else { "rust" };
+            let requested_target = match args[1].as_str() {
+                "--emit-asm" => "asm",
+                "--emit-c" => "c",
+                _ => "rust",
+            };
             let code = transpiler
                 .transpile_target(&source, requested_target)
                 .map_err(|e| anyhow::anyhow!(e))?;
@@ -407,6 +419,14 @@ fn main() -> Result<()> {
                     generate_c_project(&source_path, &output_dir)?;
                     println!(
                         "Generated C project at {} (source: {})",
+                        output_dir.display(),
+                        source_path.display()
+                    );
+                }
+                Target::Asm => {
+                    generate_asm_project(&source_path, &output_dir)?;
+                    println!(
+                        "Generated assembly project at {} (source: {})",
                         output_dir.display(),
                         source_path.display()
                     );
@@ -498,6 +518,21 @@ fn main() -> Result<()> {
                         "Generated and built {} -> {}",
                         path.display(),
                         c_binary_path(&path).display()
+                    );
+                }
+                Target::Asm => {
+                    let output_path = default_asm_output_path(&path);
+                    let source = std::fs::read_to_string(&path)
+                        .with_context(|| format!("Failed to read file: {}", path.display()))?;
+                    let code = poly_transpiler::Transpiler::new()
+                        .transpile_asm_checked(&source)
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                    std::fs::write(&output_path, &code)
+                        .with_context(|| format!("Failed to write {}", output_path.display()))?;
+                    println!(
+                        "Generated {} -> {}",
+                        path.display(),
+                        output_path.display()
                     );
                 }
             }
@@ -922,6 +957,124 @@ fn default_c_output_path(source_path: &Path) -> PathBuf {
     let mut output = source_path.to_path_buf();
     output.set_extension(Target::C.extension());
     output
+}
+
+fn default_asm_output_path(source_path: &Path) -> PathBuf {
+    let mut output = source_path.to_path_buf();
+    output.set_extension(Target::Asm.extension());
+    output
+}
+
+/// Generate a standalone assembly project from a Poly source file.
+fn generate_asm_project(source_path: &Path, output_dir: &Path) -> Result<()> {
+    if source_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        != Some("poly")
+    {
+        bail!(
+            "Source file must have a .poly extension: {}",
+            source_path.display()
+        );
+    }
+    let source = std::fs::read_to_string(source_path)
+        .with_context(|| format!("Failed to read source file: {}", source_path.display()))?;
+    let code = poly_transpiler::Transpiler::new()
+        .transpile_asm_checked(&source)
+        .map_err(|error| anyhow::anyhow!(error))?;
+    if output_dir.exists() && output_dir.read_dir()?.next().is_some() {
+        bail!(
+            "Refusing to overwrite existing files in {}",
+            output_dir.display()
+        );
+    }
+    std::fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "Failed to create project directory: {}",
+            output_dir.display()
+        )
+    })?;
+    let source_path_out = output_dir.join("main.S");
+    std::fs::write(&source_path_out, &code)
+        .with_context(|| format!("Failed to write {}", source_path_out.display()))?;
+    let makefile = format!(
+        "# Auto-generated Makefile for Poly asm project\n\
+# Source: {}\n\
+\n\
+.PHONY: all clean run\n\
+\n\
+all: main\n\
+\n\
+main: main.o\n\
+\tld -o $@ $<\n\
+\n\
+main.o: main.S\n\
+\tas --64 -o $@ $<\n\
+\n\
+run: main\n\
+\t./main\n\
+\n\
+clean:\n\
+\trm -f main main.o\n",
+        source_path.file_name().unwrap_or_default().to_string_lossy()
+    );
+    std::fs::write(output_dir.join("Makefile"), &makefile)
+        .with_context(|| format!("Failed to write Makefile in {}", output_dir.display()))?;
+    let readme = format!(
+        "# Poly asm project\n\
+\n\
+Generated from `{}`.\n\
+\n\
+## Build\n\
+\n\
+```\n\
+make\n\
+```\n\
+\n\
+## Run\n\
+\n\
+```\n\
+make run\n\
+```\n",
+        source_path.file_name().unwrap_or_default().to_string_lossy()
+    );
+    std::fs::write(output_dir.join("README.md"), &readme)
+        .with_context(|| format!("Failed to write README.md in {}", output_dir.display()))?;
+    Ok(())
+}
+
+/// Verify generated x86-64 assembly syntax using `as`.
+fn verify_asm_compiles(code: &str) -> Result<()> {
+    use std::process::Command;
+    let unique_id = format!(
+        "{}-{}",
+        process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
+    let temp_dir = std::env::temp_dir();
+    let source_path = temp_dir.join(format!("poly_check_{unique_id}.S"));
+    let output_path = temp_dir.join(format!("poly_check_{unique_id}.o"));
+    std::fs::write(&source_path, code).context("Failed to write temporary assembly source")?;
+    let output = Command::new("as")
+        .arg("--64")
+        .arg("-o")
+        .arg(&output_path)
+        .arg(&source_path)
+        .output()
+        .context("Failed to run `as`. Is GNU binutils installed?");
+    let _ = std::fs::remove_file(&source_path);
+    let _ = std::fs::remove_file(&output_path);
+    let output = output?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            String::from_utf8_lossy(&output.stderr).to_string()
+        ))
+    }
 }
 
 fn c_binary_path(source_path: &Path) -> PathBuf {

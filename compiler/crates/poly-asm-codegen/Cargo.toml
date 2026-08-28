@@ -1,0 +1,12 @@
+[package]
+name = "poly-asm-codegen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "x86-64 assembly code generator for the Poly language"
+
+[dependencies]
+poly-parser.workspace = true
+
+[dev-dependencies]
+poly-lexer.workspace = true

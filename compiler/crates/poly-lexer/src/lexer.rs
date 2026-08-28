@@ -348,7 +348,7 @@ impl<'a> Lexer<'a> {
             .find_map(|(index, ch)| (*ch == '\n').then_some(index))
             .unwrap_or(self.chars.len());
         let marker: String = self.chars[marker_start..line_end].iter().collect();
-        let language = ["rust", "cpp", "c"]
+        let language = ["rust", "cpp", "c", "asm"]
             .iter()
             .find(|language| marker.starts_with(**language))?;
         if marker[language.len()..].trim().is_empty() {

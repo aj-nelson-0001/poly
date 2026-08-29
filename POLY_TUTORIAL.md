@@ -270,16 +270,11 @@ end fn
 
 ### Basic Ranges
 
-Poly's `loop` command with colon syntax supports flexible iteration inspired by Sinclair QL SuperBASIC. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`:
+Poly's `loop` command supports flexible iteration inspired by Sinclair QL SuperBASIC. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`:
 
 ~~~poly
 # Simple range
 loop i 0..10
-    put i
-end loop
-
-# Inclusive range
-loop i 0..=10
     put i
 end loop
 ~~~

@@ -324,10 +324,9 @@ range_loop      ::= "loop" ":" <identifier> <range_list> <block> "end" "loop"
 collection_loop ::= "loop" ":" <identifier> "in" <expression> <block> "end" "loop"
                    | "loop" ":" <tuple_destructuring> "in" <expression> <block> "end" "loop"
 
-// Loop ranges include both endpoints; `..=` is accepted as an explicit spelling.
+// Loop ranges include both endpoints.
 range_list      ::= <range> { "," <range> }
 range           ::= <expression> ".." <expression>
-                   | <expression> "..=" <expression>
 
 step_clause     ::= "step" <expression>
 ```

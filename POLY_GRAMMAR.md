@@ -179,7 +179,7 @@ loop_statement ::= "loop" "end" "loop"
 
 loop_source   ::= "in" expression | range_list
 range_list    ::= range_part { "," range_part }
-range_part    ::= expression ".." [ "=" ] expression [ "step" expression ]
+range_part    ::= expression ".." expression [ "step" expression ]
                  | expression
 
 match_expression ::= "match" expression { pattern "," expression } "end" "match"

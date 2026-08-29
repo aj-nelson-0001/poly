@@ -13,14 +13,7 @@ fn main()
     end loop
     put ""
     
-    # Test 2: Inclusive range
-    put "Test 2: Inclusive range (0..=5)"
-    loop i 0..=5
-        put "  " + i.to_string()
-    end loop
-    put ""
-    
-    # Test 3: Multiple ranges and specific values
+    # Test 2: Multiple ranges and specific values
     put "Test 3: Multiple ranges and values (1..3, 7, 19..21)"
     loop i 1..3, 7, 19..21
         put "  " + i.to_string()

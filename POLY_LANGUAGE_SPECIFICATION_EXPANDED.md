@@ -918,18 +918,13 @@ end loop
 
 ### Loop Ranges (Inspired by Sinclair QL SuperBASIC)
 
-Poly's `loop` command supports multiple ranges and specific values, borrowing from Sinclair QL SuperBASIC's flexible `FOR` loop design. Loop ranges include both endpoints: `1..3` iterates `1, 2, 3`. The `..=` spelling is accepted but redundant for `loop` ranges. Use `loop` (with colon) for range/value iteration, while `loop` (without colon) remains the infinite loop.
+Poly's `loop` command supports multiple ranges and specific values, borrowing from Sinclair QL SuperBASIC's flexible `FOR` loop design. Loop ranges include both endpoints: `1..3` iterates `1, 2, 3`. Use `loop variable` for range/value iteration, while bare `loop` remains the infinite loop.
 
 #### Syntax Variants
 
 ~~~poly fragment
 // Simple range
 loop i 0..10
-    print(i)
-end loop
-
-// Inclusive range
-loop i 0..=10
     print(i)
 end loop
 
@@ -1016,7 +1011,6 @@ end loop
 | Poly Syntax | Rust Output |
 |-------------|-------------|
 | `loop i 0..10` | `for i in 0..=10 {` |
-| `loop i 0..=10` | `for i in 0..=10 {` |
 | `loop i 1..3, 7, 19..20` | `for i in (1..=3).chain(std::iter::once(7)).chain(19..=20) {` |
 | `loop i 1..10 step 2` | `for i in (1..=10).step_by(2) {` |
 | `loop i 10..1 step -1` | `for i in (1..=10).rev() {` |

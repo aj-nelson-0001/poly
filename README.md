@@ -169,7 +169,7 @@ end match
 ### Loop Ranges (SuperBASIC-inspired)
 
 The loop variable must be named explicitly after `loop`: `loop <var_name> <ranges>`. `loop` without a variable is not part of the current v2 syntax.
-Collection iteration uses `loop <var_name> in <collection>`. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`; `..=` is accepted but redundant for `loop` ranges.
+Collection iteration uses `loop <var_name> in <collection>`. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`.
 
 ~~~poly
 # Simple range

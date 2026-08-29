@@ -449,7 +449,7 @@ approach2()
 
 ## Summary
 
-1. **Output**: Use `-n`, buffer output, avoid unnecessary formatting
+1. **Output**: Buffer output, avoid unnecessary formatting
 2. **Input**: Use appropriate types, validate early, use timeouts
 3. **File I/O**: Use buffering, read efficiently, use binary mode
 4. **Error Handling**: Use `try`, pattern matching, avoid unnecessary errors

@@ -42,7 +42,7 @@ Write to files using redirection operators:
 
 ~~~poly
 put "Line 1" to "output.txt"    # Write (truncate)
-put "Line 2" >to "output.txt"   # Append
+put "Line 2" to "output.txt" -append   # Append
 ~~~
 
 ### Error/Warning Output

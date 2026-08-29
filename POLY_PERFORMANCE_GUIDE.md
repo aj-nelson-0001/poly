@@ -132,7 +132,7 @@ put buffer.join("\n") to "output.txt"
 
 // Bad: Unbuffered writes
 loop i 0..10000
-    put "Line " + i.to_string() >to "output.txt"  // 10000 file operations
+    put "Line " + i.to_string() to "output.txt" -append  // 10000 file operations
 end loop
 ~~~
 

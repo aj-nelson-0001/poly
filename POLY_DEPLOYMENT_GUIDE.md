@@ -165,7 +165,7 @@ fn log_request(method: ustring, path: ustring, status: i32, duration_ms: i32)
         duration_ms: duration_ms
     }
 
-    put log_entry.to_json() >to "access.log"
+    put log_entry.to_json() to "access.log" -append
 end fn
 
 // Error logging
@@ -178,7 +178,7 @@ fn log_error(error: Error, context: ustring)
         stack_trace: error.stack_trace
     }
 
-    put log_entry.to_json() >to "error.log"
+    put log_entry.to_json() to "error.log" -append
     error "Error in " + context + ": " + error.message
 end fn
 ~~~

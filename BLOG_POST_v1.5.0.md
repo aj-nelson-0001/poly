@@ -54,7 +54,7 @@ File write and append operations now generate correct Rust code:
 put "Hello, World!" to "output.txt"
 
 # Append to file
-put "More content" >to "output.txt"
+put "More content" to "output.txt" -append
 ~~~
 
 Generates:

@@ -284,7 +284,7 @@ Audit pass fixing optimizer soundness, runtime stubs, and checker holes.
   - `byte` → `u8`
   - `bytes` → `Vec<u8>`
 - Added file write operations (`put "content" to "file"`)
-- Added file append operations (`put "content" >to "file"`)
+- Added file append operations (`put "content" to "file" -append`)
 - Added `split()` method support with `.collect::<Vec<_>>()`
 - Added `open()` function support for file operations
 - Added placeholder support for `eof()` and `get_line()` methods

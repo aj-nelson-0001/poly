@@ -187,13 +187,13 @@ end match
 fn log_error(error: ustring, context: ustring)
     var timestamp ustring := get_timestamp()
     var log_entry ustring := timestamp + " | " + context + " | " + error
-    put log_entry >to "app.log"
+    put log_entry to "app.log" -append
     set_file_permissions("app.log", 0o640)
 end fn
 
 // Bad: Log to insecure location
 fn log_error(error: ustring)
-    put error >to "/tmp/error.log"  // World-readable
+    put error to "/tmp/error.log"  // World-readable
 end fn
 ~~~
 

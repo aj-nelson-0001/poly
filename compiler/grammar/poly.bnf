@@ -109,8 +109,7 @@ mutation_command ::= <assignment_target> <assignment_op> <expression>
 delimiter       ::= "(" | ")" | "[" | "]" | "{" | "}"
                    | "," | ";" | ":" | "." | "::"
                    | "->" | ".." | "..="
-                   | "<" | ">"  // for file I/O
-                   | ">>"       // for file append
+                   | "<"
 ```
 
 ### Keywords
@@ -462,10 +461,7 @@ macro_declaration ::= "macro" <identifier> "(" [<parameters>] ")"
 ### I/O Statements
 
 ```
-put_statement   ::= "put" <expression> [<redirect>]
-
-redirect        ::= ">" <expression>
-                   | ">>" <expression>
+put_statement   ::= "put" <expression> ["to" <expression> ["-append"]]
 
 error_statement ::= "error" <expression>
 

@@ -1556,7 +1556,7 @@ Poly's `put` command outputs to stdout and always appends a newline (`\n`), like
 1. **`put`**: Outputs to stdout and always appends a newline (`\n`). This is the primary output command.
 2. **Unicode inference**: The language automatically detects Unicode based on string content.
 3. **Error/Warning commands**: Use `error`, `warn`, and `info` for stderr output. These commands automatically prepend level indicators.
-4. **File output**: Use `>` for write/truncate and `>>` for append operations.
+4. **File output**: Use `to` for write/truncate and `to ... -append` for append operations.
 
 > **Note:** The legacy `put -n` and `putl` flags/commands are no longer accepted. Use `put` for all output.
 
@@ -1571,7 +1571,7 @@ put expression
 put expression to "filename.txt"
 
 // Output to file (append)
-put expression to "filename.txt"
+put expression to "filename.txt" -append
 
 // Error messages (to stderr)
 error expression
@@ -1735,7 +1735,7 @@ var output ustring := capture put unicode "Computed: " + (2 + 2)
 | `warn expr` | `eprintln!("[WARN] {}", expr);` |
 | `info expr` | `eprintln!("[INFO] {}", expr);` |
 | `put expr to "file"` | `std::fs::write("file", format!("{}\n", expr)).unwrap();` |
-| `put expr to "file"` | `use std::io::Write; let mut f = std::fs::OpenOptions::new().append(true).open("file").unwrap(); writeln!(f, "{}", expr).unwrap();` |
+| `put expr to "file" -append` | `use std::io::Write; let mut f = std::fs::OpenOptions::new().append(true).open("file").unwrap(); writeln!(f, "{}", expr).unwrap();` |
 
 **Note:** The `error`, `warn`, and `info` commands automatically prepend level indicators (`[ERROR]`, `[WARN]`, `[INFO]`) to the output. This helps with log filtering and debugging.
 
@@ -2182,13 +2182,10 @@ end fn
 ### Grammar Addition
 
 ~~~bnf
-<put_stmt> ::= "put" <expr> <redir>?
+<put_stmt> ::= "put" <expr> ["to" <string> ["-append"]]
              | "error" <expr>
              | "warn" <expr>
              | "info" <expr>
-
-<redir> ::= ">" <string>
-          | ">>" <string>
 ~~~
 
 **Note:** `put` always appends a newline (like Rust's `println!`). The legacy `put -n` and `putl` are no longer accepted. The `error`, `warn`, and `info` commands always output to stderr with a newline.

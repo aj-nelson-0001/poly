@@ -61,7 +61,7 @@ end fn
 // Test file append
 fn test_file_append()
     put "Line 1" to "test_append.txt"
-    put "Line 2" >to "test_append.txt"
+    put "Line 2" to "test_append.txt" -append
     var content ustring := get from "test_append.txt"
     assert(content = "Line 1
 Line 2")
@@ -400,7 +400,7 @@ end fn
 fn test_file_write_performance()
     var start := time_now()
     loop i 0..1000
-        put "Line " + i.to_string() >to "perf_test.txt"
+        put "Line " + i.to_string() to "perf_test.txt" -append
     end loop
     var duration := time_now() - start
     delete_file("perf_test.txt")

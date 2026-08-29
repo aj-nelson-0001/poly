@@ -239,7 +239,7 @@ var data bytes := get from "binary.bin"
 **New Syntax:**
 ~~~poly fragment
 put "Line 1\nLine 2" to "output.txt"
-put "Appended line" >to "output.txt"
+put "Appended line" to "output.txt" -append
 
 var content ustring := get from "input.txt"
 var data bytes := get from "binary.bin"

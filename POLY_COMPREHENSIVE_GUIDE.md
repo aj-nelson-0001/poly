@@ -609,7 +609,7 @@ end try
 put "Hello, World!" to "output.txt"
 
 // Append to file
-put "New line" >to "output.txt"
+put "New line" to "output.txt" -append
 ~~~
 
 ### Command Line Input

@@ -1,7 +1,60 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-08-23.
+Last updated: 2026-08-30.
+
+## v2 audit fixes, snapshot tests, and JS design (2026-08-30)
+
+Session audit of the asm/c codegen, checker, and CLI; documentation
+cross-check; snapshot-test hardening; and a JS-target design proposal
+(implementation on hold per review decision).
+
+### Bugs found and fixed (asm backend + CLI)
+
+- **String variables printed as addresses.** The asm backend routed string
+  variables through the integer print path (`_print_int`); string variables
+  hold pointers, so `put name` printed an address. They now use the
+  strlen-based sys_write path, with `var_types` tracking for
+  struct/enum/string locals. Regression test `supports_string_variable` added.
+- **Function frame size computed too early.** Locals were gathered after the
+  `subq` stack reservation was emitted, undersizing the frame for functions
+  with many variables (stack corruption). Now two-phase: collect all locals,
+  then reserve the frame.
+- **Missing trailing newline** in asm output (POSIX text-file convention).
+- **CLI help inaccuracies** in `poly-cli`: `--emit-asm`/`--target`
+  descriptions corrected and rust-only flags (`--ir`, `--source-map`,
+  `--format`, `--diff`) labeled "rust target only".
+
+### Documentation cross-check
+
+- `POLY_V2_SUPPORT_MATRIX.md` and CLI docs cross-checked against actual
+  behavior; flag descriptions now match the implemented CLI.
+- Roadmap, changelog, and C-blocks docs verified current.
+
+### Snapshot-test hardening
+
+- Added `compiler/crates/poly-transpiler/tests/snapshot_tests.rs` with 26
+  committed snapshots in `tests/snapshots/`: 18 target×sample (rust/c/asm),
+  6 IR-pipeline, and the two target fixtures (`asm_target_tests.poly`,
+  `c_target_tests.poly`).
+- Byte-for-byte comparison; unintended codegen changes fail CI. Regenerate
+  with `POLY_UPDATE_SNAPSHOTS=1 cargo test -p poly-transpiler --test
+  snapshot_tests`.
+- Verified the assertions catch real regressions: a one-token C-backend edit
+  tripped two snapshots; reverting went green.
+
+### Verification
+
+- `cargo test --workspace`: 383 passed, 0 failed.
+- `cargo clippy -p poly-asm-codegen --all-targets`: clean.
+- `cargo fmt --all`: applied and verified.
+- End-to-end smoke: comprehensive_demo → rust (built+ran), c_target_demo → c
+  (binary), asm_target_tests → asm (.S generated).
+
+### JS target design (on hold)
+
+- Added `POLY_JS_DESIGN.md` as a proposal for review. Implementation is on
+  hold per review decision.
 
 ## v2 preview contract and release hardening (2026-08-23)
 

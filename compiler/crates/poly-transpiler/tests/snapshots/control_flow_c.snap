@@ -1,0 +1,23 @@
+/* Generated from Poly source code. */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+    int32_t x = 10;
+    if (x > 5) {
+        printf("%d\n", 1);
+    } else {
+        printf("%d\n", 0);
+    }
+    int32_t i = 0;
+    while (i < 3) {
+        i = (i + 1);
+    }
+    for (int32_t j = 0; j <= 3; j += 1) {
+        printf("%d\n", j);
+    }
+    return 0;
+}

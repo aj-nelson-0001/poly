@@ -1,0 +1,19 @@
+// Generated from Poly source code
+#![allow(unused_variables, unused_mut, unused_imports, dead_code, unused_parens, unreachable_patterns)]
+
+fn main() {
+    let mut x: i32 = 10;
+    if (x > 5) {
+    println!("{}", 1);
+} else {
+    println!("{}", 0);
+}
+
+    let mut i: i32 = 0;
+    while (i < 3) {
+        i = (i + 1);
+    }
+    for j in 0..=3 {
+    println!("{}", j);
+}
+}

@@ -1,0 +1,7 @@
+// Generated from Poly source code
+#![allow(unused_variables, unused_mut, unused_imports, dead_code, unused_parens, unreachable_patterns)]
+
+fn main() {
+    println!("{}", String::from("hello world"));
+    println!("{}", 42);
+}

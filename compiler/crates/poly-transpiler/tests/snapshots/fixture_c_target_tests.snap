@@ -1,0 +1,28 @@
+/* Generated from Poly source code. */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int double_value(int x) {
+    return x * 2;
+}
+
+int main(void) {
+    int32_t total = 0;
+    for (int32_t i = 1; i <= 5; i += 1) {
+        total = (total + double_value(i));
+    }
+    if (total == 30) {
+        printf("%d\n", total);
+    } else {
+        fprintf(stderr, "[ERROR] unexpected total\n");
+    }
+    int32_t remaining = 0;
+    while (remaining < 3) {
+        remaining = (remaining + 1);
+    }
+    printf("%d\n", remaining);
+    return 0;
+}

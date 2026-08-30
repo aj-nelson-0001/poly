@@ -1,0 +1,9 @@
+// Generated from Poly source code
+#![allow(unused_variables, unused_mut, unused_imports, dead_code, unused_parens, unreachable_patterns)]
+
+fn main() {
+    let mut x: i32 = 10;
+    let mut y: i32 = ((x * 4) + 2);
+    println!("{}", y);
+    println!("{}", (x - 1));
+}

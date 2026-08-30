@@ -1,0 +1,13 @@
+/* Generated from Poly source code. */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+    const char * name = "Poly";
+    printf("%s\n", name);
+    printf("hello %s\n", name);
+    return 0;
+}

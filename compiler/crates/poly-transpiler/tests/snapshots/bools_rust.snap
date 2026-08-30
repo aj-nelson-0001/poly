@@ -1,0 +1,9 @@
+// Generated from Poly source code
+#![allow(unused_variables, unused_mut, unused_imports, dead_code, unused_parens, unreachable_patterns)]
+
+fn main() {
+    let mut a: bool = true;
+    let mut b: bool = false;
+    let mut c: bool = (a != b);
+    println!("{}", c);
+}

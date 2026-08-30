@@ -1,0 +1,14 @@
+/* Generated from Poly source code. */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+    bool a = true;
+    bool b = false;
+    bool c = (a != b);
+    printf("%d\n", c);
+    return 0;
+}

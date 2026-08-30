@@ -1,0 +1,14 @@
+/* Generated from Poly source code. */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+    int32_t x = 10;
+    int32_t y = ((x * 4) + 2);
+    printf("%d\n", y);
+    printf("%d\n", (x - 1));
+    return 0;
+}

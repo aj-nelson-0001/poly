@@ -1,0 +1,8 @@
+// Generated from Poly source code
+#![allow(unused_variables, unused_mut, unused_imports, dead_code, unused_parens, unreachable_patterns)]
+
+fn main() {
+    let mut name: String = String::from("Poly");
+    println!("{}", name);
+    println!("{}", format!("{}{}", String::from("hello "), name));
+}

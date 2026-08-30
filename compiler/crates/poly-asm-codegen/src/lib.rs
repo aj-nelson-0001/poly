@@ -154,9 +154,7 @@ impl AsmGenerator {
 
         for statement in &program.statements {
             match &statement.node {
-                Statement::ForeignBlock { language, content }
-                    if language == "asm" =>
-                {
+                Statement::ForeignBlock { language, content } if language == "asm" => {
                     asm_blocks.push(content.clone());
                 }
                 Statement::ForeignBlock { .. } => {}
@@ -192,7 +190,8 @@ impl AsmGenerator {
 
         // Pass 2: compose the full translation unit.
         self.output.push_str("# Generated from Poly source code.\n");
-        self.output.push_str("# Target: x86-64 Linux (AT&T syntax, syscalls)\n\n");
+        self.output
+            .push_str("# Target: x86-64 Linux (AT&T syntax, syscalls)\n\n");
         self.output.push_str(".section .bss\n");
         self.output.push_str(".lcomm _itoa_buf, 32\n\n");
         self.output.push_str(".section .data\n");
@@ -291,6 +290,13 @@ impl AsmGenerator {
                 let _ = writeln!(param_moves, "    movq {reg}, -{offset}(%rbp)");
             }
         }
+        // Pre-reserve one slot per statement so the frame size is final before
+        // `subq` is emitted; emit_statement only appends to the frame afterwards.
+        if let Some(body) = &func.body {
+            for _ in body {
+                frame.allocate(&format!("__reserve_{}", frame.next_offset));
+            }
+        }
 
         let _ = writeln!(self.output, ".globl {name}", name = func.name);
         let _ = writeln!(self.output, "{name}:", name = func.name);
@@ -321,20 +327,19 @@ impl AsmGenerator {
     // Statements
     // -------------------------------------------------------------------
 
-    fn emit_statement(
-        &mut self,
-        stmt: &Statement,
-        frame: &mut StackFrame,
-    ) -> Result<(), String> {
+    fn emit_statement(&mut self, stmt: &Statement, frame: &mut StackFrame) -> Result<(), String> {
         match stmt {
             Statement::VarDeclaration { name, ty, value } => {
                 // Allocate with proper size for struct/enum types.
                 let loc = if let Some(TypeAnnotation::Named(type_name)) = ty {
                     if let Some(layout) = self.structs.get(type_name) {
-                        let total: u32 = layout.values().map(|f| {
-                            // Round each field up to 8-byte slot
-                            ((f.size + 7) / 8) * 8
-                        }).sum();
+                        let total: u32 = layout
+                            .values()
+                            .map(|f| {
+                                // Round each field up to 8-byte slot
+                                ((f.size + 7) / 8) * 8
+                            })
+                            .sum();
                         frame.allocate_struct(name, total)
                     } else if self.enums.contains_key(type_name) {
                         frame.allocate_struct(name, 40) // enum tag (8) + up to 4 payload slots (32)
@@ -355,9 +360,14 @@ impl AsmGenerator {
                             "Assembly backend does not support type `{ty:?}` for `{name}`; use integer, bool, string, struct, or enum"
                         ));
                     }
-                    // Record struct/enum type for field access.
+                    // Record struct/enum/string types for typed access (fields,
+                    // strlen-based `put` of string variables).
                     if let TypeAnnotation::Named(type_name) = ty {
-                        if self.structs.contains_key(type_name) || self.enums.contains_key(type_name) {
+                        if self.structs.contains_key(type_name)
+                            || self.enums.contains_key(type_name)
+                            || type_name == "string"
+                            || type_name == "ustring"
+                        {
                             frame.var_types.insert(name.clone(), type_name.clone());
                         }
                     }
@@ -368,20 +378,40 @@ impl AsmGenerator {
                     if let Some(TypeAnnotation::Named(type_name)) = ty {
                         if let Some(layout) = self.structs.get(type_name) {
                             // Struct: copy field-by-field
-                            if let (Location::Stack(dest_off), Location::Stack(src_off)) = (loc, expr_loc) {
+                            if let (Location::Stack(dest_off), Location::Stack(src_off)) =
+                                (loc, expr_loc)
+                            {
                                 let mut fields: Vec<&FieldInfo> = layout.values().collect();
                                 fields.sort_by_key(|f| f.offset);
                                 for field_info in fields {
-                                    let _ = writeln!(self.output, "    movq -{}(%rbp), %rax", src_off + field_info.offset);
-                                    let _ = writeln!(self.output, "    movq %rax, -{}(%rbp)", dest_off + field_info.offset);
+                                    let _ = writeln!(
+                                        self.output,
+                                        "    movq -{}(%rbp), %rax",
+                                        src_off + field_info.offset
+                                    );
+                                    let _ = writeln!(
+                                        self.output,
+                                        "    movq %rax, -{}(%rbp)",
+                                        dest_off + field_info.offset
+                                    );
                                 }
                             }
                         } else if self.enums.contains_key(type_name) {
                             // Enum: copy tag + all 5 qword slots
-                            if let (Location::Stack(dest_off), Location::Stack(src_off)) = (loc, expr_loc) {
+                            if let (Location::Stack(dest_off), Location::Stack(src_off)) =
+                                (loc, expr_loc)
+                            {
                                 for slot in 0..5u32 {
-                                    let _ = writeln!(self.output, "    movq -{}(%rbp), %rax", src_off + slot * 8);
-                                    let _ = writeln!(self.output, "    movq %rax, -{}(%rbp)", dest_off + slot * 8);
+                                    let _ = writeln!(
+                                        self.output,
+                                        "    movq -{}(%rbp), %rax",
+                                        src_off + slot * 8
+                                    );
+                                    let _ = writeln!(
+                                        self.output,
+                                        "    movq %rax, -{}(%rbp)",
+                                        dest_off + slot * 8
+                                    );
                                 }
                             }
                         } else {
@@ -407,20 +437,35 @@ impl AsmGenerator {
             Statement::Assignment { target, value } => {
                 let target_name = match target {
                     Expression::Identifier(n) => n.clone(),
-                    _ => return Err("Assembly backend only supports assignment to variables".to_string()),
+                    _ => {
+                        return Err(
+                            "Assembly backend only supports assignment to variables".to_string()
+                        )
+                    }
                 };
-                let dest = frame.get(&target_name)
+                let dest = frame
+                    .get(&target_name)
                     .ok_or_else(|| format!("Undefined variable `{target_name}`"))?;
                 let expr_loc = self.emit_expr(value, frame)?;
                 // For struct types, copy field-by-field.
                 if let Some(type_name) = frame.var_types.get(&target_name).cloned() {
                     if let Some(layout) = self.structs.get(&type_name) {
-                        if let (Location::Stack(dest_off), Location::Stack(src_off)) = (dest, expr_loc) {
+                        if let (Location::Stack(dest_off), Location::Stack(src_off)) =
+                            (dest, expr_loc)
+                        {
                             let mut fields: Vec<&FieldInfo> = layout.values().collect();
                             fields.sort_by_key(|f| f.offset);
                             for field_info in fields {
-                                let _ = writeln!(self.output, "    movq -{}(%rbp), %rax", src_off + field_info.offset);
-                                let _ = writeln!(self.output, "    movq %rax, -{}(%rbp)", dest_off + field_info.offset);
+                                let _ = writeln!(
+                                    self.output,
+                                    "    movq -{}(%rbp), %rax",
+                                    src_off + field_info.offset
+                                );
+                                let _ = writeln!(
+                                    self.output,
+                                    "    movq %rax, -{}(%rbp)",
+                                    dest_off + field_info.offset
+                                );
                             }
                         }
                     } else {
@@ -432,7 +477,10 @@ impl AsmGenerator {
             }
             Statement::PutStatement { expr, redirect } => {
                 if redirect.is_some() {
-                    return Err("Assembly backend file redirects are not implemented; use a #asm helper".to_string());
+                    return Err(
+                        "Assembly backend file redirects are not implemented; use a #asm helper"
+                            .to_string(),
+                    );
                 }
                 self.emit_put(expr, frame)?;
             }
@@ -457,13 +505,11 @@ impl AsmGenerator {
                 self.output.push_str("    retq\n");
             }
             Statement::BreakStatement => {
-                let ctx = self.loop_stack.last()
-                    .ok_or("break outside of loop")?;
+                let ctx = self.loop_stack.last().ok_or("break outside of loop")?;
                 let _ = writeln!(self.output, "    jmp {}", ctx.break_label);
             }
             Statement::ContinueStatement => {
-                let ctx = self.loop_stack.last()
-                    .ok_or("continue outside of loop")?;
+                let ctx = self.loop_stack.last().ok_or("continue outside of loop")?;
                 let _ = writeln!(self.output, "    jmp {}", ctx.continue_label);
             }
             Statement::ExpressionStatement(expr) => match expr {
@@ -513,11 +559,22 @@ impl AsmGenerator {
                     }
                     let _ = writeln!(self.output, "{end_label}:");
                 }
-                Expression::LoopRange { variable, ranges, body } => {
+                Expression::LoopRange {
+                    variable,
+                    ranges,
+                    body,
+                } => {
                     if ranges.len() != 1 {
-                        return Err("Assembly backend currently supports one range per loop".to_string());
+                        return Err(
+                            "Assembly backend currently supports one range per loop".to_string()
+                        );
                     }
-                    let ast::LoopRangePart::Range { start, end, inclusive, step } = &ranges[0]
+                    let ast::LoopRangePart::Range {
+                        start,
+                        end,
+                        inclusive,
+                        step,
+                    } = &ranges[0]
                     else {
                         return Err("Assembly backend requires a numeric range loop".to_string());
                     };
@@ -535,8 +592,12 @@ impl AsmGenerator {
                     let step_val: i64 = if let Some(s) = step {
                         if let Expression::IntLiteral(v) = s {
                             v.parse().unwrap_or(1)
-                        } else { 1 }
-                    } else { 1 };
+                        } else {
+                            1
+                        }
+                    } else {
+                        1
+                    };
 
                     let check_label = self.fresh_label("for_check");
                     let body_label = self.fresh_label("for_body");
@@ -559,8 +620,16 @@ impl AsmGenerator {
                     self.load_to_reg(var_loc, "%rax", frame)?;
                     self.output.push_str("    cmpq %r12, %rax\n");
                     let jmp = if descending {
-                        if *inclusive { "jge" } else { "jg" }
-                    } else if *inclusive { "jle" } else { "jl" };
+                        if *inclusive {
+                            "jge"
+                        } else {
+                            "jg"
+                        }
+                    } else if *inclusive {
+                        "jle"
+                    } else {
+                        "jl"
+                    };
                     let _ = writeln!(self.output, "    {jmp} {body_label}");
                     let _ = writeln!(self.output, "{end_label}:");
                     // Restore the previous loop's end bound.
@@ -625,7 +694,9 @@ impl AsmGenerator {
             | Statement::ModuleDeclaration(_)
             | Statement::UseDeclaration(_)
             | Statement::TypeDeclaration(_) => {
-                return Err("This Poly declaration is not supported in an assembly function".to_string());
+                return Err(
+                    "This Poly declaration is not supported in an assembly function".to_string(),
+                );
             }
         }
         Ok(())
@@ -638,7 +709,9 @@ impl AsmGenerator {
     fn emit_expr(&mut self, expr: &Expression, frame: &mut StackFrame) -> Result<Location, String> {
         match expr {
             Expression::IntLiteral(value) => {
-                let v: i64 = value.parse().map_err(|_| format!("Invalid integer literal: {value}"))?;
+                let v: i64 = value
+                    .parse()
+                    .map_err(|_| format!("Invalid integer literal: {value}"))?;
                 let loc = frame.allocate(&format!("__imm_{v}"));
                 self.emit_store_const(loc, v);
                 Ok(loc)
@@ -655,9 +728,9 @@ impl AsmGenerator {
                 self.emit_string_addr(&label, loc);
                 Ok(loc)
             }
-            Expression::Identifier(name) => {
-                frame.get(name).ok_or_else(|| format!("Undefined variable `{name}`"))
-            }
+            Expression::Identifier(name) => frame
+                .get(name)
+                .ok_or_else(|| format!("Undefined variable `{name}`")),
             Expression::BinaryOp { op, left, right } => {
                 // String concatenation: do NOT emit here (no side effects in
                 // emit_expr). The caller (emit_put) handles it.
@@ -755,7 +828,9 @@ impl AsmGenerator {
                     }
                     UnaryOp::BitNot => self.output.push_str("    notq %rax\n"),
                     UnaryOp::Deref => {
-                        return Err("Assembly backend does not support dereferencing yet".to_string());
+                        return Err(
+                            "Assembly backend does not support dereferencing yet".to_string()
+                        );
                     }
                 }
                 let loc = frame.allocate("__unary");
@@ -765,7 +840,11 @@ impl AsmGenerator {
             Expression::Call { func, args } => {
                 let func_name = match func.as_ref() {
                     Expression::Identifier(n) => n.clone(),
-                    _ => return Err("Assembly backend only supports direct function calls".to_string()),
+                    _ => {
+                        return Err(
+                            "Assembly backend only supports direct function calls".to_string()
+                        )
+                    }
                 };
                 let param_regs: &[&str] = &["%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"];
                 let mut arg_locs = Vec::new();
@@ -795,19 +874,24 @@ impl AsmGenerator {
                 }
             }
             Expression::StructLiteral { name, fields } => {
-                let layout_init = self.structs.get(name)
+                let layout_init = self
+                    .structs
+                    .get(name)
                     .ok_or_else(|| format!("Unknown struct `{name}`"))?
                     .clone();
                 let total: u32 = layout_init.values().map(|f| ((f.size + 7) / 8) * 8).sum();
                 let base = frame.allocate_struct(&format!("__struct_{name}"), total);
                 // Collect (offset, expr) pairs to avoid borrow conflicts.
                 let field_offsets: Vec<(u32, Expression)> = {
-                    let layout = self.structs.get(name)
+                    let layout = self
+                        .structs
+                        .get(name)
                         .ok_or_else(|| format!("Unknown struct `{name}`"))?
                         .clone();
                     let mut result = Vec::new();
                     for (field_name, expr) in fields {
-                        let offset = layout.get(field_name.as_str())
+                        let offset = layout
+                            .get(field_name.as_str())
                             .ok_or_else(|| format!("Unknown field `{field_name}` on `{name}"))?
                             .offset;
                         result.push((offset, expr.clone()));
@@ -818,7 +902,11 @@ impl AsmGenerator {
                     let val_loc = self.emit_expr(&expr, frame)?;
                     if let Location::Stack(base_offset) = base {
                         self.load_to_reg(val_loc, "%rax", frame)?;
-                        let _ = writeln!(self.output, "    movq %rax, -{}(%rbp)", base_offset + offset);
+                        let _ = writeln!(
+                            self.output,
+                            "    movq %rax, -{}(%rbp)",
+                            base_offset + offset
+                        );
                     }
                 }
                 Ok(base)
@@ -827,30 +915,45 @@ impl AsmGenerator {
                 let obj_loc = self.emit_expr(object, frame)?;
                 // Determine the struct type from the variable's declared type.
                 let struct_name = match object.as_ref() {
-                    Expression::Identifier(var_name) => {
-                        frame.var_types.get(var_name).cloned()
-                    }
+                    Expression::Identifier(var_name) => frame.var_types.get(var_name).cloned(),
                     _ => None,
                 };
                 if let (Location::Stack(base_offset), Some(sname)) = (obj_loc, &struct_name) {
-                    let layout = self.structs.get(sname)
+                    let layout = self
+                        .structs
+                        .get(sname)
                         .ok_or_else(|| format!("Unknown struct `{sname}"))?
                         .clone();
-                    let field_info = layout.get(field)
+                    let field_info = layout
+                        .get(field)
                         .ok_or_else(|| format!("Unknown field `{field}` on `{sname}"))?;
                     let loc = frame.allocate(&format!("__field_{field}"));
-                    let _ = writeln!(self.output, "    movq -{}(%rbp), %rax", base_offset + field_info.offset);
+                    let _ = writeln!(
+                        self.output,
+                        "    movq -{}(%rbp), %rax",
+                        base_offset + field_info.offset
+                    );
                     self.move_to_loc(Location::Reg("%rax"), loc, frame)?;
                     Ok(loc)
                 } else {
-                    Err(format!("Cannot access field `{field}`: struct type unknown at codegen time"))
+                    Err(format!(
+                        "Cannot access field `{field}`: struct type unknown at codegen time"
+                    ))
                 }
             }
-            Expression::EnumVariant { enum_name, variant, data } => {
-                let enum_info = self.enums.get(enum_name)
+            Expression::EnumVariant {
+                enum_name,
+                variant,
+                data,
+            } => {
+                let enum_info = self
+                    .enums
+                    .get(enum_name)
                     .ok_or_else(|| format!("Unknown enum `{enum_name}"))?
                     .clone();
-                let tag = enum_info.tags.get(variant)
+                let tag = enum_info
+                    .tags
+                    .get(variant)
                     .ok_or_else(|| format!("Unknown variant `{variant}` on `{enum_name}"))?;
                 // Allocate tag (8 bytes) + up to 4 payload slots (32 bytes)
                 let loc = frame.allocate_struct(&format!("__enum_{enum_name}_{variant}"), 40);
@@ -861,7 +964,11 @@ impl AsmGenerator {
                         for (i, expr) in payload.iter().enumerate() {
                             let val_loc = self.emit_expr(expr, frame)?;
                             self.load_to_reg(val_loc, "%rax", frame)?;
-                            let _ = writeln!(self.output, "    movq %rax, -{}(%rbp)", base_offset + 8 + (i as u32) * 8);
+                            let _ = writeln!(
+                                self.output,
+                                "    movq %rax, -{}(%rbp)",
+                                base_offset + 8 + (i as u32) * 8
+                            );
                         }
                     }
                 }
@@ -904,19 +1011,27 @@ impl AsmGenerator {
                                 let _ = writeln!(self.output, "    jmp {}", next_arm_labels[i + 1]);
                             }
                         }
-                        ast::Pattern::Enum { enum_name, variant, inner: _ } => {
+                        ast::Pattern::Enum {
+                            enum_name,
+                            variant,
+                            inner: _,
+                        } => {
                             // Load tag from scrutinee (offset 0) and compare.
                             if let Location::Stack(base) = scrut_loc {
                                 let _ = writeln!(self.output, "    movq -{base}(%rbp), %rax");
-                                let tag = self.enums.get(enum_name)
+                                let tag = self
+                                    .enums
+                                    .get(enum_name)
                                     .and_then(|e| e.tags.get(variant))
-                                    .copied().unwrap_or(0);
+                                    .copied()
+                                    .unwrap_or(0);
                                 let _ = writeln!(self.output, "    cmpq ${tag}, %rax");
                                 if is_last {
                                     let _ = writeln!(self.output, "    jmp {}", arm_labels[i]);
                                 } else {
                                     let _ = writeln!(self.output, "    je {}", arm_labels[i]);
-                                    let _ = writeln!(self.output, "    jmp {}", next_arm_labels[i + 1]);
+                                    let _ =
+                                        writeln!(self.output, "    jmp {}", next_arm_labels[i + 1]);
                                 }
                             } else {
                                 let _ = writeln!(self.output, "    jmp {}", arm_labels[i]);
@@ -971,9 +1086,9 @@ impl AsmGenerator {
             | Expression::ArrayLiteral(_)
             | Expression::UnicodeCharLiteral(_)
             | Expression::FloatLiteral(_)
-            | Expression::ByteLiteral(_) => {
-                Err("Expression not supported by the assembly backend; use a #asm helper".to_string())
-            }
+            | Expression::ByteLiteral(_) => Err(
+                "Expression not supported by the assembly backend; use a #asm helper".to_string(),
+            ),
         }
     }
 
@@ -982,7 +1097,12 @@ impl AsmGenerator {
     // -------------------------------------------------------------------
 
     /// Bind variables introduced by a match pattern.
-    fn bind_pattern_vars(&mut self, pattern: &ast::Pattern, scrut_loc: Location, frame: &mut StackFrame) -> Result<(), String> {
+    fn bind_pattern_vars(
+        &mut self,
+        pattern: &ast::Pattern,
+        scrut_loc: Location,
+        frame: &mut StackFrame,
+    ) -> Result<(), String> {
         match pattern {
             ast::Pattern::Identifier(name) => {
                 let loc = frame.allocate(name);
@@ -1018,6 +1138,18 @@ impl AsmGenerator {
             self.emit_string_typed_put(expr, frame)?;
             return Ok(());
         }
+        // A bare string-typed variable holds a pointer, not an integer: printing
+        // it through _print_int would emit the address. Route it through the
+        // strlen-based writer instead.
+        if let Expression::Identifier(name) = expr {
+            if let Some(type_name) = frame.var_types.get(name).cloned() {
+                if type_name == "string" || type_name == "ustring" {
+                    self.emit_string_concat(expr, frame)?;
+                    self.emit_newline();
+                    return Ok(());
+                }
+            }
+        }
         // Integer / boolean expressions: convert to decimal and write.
         let loc = self.emit_expr(expr, frame)?;
         self.load_to_reg(loc, "%rdi", frame)?;
@@ -1026,8 +1158,20 @@ impl AsmGenerator {
         Ok(())
     }
 
+    fn emit_newline(&mut self) {
+        self.output.push_str("    movq $1, %rax\n");
+        self.output.push_str("    movq $1, %rdi\n");
+        self.output.push_str("    leaq _newline(%rip), %rsi\n");
+        self.output.push_str("    movq $1, %rdx\n");
+        self.output.push_str("    syscall\n");
+    }
+
     /// Emit a `put` for a string-typed expression: write value then newline.
-    fn emit_string_typed_put(&mut self, expr: &Expression, frame: &mut StackFrame) -> Result<(), String> {
+    fn emit_string_typed_put(
+        &mut self,
+        expr: &Expression,
+        frame: &mut StackFrame,
+    ) -> Result<(), String> {
         match expr {
             Expression::StringLiteral(value) | Expression::UnicodeStringLiteral(value) => {
                 let label = self.intern_string(value);
@@ -1039,7 +1183,11 @@ impl AsmGenerator {
                 let _ = writeln!(self.output, "    movq ${len}, %rdx");
                 self.output.push_str("    syscall\n");
             }
-            Expression::BinaryOp { op: BinaryOp::Add, left, right } => {
+            Expression::BinaryOp {
+                op: BinaryOp::Add,
+                left,
+                right,
+            } => {
                 self.output.push_str("    # put (string concat)\n");
                 self.emit_string_concat(left, frame)?;
                 self.emit_string_concat(right, frame)?;
@@ -1054,15 +1202,16 @@ impl AsmGenerator {
             }
         }
         // Trailing newline
-        self.output.push_str("    movq $1, %rax\n");
-        self.output.push_str("    movq $1, %rdi\n");
-        self.output.push_str("    leaq _newline(%rip), %rsi\n");
-        self.output.push_str("    movq $1, %rdx\n");
-        self.output.push_str("    syscall\n");
+        self.emit_newline();
         Ok(())
     }
 
-    fn emit_put_with_prefix(&mut self, prefix: &str, expr: &Expression, frame: &mut StackFrame) -> Result<(), String> {
+    fn emit_put_with_prefix(
+        &mut self,
+        prefix: &str,
+        expr: &Expression,
+        frame: &mut StackFrame,
+    ) -> Result<(), String> {
         // Write prefix string
         let label = self.intern_string(prefix);
         let len = asm_escape(prefix).len() as i64;
@@ -1076,7 +1225,11 @@ impl AsmGenerator {
     }
 
     /// Emit a string piece for concatenation (no newline).
-    fn emit_string_concat(&mut self, expr: &Expression, frame: &mut StackFrame) -> Result<(), String> {
+    fn emit_string_concat(
+        &mut self,
+        expr: &Expression,
+        frame: &mut StackFrame,
+    ) -> Result<(), String> {
         match expr {
             Expression::StringLiteral(value) | Expression::UnicodeStringLiteral(value) => {
                 let label = self.intern_string(value);
@@ -1091,10 +1244,11 @@ impl AsmGenerator {
             Expression::Identifier(name) => {
                 // String variable: we need strlen. For simplicity, use sys_write
                 // with a generous max length; the buffer is NUL-terminated.
-                let loc = frame.get(name)
+                let loc = frame
+                    .get(name)
                     .ok_or_else(|| format!("Undefined variable `{name}`"))?;
                 self.load_to_reg(loc, "%r8", frame)?; // r8 = string ptr
-                // strlen loop
+                                                      // strlen loop
                 let loop_label = self.fresh_label("strlen");
                 let end_label = self.fresh_label("strlen_end");
                 self.output.push_str("    xorq %rdx, %rdx\n"); // length counter
@@ -1113,7 +1267,11 @@ impl AsmGenerator {
                 self.output.push_str("    syscall\n");
                 Ok(())
             }
-            Expression::BinaryOp { op: BinaryOp::Add, left, right } => {
+            Expression::BinaryOp {
+                op: BinaryOp::Add,
+                left,
+                right,
+            } => {
                 self.emit_string_concat(left, frame)?;
                 self.emit_string_concat(right, frame)?;
                 Ok(())
@@ -1129,16 +1287,21 @@ impl AsmGenerator {
     }
 
     fn is_string_expr(&self, expr: &Expression) -> bool {
-        matches!(expr, Expression::StringLiteral(_) | Expression::UnicodeStringLiteral(_))
+        matches!(
+            expr,
+            Expression::StringLiteral(_) | Expression::UnicodeStringLiteral(_)
+        )
     }
 
     /// Check whether an expression evaluates to a string-typed value.
     fn is_string_typed_expr(&self, expr: &Expression) -> bool {
         match expr {
             Expression::StringLiteral(_) | Expression::UnicodeStringLiteral(_) => true,
-            Expression::BinaryOp { op: BinaryOp::Add, left, right } => {
-                self.is_string_typed_expr(left) || self.is_string_typed_expr(right)
-            }
+            Expression::BinaryOp {
+                op: BinaryOp::Add,
+                left,
+                right,
+            } => self.is_string_typed_expr(left) || self.is_string_typed_expr(right),
             _ => false,
         }
     }
@@ -1170,7 +1333,12 @@ impl AsmGenerator {
         }
     }
 
-    fn move_to_loc(&mut self, src: Location, dst: Location, _frame: &StackFrame) -> Result<(), String> {
+    fn move_to_loc(
+        &mut self,
+        src: Location,
+        dst: Location,
+        _frame: &StackFrame,
+    ) -> Result<(), String> {
         match (src, dst) {
             (Location::Stack(s), Location::Stack(d)) => {
                 let _ = writeln!(self.output, "    movq -{s}(%rbp), %rax");
@@ -1243,9 +1411,9 @@ impl AsmGenerator {
                 "string" | "ustring" => 8, // pointer
                 _ => {
                     // Struct type: sum of field sizes
-                    self.structs.get(name).map_or(8, |fields| {
-                        fields.values().map(|f| f.size).sum::<u32>()
-                    })
+                    self.structs
+                        .get(name)
+                        .map_or(8, |fields| fields.values().map(|f| f.size).sum::<u32>())
                 }
             },
             _ => 8, // pointers
@@ -1253,7 +1421,10 @@ impl AsmGenerator {
     }
 
     /// Return the layout for a struct type, computing field offsets.
-    fn compute_struct_layout(&self, fields: &[ast::StructField]) -> std::collections::HashMap<String, FieldInfo> {
+    fn compute_struct_layout(
+        &self,
+        fields: &[ast::StructField],
+    ) -> std::collections::HashMap<String, FieldInfo> {
         let mut layout = std::collections::HashMap::new();
         let mut offset: u32 = 0;
         for field in fields {
@@ -1267,8 +1438,13 @@ impl AsmGenerator {
 }
 
 fn is_negative_expression(expression: &Expression) -> bool {
-    matches!(expression, Expression::UnaryOp { op: UnaryOp::Neg, .. })
-        || matches!(expression, Expression::IntLiteral(value) if value.starts_with('-'))
+    matches!(
+        expression,
+        Expression::UnaryOp {
+            op: UnaryOp::Neg,
+            ..
+        }
+    ) || matches!(expression, Expression::IntLiteral(value) if value.starts_with('-'))
 }
 
 fn asm_escape(s: &str) -> String {
@@ -1314,9 +1490,7 @@ mod tests {
 
     #[test]
     fn emits_asm_foreign_block() {
-        let output = transpile_source(
-            "#asm\nmy_func:\n    retq\n#endasm\nvar x i32 := 1\nput x",
-        );
+        let output = transpile_source("#asm\nmy_func:\n    retq\n#endasm\nvar x i32 := 1\nput x");
         assert!(output.contains("my_func:"));
     }
 
@@ -1339,25 +1513,23 @@ mod tests {
             r#"var name string := "Poly"
 put name"#,
         );
-        // String variable is stored as a pointer; put goes through _print_int
-        assert!(output.contains("callq _print_int"));
+        // String variables hold pointers: put must use the strlen-based
+        // sys_write path, never _print_int (which would print the address).
         assert!(output.contains("leaq str_"));
+        assert!(!output.contains("callq _print_int"));
     }
 
     #[test]
     fn supports_if_else() {
-        let output = transpile_source(
-            "var x i32 := 10\nif x > 5,\n    put 1\nelse\n    put 0\nend if",
-        );
+        let output =
+            transpile_source("var x i32 := 10\nif x > 5,\n    put 1\nelse\n    put 0\nend if");
         assert!(output.contains("jz"));
         assert!(output.contains("jmp"));
     }
 
     #[test]
     fn supports_while_loop() {
-        let output = transpile_source(
-            "var i i32 := 0\nwhile i < 5\n    i := i + 1\nend while",
-        );
+        let output = transpile_source("var i i32 := 0\nwhile i < 5\n    i := i + 1\nend while");
         assert!(output.contains("while"));
         assert!(output.contains("cmpq"));
     }
@@ -1407,7 +1579,8 @@ put name"#,
 
     #[test]
     fn function_emission() {
-        let output = transpile_source("fn double(v: i32): i32\n    return v * 2\nend fn\nput double(21)");
+        let output =
+            transpile_source("fn double(v: i32): i32\n    return v * 2\nend fn\nput double(21)");
         assert!(output.contains(".globl double"));
         assert!(output.contains("double:"));
         assert!(output.contains("retq"));

@@ -23,7 +23,10 @@ impl Target {
             "rust" | "rs" => Ok(Target::Rust),
             "c" => Ok(Target::C),
             "asm" | "s" | "S" => Ok(Target::Asm),
-            other => bail!("Unknown target '{}'. Supported targets: rust, c, asm", other),
+            other => bail!(
+                "Unknown target '{}'. Supported targets: rust, c, asm",
+                other
+            ),
         }
     }
 
@@ -85,12 +88,16 @@ fn main() -> Result<()> {
         eprintln!("  --emit-rust       Print transpiled Rust instead of compiling");
         eprintln!("  --emit-c          Print transpiled C instead of compiling");
         eprintln!("  --emit-asm        Print transpiled x86-64 assembly instead of compiling");
-        eprintln!("  --intermediate-representation  Print the IR pipeline output");
+        eprintln!(
+            "  --intermediate-representation  Print the IR pipeline output (rust target only)"
+        );
         eprintln!("  --ir                           Alias for --intermediate-representation");
-        eprintln!("  --source-map      Print the generated source map");
-        eprintln!("  --format          Format output with rustfmt");
-        eprintln!("  --diff            Show diff between unformatted and formatted");
-        eprintln!("  --watch           Watch file and re-transpile on changes");
+        eprintln!("  --source-map      Print the generated source map (rust target only)");
+        eprintln!("  --format          Format output with rustfmt (rust target only)");
+        eprintln!(
+            "  --diff            Show diff between unformatted and formatted (rust target only)"
+        );
+        eprintln!("  --watch           Watch file and re-transpile on changes (rust target only)");
         eprintln!(
             "  --project         Generate a Cargo project (usage: --project <dir> <file.poly>)"
         );
@@ -114,10 +121,16 @@ fn main() -> Result<()> {
             println!("  --emit-rust       Print transpiled Rust instead of compiling");
             println!("  --emit-c          Print transpiled C instead of compiling");
             println!("  --emit-asm        Print transpiled x86-64 assembly instead of compiling");
-            println!("  --intermediate-representation  Print the IR pipeline output");
+            println!(
+                "  --intermediate-representation  Print the IR pipeline output (rust target only)"
+            );
             println!("  --ir                           Alias for --intermediate-representation");
-            println!("  --source-map      Print the generated source map");
-            println!("  --format          Format output with rustfmt");
+            println!("  --source-map      Print the generated source map (rust target only)");
+            println!("  --format          Format output with rustfmt (rust target only)");
+            println!("  --diff            Show diff between unformatted and formatted (rust target only)");
+            println!(
+                "  --watch           Watch file and re-transpile on changes (rust target only)"
+            );
             println!(
                 "  --project         Generate a Cargo project (usage: --project <dir> <file.poly>)"
             );
@@ -529,11 +542,7 @@ fn main() -> Result<()> {
                         .map_err(|e| anyhow::anyhow!(e))?;
                     std::fs::write(&output_path, &code)
                         .with_context(|| format!("Failed to write {}", output_path.display()))?;
-                    println!(
-                        "Generated {} -> {}",
-                        path.display(),
-                        output_path.display()
-                    );
+                    println!("Generated {} -> {}", path.display(), output_path.display());
                 }
             }
             Ok(())
@@ -1016,7 +1025,10 @@ run: main\n\
 \n\
 clean:\n\
 \trm -f main main.o\n",
-        source_path.file_name().unwrap_or_default().to_string_lossy()
+        source_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
     );
     std::fs::write(output_dir.join("Makefile"), &makefile)
         .with_context(|| format!("Failed to write Makefile in {}", output_dir.display()))?;
@@ -1036,7 +1048,10 @@ make\n\
 ```\n\
 make run\n\
 ```\n",
-        source_path.file_name().unwrap_or_default().to_string_lossy()
+        source_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
     );
     std::fs::write(output_dir.join("README.md"), &readme)
         .with_context(|| format!("Failed to write README.md in {}", output_dir.display()))?;

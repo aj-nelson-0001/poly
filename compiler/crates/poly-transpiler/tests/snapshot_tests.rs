@@ -13,8 +13,6 @@
 
 use std::path::{Path, PathBuf};
 
-use poly_lexer::Lexer;
-use poly_parser::Parser;
 use poly_transpiler::Transpiler;
 
 fn update_snapshots_requested() -> bool {
@@ -72,7 +70,7 @@ fn transpile_source(source: &str, target: &str) -> Result<String, String> {
 fn check_snapshot(name: &str, output: &str) {
     let path = snapshot_path(name);
     if update_snapshots_requested() {
-        std::fs::create_dir_all(&snapshot_dir()).expect("create snapshot dir");
+        std::fs::create_dir_all(snapshot_dir()).expect("create snapshot dir");
         std::fs::write(&path, output).expect("write snapshot");
         return;
     }

@@ -63,7 +63,7 @@ impl StackFrame {
         let loc = Location::Stack(self.next_offset);
         self.locals.insert(name.to_string(), loc);
         // Round up to next multiple of 8
-        let slots = (total_size + 7) / 8;
+        let slots = total_size.div_ceil(8);
         self.next_offset += slots * 8;
         loc
     }
@@ -337,7 +337,7 @@ impl AsmGenerator {
                             .values()
                             .map(|f| {
                                 // Round each field up to 8-byte slot
-                                ((f.size + 7) / 8) * 8
+                                f.size.div_ceil(8) * 8
                             })
                             .sum();
                         frame.allocate_struct(name, total)
@@ -589,12 +589,8 @@ impl AsmGenerator {
                     self.output.push_str("    movq %r12, %rax\n");
                     self.move_to_loc(Location::Reg("%rax"), saved_r12, frame)?;
                     self.move_to_loc(end_loc, Location::Reg("%r12"), frame)?;
-                    let step_val: i64 = if let Some(s) = step {
-                        if let Expression::IntLiteral(v) = s {
-                            v.parse().unwrap_or(1)
-                        } else {
-                            1
-                        }
+                    let step_val: i64 = if let Some(Expression::IntLiteral(v)) = step {
+                        v.parse().unwrap_or(1)
                     } else {
                         1
                     };
@@ -879,7 +875,7 @@ impl AsmGenerator {
                     .get(name)
                     .ok_or_else(|| format!("Unknown struct `{name}`"))?
                     .clone();
-                let total: u32 = layout_init.values().map(|f| ((f.size + 7) / 8) * 8).sum();
+                let total: u32 = layout_init.values().map(|f| f.size.div_ceil(8) * 8).sum();
                 let base = frame.allocate_struct(&format!("__struct_{name}"), total);
                 // Collect (offset, expr) pairs to avoid borrow conflicts.
                 let field_offsets: Vec<(u32, Expression)> = {
@@ -1108,14 +1104,15 @@ impl AsmGenerator {
                 let loc = frame.allocate(name);
                 self.move_to_loc(scrut_loc, loc, frame)?;
             }
-            ast::Pattern::Enum { inner, .. } => {
-                if let Some(inner_patterns) = inner {
-                    if let Location::Stack(base) = scrut_loc {
-                        // Each payload value is at base + 8 + i * 8
-                        for (i, pat) in inner_patterns.iter().enumerate() {
-                            let data_loc = Location::Stack(base + 8 + (i as u32) * 8);
-                            self.bind_pattern_vars(pat, data_loc, frame)?;
-                        }
+            ast::Pattern::Enum {
+                inner: Some(inner_patterns),
+                ..
+            } => {
+                if let Location::Stack(base) = scrut_loc {
+                    // Each payload value is at base + 8 + i * 8
+                    for (i, pat) in inner_patterns.iter().enumerate() {
+                        let data_loc = Location::Stack(base + 8 + (i as u32) * 8);
+                        self.bind_pattern_vars(pat, data_loc, frame)?;
                     }
                 }
             }

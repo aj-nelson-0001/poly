@@ -6,7 +6,6 @@
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::fmt::Write;
 
 use crate::intermediate_representation::*;
 
@@ -63,7 +62,7 @@ impl IntermediateRepresentationCodeGen {
     pub fn new() -> Self {
         Self {
             indent: 0,
-            output: String::new(),
+            output: String::with_capacity(4096),
             string_scopes: RefCell::new(vec![HashSet::new()]),
             type_scopes: RefCell::new(vec![HashMap::new()]),
             vec_scopes: RefCell::new(vec![HashSet::new()]),
@@ -373,7 +372,7 @@ impl IntermediateRepresentationCodeGen {
             self.writeln("#[tokio::main]");
         }
         let async_prefix = if function.is_async { "async " } else { "" };
-        self.writeln(&format!(
+        self.writeln_fmt(format_args!(
             "{}fn {}{}({}){} {{",
             async_prefix,
             function.name,
@@ -410,16 +409,16 @@ impl IntermediateRepresentationCodeGen {
 
     fn gen_struct(&mut self, structure: &Struct) {
         let generics = self.gen_generics(&structure.generics);
-        self.writeln(&format!("struct {}{} {{", structure.name, generics));
+        self.writeln_fmt(format_args!("struct {}{} {{", structure.name, generics));
         self.indent += 1;
         for field in &structure.fields {
-            self.writeln(&format!("{}: {},", field.name, self.gen_type(&field.ty)));
+            self.writeln_fmt(format_args!("{}: {},", field.name, self.gen_type(&field.ty)));
         }
         self.indent -= 1;
         self.writeln("}");
 
         if !structure.methods.is_empty() {
-            self.writeln(&format!("impl{generics} {} {{", structure.name));
+            self.writeln_fmt(format_args!("impl{generics} {} {{", structure.name));
             self.indent += 1;
             for method in &structure.methods {
                 self.gen_function(method, true);
@@ -431,11 +430,10 @@ impl IntermediateRepresentationCodeGen {
 
     fn gen_enum(&mut self, enumeration: &Enum) {
         self.writeln("#[derive(Debug, Clone)]");
-        self.writeln(&format!("enum {} {{", enumeration.name));
+        self.writeln_fmt(format_args!("enum {} {{", enumeration.name));
         self.indent += 1;
         for variant in &enumeration.variants {
-            if variant.is_struct {
-                self.writeln(&format!("{} {{", variant.name));
+            if variant.is_struct {                    self.writeln_fmt(format_args!("{} {{", variant.name));
                 self.indent += 1;
                 for field in &variant.fields {
                     let ty = if matches!(&field.ty, Type::Named(name) if name == &enumeration.name)
@@ -444,12 +442,12 @@ impl IntermediateRepresentationCodeGen {
                     } else {
                         self.gen_type(&field.ty)
                     };
-                    self.writeln(&format!("{}: {},", field.name, ty));
+                    self.writeln_fmt(format_args!("{}: {},", field.name, ty));
                 }
                 self.indent -= 1;
                 self.writeln("},");
             } else if variant.fields.is_empty() {
-                self.writeln(&format!("{},", variant.name));
+                self.writeln_fmt(format_args!("{},", variant.name));
             } else {
                 let types: Vec<String> = variant
                     .fields
@@ -467,14 +465,14 @@ impl IntermediateRepresentationCodeGen {
                         }
                     })
                     .collect();
-                self.writeln(&format!("{}({}),", variant.name, types.join(", ")));
+                self.writeln_fmt(format_args!("{}({}),", variant.name, types.join(", ")));
             }
         }
         self.indent -= 1;
         self.writeln("}");
 
         if !enumeration.methods.is_empty() {
-            self.writeln(&format!("impl {} {{", enumeration.name));
+            self.writeln_fmt(format_args!("impl {} {{", enumeration.name));
             self.indent += 1;
             for method in &enumeration.methods {
                 self.gen_function(method, true);
@@ -576,16 +574,16 @@ impl IntermediateRepresentationCodeGen {
                     Some(value) => {
                         let value_str = self.gen_decl_value(name, value, ty.as_ref());
                         if ty.is_some() {
-                            self.writeln(&format!("let mut {}: {} = {};", name, ty_str, value_str));
+                            self.writeln_fmt(format_args!("let mut {}: {} = {};", name, ty_str, value_str));
                         } else {
-                            self.writeln(&format!("let mut {} = {};", name, value_str));
+                            self.writeln_fmt(format_args!("let mut {} = {};", name, value_str));
                         }
                     }
                     None => {
                         if ty.is_some() {
-                            self.writeln(&format!("let mut {}: {};", name, ty_str));
+                            self.writeln_fmt(format_args!("let mut {}: {};", name, ty_str));
                         } else {
-                            self.writeln(&format!("let mut {};", name));
+                            self.writeln_fmt(format_args!("let mut {};", name));
                         }
                     }
                 }
@@ -616,9 +614,9 @@ impl IntermediateRepresentationCodeGen {
                 let ty_str = ty.as_ref().map(|ty| self.gen_type(ty)).unwrap_or_default();
                 let value_str = self.gen_decl_value(name, value, ty.as_ref());
                 if ty.is_some() {
-                    self.writeln(&format!("let {}: {} = {};", name, ty_str, value_str));
+                    self.writeln_fmt(format_args!("let {}: {} = {};", name, ty_str, value_str));
                 } else {
-                    self.writeln(&format!("let {} = {};", name, value_str));
+                    self.writeln_fmt(format_args!("let {} = {};", name, value_str));
                 }
             }
             Statement::Assignment { target, value } => {
@@ -638,7 +636,7 @@ impl IntermediateRepresentationCodeGen {
                 }
                 let target_str = self.gen_expr(target);
                 let value_str = self.gen_expr(value);
-                self.writeln(&format!("{} = {};", target_str, value_str));
+                self.writeln_fmt(format_args!("{} = {};", target_str, value_str));
             }
             Statement::Mutation { target, op, value } => {
                 let target_str = self.gen_expr(target);
@@ -662,7 +660,7 @@ impl IntermediateRepresentationCodeGen {
                 } else {
                     amount
                 };
-                self.writeln(&format!("{} {} {};", target_str, operator, amount));
+                self.writeln_fmt(format_args!("{} {} {};", target_str, operator, amount));
             }
             Statement::Return(value) => match value {
                 Some(value) => {
@@ -671,7 +669,7 @@ impl IntermediateRepresentationCodeGen {
                     *self.closure_move.borrow_mut() = true;
                     let rendered = self.gen_expr(value);
                     *self.closure_move.borrow_mut() = false;
-                    self.writeln(&format!("return {};", rendered));
+                    self.writeln_fmt(format_args!("return {};", rendered));
                 }
                 None => self.writeln("return;"),
             },
@@ -680,15 +678,15 @@ impl IntermediateRepresentationCodeGen {
             Statement::Put { expr, redirect } => self.gen_put(expr, redirect.as_ref()),
             Statement::Error(expr) => {
                 let expr_str = self.gen_expr(expr);
-                self.writeln(&format!("eprintln!(\"[ERROR] {{}}\", {});", expr_str));
+                self.writeln_fmt(format_args!("eprintln!(\"[ERROR] {{}}\", {});", expr_str));
             }
             Statement::Warn(expr) => {
                 let expr_str = self.gen_expr(expr);
-                self.writeln(&format!("eprintln!(\"[WARN] {{}}\", {});", expr_str));
+                self.writeln_fmt(format_args!("eprintln!(\"[WARN] {{}}\", {});", expr_str));
             }
             Statement::Info(expr) => {
                 let expr_str = self.gen_expr(expr);
-                self.writeln(&format!("eprintln!(\"[INFO] {{}}\", {});", expr_str));
+                self.writeln_fmt(format_args!("eprintln!(\"[INFO] {{}}\", {});", expr_str));
             }
             Statement::Expression(expr) => {
                 if let Expr::BinaryOp { op, .. } = expr {
@@ -705,7 +703,7 @@ impl IntermediateRepresentationCodeGen {
                 {
                     // While loop shape (parser encodes while as if-without-else).
                     let cond = self.gen_expr(condition);
-                    self.writeln(&format!("while {} {{", cond));
+                    self.writeln_fmt(format_args!("while {} {{", cond));
                     self.indent += 1;
                     self.enter_scope();
                     for statement in then_block {
@@ -725,7 +723,7 @@ impl IntermediateRepresentationCodeGen {
                     | Expr::Match { .. } => {
                         self.writeln(&expr_str);
                     }
-                    _ => self.writeln(&format!("{};", expr_str)),
+                    _ => self.writeln_fmt(format_args!("{};", expr_str)),
                 }
             }
             Statement::If {
@@ -736,7 +734,7 @@ impl IntermediateRepresentationCodeGen {
             } => {
                 if *is_while {
                     let cond = self.gen_expr(condition);
-                    self.writeln(&format!("while {} {{", cond));
+                    self.writeln_fmt(format_args!("while {} {{", cond));
                     self.indent += 1;
                     self.enter_scope();
                     for statement in then_block {
@@ -748,7 +746,7 @@ impl IntermediateRepresentationCodeGen {
                     return;
                 }
                 let cond = self.gen_expr(condition);
-                self.writeln(&format!("if {} {{", cond));
+                self.writeln_fmt(format_args!("if {} {{", cond));
                 self.indent += 1;
                 self.enter_scope();
                 for statement in then_block {
@@ -778,7 +776,7 @@ impl IntermediateRepresentationCodeGen {
                 } else {
                     scrutinee_str
                 };
-                self.writeln(&format!("match {} {{", scrutinee_str));
+                self.writeln_fmt(format_args!("match {} {{", scrutinee_str));
                 self.indent += 1;
                 for arm in arms {
                     let (pattern_str, pattern_guards) = self.gen_pattern_with_guards(&arm.pattern);
@@ -801,11 +799,19 @@ impl IntermediateRepresentationCodeGen {
                                 let generated = self.gen_statement_str(statement);
                                 self.indent = saved;
                                 self.output = temp;
-                                block.push_str(&format!("{}{}\n", self.indent_str(), generated));
+                                // Write indent directly to avoid String allocation
+                                for _ in 0..self.indent {
+                                    block.push_str("    ");
+                                }
+                                block.push_str(&generated);
+                                block.push('\n');
                             }
                             self.exit_scope();
                             self.indent -= 1;
-                            block.push_str(&format!("{}}}", self.indent_str()));
+                            for _ in 0..self.indent {
+                                block.push_str("    ");
+                            }
+                            block.push('}');
                             block
                         }
                     };
@@ -985,14 +991,14 @@ impl IntermediateRepresentationCodeGen {
                             content
                         )
                     };
-                    self.writeln(&format!("std::fs::write({}, {}).unwrap();", path, value));
+                    self.writeln_fmt(format_args!("std::fs::write({}, {}).unwrap();", path, value));
                     return;
                 }
                 BinaryOp::Shr => {
                     let content = self.gen_expr(left);
                     let path = self.gen_expr(right);
                     *self.needs_io_write.borrow_mut() = true;
-                    self.writeln(&format!(
+                    self.writeln_fmt(format_args!(
                         "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{}\", {}).unwrap(); }}",
                         path, self.put_format_spec(left), content
                     ));
@@ -1008,7 +1014,7 @@ impl IntermediateRepresentationCodeGen {
             Some(Redirect::Write(path)) => {
                 let path_str = self.gen_expr(path);
                 *self.needs_io_write.borrow_mut() = true;
-                self.writeln(&format!(
+                self.writeln_fmt(format_args!(
                     "std::fs::write({}, format!(\"{}\\n\", {})).unwrap();",
                     path_str, spec, expr_str
                 ));
@@ -1016,13 +1022,13 @@ impl IntermediateRepresentationCodeGen {
             Some(Redirect::Append(path)) => {
                 let path_str = self.gen_expr(path);
                 *self.needs_io_write.borrow_mut() = true;
-                self.writeln(&format!(
+                self.writeln_fmt(format_args!(
                     "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{}\", {}).unwrap(); }}",
                     path_str, spec, expr_str
                 ));
             }
             None => {
-                self.writeln(&format!("println!(\"{}\", {});", spec, expr_str));
+                self.writeln_fmt(format_args!("println!(\"{}\", {});", spec, expr_str));
             }
         }
     }
@@ -1036,7 +1042,10 @@ impl IntermediateRepresentationCodeGen {
                 format!("String::from({:?})", value)
             }
             Expr::Literal(Literal::Char(value)) => format!("{:?}", value),
-            Expr::Literal(Literal::Bool(value)) => value.to_string(),
+            Expr::Literal(Literal::Bool(value)) => {
+                // Avoid String allocation for boolean literals
+                if *value { "true".to_string() } else { "false".to_string() }
+            }
             Expr::Literal(Literal::Bytes(bytes)) => {
                 let hex: Vec<String> = bytes.iter().map(|b| format!("0x{:02X}", b)).collect();
                 format!("vec![{}]", hex.join(", "))
@@ -1055,10 +1064,11 @@ impl IntermediateRepresentationCodeGen {
                 } else if self.string_constants.contains(name) {
                     format!("{}.to_string()", name)
                 } else {
-                    self.enum_variants
-                        .get(name)
-                        .cloned()
-                        .unwrap_or_else(|| name.clone())
+                    // Avoid clone when returning the name as-is (most common case)
+                    match self.enum_variants.get(name) {
+                        Some(qualified) => qualified.clone(),
+                        None => name.clone(),
+                    }
                 }
             }
             Expr::BinaryOp { op, left, right } => {
@@ -1811,7 +1821,7 @@ impl IntermediateRepresentationCodeGen {
         ranges: &[LoopRangePart],
         body: &[Statement],
     ) -> String {
-        let mut result = String::new();
+        let mut result = String::with_capacity(128);
         if ranges.len() == 1 {
             match &ranges[0] {
                 LoopRangePart::Range {
@@ -1846,7 +1856,8 @@ impl IntermediateRepresentationCodeGen {
                     } else {
                         range
                     };
-                    result.push_str(&format!("for {} in {} {{\n", variable, iterator));
+                    use std::fmt::Write;
+                    writeln!(result, "for {} in {} {{", variable, iterator).unwrap();
                 }
                 LoopRangePart::Value(value) => {
                     // Collection loops iterate by value (`iter().cloned()`) so
@@ -1886,7 +1897,8 @@ impl IntermediateRepresentationCodeGen {
                     } else {
                         format!("[{}]", self.gen_expr(value))
                     };
-                    result.push_str(&format!("for {} in {} {{\n", variable, iterator));
+                    use std::fmt::Write;
+                    writeln!(result, "for {} in {} {{", variable, iterator).unwrap();
                 }
             }
         } else {
@@ -1938,11 +1950,13 @@ impl IntermediateRepresentationCodeGen {
                 .into_iter()
                 .reduce(|left, right| format!("{}.chain({})", left, right))
                 .unwrap_or_else(|| "std::iter::empty()".to_string());
-            result.push_str(&format!("for {} in {} {{\n", variable, chained));
+            use std::fmt::Write;
+            writeln!(result, "for {} in {} {{", variable, chained).unwrap();
         }
         self.enter_scope();
         for statement in body {
-            result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+            use std::fmt::Write;
+            writeln!(result, "    {}", self.gen_statement_str(statement)).unwrap();
         }
         self.exit_scope();
         result.push('}');
@@ -3301,13 +3315,25 @@ impl IntermediateRepresentationCodeGen {
             .is_some_and(|name| name.starts_with("Set<"))
     }
 
-    fn indent_str(&self) -> String {
-        "    ".repeat(self.indent)
+    /// Write a line with indent. Writes indent characters directly to avoid
+    /// allocating a String via `repeat()` on every line.
+    fn writeln(&mut self, s: &str) {
+        for _ in 0..self.indent {
+            self.output.push_str("    ");
+        }
+        self.output.push_str(s);
+        self.output.push('\n');
     }
 
-    fn writeln(&mut self, s: &str) {
-        let indent = self.indent_str();
-        writeln!(self.output, "{}{}", indent, s).unwrap();
+    /// Write a formatted line directly to the output buffer, avoiding the
+    /// intermediate String allocation from `format!`.
+    fn writeln_fmt(&mut self, args: std::fmt::Arguments<'_>) {
+        for _ in 0..self.indent {
+            self.output.push_str("    ");
+        }
+        use std::fmt::Write;
+        self.output.write_fmt(args).unwrap();
+        self.output.push('\n');
     }
 }
 

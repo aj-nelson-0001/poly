@@ -17,6 +17,12 @@ All notable changes to the Poly language compiler will be documented in this fil
 - Added cross-platform Rust/C CI for Linux, macOS, and Windows. The CLI honors
   `POLY_CC`, with documented platform compiler fallbacks.
 
+### Performance
+
+- Optimized IR codegen output path: pre-allocated buffer, direct indent
+  writing (eliminated `String::repeat()` per line), `writeln_fmt` to avoid
+  intermediate `format!()` allocations, and loop body pre-allocation.
+
 ### Fixed
 
 - Removed the unfinished `process_config` builtin lowering that silently

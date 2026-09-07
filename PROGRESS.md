@@ -1,7 +1,76 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-08-30.
+Last updated: 2026-09-06.
+
+## Codegen optimizations and project audit (2026-09-06)
+
+Session audit of the full project: build status, test coverage, clippy
+warnings, missing features, documentation bugs, and codegen performance
+optimizations.
+
+### Follow-up resolution (2026-09-07)
+
+- **Clippy strict CI restored**: fixed all 8 warnings — three
+  `manual_div_ceil` (`.div_ceil(8)` for slot rounding), two `collapsible_match`
+  (collapsed nested `if let` into outer patterns) in `poly-asm-codegen`, and
+  three in `snapshot_tests.rs` (two unused imports, one needless borrow).
+  `cargo clippy --workspace --all-targets -- -D warnings` now passes.
+- **Tutorial `with validate` corrected**: the three tutorial presentations
+  (input section, complete example, summary) now use a loop-based validation
+  pattern with a note that `with validate` is a parser-only compatibility form
+  per the v2 spec. The replacement examples were verified with `--check` and a
+  runtime run (valid input, re-prompt on invalid, masked password re-prompt).
+- **Doc audit note**: `scripts/check_poly_examples.py` reports 43 pre-existing
+  unmarked failures in historical v1 docs (verified identical before and after
+  these changes; the tutorial itself has 0 failures). `check_markdown.py`
+  failures come from the two untracked report files using triple-backtick
+  fences.
+- Verified: 383/383 tests pass, snapshot tests byte-identical, strict clippy
+  clean.
+
+### Project audit
+
+- **Build**: 0 errors, 383 tests pass, 0 failures.
+- **Clippy**: 8 warnings total (5 in poly-asm-codegen, 3 in poly-transpiler
+test). Would fail strict CI (`-D warnings`).
+- **Missing features**: JS backend (design only), C++ backend (reserved),
+C backend gaps (stdin, closures, tuples, pattern matching), ASM backend
+gaps (for-in loops, dereferencing).
+- **Documentation bug**: `POLY_TUTORIAL.md` documents `with validate` as a
+working feature, but it is a parser-only stub — the validation closure is
+never executed at runtime. The v2 spec explicitly states this is "not part
+of the maintained runnable v2 API."
+
+### Codegen optimizations (poly-intermediate-representation)
+
+All changes internal to `codegen.rs`. Poly language and generated output
+are unchanged. 383 tests pass including snapshot tests.
+
+1. **Output buffer pre-allocation**: `String::with_capacity(4096)` instead
+of `String::new()` — avoids ~log₂(output_size) reallocations.
+2. **Indent writing**: Write indent characters directly via `push_str("
+    ")` in a loop instead of `String::repeat(self.indent)` — eliminates
+one allocation per output line.
+3. **`writeln_fmt` method**: Writes indent + formatted args directly to the
+output buffer, avoiding the intermediate `String` from `format!()`. Applied
+to all hot paths: VarDecl, LetDecl, Assignment, Mutation, Return, Put,
+Error/Warn/Info, If/While/Match, gen_put, gen_function, gen_struct,
+gen_enum.
+4. **`gen_loop_range` optimization**: Uses `writeln!` directly on the result
+string instead of `push_str(&format!(...))`. Pre-allocates
+`String::with_capacity(128)` for loop bodies.
+5. **Boolean literal optimization**: Returns `&str` constants for `true`/
+`false` instead of `value.to_string()`.
+6. **Identifier lookup optimization**: Avoids unnecessary `.cloned()` in the
+common (non-enum) case.
+
+### Verification
+
+- `cargo test --workspace`: 383 passed, 0 failed.
+- `cargo clippy -p poly-intermediate-representation --all-targets`: clean
+(no new warnings).
+- Snapshot tests: all pass (byte-for-byte output verification).
 
 ## v2 audit fixes, snapshot tests, and JS design (2026-08-30)
 

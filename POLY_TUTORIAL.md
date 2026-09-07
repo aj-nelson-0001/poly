@@ -114,10 +114,23 @@ end match
 
 ### Input with Validation
 
-Use `with validate` to validate input:
+> **Note:** The `with validate` clause is a parser-only compatibility form and
+> is not part of the maintained runnable v2 API — the closure is never executed
+> at runtime (see the v2 spec). Validate input with a loop instead:
 
 ~~~poly
-var age i32 := get with validate |x| x >= 1 && x <= 150
+put "Enter age: "
+var done bool := false
+var age i32 := 0
+while not done
+    var input i32 := get --as i32
+    if input >= 1 && input <= 150
+        age := input
+        done := true
+    else
+        put "Age must be between 1 and 150"
+    end if
+end while
 ~~~
 
 ### Delimiter-Based Input
@@ -243,17 +256,37 @@ fn main()
     put "=== User Registration ==="
     put ""
     
-    # Get name with validation
-    put "Enter your name: "
-    var name ustring := get with validate |n| n.len() >= 2
+    # Get name (validated with a loop)
+    put "Enter your name (2+ characters): "
+    var name ustring := ""
+    while name.len() < 2
+        var input ustring := get
+        if input.len() >= 2
+            name := input
+        else
+            put "Name must be at least 2 characters"
+        end if
+    end while
     
-    # Get email with validation
+    # Get email (validated with a loop)
     put "Enter your email: "
-    var email ustring := get with validate |e| e.contains(unicode "@")
+    var email ustring := ""
+    while email.contains(unicode "@") = false
+        var input ustring := get
+        if input.contains(unicode "@")
+            email := input
+        else
+            put "Email must contain @"
+        end if
+    end while
     
     # Get password (mask suppresses echo on Unix terminals)
-    put "Enter password: "
-    var password ustring := get --mask unicode "*" with validate |p| p.len() >= 8
+    put "Enter password (8+ characters): "
+    var password ustring := get --mask unicode "*"
+    while password.len() < 8
+        put "Password must be at least 8 characters"
+        password := get --mask unicode "*"
+    end while
     
     # Confirm registration
     put ""
@@ -353,7 +386,8 @@ end loop
 
 - **Output**: Use `put` for console output (always adds a newline)
 - **Input**: Use `get` with flags like `--default`, `--mask`, `--timeout`, `--until`
-- **Validation**: Use `with validate` for input validation
+- **Validation**: Validate input with a loop (`with validate` is not part of
+  the runnable v2 API)
 - **Errors**: Use `Result<T, E>` with `Ok(value)` and `Error(e)`
 - **Pattern Matching**: Use `match` to handle different cases
 - **Error Propagation**: Use `try` to propagate errors

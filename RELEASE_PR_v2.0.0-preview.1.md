@@ -6,6 +6,9 @@
 
 **Branch:** `v1.7.3-audit-fixes` → `master`
 
+**Evidence refreshed:** 2026-09-07 (includes the keyword-operator migration
+and playground/VS Code sync described under "Commit Structure").
+
 ---
 
 ## Release Evidence
@@ -13,7 +16,7 @@
 ### Compiler & Toolchain
 
 - **Poly version:** 2.0.0-preview.1
-- **Rust toolchain:** `1.93.0` (pinned via `rust-toolchain.toml`)
+- **Rust toolchain:** `1.98.0` (pinned via `rust-toolchain.toml`)
 - **C compiler:** System default (`cc` / `gcc`)
 
 ### Verification Commands & Results
@@ -24,20 +27,24 @@ All commands executed from a clean checkout on the `v1.7.3-audit-fixes` branch:
 |-------|---------|--------|
 | Format | `cargo fmt --all -- --check` | ✅ Pass |
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ Pass |
-| Tests | `cargo test --workspace -- --test-threads=1` | ✅ 99 tests passed, 0 failed |
+| Tests | `cargo test --workspace` | ✅ 387 tests passed, 0 failed |
 | Type check | `cargo check --workspace --all-targets` | ✅ Pass |
-| Markdown | `python3 scripts/check_markdown.py` | ✅ 46 files, 1298 fence markers, no violations |
-| Examples | `python3 scripts/check_poly_examples.py` (9 docs) | ✅ 45 blocks checked, 18 passed, 27 marked fragments |
+| Markdown | `python3 scripts/check_markdown.py` | ✅ 49 files, 1,312 tilde fence markers, no violations |
+| Examples | `python3 scripts/check_poly_examples.py` | ✅ 565 blocks: 229 passed, 336 marked fragments, 0 unmarked failures |
+| Playground | All 9 embedded examples pass `poly --check`; wasm rebuilt and smoke-tested (keyword ops transpile, legacy symbols rejected) | ✅ Pass |
 
 ### Test Summary
 
-- **poly-lexer**: 33 tests ✅
-- **poly-parser**: 26 tests ✅ (including 3 fuzz recovery)
-- **poly-transpiler**: 24 tests ✅ (checker + codegen + source map)
+- **poly-cli**: 110 tests ✅ (12 unit, 53 error-handling, 7 error-recovery, 38 integration)
+- **poly-transpiler**: 90 tests ✅ (84 unit, 3 fuzz recovery, 3 snapshot)
+- **poly-parser**: 60 tests ✅ (56 unit, 4 fuzz recovery)
+- **poly-lexer**: 38 tests ✅ (including keyword-operator coverage)
+- **poly-intermediate-representation**: 45 tests ✅
+- **poly-asm-codegen**: 14 tests ✅
+- **poly-lsp**: 17 tests ✅
 - **poly-types**: 9 tests ✅
 - **poly-wasm**: 3 tests ✅
-- **poly-c-codegen**: 0 doc tests ✅
-- **Fuzz recovery**: 3 tests ✅
+- **poly-c-codegen**: 1 test ✅
 
 ### Runtime Fixtures
 
@@ -151,16 +158,22 @@ a70c4f5 feat: target-aware Rust/C pipeline, language features, and compiler impr
 
 The previous 36-commit history is preserved on the `backup-audit-fixes` branch for reference.
 
+**Since the restructure**, the branch has gained the keyword-operator
+migration (`feat!`), example/fixture migration, documentation migration and
+modernization, and the playground/VS Code sync (`fix:`). All evidence above
+reflects the branch tip.
+
 ---
 
 ## Checklist
 
 - [x] `cargo fmt --all -- --check`
 - [x] `cargo clippy --workspace --all-targets -- -D warnings`
-- [x] `cargo test --workspace -- --test-threads=1` (99/99 passed)
+- [x] `cargo test --workspace` (387/387 passed)
 - [x] `cargo check --workspace --all-targets`
-- [x] `python3 scripts/check_markdown.py` (46 files clean)
-- [x] `python3 scripts/check_poly_examples.py` (9 docs, 45 blocks)
+- [x] `python3 scripts/check_markdown.py` (49 files clean)
+- [x] `python3 scripts/check_poly_examples.py` (565 blocks, 0 unmarked failures)
+- [x] All 9 playground examples pass `poly --check`; `poly.wasm` rebuilt and smoke-tested
 - [x] Rust examples checked, native fixtures compiled
 - [x] C fixture checked, built, and executed
 - [x] Mixed target fixture verified
@@ -190,8 +203,9 @@ The previous 36-commit history is preserved on the `backup-audit-fixes` branch f
 1. **Simple code** (variables, I/O, loops, basic functions): No changes needed
 2. **Complex code** (closures, generics, async, traits): Wrap in `#rust ... #endrust` blocks
 3. **Equality:** Replace `==` with `=`
-4. **Unicode strings:** Use `unicode "text"` instead of `u"text"`
-5. **File append:** Use `put value to "file" -append` instead of `-append` flag on its own
+4. **Operators:** Logical/bitwise/remainder operators are keywords — `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, `shift left/right`; the symbol forms (`&&`, `||`, `!`, `^`, `%`, `&`, `|`, `~`) are rejected with migration diagnostics (`<<`/`>>` remain valid)
+5. **Unicode strings:** Use `unicode "text"` instead of `u"text"`
+6. **File append:** Use `put value to "file" -append` instead of `-append` flag on its own
 
 ### Example
 

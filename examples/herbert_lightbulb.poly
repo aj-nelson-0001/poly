@@ -1,0 +1,60 @@
+# Poly Example: The Herbert Lightbulb Census
+#
+# Research question: how many Herberts does it take to change a light bulb?
+# This program settles it empirically. For each candidate crew size N, it
+# simulates the change and checks every success criterion. Output is
+# deterministic, peer-reviewable, and slightly smug.
+
+fn main()
+    put "=== Herbert Lightbulb Study (IRB approval pending) ==="
+    put ""
+
+    var found i32 := 0
+    var verdict := "inconclusive"
+
+    loop herberts 1..5
+        if simulate(herberts),
+            found := found + 1
+            if found = 1,
+                verdict := "the answer is {herberts}"
+            end if
+            put "crew of {herberts}: SUCCESS"
+        else,
+            put "crew of {herberts}: failure (see incident report)"
+        end if
+    end loop
+
+    put ""
+    put "In a sample of 5 candidates, {found} crew size(s) worked."
+    if found != 1,
+        put "RETRACTION REQUIRED: expected exactly one working crew."
+    else,
+        put "CONCLUSION: {verdict}."
+        put ""
+        put "One. Herbert holds the bulb in place"
+        put "and the world revolves around him."
+    end if
+end fn
+
+# Simulate one bulb change by a crew of `herberts`. Returns true iff the
+# bulb is changed, the ladder survives, and nobody was supervising.
+fn simulate(herberts: i32): bool
+    var bulb_changed bool := herberts >= 1
+    var ladder_held bool := herberts >= 2
+    var herbert_busy bool := false
+
+    while herberts > 1
+        herbert_busy := true
+        break
+    end while
+
+    if bulb_changed and  not ladder_held and  not herbert_busy,
+        return true
+    end if
+
+    if bulb_changed and  ladder_held,
+        return false
+    end if
+
+    return false
+end fn

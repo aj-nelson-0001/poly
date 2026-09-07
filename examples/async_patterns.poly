@@ -55,7 +55,7 @@ impl Database
     end fn
     
     async fn query(self, sql: ustring): Result<Vec<ustring>, ustring>
-        if !self.connected,
+        if not self.connected,
             return Error(unicode "Not connected")
         end if
         

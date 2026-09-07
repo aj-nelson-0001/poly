@@ -81,7 +81,7 @@ end match
 # Test 11: Input with validation
 put "\n=== Test 11: Input with Validation ==="
 put "Enter a number between 1 and 100: "
-var validated i32 := get with validate |x| x >= 1 && x <= 100
+var validated i32 := get with validate |x| x >= 1 and x <= 100
 put "You entered: " + validated
 
 # Test 12: Input with delimiter (--until flag)
@@ -194,7 +194,7 @@ put "This test demonstrates multiple input features combined"
 put "Enter your name (default: Anonymous): "
 var user_name ustring := get --default unicode "Anonymous"
 put "Enter your age: "
-var user_age i32 := get with validate |x| x > 0 && x < 150
+var user_age i32 := get with validate |x| x > 0 and x < 150
 put "Enter your email: "
 var user_email ustring := get with validate |e| e.contains(unicode "@")
 

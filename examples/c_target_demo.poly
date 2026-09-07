@@ -66,18 +66,18 @@ put add(x, y)
 put x - y
 put x * y
 put x / y
-put x % y
+put x mod y
 put ""
 
 # Bitwise operations (avoid >> in put)
 put "-- Bitwise ops --"
 var a i32 := 10
 var b i32 := 12
-var band i32 := a & b
+var band i32 := a bitand b
 put band
-var bor i32 := a | b
+var bor i32 := a bitor b
 put bor
-var bxor i32 := a ^ b
+var bxor i32 := a xor b
 put bxor
 var lshift i32 := a << 2
 put lshift

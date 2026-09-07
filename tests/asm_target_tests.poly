@@ -76,7 +76,7 @@ put found
 
 var odd_sum i32 := 0
 loop n 1..10
-    if n % 2 = 0
+    if n mod 2 = 0
         continue
     end if
     odd_sum := odd_sum + n

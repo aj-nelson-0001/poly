@@ -7,7 +7,7 @@ fn main()
     
     # Test 1: Age validation
     put "Test 1: Age validation"
-    var age i32 := get with validate |x| x >= 1 && x <= 150
+    var age i32 := get with validate |x| x >= 1 and x <= 150
     put "Valid age: " + age.to_string()
     put ""
     
@@ -91,7 +91,7 @@ fn is_valid_email(email: ustring): bool
     loop i 0..email.len() - 1
         if email[i] = unicode '@',
             after_at := true
-        else if after_at && email[i] = unicode '.',
+        else if after_at and email[i] = unicode '.',
             has_dot := true
         end if
     end loop

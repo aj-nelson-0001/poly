@@ -68,10 +68,10 @@ fn classify_number(x: i32): String
     if x = 0,
         return "Zero"
     end if
-    if x > 0 && x <= 10,
+    if x > 0 and x <= 10,
         return "Small positive"
     end if
-    if x > 10 && x <= 100,
+    if x > 10 and x <= 100,
         return "Medium positive"
     end if
     return "Large positive"

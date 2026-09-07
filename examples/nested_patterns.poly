@@ -2,11 +2,11 @@
 
 # FizzBuzz with nested conditions
 fn fizzbuzz(n: i32): string
-    if n % 15 = 0,
+    if n mod 15 = 0,
         return "FizzBuzz"
-    else if n % 3 = 0,
+    else if n mod 3 = 0,
         return "Fizz"
-    else if n % 5 = 0,
+    else if n mod 5 = 0,
         return "Buzz"
     else,
         return str(n)
@@ -45,9 +45,9 @@ end fn
 
 # Simple classification
 fn classify_triangle(a: f64, b: f64, c: f64): string
-    if a = b && b = c,
+    if a = b and b = c,
         return "Equilateral"
-    else if a = b || b = c,
+    else if a = b or b = c,
         return "Isosceles"
     else,
         return "Scalene"
@@ -69,7 +69,7 @@ fn get_status(state: i32, value: i32): string
             return "Processing: low value"
         end if
     else if state = 2,
-        if value % 2 = 0,
+        if value mod 2 = 0,
             return "Finishing: even"
         else,
             return "Finishing: odd"

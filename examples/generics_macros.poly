@@ -12,7 +12,7 @@ end macro
 
 # Macros can wrap control flow and error reporting.
 macro assert_true(condition)
-    if !condition,
+    if not condition,
         error "Assertion failed"
     end if
 end macro

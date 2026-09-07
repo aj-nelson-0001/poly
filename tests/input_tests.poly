@@ -49,7 +49,7 @@ end match
 # ============================================================
 put "\n=== Test 6: Input with Validation ==="
 put "Enter a number between 1 and 100: "
-var validated i32 := get with validate |x| x >= 1 && x <= 100
+var validated i32 := get with validate |x| x >= 1 and x <= 100
 put "You entered: " + validated
 
 # ============================================================

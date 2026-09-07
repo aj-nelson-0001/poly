@@ -23,7 +23,7 @@ fn main()
     put "Reading line by line:"
     var file := open("sample.txt")
     var line_num i32 := 1
-    while !file.eof()
+    while not file.eof()
         var line ustring := file.get_line()
         put "Line " + line_num.to_string() + ": " + line
         line_num := line_num + 1

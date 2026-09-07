@@ -25,13 +25,13 @@ end fn
 # Classification based on multiple conditions
 fn classify_number(n: i32): string
     if n > 0,
-        if n % 2 = 0,
+        if n mod 2 = 0,
             return "positive even"
         else,
             return "positive odd"
         end if
     else if n < 0,
-        if n % 2 = 0,
+        if n mod 2 = 0,
             return "negative even"
         else,
             return "negative odd"

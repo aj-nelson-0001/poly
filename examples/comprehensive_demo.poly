@@ -107,7 +107,7 @@ put "10 + 3 = " + sum.to_string()
 put "10 - 3 = " + (x - y).to_string()
 put "10 * 3 = " + (x * y).to_string()
 put "10 / 3 = " + (x / y).to_string()
-put "10 % 3 = " + (x % y).to_string()
+put "10 % 3 = " + (x mod y).to_string()
 put ""
 
 # Mutation ops
@@ -210,9 +210,9 @@ put ""
 put "-- Bitwise ops --"
 var a i32 := 10
 var b i32 := 12
-put "  a & b  = " + (a & b).to_string()
-put "  a | b  = " + (a | b).to_string()
-put "  a ^ b  = " + (a ^ b).to_string()
+put "  a & b  = " + (a bitand b).to_string()
+put "  a | b  = " + (a bitor b).to_string()
+put "  a ^ b  = " + (a xor b).to_string()
 put "  a << 2 = " + (a << 2).to_string()
 put "  a >> 1 = " + (a >> 1).to_string()
 put ""
@@ -242,7 +242,7 @@ put ""
 put "-- Break & Continue --"
 put "  Even numbers 0..10:"
 loop i 0..10
-    if i % 2 != 0,
+    if i mod 2 != 0,
         continue
     end if
     put "    " + i.to_string()

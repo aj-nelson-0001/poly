@@ -256,19 +256,23 @@
       "patterns": [
         {
           "name": "keyword.operator.assignment.poly",
-          "match": ":=|\\+=|-=|\\*=|/=|%=|&&=|\\|\\|="
+          "match": ":="
         },
         {
           "name": "keyword.operator.comparison.poly",
-          "match": "==|!=|<=|>=|<|>|=\\b"
+          "match": "!=|<=|>=|<|>|=\\b"
         },
         {
           "name": "keyword.operator.arithmetic.poly",
-          "match": "\\+|-|\\*|/|%|\\^"
+          "match": "\\+|-|\\*|/"
         },
         {
-          "name": "keyword.operator.logical.poly",
-          "match": "&&|\\|\\||!"
+          "name": "keyword.operator.word.poly",
+          "match": "\\b(and|or|xor|mod|bitand|bitor|bitnot|shift\\s+(?:left|right))\\b"
+        },
+        {
+          "name": "keyword.operator.bitwise.poly",
+          "match": "<<|>>"
         },
         {
           "name": "keyword.operator.pipe.poly",

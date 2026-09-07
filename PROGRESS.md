@@ -3,6 +3,45 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-07.
 
+## Playground and VS Code keyword-operator sync (2026-09-07)
+
+Brought the browser playground and the VS Code grammar up to the
+keyword-operator dialect.
+
+### Playground (playground/index.html, playground/poly.wasm)
+
+- Rebuilt `playground/poly.wasm` from the current compiler via
+  `compiler/scripts/build_playground_wasm.sh` (408K, opt-level=z/LTO) so the
+  in-browser engine matches the CLI: keyword operators transpile, retired
+  symbols (`%`, `&&`, `^`, `!`, `|`, `==`) get migration diagnostics.
+- Demo-transpiler examples rewritten to compiler-verified syntax: the grades
+  example uses `while score <= 95` instead of the counter `loop` that mutated
+  an immutable binding; the HOF example filters with `x mod 2 = 0`; the tuples
+  example assigns `pair.0 := 99` instead of the retired `set ... to` form.
+- Demo transpiler (`polyToRust`) now maps keyword operators onto Rust symbols
+  (`mod`→`%`, `xor`→`^`, `and`→`&&`, `or`→`||`, `bitand`→`&`, `bitor`→`|`,
+  `(bit)not`→`!`, `shift left/right`→`<<`/`>>`) with string literals masked
+  out, lowers Poly `=` equality to Rust `==` inside expressions, drops the
+  dead `+=` handler, accepts tuple/field assignment paths (`pair.0 := 99`),
+  and supports destructured `for` bindings.
+
+### VS Code extension (vscode/syntaxes/poly.tmLanguage.json)
+
+- Added `keyword.operator.word.poly` highlighting for the operator keywords
+  and `keyword.operator.bitwise.poly` for the retained `<<`/`>>` forms.
+- Removed highlighting of retired symbol operators (`&&`, `||`, `!`, `^`,
+  `%`, `&`, `|`, `==`) and compound assignments (`+=`, `%=`, `&&=`, …) so
+  rejected syntax no longer renders as valid.
+
+### Verification
+
+- All nine embedded playground examples pass `poly --check` (real compiler).
+- Node harness: 20 demo-transpiler operator cases pass; all nine examples
+  transpile without throwing.
+- WASM smoke test (node): 3 keyword-operator programs produce expected Rust
+  (`%`, `^`, `<<`, `&&`, `&`, `|`, `!`, `>>`, `==`); 6 legacy-symbol programs
+  are rejected with diagnostics. `cargo test -p poly-wasm` 3/3 pass.
+
 ## Operator keyword migration (2026-09-07)
 
 Logical, bitwise, and remainder operators are now keyword-spelled; the old

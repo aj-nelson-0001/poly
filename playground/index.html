@@ -451,7 +451,7 @@ put message"></textarea>
         <div class="features-section">
             <div class="feature-card">
                 <h3><span class="feature-icon">🎯</span> Clean Syntax</h3>
-                <p>Poly uses a clean, readable syntax: <code>var x i32 := 42</code>, comma-based <code>if</code> conditions, and explicit <code>end</code> keywords. No semicolons, no curly braces.</p>
+                <p>Poly uses a clean, readable syntax: <code>var x i32 := 42</code>, comma-based <code>if</code> conditions, and explicit <code>end</code> keywords. Operators are words — <code>and</code>, <code>or</code>, <code>not</code>, <code>mod</code>, <code>xor</code>, <code>bitand</code>, <code>bitor</code>, <code>bitnot</code>, <code>shift left/right</code>. No semicolons, no curly braces.</p>
             </div>
             <div class="feature-card">
                 <h3><span class="feature-icon">⚡</span> Fast Transpilation</h3>
@@ -571,11 +571,11 @@ end fn
 
 fn main()
     var score := 15
-    loop score 0..5
+    while score <= 95
         put score
         put grade(score)
         score := score + 20
-    end loop
+    end while
 end fn`,
             closure: `# Closures are first-class: stored and called
 fn main()
@@ -607,7 +607,7 @@ fn main()
     put xs.map(|x| x * 2)[0]
     put xs.map(|x| x * 2)[4]
     put "evens:"
-    var evens := xs.filter(|x| x % 2 == 0)
+    var evens := xs.filter(|x| x mod 2 = 0)
     for v in evens
         put v
     end for
@@ -671,7 +671,7 @@ fn main()
         put val
     end for
 
-    set pair.0 to 99
+    pair.0 := 99
     pair.1 = false
     put "after assignment:"
     put pair.0
@@ -688,6 +688,9 @@ end fn`
         // supports the core constructs: var/let/const, fn with end fn, if/
         // else-if/else (comma syntax), while, for-in ranges, match, put,
         // return, error/warn/info, struct, enum, closures, and ustring.
+        // Poly's keyword operators (and/or/not/mod/xor/bitand/bitor/bitnot,
+        // shift left/right) are mapped onto the Rust symbol operators, and
+        // Poly's `=` equality becomes Rust `==` inside expressions.
         // Unsupported constructs pass through with a `// UNSUPPORTED:` note.
         // ------------------------------------------------------------------
 
@@ -829,10 +832,39 @@ end fn`
                 return 'impl Fn(' + params + ') -> ' + mapType(m[2].trim());
             }
 
+            // Map Poly's keyword operators onto the Rust symbol operators.
+            // String literals are masked out first so words like "and" inside
+            // "apples and oranges" are never rewritten.
+            function mapOperators(e) {
+                const strings = [];
+                e = e.replace(/"(?:[^"\\]|\\.)*"/g, m => {
+                    strings.push(m);
+                    return '\u0000' + (strings.length - 1) + '\u0000';
+                });
+                // Two-word shift operators first.
+                e = e.replace(/\bshift\s+left\b/g, '<<');
+                e = e.replace(/\bshift\s+right\b/g, '>>');
+                // Prefix unary keyword operators (bitnot folds into not).
+                e = e.replace(/\b(?:bit)?not\b\s*/g, '!');
+                // Binary keyword operators.
+                e = e.replace(/\bmod\b/g, '%');
+                e = e.replace(/\bxor\b/g, '^');
+                e = e.replace(/\band\b/g, '&&');
+                e = e.replace(/\bor\b/g, '||');
+                e = e.replace(/\bbitand\b/g, '&');
+                e = e.replace(/\bbitor\b/g, '|');
+                // Poly `=` is equality; Rust needs `==` inside expressions.
+                // The lookarounds leave :=, <=, >=, !=, ==, and = untouched.
+                e = e.replace(/(?<![<>=!:=])=(?!=)/g, '==');
+                e = e.replace(/\u0000(\d+)\u0000/g, (_, i) => strings[Number(i)]);
+                return e;
+            }
+
             function mapExpr(expr) {
                 let e = expr.trim();
                 // unicode "..." -> String::from("...")
                 e = e.replace(/\bunicode\s+"([^"]*)"/g, 'String::from("$1")');
+                e = mapOperators(e);
                 return e;
             }
 
@@ -1002,7 +1034,7 @@ end fn`
                 }
 
                 // ---- for ... in range ----
-                let forMatch = l.match(/^for\s+(\w+)\s+in\s+(.+)$/);
+                let forMatch = l.match(/^for\s+(.+?)\s+in\s+(.+)$/);
                 if (forMatch) {
                     const range = forMatch[2].trim();
                     const rangeMatch = range.match(/^(\d+|[\w.]+)\s*\.\.\s*(\d+|[\w.]+)$/);
@@ -1062,17 +1094,15 @@ end fn`
                 }
 
                 // ---- assignment / mutation ----
-                let assign = l.match(/^(\w+)\s*\+=\s*(.*)$/);
-                if (assign) {
-                    rust.push(pad() + `${assign[1]} += ${mapExpr(assign[2])};`);
-                    continue;
-                }
-                assign = l.match(/^(\w+)\s*:=\s*(.*)$/);
+                // Poly has no compound assignment: `:=` initializes and `=`
+                // reassigns. The left side may be a tuple/field path such as
+                // `pair.0` or `nested.1.0`.
+                let assign = l.match(/^([\w.]+)\s*:=\s*(.*)$/);
                 if (assign) {
                     rust.push(pad() + `${assign[1]} = ${mapExpr(assign[2])};`);
                     continue;
                 }
-                assign = l.match(/^(\w+)\s*=\s*(.*)$/);
+                assign = l.match(/^([\w.]+)\s*=\s*(.*)$/);
                 if (assign) {
                     rust.push(pad() + `${assign[1]} = ${mapExpr(assign[2])};`);
                     continue;

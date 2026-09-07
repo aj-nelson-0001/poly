@@ -6,6 +6,23 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Changed
 
+- **Playground**: rewrote the embedded JS demo transpiler and example programs
+  for the keyword-operator dialect. The demo now maps `and`/`or`/`not`/
+  `mod`/`xor`/`bitand`/`bitor`/`bitnot`/`shift left`/`shift right` onto the
+  Rust symbol operators and lowers Poly `=` equality to Rust `==` inside
+  expressions (string-literal aware); the legacy `+=` handler was removed,
+  assignment now supports tuple/field paths (`pair.0 := 99`), and `for`
+  supports destructured patterns. All nine playground examples were rewritten
+  to syntax that passes the real compiler (`while` instead of counter `loop`,
+  `mod`/`=` in filter closures, `pair.0 := 99` instead of `set ... to`), and
+  the checked-in `playground/poly.wasm` was rebuilt from the current
+  compiler so the browser engine matches the CLI.
+- **VS Code extension**: the TextMate grammar now highlights the keyword
+  operators (`and`, `or`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`,
+  `shift left/right`) and the retained `<<`/`>>` shift alternatives; retired
+  symbol operators (`&&`, `||`, `!`, `^`, `%`, `&`, `|`, `==`) and compound
+  assignments (`+=`, `%=`, `&&=`, …) are no longer highlighted as valid.
+
 - **Operator keywords**: logical, bitwise, and remainder operators are now
   spelled as keywords — `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`,
   `bitnot`, and `shift left` / `shift right`. The retired symbol spellings

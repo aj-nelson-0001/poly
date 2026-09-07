@@ -74,11 +74,11 @@ var price ustring := get  // Then convert later
 
 ~~~poly
 // Good: Validate immediately
-var age i32 := get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 and x < 150
 
 // Bad: Validate late
 var age i32 := get
-if age < 0 || age > 150,
+if age < 0 or age > 150,
     error "Invalid age"
     // ... more code before handling
 end if
@@ -104,13 +104,13 @@ var input ustring := get  // Can hang forever
 // Good: Batch reads
 var lines Vec<ustring> := []
 var file := open("data.txt")
-while !file.eof()
+while not file.eof()
     lines.push(file.get_line())
 end while
 
 // Bad: Frequent reads
 var file := open("data.txt")
-while !file.eof()
+while not file.eof()
     var line ustring := file.get_line()
     process(line)  // Process each line immediately
 end while
@@ -145,7 +145,7 @@ var lines Vec<ustring> := content.split("\n")
 
 // Bad: Read line by line
 var file := open("large_file.txt")
-while !file.eof()
+while not file.eof()
     var line ustring := file.get_line()
     // Process each line
 end while

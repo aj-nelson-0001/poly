@@ -18,7 +18,7 @@ else
 end if
 ~~~
 
-Use `:=` for initialization and assignment. Use `=` for equality. `==` is rejected. `var` writes an optional type without a colon; `let` type annotations use a colon.
+Use `:=` for initialization and assignment. Use `=` for equality. `==` is rejected. Logical, bitwise, and remainder operators are keyword-spelled: `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, and `shift left` / `shift right` (`<<` and `>>` remain valid). The retired symbol spellings `&&`, `||`, `!`, `^`, `%`, `&`, `|`, `~` are rejected with migration diagnostics. `var` writes an optional type without a colon; `let` type annotations use a colon.
 
 ## Output
 

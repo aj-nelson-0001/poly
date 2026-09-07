@@ -99,11 +99,11 @@ var input ustring := get  // Can hang forever
 
 ~~~poly
 // Good: Validate early
-var age i32 := get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 and x < 150
 
 // Bad: Validate late
 var age i32 := get
-if age < 0 || age > 150,
+if age < 0 or age > 150,
     error "Invalid age"
 end if
 ~~~
@@ -345,7 +345,7 @@ var password ustring := get
 
 ~~~poly
 // Good: Validate everything
-var age i32 := get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 and x < 150
 var email ustring := get with validate |e| e.contains(unicode "@")
 
 // Bad: Trust input

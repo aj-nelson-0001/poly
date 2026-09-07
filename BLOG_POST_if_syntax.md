@@ -135,13 +135,13 @@ end fn
 ~~~poly
 fn categorize_number(n: i32): string
     if n > 0,
-        if n % 2 = 0,
+        if n mod 2 = 0,
             return "Positive Even"
         else,
             return "Positive Odd"
         end if
     else if n < 0,
-        if n % 2 = 0,
+        if n mod 2 = 0,
             return "Negative Even"
         else,
             return "Negative Odd"

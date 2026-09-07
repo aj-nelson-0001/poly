@@ -363,12 +363,12 @@ end struct
 
 | Poly | Rust |
 |------|------|
-| `a & b` | `a & b` |
-| `a \| b` | `a \| b` |
-| `a ^ b` | `a ^ b` |
-| `~a` | `!a` |
-| `a << n` | `a << n` |
-| `a >> n` | `a >> n` |
+| `a bitand b` | `a & b` |
+| `a bitor b` | `a \| b` |
+| `a xor b` | `a ^ b` |
+| `bitnot a` | `!a` |
+| `a shift left n` (or `a << n`) | `a << n` |
+| `a shift right n` (or `a >> n`) | `a >> n` |
 
 ---
 
@@ -391,16 +391,16 @@ end struct
 ## 12. Operators
 
 ### Arithmetic
-`+` `-` `*` `/` `%`
+`+` `-` `*` `/` `mod`
 
 ### Comparison
 `=` `!=` `<` `>` `<=` `>=`
 
 ### Logical
-`&&` `||` `!`
+`and` `or` `not`
 
 ### Bitwise
-`&` `|` `^` `~` `<<` `>>`
+`bitand` `bitor` `xor` `bitnot` `shift left` / `shift right` (alternatively `<<` `>>`)
 
 ### Assignment
 `:=` `=` `+=` `-=` `->`

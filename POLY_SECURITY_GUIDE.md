@@ -16,9 +16,9 @@ This guide covers security best practices for the new Poly I/O and error handlin
 
 ~~~poly
 // Good: Validate all input
-var age i32 := get with validate |x| x > 0 && x < 150
-var email ustring := get with validate |e| e.contains(unicode "@") && e.len() < 255
-var name ustring := get with validate |n| n.len() >= 1 && n.len() <= 100
+var age i32 := get with validate |x| x > 0 and x < 150
+var email ustring := get with validate |e| e.contains(unicode "@") and e.len() < 255
+var name ustring := get with validate |n| n.len() >= 1 and n.len() <= 100
 
 // Bad: Trust input
 var age i32 := get  // Could be negative or huge

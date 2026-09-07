@@ -124,7 +124,7 @@ var done bool := false
 var age i32 := 0
 while not done
     var input i32 := get --as i32
-    if input >= 1 && input <= 150
+    if input >= 1 and input <= 150
         age := input
         done := true
     else

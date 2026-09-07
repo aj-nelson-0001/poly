@@ -122,7 +122,7 @@ put a + b     # 13
 put a - b     # 7
 put a * b     # 30
 put a / b     # 3 (integer division)
-put a % b     # 1 (modulo)
+put a mod b   # 1 (modulo)
 ~~~
 
 ### Comparison and Logic
@@ -690,7 +690,7 @@ var n i32 := 42
 match n
     x if x < 0, put "negative"
     x if x = 0, put "zero"
-    x if x > 0 && x < 100, put "small positive"
+    x if x > 0 and x < 100, put "small positive"
     _, put "large positive"
 end match
 ~~~
@@ -791,7 +791,7 @@ var xs := [1, 2, 3, 4, 5]
 put xs.map(|x| x * 2)          # [2, 4, 6, 8, 10]
 
 # filter: keep elements matching a predicate
-put xs.filter(|x| x % 2 = 0)   # [2, 4]
+put xs.filter(|x| x mod 2 = 0)   # [2, 4]
 
 # reduce: combine all elements
 put xs.reduce(0, |acc, x| acc + x)   # 15
@@ -807,7 +807,7 @@ Use .iter() to get an iterator, then chain operations:
 ~~~poly
 var xs := [1, 2, 3, 4, 5]
 var sum i32 := xs.iter().sum()
-var evens := xs.iter().filter(|x| x % 2 = 0).collect()
+var evens := xs.iter().filter(|x| x mod 2 = 0).collect()
 ~~~
 
 ### String Higher-Order Methods

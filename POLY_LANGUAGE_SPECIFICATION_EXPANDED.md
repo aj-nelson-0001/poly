@@ -117,10 +117,10 @@ x := y     // replace x with y; self-reference is rejected
 var a i32 := 0b1010
 var b i32 := 0b1100
 
-var result := a & b    // Bitwise AND: 0b1000
-var result := a | b    // Bitwise OR: 0b1110
-var result := a ^ b    // Bitwise XOR: 0b0110
-var result := ~a       // Bitwise NOT
+var and_result := a bitand b    // Bitwise AND: 0b1000
+var or_result := a bitor b      // Bitwise OR: 0b1110
+var xor_result := a xor b       // Bitwise XOR: 0b0110
+var not_result := bitnot a      // Bitwise NOT
 var result := a << 2   // Left shift
 var result := a >> 1   // Right shift
 ~~~
@@ -1898,7 +1898,7 @@ var email ustring := get
 
 // Provide clear error messages
 put "Enter your age: "
-var age i32 := get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 and x < 150
 // Error message: "Please enter a valid age between 1 and 150"
 
 // Use semantic output
@@ -2289,7 +2289,7 @@ match get --timeout 3000
 end match
 
 // Input with validation
-var age i32 := get with validate |x| x >= 1 && x <= 100
+var age i32 := get with validate |x| x >= 1 and x <= 100
 put "Valid age: " + age
 ~~~
 
@@ -2318,7 +2318,7 @@ var text ustring := get from "utf8.txt" with encoding unicode "utf-8"
 
 ~~~poly fragment
 // Input with validation
-var age i32 := get with validate |x| x > 0 && x < 150
+var age i32 := get with validate |x| x > 0 and x < 150
 
 // Input with default value (on empty input)
 var name ustring := get --default unicode "Anonymous"

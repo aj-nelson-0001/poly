@@ -156,13 +156,20 @@ tuple_literal ::= "(" expression "," expression { "," expression } ")"
 arguments ::= expression { "," expression }
 closure ::= "|" [ parameters ] "|" expression
 
-binary_operator ::= "+" | "-" | "*" | "/" | "%"
+binary_operator ::= "+" | "-" | "*" | "/" | "mod"
                  | "=" | "!=" | "<" | ">" | "<=" | ">="
-                 | "&&" | "||" | "&" | "|" | "^" | "<<" | ">>"
-unary_operator ::= "-" | "!" | "~" | "*"
+                 | "and" | "or" | "xor" | "bitand" | "bitor"
+                 | "shift" ("left" | "right")
+                 | "<<" | ">>"
+unary_operator ::= "-" | "not" | "bitnot" | "*"
 ~~~
 
-`=` is the equality operator. `:=` is assignment. `==` is tokenized only to provide a migration diagnostic and is rejected by the parser.
+`=` is the equality operator. `:=` is assignment. Logical, bitwise, and
+remainder operators are spelled as keywords: `and`, `or`, `xor`, `mod`,
+`bitand`, `bitor`, `bitnot`, and `shift left` / `shift right`. The `<<` and
+`>>` symbols remain valid alternative shift syntax. The retired symbol
+spellings `&&`, `||`, `!`, `^`, `%`, `&`, `|`, and `~` are tokenized only to
+provide migration diagnostics and are rejected by the parser.
 
 ## Control Flow
 

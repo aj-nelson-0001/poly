@@ -138,7 +138,7 @@ The C backend covers the orchestration subset but many features require `#c` hel
 `POLY_TUTORIAL.md` (line 117) documented `with validate` as a working feature:
 
 ~~~poly
-var age i32 := get with validate |x| x >= 1 && x <= 150
+var age i32 := get with validate |x| x >= 1 and x <= 150
 ~~~
 
 However, this is a **parser-only stub**. The syntax is parsed and stored in the AST, but the checker and codegen ignore it entirely. The validation closure is never executed at runtime. The v2 spec and API reference both state this is "not part of the maintained runnable v2 API."

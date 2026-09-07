@@ -435,7 +435,7 @@ fn main()
     put add5(10)                      # 15
     var xs := [1, 2, 3, 4, 5]
     put xs.map(|x| x * 2)             # [2, 4, 6, 8, 10] (vectors print with {:?})
-    put xs.filter(|x| x % 2 = 0)     # [2, 4]
+    put xs.filter(|x| x mod 2 = 0)     # [2, 4]
     put xs.reduce(0, |acc, x| acc + x)  # 15
     put xs.sort_by(|a, b| a > b)      # [5, 4, 3, 2, 1]
     put "hello".map(|c| c)            # ['h', 'e', 'l', 'l', 'o']

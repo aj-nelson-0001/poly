@@ -103,7 +103,7 @@ Strip Poly down to only what an assembly-like syntax layer needs. Remove feature
 | Structs | `struct Name ... end struct` | Simple field declarations |
 | Primitives | `i32`, `u64`, `bool`, `ustring`, etc. | Core types |
 | String interpolation | `"Hello, {name}!"` | Convenience |
-| Bitwise ops | `&`, `\|`, `^`, `~`, `<<`, `>>` | Systems programming |
+| Bitwise ops | `bitand`, `bitor`, `xor`, `bitnot`, `shift left`/`right`, `<<`, `>>` | Systems programming |
 
 ### Features to REMOVE from Poly (move to `#rust`)
 

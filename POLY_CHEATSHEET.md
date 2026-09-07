@@ -10,7 +10,7 @@ let greeting: ustring := unicode "Hello"
 const limit := 3
 
 loop i 0..limit
-    add count
+    count := count + 1
 end loop
 
 if count = 4

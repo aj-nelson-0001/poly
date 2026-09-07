@@ -354,7 +354,7 @@ end loop
 
 ### Use Iterators
 
-~~~poly
+~~~poly fragment
 fn main()
     var list Vec<i32> := [1, 2, 3, 4]
 

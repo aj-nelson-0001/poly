@@ -195,7 +195,7 @@ The previous 36-commit history is preserved on the `backup-audit-fixes` branch f
 
 ### Example
 
-~~~poly
+~~~poly fragment
 # Before (v1.x)
 fn process(items: Vec<i32>): Vec<i32>
     return items.filter(|x| x > 0).map(|x| x * 2)

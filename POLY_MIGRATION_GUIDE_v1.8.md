@@ -24,7 +24,7 @@ This guide helps you update code written in Poly v1.7.x (and earlier) to work wi
 ### 1. Loop Syntax (remove colon)
 
 **Before:**
-~~~poly
+~~~poly fragment
 loop: i 0..10
     put i
 end loop
@@ -35,7 +35,7 @@ end loop
 ~~~
 
 **After:**
-~~~poly
+~~~poly fragment
 loop i 0..10
     put i
 end loop
@@ -52,7 +52,7 @@ The infinite loop (`loop ... end loop`) is unchanged.
 These assembly-style mutation commands have been removed. Use the `:=` assignment operator with arithmetic expressions instead.
 
 **Before:**
-~~~poly
+~~~poly fragment
 var count := 0
 add count, 1        # count = 1
 inc count            # count = 2
@@ -74,21 +74,21 @@ count := count - 1   # count = 0
 The `set x to y` form has been removed. Use `x := y` instead.
 
 **Before:**
-~~~poly
+~~~poly fragment
 set name to "Alice"
 set age to 30
 set result to a + b
 ~~~
 
 **After:**
-~~~poly
+~~~poly fragment
 var name := "Alice"
 var age := 30
 var result := a + b
 ~~~
 
 Or if the variable already exists:
-~~~poly
+~~~poly fragment
 name := "Alice"
 age := 30
 result := a + b
@@ -99,7 +99,7 @@ result := a + b
 The `+=`, `-=`, `*=`, `/=` operators have been removed. Use `:=` with the full expression.
 
 **Before:**
-~~~poly
+~~~poly fragment
 x += 5
 x -= 3
 x *= 2
@@ -107,7 +107,7 @@ x /= 4
 ~~~
 
 **After:**
-~~~poly
+~~~poly fragment
 x := x + 5
 x := x - 3
 x := x * 2
@@ -119,7 +119,7 @@ x := x / 4
 Replace `>` / `>>` / `<` with `to` / `to ... -append` / `from`.
 
 **Before:**
-~~~poly
+~~~poly fragment
 put "Hello" > "output.txt"      # Write
 put "World" >> "output.txt"     # Append
 var content := get < "input.txt"  # Read
@@ -137,12 +137,12 @@ var content := get from "input.txt" # Read
 The `=` operator is now **only** for equality checking. Assignment **must** use `:=`.
 
 **Before (ambiguous):**
-~~~poly
+~~~poly fragment
 x = 5          # Was this assignment or comparison?
 ~~~
 
 **After (unambiguous):**
-~~~poly
+~~~poly fragment
 x := 5         # Assignment
 if x = 5,      # Equality check
     put "equal"

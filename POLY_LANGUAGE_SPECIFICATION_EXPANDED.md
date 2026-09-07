@@ -1131,7 +1131,7 @@ end
 
 ### Higher-Order Functions
 
-~~~poly
+~~~poly fragment
 // Map
 var doubled := [1, 2, 3].map(|x| x * 2)
 
@@ -1649,7 +1649,7 @@ put unicode "{'hello':.10}" // hello*****
 
 ### File Output
 
-~~~poly
+~~~poly fragment
 // Write to file (creates or overwrites)
 put unicode "Line 1
 Line 2
@@ -1819,7 +1819,7 @@ end fn
 
 ### Edge Cases
 
-~~~poly
+~~~poly fragment
 // Empty string output
 put ""  // Outputs empty line
 

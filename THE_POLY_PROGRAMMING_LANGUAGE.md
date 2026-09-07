@@ -127,7 +127,7 @@ put a % b     # 1 (modulo)
 
 ### Comparison and Logic
 
-~~~poly
+~~~poly fragment
 put a > b       # true
 put a = 10      # true (single = is equality)
 put a != 5      # true
@@ -143,7 +143,7 @@ Note: equality is =, not ==. Assignment uses := (declaration) or
 
 ### Bitwise Operations
 
-~~~poly
+~~~poly fragment
 var x i32 := 0b1010
 var y i32 := 0b1100
 
@@ -203,7 +203,7 @@ branches are optional. There is no parenthesization around conditions.
 
 ### While Loops
 
-~~~poly
+~~~poly fragment
 var i i32 := 0
 while i < 5
     put i
@@ -280,7 +280,7 @@ end for
 
 break inside a loop can carry a value that becomes the loop's result:
 
-~~~poly
+~~~poly fragment
 var result := loop
     var n := get
     var parsed n i32 := n.parse::<i32>()
@@ -403,7 +403,7 @@ end match
 
 ### Vector Methods
 
-~~~poly
+~~~poly fragment
 var xs Vec<i32> := [3, 1, 4, 1, 5]
 
 xs.push(9)            # append an element
@@ -465,7 +465,7 @@ put s.to_lowercase()             # "hello, world!"
 
 Strings are mutable with add and +=:
 
-~~~poly
+~~~poly fragment
 var buf := "Hello"
 buf := buf + " world"
 buf += "!"
@@ -481,7 +481,7 @@ put ["a", "b", "c"].join(", ")  # "a, b, c"
 
 ### Characters and Iteration
 
-~~~poly
+~~~poly fragment
 var s := "hello"
 loop c in s
     put c
@@ -490,7 +490,7 @@ end for
 
 String methods that return iterators:
 
-~~~poly
+~~~poly fragment
 put "hello".map(|c| c)           # Vec of chars
 put "hello".filter(|c| c != 'l')  # ['h', 'e', 'o']
 ~~~
@@ -511,7 +511,7 @@ end struct
 The var prefix is optional on fields. Construct a struct with named
 fields:
 
-~~~poly
+~~~poly fragment
 var p := Point { x: 3.0, y: 4.0 }
 put p.x    # 3.0
 ~~~
@@ -564,14 +564,14 @@ put nested.1.0    # 2
 
 Tuple assignment:
 
-~~~poly
+~~~poly fragment
 pair.0 := 99
 pair.1 = false
 ~~~
 
 Destructuring:
 
-~~~poly
+~~~poly fragment
 var (x, y) := (1, 2)
 ~~~
 
@@ -595,7 +595,7 @@ end enum
 Variants can carry data. Tuple variants use parentheses; struct variants
 use braces:
 
-~~~poly
+~~~poly fragment
 enum Shape
     Circle(f64)
     Rectangle { width: f64, height: f64 }
@@ -653,7 +653,7 @@ end match
 
 ### Matching Enums
 
-~~~poly
+~~~poly fragment
 var color := Color::Red
 match color
     Red, put "warm"
@@ -697,7 +697,7 @@ end match
 
 ### Range Patterns
 
-~~~poly
+~~~poly fragment
 match score
     0..=59, put "F"
     60..=69, put "D"
@@ -712,7 +712,7 @@ end match
 
 Bind a value while matching a pattern with @:
 
-~~~poly
+~~~poly fragment
 match age
     n @ 0..12, put "child: " + n
     n @ 13..17, put "teenager: " + n
@@ -734,7 +734,7 @@ put square(4)    # 16
 
 A multi-line closure:
 
-~~~poly
+~~~poly fragment
 var classify := |x: i32|
     if x < 0,
         return "negative"
@@ -814,7 +814,7 @@ var evens := xs.iter().filter(|x| x % 2 = 0).collect()
 
 Strings iterate over characters:
 
-~~~poly
+~~~poly fragment
 put "hello".map(|c| c)                    # Vec of chars
 put "hello".filter(|c| c != 'l')          # ['h', 'e', 'o']
 put "hello".reduce(0, |acc, c| acc + (c as i32))   # sum of char codes
@@ -839,7 +839,7 @@ end enum
 
 ### Returning Results
 
-~~~poly
+~~~poly fragment
 fn read_config(path: ustring): Result<ustring, FileError>
     if path.len() = 0,
         return Error(FileError::NotFound)
@@ -850,7 +850,7 @@ end fn
 
 ### Matching on Results
 
-~~~poly
+~~~poly fragment
 match read_config(unicode "config.txt")
     Ok(content), put "loaded: " + content
     Error(FileError::NotFound), error "file not found"
@@ -863,7 +863,7 @@ end match
 
 Use try to propagate errors up the call chain (like Rust's ?):
 
-~~~poly
+~~~poly fragment
 fn load_app(): Result<ustring, FileError>
     var config := try read_config(unicode "config.txt")
     # If read_config returned Error, we return it here.
@@ -874,7 +874,7 @@ end fn
 
 ### Checked Accessors
 
-~~~poly
+~~~poly fragment
 var r := Ok(42)
 put r.is_ok()       # true
 put r.is_error()    # false
@@ -912,7 +912,7 @@ var age i32 := get --as i32        # parse as integer
 
 ### File Reading
 
-~~~poly
+~~~poly fragment
 var content := get from "data.txt"              # read file
 var bytes := get from "image.png"              # read as bytes
 ~~~
@@ -928,7 +928,7 @@ var input := get --until ","                 # read until delimiter
 
 ### Test Helpers
 
-~~~poly
+~~~poly fragment
 assert(age > 0)                     # panics if false
 pass("all tests passed")            # prints [PASS]
 fail("unexpected value")            # prints [FAIL], exits 1
@@ -953,7 +953,7 @@ end fn
 
 ### Generic Containers
 
-~~~poly
+~~~poly fragment
 fn first<T>(xs: Vec<T>): T
     return xs[0]
 end fn
@@ -982,7 +982,7 @@ The compiler substitutes concrete types at call sites and rejects mismatches.
 Poly supports async/await syntax. Async functions are declared with async fn
 and awaited with .await:
 
-~~~poly
+~~~poly fragment
 async fn fetch(url: ustring): Result<ustring, ustring>
     var response := http_get(url).await
     return response
@@ -1001,13 +1001,13 @@ The compiler detects async usage and adds #[tokio::main] automatically.
 
 ### Spawning Tasks
 
-~~~poly
+~~~poly fragment
 spawn delay(1000).await
 ~~~
 
 ### Database Access
 
-~~~poly
+~~~poly fragment
 var rows := db_execute(unicode "CREATE TABLE t (id INTEGER)").await
 var rows := db_execute(unicode "SELECT * FROM t").await
 ~~~

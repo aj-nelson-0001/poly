@@ -143,16 +143,16 @@ Note: equality is =, not ==. Assignment uses := (declaration) or
 
 ### Bitwise Operations
 
-~~~poly fragment
+~~~poly
 var x i32 := 0b1010
 var y i32 := 0b1100
 
-put x & y    # 0b1000  (AND)
-put x | y    # 0b1110  (OR)
-put x ^ y    # 0b0110  (XOR)
-put ~x       # bitwise NOT
-put x << 2   # left shift
-put x >> 1   # right shift
+put x bitand y    # 0b1000  (AND)
+put x bitor y     # 0b1110  (OR)
+put x xor y       # 0b0110  (XOR)
+put bitnot x      # bitwise NOT
+put x << 2        # left shift
+put x >> 1        # right shift
 ~~~
 
 ### String Concatenation

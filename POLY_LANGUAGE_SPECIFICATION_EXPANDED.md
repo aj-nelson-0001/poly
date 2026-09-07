@@ -74,7 +74,7 @@ const NAME := value
 
 ### Examples
 
-~~~poly fragment
+~~~poly
 var count i32 := 0
 var status bool := true
 const MAX_BUFFER := 1024
@@ -879,12 +879,12 @@ end fn
 
 ### While Loops
 
-~~~poly fragment
+~~~poly
 // Basic while loop
 var i i32 := 0
 while i < 10
-    print(i)
-    add i
+    put i
+    i := i + 1
 end while
 
 // While with break/continue
@@ -894,12 +894,12 @@ while true
     if i > 100
         break
     end if
-    if i % 2 = 0
-        add i
+    if i mod 2 = 0
+        i := i + 1
         continue
     end if
     sum := sum + i
-    add i
+    i := i + 1
 end while
 ~~~
 
@@ -1131,24 +1131,24 @@ end
 
 ### Higher-Order Functions
 
-~~~poly fragment
+~~~poly
 // Map
 var doubled := [1, 2, 3].map(|x| x * 2)
 
 // Filter
-var evens := [1, 2, 3, 4, 5].filter(|x| x % 2 == 0)
+var evens := [1, 2, 3, 4, 5].filter(|x| x mod 2 = 0)
 
 // Reduce/Fold
 var sum := [1, 2, 3, 4, 5].reduce(0, |acc, x| acc + x)
 
 // First even (via reduce on an Option-like flag is not built in; use a loop)
 var first_even := 0
-loop x in [1, 3, 4, 5]
-    if x % 2 == 0,
+for x in [1, 3, 4, 5]
+    if x mod 2 = 0,
         first_even := x
         break
     end if
-end loop
+end for
 
 // Any/All (via filter + len)
 var negatives := [-1, 2, 3].filter(|x| x < 0)
@@ -1161,14 +1161,14 @@ var sorted := [3, 1, 4, 1, 5].sort_by(|a, b| a > b)
 
 // Chained operations
 var result := [1, 2, 3, 4, 5]
-    .filter(|x| x % 2 = 0)
+    .filter(|x| x mod 2 = 0)
     .map(|x| x * x)
     .reduce(0, |acc, x| acc + x)
 ~~~
 
 ### Function Pointers
 
-~~~poly fragment
+~~~poly
 // Function type
 type MathOp := fn(i32, i32) -> i32
 

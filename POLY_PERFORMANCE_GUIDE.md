@@ -324,7 +324,7 @@ end fn
 
 ### Use Appropriate Collection Types
 
-~~~poly fragment
+~~~poly
 // Good: Use appropriate types
 var list Vec<i32> := [1, 2, 3]  // Dynamic array
 var map Map<ustring, i32> := []  // Hash map
@@ -354,7 +354,7 @@ end loop
 
 ### Use Iterators
 
-~~~poly fragment
+~~~poly
 fn main()
     var list Vec<i32> := [1, 2, 3, 4]
 
@@ -363,14 +363,14 @@ fn main()
     put sum
     var doubled := list.iter().map(|x| x * 2).collect()
     put doubled
-    var evens := list.iter().filter(|x| x % 2 == 0).collect()
+    var evens := list.iter().filter(|x| x mod 2 = 0).collect()
     put evens
 
     // Bad: Manual iteration
     var sum2 i32 := 0
-    loop item in list
+    for item in list
         sum2 := sum2 + item
-    end loop
+    end for
     put sum2
 end fn
 ~~~

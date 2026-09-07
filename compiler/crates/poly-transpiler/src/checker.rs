@@ -501,32 +501,10 @@ impl TypeChecker {
                 }
             }
             Statement::PutStatement { expr, redirect, .. } => {
-                let is_file_operator = matches!(
-                    expr,
-                    Expression::BinaryOp {
-                        op: BinaryOp::Gt | BinaryOp::Shr,
-                        ..
-                    }
-                );
-                if is_file_operator {
-                    if let Expression::BinaryOp { left, right, .. } = expr {
-                        let content_type = self.check_expression(left);
-                        let path_type = self.check_expression(right);
-                        if !matches!(content_type, PolyType::String | PolyType::Vec(_)) {
-                            self.error(TypeCheckError::in_context(
-                                format!("expected String or bytes, got {}", content_type),
-                                "file content".to_string(),
-                            ));
-                        }
-                        self.require_compatible(
-                            &path_type,
-                            &PolyType::String,
-                            "file path".to_string(),
-                        );
-                    }
-                } else {
-                    self.check_expression(expr);
-                }
+                // File output is exclusively `put value to "file"` now; `>` and
+                // `>>` were retired redirect spellings, so any top-level binary
+                // expression in `put` is checked as an ordinary expression.
+                self.check_expression(expr);
                 if let Some(redirect) = redirect {
                     let path = match redirect {
                         Redirect::Write(path) | Redirect::Append(path) => {
@@ -546,24 +524,7 @@ impl TypeChecker {
                 self.check_expression(expr);
             }
             Statement::ExpressionStatement(expr) => {
-                if let Expression::BinaryOp {
-                    op: BinaryOp::Gt | BinaryOp::Shr,
-                    left,
-                    right,
-                } = expr
-                {
-                    let content_type = self.check_expression(left);
-                    let path_type = self.check_expression(right);
-                    if !matches!(content_type, PolyType::String | PolyType::Vec(_)) {
-                        self.error(TypeCheckError::in_context(
-                            format!("expected String or bytes, got {}", content_type),
-                            "file content".to_string(),
-                        ));
-                    }
-                    self.require_compatible(&path_type, &PolyType::String, "file path".to_string());
-                } else {
-                    self.check_expression(expr);
-                }
+                self.check_expression(expr);
             }
             Statement::ModuleDeclaration(module) => {
                 self.push_scope();
@@ -2968,7 +2929,7 @@ mod tests {
     #[test]
     fn accepts_iterator_chains() {
         assert!(check(
-            "fn main()\n    var xs := [1, 2, 3]\n    var s i32 := xs.iter().sum()\n    var d := xs.iter().map(|x| x * 2).collect()\n    var e := xs.iter().filter(|x| x % 2 = 0).collect()\n    loop x in xs.iter()\n        put x\n    end loop\nend fn"
+            "fn main()\n    var xs := [1, 2, 3]\n    var s i32 := xs.iter().sum()\n    var d := xs.iter().map(|x| x * 2).collect()\n    var e := xs.iter().filter(|x| x mod 2 = 0).collect()\n    loop x in xs.iter()\n        put x\n    end loop\nend fn"
         )
         .is_ok());
     }
@@ -3256,7 +3217,7 @@ mod tests {
 
     #[test]
     fn accepts_vec_higher_order_methods() {
-        let source = "fn main()\n    var xs := [1, 2, 3, 4, 5]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x % 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\n    put xs.reduce(1, |acc, x| acc * x)\nend fn";
+        let source = "fn main()\n    var xs := [1, 2, 3, 4, 5]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x mod 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\n    put xs.reduce(1, |acc, x| acc * x)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
     }
 

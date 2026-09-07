@@ -4,6 +4,17 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- **Operator keywords**: logical, bitwise, and remainder operators are now
+  spelled as keywords — `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`,
+  `bitnot`, and `shift left` / `shift right`. The retired symbol spellings
+  `&&`, `||`, `!`, `^`, `%`, `&`, `|`, and `~` are tokenized only to produce
+  migration diagnostics ("use `and`" etc.), mirroring the `==` rejection.
+  `<<` and `>>` remain valid alternative shift syntax, and `left`/`right`
+  stay usable as ordinary identifiers. All examples, fixtures, and tests
+  were migrated to the keyword spellings.
+
 ### Added
 
 - Pinned development and CI builds to Rust 1.98.0 and refreshed the checked-in playground WASM artifact for reproducible releases.

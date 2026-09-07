@@ -967,7 +967,7 @@ mod tests {
 
     #[test]
     fn folds_boolean_logic() {
-        let mut program = parse_to_ir("var x := true && false");
+        let mut program = parse_to_ir("var x := true and false");
         ConstantFolding.run(&mut program);
 
         match &program.main_body[0] {
@@ -1111,7 +1111,7 @@ mod tests {
 
     #[test]
     fn bitwise_not_folds_integers() {
-        let mut program = parse_to_ir("var x := ~0");
+        let mut program = parse_to_ir("var x := bitnot 0");
         ConstantFolding.run(&mut program);
 
         match &program.main_body[0] {

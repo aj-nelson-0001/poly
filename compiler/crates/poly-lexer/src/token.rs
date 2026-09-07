@@ -109,6 +109,18 @@ pub enum TokenKind {
     Capture,
     To,
 
+    // Operator keywords: logical, bitwise, and arithmetic operators are
+    // spelled as words; the old symbol spellings are rejected with migration
+    // diagnostics (except << >>, which remain alternative shift syntax).
+    And,
+    Or,
+    Xor,
+    Mod,
+    BitAnd,
+    BitOr,
+    BitNot,
+    Shift,
+
     // I/O commands
     Put,
     Get,
@@ -169,9 +181,10 @@ pub enum TokenKind {
     GtEq,  // >=
 
     // Logical
-    AndAnd, // &&
-    OrOr,   // ||
-    Not,    // !
+    AndAnd, // && (legacy syntax, rejected by the parser)
+    OrOr,   // || (legacy syntax, rejected by the parser)
+    Not,    // `not` keyword (unary logical not)
+    Bang,   // ! (legacy `not` spelling, rejected by the parser; `!=` is NotEq)
 
     // Bitwise
     Amp,   // &
@@ -289,6 +302,14 @@ impl fmt::Display for TokenKind {
             TokenKind::Step => write!(f, "step"),
             TokenKind::Capture => write!(f, "capture"),
             TokenKind::To => write!(f, "to"),
+            TokenKind::And => write!(f, "and"),
+            TokenKind::Or => write!(f, "or"),
+            TokenKind::Xor => write!(f, "xor"),
+            TokenKind::Mod => write!(f, "mod"),
+            TokenKind::BitAnd => write!(f, "bitand"),
+            TokenKind::BitOr => write!(f, "bitor"),
+            TokenKind::BitNot => write!(f, "bitnot"),
+            TokenKind::Shift => write!(f, "shift"),
             TokenKind::From => write!(f, "from"),
 
             // I/O
@@ -348,7 +369,8 @@ impl fmt::Display for TokenKind {
             TokenKind::GtEq => write!(f, ">="),
             TokenKind::AndAnd => write!(f, "&&"),
             TokenKind::OrOr => write!(f, "||"),
-            TokenKind::Not => write!(f, "!"),
+            TokenKind::Not => write!(f, "not"),
+            TokenKind::Bang => write!(f, "!"),
             TokenKind::Amp => write!(f, "&"),
             TokenKind::Pipe => write!(f, "|"),
             TokenKind::Caret => write!(f, "^"),
@@ -431,6 +453,14 @@ impl TokenKind {
                 | TokenKind::Step
                 | TokenKind::Capture
                 | TokenKind::To
+                | TokenKind::And
+                | TokenKind::Or
+                | TokenKind::Xor
+                | TokenKind::Mod
+                | TokenKind::BitAnd
+                | TokenKind::BitOr
+                | TokenKind::BitNot
+                | TokenKind::Shift
                 | TokenKind::From
                 | TokenKind::Unicode
         )

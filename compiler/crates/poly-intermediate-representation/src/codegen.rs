@@ -412,7 +412,11 @@ impl IntermediateRepresentationCodeGen {
         self.writeln_fmt(format_args!("struct {}{} {{", structure.name, generics));
         self.indent += 1;
         for field in &structure.fields {
-            self.writeln_fmt(format_args!("{}: {},", field.name, self.gen_type(&field.ty)));
+            self.writeln_fmt(format_args!(
+                "{}: {},",
+                field.name,
+                self.gen_type(&field.ty)
+            ));
         }
         self.indent -= 1;
         self.writeln("}");
@@ -433,7 +437,8 @@ impl IntermediateRepresentationCodeGen {
         self.writeln_fmt(format_args!("enum {} {{", enumeration.name));
         self.indent += 1;
         for variant in &enumeration.variants {
-            if variant.is_struct {                    self.writeln_fmt(format_args!("{} {{", variant.name));
+            if variant.is_struct {
+                self.writeln_fmt(format_args!("{} {{", variant.name));
                 self.indent += 1;
                 for field in &variant.fields {
                     let ty = if matches!(&field.ty, Type::Named(name) if name == &enumeration.name)
@@ -574,7 +579,10 @@ impl IntermediateRepresentationCodeGen {
                     Some(value) => {
                         let value_str = self.gen_decl_value(name, value, ty.as_ref());
                         if ty.is_some() {
-                            self.writeln_fmt(format_args!("let mut {}: {} = {};", name, ty_str, value_str));
+                            self.writeln_fmt(format_args!(
+                                "let mut {}: {} = {};",
+                                name, ty_str, value_str
+                            ));
                         } else {
                             self.writeln_fmt(format_args!("let mut {} = {};", name, value_str));
                         }
@@ -689,12 +697,10 @@ impl IntermediateRepresentationCodeGen {
                 self.writeln_fmt(format_args!("eprintln!(\"[INFO] {{}}\", {});", expr_str));
             }
             Statement::Expression(expr) => {
-                if let Expr::BinaryOp { op, .. } = expr {
-                    if matches!(op, BinaryOp::Gt | BinaryOp::Shr) {
-                        self.gen_put(expr, None);
-                        return;
-                    }
-                }
+                // `>` and `>>` were legacy file-redirect spellings; redirects
+                // are now exclusively `put ... to "file"`, so a top-level
+                // binary expression statement is generated as an ordinary
+                // expression.
                 if let Expr::If {
                     condition,
                     then_block,
@@ -977,36 +983,8 @@ impl IntermediateRepresentationCodeGen {
     }
 
     fn gen_put(&mut self, expr: &Expr, redirect: Option<&Redirect>) {
-        if let Expr::BinaryOp { op, left, right } = expr {
-            match op {
-                BinaryOp::Gt => {
-                    let content = self.gen_expr(left);
-                    let path = self.gen_expr(right);
-                    let value = if self.is_bytes_expr(left) {
-                        content
-                    } else {
-                        format!(
-                            "format!(\"{}\\n\", {})",
-                            self.put_format_spec(left),
-                            content
-                        )
-                    };
-                    self.writeln_fmt(format_args!("std::fs::write({}, {}).unwrap();", path, value));
-                    return;
-                }
-                BinaryOp::Shr => {
-                    let content = self.gen_expr(left);
-                    let path = self.gen_expr(right);
-                    *self.needs_io_write.borrow_mut() = true;
-                    self.writeln_fmt(format_args!(
-                        "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{}\", {}).unwrap(); }}",
-                        path, self.put_format_spec(left), content
-                    ));
-                    return;
-                }
-                _ => {}
-            }
-        }
+        // Legacy `put x > "file"` / `put x >> "file"` handling was removed:
+        // redirects are now only `put ... to "file"` (the Redirect field).
 
         let expr_str = self.gen_expr(expr);
         let spec = self.put_format_spec(expr);
@@ -1044,7 +1022,11 @@ impl IntermediateRepresentationCodeGen {
             Expr::Literal(Literal::Char(value)) => format!("{:?}", value),
             Expr::Literal(Literal::Bool(value)) => {
                 // Avoid String allocation for boolean literals
-                if *value { "true".to_string() } else { "false".to_string() }
+                if *value {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                }
             }
             Expr::Literal(Literal::Bytes(bytes)) => {
                 let hex: Vec<String> = bytes.iter().map(|b| format!("0x{:02X}", b)).collect();
@@ -2185,34 +2167,9 @@ impl IntermediateRepresentationCodeGen {
             Statement::Break => "break;".to_string(),
             Statement::Continue => "continue;".to_string(),
             Statement::Put { expr, redirect } => {
-                if let Expr::BinaryOp { op, left, right } = expr {
-                    match op {
-                        BinaryOp::Gt => {
-                            let content = self.gen_expr(left);
-                            let path = self.gen_expr(right);
-                            let value = if self.is_bytes_expr(left) {
-                                content
-                            } else {
-                                format!(
-                                    "format!(\"{}\\n\", {})",
-                                    self.put_format_spec(left),
-                                    content
-                                )
-                            };
-                            return format!("std::fs::write({}, {}).unwrap();", path, value);
-                        }
-                        BinaryOp::Shr => {
-                            let content = self.gen_expr(left);
-                            let path = self.gen_expr(right);
-                            *self.needs_io_write.borrow_mut() = true;
-                            return format!(
-                                "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({0}).unwrap(); writeln!(f, \"{1}\", {2}).unwrap(); }}",
-                                path, self.put_format_spec(left), content
-                            );
-                        }
-                        _ => {}
-                    }
-                }
+                // Legacy `put x > "file"` / `put x >> "file"` handling was
+                // removed: redirects are now only `put ... to "file"` (the
+                // Redirect field).
                 let expr_str = self.gen_expr(expr);
                 match redirect {
                     Some(Redirect::Write(path)) => {
@@ -3743,7 +3700,7 @@ mod tests {
     #[test]
     fn vec_hof_methods_emit_iterator_chains() {
         let rust = transpile(
-            "fn main()\n    var xs := [1, 2, 3]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x % 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\nend fn",
+            "fn main()\n    var xs := [1, 2, 3]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x mod 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\nend fn",
         );
         assert!(
             rust.contains("xs.iter().cloned().map(|x| (x * 2)).collect::<Vec<_>>()[(0) as usize]"),

@@ -395,7 +395,7 @@ fn test_runtime_file_reading_line_by_line() {
     let source = r#"
 fn main()
     var file := open("data.txt")
-    while !file.eof()
+    while not file.eof()
         put file.get_line()
     end while
 end fn
@@ -850,7 +850,7 @@ fn main()
     put total
     var doubled := list.iter().map(|x| x * 2).collect()
     put doubled
-    var evens := list.iter().filter(|x| x % 2 = 0).collect()
+    var evens := list.iter().filter(|x| x mod 2 = 0).collect()
     put evens
     var weighted := list.iter().filter(|x| x > 1).map(|x| x * 10).sum()
     put weighted

@@ -1,7 +1,45 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-06.
+Last updated: 2026-09-07.
+
+## Operator keyword migration (2026-09-07)
+
+Logical, bitwise, and remainder operators are now keyword-spelled; the old
+symbol forms are rejected with migration diagnostics.
+
+### Language change
+
+- New keywords: `and`, `or`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, and
+  `shift left` / `shift right` (two-word form; the direction word stays an
+  ordinary identifier so `left`/`right` remain usable as names).
+- Retired symbols rejected in operator position with diagnostics pointing to
+  the keyword, mirroring the `==` rejection: `&&`→`and`, `||`→`or`, `!`→`not`,
+  `^`→`xor`, `%`→`mod`, `&`→`bitand`, `|`→`bitor`, `~`→`bitnot`. The lexer
+  gives them dedicated tokens (`Bang` for standalone `!`) so the parser can
+  reject precisely; closure pipes `|x|` and `!=` are unaffected.
+- `<<` and `>>` remain valid alternative shift syntax.
+- AST/IR operator variants are unchanged (`And`, `Or`, `BitXor`, ...) — the
+  checker, optimizer, and all three backends needed no semantic changes.
+
+### Dead-code removal surfaced by the migration
+
+- The checker and IR codegen still carried the legacy `put x > "file"` /
+  `put x >> "file"` redirect special cases; with redirects now exclusively
+  `put ... to "file"`, those paths misfired on ordinary `put` of a `>>`
+  shift expression. Removed from checker and both codegen paths.
+
+### Migrations and verification
+
+- Migrated all 20 `examples/*.poly` and `tests/*.poly` fixtures plus two
+  embedded Rust-test sources to keyword spellings (script-assisted, with
+  string/comment/foreign-block protection; closure pipes preserved).
+- New tests: lexer keyword test, parser operator-keyword AST test,
+  retired-symbol rejection test, and shift-direction-word test.
+- Verified: 384 workspace tests pass, all 22 examples/fixtures pass
+  `--check` (C/ASM fixtures with their targets), keyword ops produce correct
+  runtime values end-to-end (mod/xor/bitand/bitor/bitnot/shift/not/and/or).
+
 
 ## Codegen optimizations and project audit (2026-09-06)
 

@@ -261,7 +261,10 @@ impl<'a> Lexer<'a> {
                 if self.match_char('=') {
                     self.add_token(TokenKind::NotEq, start);
                 } else {
-                    self.add_token(TokenKind::Not, start);
+                    // Standalone `!` is the retired spelling of `not`; a
+                    // dedicated token lets the parser reject it precisely
+                    // while the `not` keyword keeps TokenKind::Not.
+                    self.add_token(TokenKind::Bang, start);
                 }
             }
             '<' => {
@@ -282,6 +285,9 @@ impl<'a> Lexer<'a> {
                     self.add_token(TokenKind::Gt, start);
                 }
             }
+            // Logical/bitwise operators are keyword-spelled now; the symbol
+            // forms get distinct token kinds so the parser can reject them
+            // with a migration diagnostic (except << >>, which stay valid).
             '&' => {
                 if self.match_char('&') {
                     self.add_token(TokenKind::AndAnd, start);
@@ -733,6 +739,16 @@ impl<'a> Lexer<'a> {
             "macro" => TokenKind::Macro,
             "try" => TokenKind::Try,
             "not" => TokenKind::Not,
+            "and" => TokenKind::And,
+            "or" => TokenKind::Or,
+            "xor" => TokenKind::Xor,
+            "mod" => TokenKind::Mod,
+            "bitand" => TokenKind::BitAnd,
+            "bitor" => TokenKind::BitOr,
+            "bitnot" => TokenKind::BitNot,
+            // `shift` is contextual: the parser reads the identifier
+            // `left`/`right` after it, so those words stay usable as names.
+            "shift" => TokenKind::Shift,
             "panic" => TokenKind::Panic,
             "null" => TokenKind::Null,
             "addr" => TokenKind::Addr,
@@ -902,13 +918,38 @@ mod tests {
         assert_eq!(tokens[10].kind, TokenKind::GtEq);
         assert_eq!(tokens[11].kind, TokenKind::AndAnd);
         assert_eq!(tokens[12].kind, TokenKind::OrOr);
-        assert_eq!(tokens[13].kind, TokenKind::Not);
+        // Standalone `!` is the retired spelling of `not` and lexes as Bang;
+        // the `not` keyword keeps TokenKind::Not.
+        assert_eq!(tokens[13].kind, TokenKind::Bang);
         assert_eq!(tokens[14].kind, TokenKind::Amp);
         assert_eq!(tokens[15].kind, TokenKind::Pipe);
         assert_eq!(tokens[16].kind, TokenKind::Caret);
         assert_eq!(tokens[17].kind, TokenKind::Tilde);
         assert_eq!(tokens[18].kind, TokenKind::LtLt);
         assert_eq!(tokens[19].kind, TokenKind::GtGt);
+    }
+
+    #[test]
+    fn test_operator_keywords() {
+        // Logical, bitwise, and arithmetic operators have keyword spellings;
+        // the parser maps them onto the same AST operator variants as the
+        // retired symbol spellings did.
+        let source = "and or xor mod bitand bitor bitnot shift left right not";
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty());
+        assert_eq!(tokens[0].kind, TokenKind::And);
+        assert_eq!(tokens[1].kind, TokenKind::Or);
+        assert_eq!(tokens[2].kind, TokenKind::Xor);
+        assert_eq!(tokens[3].kind, TokenKind::Mod);
+        assert_eq!(tokens[4].kind, TokenKind::BitAnd);
+        assert_eq!(tokens[5].kind, TokenKind::BitOr);
+        assert_eq!(tokens[6].kind, TokenKind::BitNot);
+        assert_eq!(tokens[7].kind, TokenKind::Shift);
+        // `left`/`right` stay ordinary identifiers; only the parser, directly
+        // after `shift`, interprets them as shift directions.
+        assert_eq!(tokens[8].kind, TokenKind::Identifier("left".to_string()));
+        assert_eq!(tokens[9].kind, TokenKind::Identifier("right".to_string()));
+        assert_eq!(tokens[10].kind, TokenKind::Not);
     }
 
     #[test]

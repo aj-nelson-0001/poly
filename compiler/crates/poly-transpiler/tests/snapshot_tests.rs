@@ -59,7 +59,11 @@ const SAMPLES: &[(&str, &str)] = &[
 
 /// Fixture files from the repo that exercise foreign blocks per target.
 const TARGET_FIXTURES: &[(&str, &str, &str)] = &[
-    ("asm_target_tests", "asm", "../../../tests/asm_target_tests.poly"),
+    (
+        "asm_target_tests",
+        "asm",
+        "../../../tests/asm_target_tests.poly",
+    ),
     ("c_target_tests", "c", "../../../tests/c_target_tests.poly"),
 ];
 
@@ -81,8 +85,7 @@ fn check_snapshot(name: &str, output: &str) {
         )
     });
     assert_eq!(
-        output,
-        expected,
+        output, expected,
         "codegen output for '{name}' diverged from the committed snapshot.\n\
          If this change is intentional, regenerate with:\n  \
          POLY_UPDATE_SNAPSHOTS=1 cargo test -p poly-transpiler --test snapshot_tests"
@@ -114,10 +117,7 @@ fn snapshots_target_fixtures() {
             .unwrap_or_else(|_| panic!("fixture missing: {}", path.display()));
         match transpile_source(&source, target) {
             Ok(output) => check_snapshot(&format!("fixture_{name}"), &output),
-            Err(err) => check_snapshot(
-                &format!("fixture_{name}"),
-                &format!("ERROR:\n{err}"),
-            ),
+            Err(err) => check_snapshot(&format!("fixture_{name}"), &format!("ERROR:\n{err}")),
         }
     }
 }

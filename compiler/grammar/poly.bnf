@@ -94,11 +94,16 @@ operator        ::= <arithmetic_op>
                    | <logical_op>
                    | <bitwise_op>
 
-arithmetic_op   ::= "+" | "-" | "*" | "/" | "%"
-comparison_op   ::= "==" | "!=" | "<" | ">" | "<=" | ">="
-logical_op      ::= "&&" | "||" | "!"
-bitwise_op      ::= "&" | "|" | "^" | "~" | "<<" | ">>"
-assignment_op   ::= "=" | "+=" | "-=" | "*=" | "/=" | "%="
+arithmetic_op   ::= "+" | "-" | "*" | "/" | "mod"
+comparison_op   ::= "=" | "!=" | "<" | ">" | "<=" | ">="
+logical_op      ::= "and" | "or" | "not"
+bitwise_op      ::= "bitand" | "bitor" | "xor" | "bitnot"
+                   | "shift" "left" | "shift" "right"
+                   | "<<" | ">>"   (* retained alternative shift syntax *)
+assignment_op   ::= "=" | "+=" | "-=" | "*=" | "/="
+
+(* The retired symbol spellings % && || ! & | ^ ~ are tokenized only to
+   provide migration diagnostics and are rejected by the parser. *)
 
 mutation_command ::= <assignment_target> <assignment_op> <expression>
 ```
@@ -502,16 +507,16 @@ async_block     ::= "async" <block> "end" "async"
 
 ## Precedence (Lowest to Highest)
 
-1. `||` — Logical OR
-2. `&&` — Logical AND
-3. `==`, `!=`, `<`, `>`, `<=`, `>=` — Comparison
-4. `|` — Bitwise OR
-5. `^` — Bitwise XOR
-6. `&` — Bitwise AND
-7. `<<`, `>>` — Bitwise shift
+1. `or` — Logical OR
+2. `and` — Logical AND
+3. `=`, `!=`, `<`, `>`, `<=`, `>=` — Comparison
+4. `bitor` — Bitwise OR
+5. `xor` — Bitwise XOR
+6. `bitand` — Bitwise AND
+7. `shift left`, `shift right` (or `<<`, `>>`) — Bitwise shift
 8. `+`, `-` — Addition, Subtraction
-9. `*`, `/`, `%` — Multiplication, Division, Modulo
-10. `!`, `-`, `~`, `*` — Unary operators
+9. `*`, `/`, `mod` — Multiplication, Division, Modulo
+10. `not`, `-`, `bitnot`, `*` — Unary operators
 11. `as` — Type cast
 12. `.`, `()`, `[]` — Field access, function call, index
 13. `<atom>` — Atoms (literals, identifiers, parenthesized expressions)

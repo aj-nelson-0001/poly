@@ -1458,30 +1458,60 @@ impl<'a> Parser<'a> {
 
     fn parse_or_expression(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_and_expression()?;
-        while self.peek() == &TokenKind::OrOr {
-            self.advance();
-            let right = self.parse_and_expression()?;
-            left = Expression::BinaryOp {
-                op: BinaryOp::Or,
-                left: Box::new(left),
-                right: Box::new(right),
-            };
+        loop {
+            match self.peek() {
+                TokenKind::Or => {
+                    self.advance();
+                    let right = self.parse_and_expression()?;
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::Or,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
+                }
+                // `||` is the retired symbol spelling of `or`.
+                TokenKind::OrOr => {
+                    return Err(self.retired_operator_error(
+                        "`||` is legacy or syntax and is rejected",
+                        "Use `or` for logical or",
+                    ));
+                }
+                _ => break,
+            }
         }
         Ok(left)
     }
 
     fn parse_and_expression(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_comparison()?;
-        while self.peek() == &TokenKind::AndAnd {
-            self.advance();
-            let right = self.parse_comparison()?;
-            left = Expression::BinaryOp {
-                op: BinaryOp::And,
-                left: Box::new(left),
-                right: Box::new(right),
-            };
+        loop {
+            match self.peek() {
+                TokenKind::And => {
+                    self.advance();
+                    let right = self.parse_comparison()?;
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::And,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
+                }
+                // `&&` is the retired symbol spelling of `and`.
+                TokenKind::AndAnd => {
+                    return Err(self.retired_operator_error(
+                        "`&&` is legacy and syntax and is rejected",
+                        "Use `and` for logical and",
+                    ));
+                }
+                _ => break,
+            }
         }
         Ok(left)
+    }
+
+    /// Build the standard migration diagnostic for a retired operator symbol,
+    /// mirroring the `==` rejection so old spellings fail with a fix.
+    fn retired_operator_error(&self, message: &str, suggestion: &str) -> ParseError {
+        ParseError::with_suggestion(message, self.current().span, suggestion)
     }
 
     fn parse_comparison(&mut self) -> Result<Expression, ParseError> {
@@ -1557,42 +1587,80 @@ impl<'a> Parser<'a> {
 
     fn parse_bitwise_or(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_bitwise_xor()?;
-        while self.peek() == &TokenKind::Pipe {
-            self.advance();
-            let right = self.parse_bitwise_xor()?;
-            left = Expression::BinaryOp {
-                op: BinaryOp::BitOr,
-                left: Box::new(left),
-                right: Box::new(right),
-            };
+        loop {
+            match self.peek() {
+                TokenKind::BitOr => {
+                    self.advance();
+                    let right = self.parse_bitwise_xor()?;
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::BitOr,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
+                }
+                // `|` is the retired symbol spelling of `bitor`. Closure
+                // parameters (`|x| ...`) never reach this position, so a
+                // single pipe here is always an operator attempt.
+                TokenKind::Pipe => {
+                    return Err(self.retired_operator_error(
+                        "`|` is legacy bitor syntax and is rejected",
+                        "Use `bitor` for bitwise or",
+                    ));
+                }
+                _ => break,
+            }
         }
         Ok(left)
     }
 
     fn parse_bitwise_xor(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_bitwise_and()?;
-        while self.peek() == &TokenKind::Caret {
-            self.advance();
-            let right = self.parse_bitwise_and()?;
-            left = Expression::BinaryOp {
-                op: BinaryOp::BitXor,
-                left: Box::new(left),
-                right: Box::new(right),
-            };
+        loop {
+            match self.peek() {
+                TokenKind::Xor => {
+                    self.advance();
+                    let right = self.parse_bitwise_and()?;
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::BitXor,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
+                }
+                // `^` is the retired symbol spelling of `xor`.
+                TokenKind::Caret => {
+                    return Err(self.retired_operator_error(
+                        "`^` is legacy xor syntax and is rejected",
+                        "Use `xor` for bitwise exclusive or",
+                    ));
+                }
+                _ => break,
+            }
         }
         Ok(left)
     }
 
     fn parse_bitwise_and(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_shift()?;
-        while self.peek() == &TokenKind::Amp {
-            self.advance();
-            let right = self.parse_shift()?;
-            left = Expression::BinaryOp {
-                op: BinaryOp::BitAnd,
-                left: Box::new(left),
-                right: Box::new(right),
-            };
+        loop {
+            match self.peek() {
+                TokenKind::BitAnd => {
+                    self.advance();
+                    let right = self.parse_shift()?;
+                    left = Expression::BinaryOp {
+                        op: BinaryOp::BitAnd,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
+                }
+                // `&` is the retired symbol spelling of `bitand`.
+                TokenKind::Amp => {
+                    return Err(self.retired_operator_error(
+                        "`&` is legacy bitand syntax and is rejected",
+                        "Use `bitand` for bitwise and",
+                    ));
+                }
+                _ => break,
+            }
         }
         Ok(left)
     }
@@ -1601,6 +1669,8 @@ impl<'a> Parser<'a> {
         let mut left = self.parse_add_sub()?;
         loop {
             match self.peek() {
+                // `<<` / `>>` remain valid alternative shift syntax alongside
+                // the keyword form.
                 TokenKind::LtLt => {
                     self.advance();
                     let right = self.parse_add_sub()?;
@@ -1615,6 +1685,30 @@ impl<'a> Parser<'a> {
                     let right = self.parse_add_sub()?;
                     left = Expression::BinaryOp {
                         op: BinaryOp::Shr,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
+                }
+                // Keyword form: `x shift left 2` / `x shift right 2`. The
+                // direction word stays an ordinary identifier so `left` and
+                // `right` remain usable as names everywhere else.
+                TokenKind::Shift => {
+                    self.advance();
+                    let direction = match self.peek() {
+                        TokenKind::Identifier(name) if name == "left" => BinaryOp::Shl,
+                        TokenKind::Identifier(name) if name == "right" => BinaryOp::Shr,
+                        _ => {
+                            return Err(ParseError::with_suggestion(
+                                "`shift` must be followed by `left` or `right`",
+                                self.current().span,
+                                "Use `x shift left 2` or `x shift right 2`",
+                            ));
+                        }
+                    };
+                    self.advance();
+                    let right = self.parse_add_sub()?;
+                    left = Expression::BinaryOp {
+                        op: direction,
                         left: Box::new(left),
                         right: Box::new(right),
                     };
@@ -1685,7 +1779,7 @@ impl<'a> Parser<'a> {
                         right: Box::new(right),
                     };
                 }
-                TokenKind::Percent => {
+                TokenKind::Mod => {
                     self.advance();
                     let right = self.parse_unary()?;
                     left = Expression::BinaryOp {
@@ -1693,6 +1787,13 @@ impl<'a> Parser<'a> {
                         left: Box::new(left),
                         right: Box::new(right),
                     };
+                }
+                // `%` is the retired symbol spelling of `mod`.
+                TokenKind::Percent => {
+                    return Err(self.retired_operator_error(
+                        "`%` is legacy mod syntax and is rejected",
+                        "Use `mod` for remainder",
+                    ));
                 }
                 _ => break,
             }
@@ -1733,7 +1834,7 @@ impl<'a> Parser<'a> {
                     expr: Box::new(expr),
                 })
             }
-            TokenKind::Tilde => {
+            TokenKind::BitNot => {
                 self.advance();
                 let expr = self.parse_unary()?;
                 Ok(Expression::UnaryOp {
@@ -1741,6 +1842,15 @@ impl<'a> Parser<'a> {
                     expr: Box::new(expr),
                 })
             }
+            // `!` is the retired symbol spelling of `not`.
+            TokenKind::Bang => Err(self.retired_operator_error(
+                "`!` is legacy not syntax and is rejected",
+                "Use `not` for logical not",
+            )),
+            TokenKind::Tilde => Err(self.retired_operator_error(
+                "`~` is legacy bitnot syntax and is rejected",
+                "Use `bitnot` for bitwise not",
+            )),
             TokenKind::Star => {
                 self.advance();
                 let expr = self.parse_unary()?;
@@ -3921,6 +4031,85 @@ end match"#
         assert!(error.message.contains("legacy equality syntax"));
         assert!(error.suggestion.unwrap().contains("Use `=`"));
         assert!(parse_source("var x := 0\nx := 1").is_ok());
+    }
+
+    #[test]
+    fn test_parse_operator_keywords() {
+        // Keyword operators produce the same AST variants the retired symbol
+        // spellings did, so the checker, optimizer, and backends are unchanged.
+        let prog = parse_source(
+            "var a := x and y\nvar b := x or y\nvar c := x xor y\nvar d := x mod y\nvar e := x bitand y\nvar f := x bitor y\nvar g := x shift left 2\nvar h := x shift right 2\nvar i := not x\nvar j := bitnot x",
+        )
+        .unwrap();
+        let expected_ops = [
+            BinaryOp::And,
+            BinaryOp::Or,
+            BinaryOp::BitXor,
+            BinaryOp::Mod,
+            BinaryOp::BitAnd,
+            BinaryOp::BitOr,
+            BinaryOp::Shl,
+            BinaryOp::Shr,
+        ];
+        for (statement, expected) in prog.statements.iter().zip(expected_ops) {
+            match &statement.node {
+                Statement::VarDeclaration {
+                    value: Some(Expression::BinaryOp { op, .. }),
+                    ..
+                } => assert_eq!(op, &expected),
+                other => panic!("expected binary var decl, got {other:?}"),
+            }
+        }
+        // Unary keyword operators.
+        for statement in &prog.statements[8..10] {
+            match &statement.node {
+                Statement::VarDeclaration {
+                    value: Some(Expression::UnaryOp { .. }),
+                    ..
+                } => {}
+                other => panic!("expected unary var decl, got {other:?}"),
+            }
+        }
+        // `left` and `right` stay usable as ordinary identifiers.
+        assert!(parse_source("var right := 1\nvar left := right").is_ok());
+    }
+
+    #[test]
+    fn test_parse_rejects_retired_operator_symbols() {
+        let cases = [
+            ("var x := a && b", "legacy and syntax", "Use `and`"),
+            ("var x := a || b", "legacy or syntax", "Use `or`"),
+            ("var x := a ^ b", "legacy xor syntax", "Use `xor`"),
+            ("var x := a % b", "legacy mod syntax", "Use `mod`"),
+            ("var x := a & b", "legacy bitand syntax", "Use `bitand`"),
+            ("var x := a | b", "legacy bitor syntax", "Use `bitor`"),
+            ("var x := ~a", "legacy bitnot syntax", "Use `bitnot`"),
+            ("var x := !a", "legacy not syntax", "Use `not`"),
+        ];
+        for (source, message_part, suggestion_part) in cases {
+            let error = parse_source(source).unwrap_err();
+            assert!(
+                error.message.contains(message_part),
+                "{source}: got {:?}",
+                error.message
+            );
+            let suggestion = error.suggestion.unwrap();
+            assert!(
+                suggestion.contains(suggestion_part),
+                "{source}: got {suggestion:?}"
+            );
+        }
+        // Shift symbols remain valid alternative syntax.
+        assert!(parse_source("var x := a << 2\nvar y := a >> 2").is_ok());
+    }
+
+    #[test]
+    fn test_shift_requires_direction_word() {
+        let error = parse_source("var x := a shift 2").unwrap_err();
+        assert!(error
+            .message
+            .contains("`shift` must be followed by `left` or `right`"));
+        assert!(parse_source("var x := a shift left 2\nvar y := a shift right 2").is_ok());
     }
 
     #[test]

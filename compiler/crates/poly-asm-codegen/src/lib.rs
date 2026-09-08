@@ -101,6 +101,10 @@ struct AsmGenerator {
     output: String,
     label_counter: usize,
     string_data: Vec<(String, String)>,
+    /// Vector literals interned as static `{element_ptr, length}` descriptors:
+    /// (descriptor label, element label, element values as pre-rendered qwords).
+    /// The asm subset has no heap, so vectors are immutable static data.
+    vector_data: Vec<(String, String, Vec<String>)>,
     loop_stack: Vec<LoopContext>,
     /// Struct name -> (field name -> FieldInfo)
     structs: std::collections::HashMap<String, std::collections::HashMap<String, FieldInfo>>,
@@ -114,6 +118,7 @@ impl AsmGenerator {
             output: String::new(),
             label_counter: 0,
             string_data: Vec::new(),
+            vector_data: Vec::new(),
             loop_stack: Vec::new(),
             structs: std::collections::HashMap::new(),
             enums: std::collections::HashMap::new(),
@@ -132,14 +137,52 @@ impl AsmGenerator {
         label
     }
 
+    /// Intern an array literal as a static descriptor: an element array of
+    /// qwords followed by a `{element_ptr, length}` pair. Returns the
+    /// descriptor label. Element expressions must already be constant-folded
+    /// to i64 values (the asm subset only supports literal arrays).
+    fn intern_vector(&mut self, elements: &[i64]) -> String {
+        let element_label = self.fresh_label("vec");
+        let descriptor_label = self.fresh_label("vecdesc");
+        let rendered: Vec<String> = elements.iter().map(|v| v.to_string()).collect();
+        self.vector_data
+            .push((descriptor_label.clone(), element_label, rendered));
+        descriptor_label
+    }
+
     fn emit_string_data(&mut self) {
         if self.string_data.is_empty() {
             return;
         }
+        // #asm blocks may leave the assembler in any section; string and
+        // vector data must land in writable .data.
+        self.output.push_str("\n.section .data");
         self.output.push_str("\n# String literals\n");
         for (label, content) in &self.string_data {
             let escaped = asm_escape(content);
             let _ = writeln!(self.output, "{label}: .asciz \"{escaped}\"");
+        }
+    }
+
+    fn emit_vector_data(&mut self) {
+        if self.vector_data.is_empty() {
+            return;
+        }
+        // Same as string data: re-establish .data in case a #asm block left
+        // the assembler in another section.
+        self.output.push_str("\n.section .data");
+        self.output.push_str("\n# Vector literals\n");
+        for (descriptor_label, element_label, elements) in &self.vector_data {
+            let _ = writeln!(
+                self.output,
+                "{element_label}: .quad {}",
+                elements.join(", ")
+            );
+            let len = elements.len();
+            let _ = writeln!(
+                self.output,
+                "{descriptor_label}: .quad {element_label}\n.quad {len}"
+            );
         }
     }
 
@@ -211,6 +254,7 @@ impl AsmGenerator {
             self.output.push('\n');
         }
         self.emit_string_data();
+        self.emit_vector_data();
         // Functions in .text, then _start in .text
         self.output.push_str(".section .text\n\n");
         self.output.push_str(&funcs_buf);
@@ -299,13 +343,20 @@ impl AsmGenerator {
                 let _ = writeln!(param_moves, "    movq {reg}, -{offset}(%rbp)");
             }
         }
-        // Pre-reserve one slot per statement so the frame size is final before
-        // `subq` is emitted; emit_statement only appends to the frame afterwards.
+        // Emit the body into a scratch buffer first so that every local and
+        // temporary slot (expression immediates, vector index/result spills,
+        // for-in cursors) is allocated BEFORE the prologue's `subq` is
+        // emitted. Sizing the frame from a per-statement estimate undersized
+        // functions with many temporaries: their locals were written below
+        // %rsp and clobbered by helper-call frames.
+        let saved_output = std::mem::take(&mut self.output);
         if let Some(body) = &func.body {
-            for _ in body {
-                frame.allocate(&format!("__reserve_{}", frame.next_offset));
+            for stmt in body {
+                self.emit_statement(&stmt.node, &mut frame)?;
             }
         }
+        let body_buf = std::mem::take(&mut self.output);
+        self.output = saved_output;
 
         let _ = writeln!(self.output, ".globl {name}", name = func.name);
         let _ = writeln!(self.output, "{name}:", name = func.name);
@@ -317,12 +368,7 @@ impl AsmGenerator {
             let _ = writeln!(self.output, "    subq ${frame_size}, %rsp");
         }
         self.output.push_str(&param_moves);
-
-        if let Some(body) = &func.body {
-            for stmt in body {
-                self.emit_statement(&stmt.node, &mut frame)?;
-            }
-        }
+        self.output.push_str(&body_buf);
 
         self.output.push_str("    movq $0, %rax\n");
         self.output.push_str("    movq %rbp, %rsp\n");
@@ -365,10 +411,27 @@ impl AsmGenerator {
                         && !self.is_struct_type(ty)
                         && !self.is_enum_type(ty)
                         && !self.is_reference_type(ty)
+                        && !self.is_vector_type(ty)
                     {
                         return Err(format!(
-                            "Assembly backend does not support type `{ty:?}` for `{name}`; use integer, bool, string, struct, or enum"
+                            "Assembly backend does not support type `{ty:?}` for `{name}`; use integer, bool, string, struct, enum, or Vec<T>"
                         ));
+                    }
+                    // Record vector element types for typed for-in bindings and
+                    // typed `put` of indexed elements.
+                    if let Some(elem) = Self::vector_element_type(ty) {
+                        let elem_name = if Self::vector_element_is_integer(&elem) {
+                            "int".to_string()
+                        } else if matches!(&elem, TypeAnnotation::Named(n) if n == "char") {
+                            "char".to_string()
+                        } else if self.is_string_type(&elem) {
+                            "string".to_string()
+                        } else {
+                            "int".to_string()
+                        };
+                        frame
+                            .var_types
+                            .insert(format!("__vecelem_{name}"), elem_name);
                     }
                     // Record struct/enum/string types for typed access (fields,
                     // strlen-based `put` of string variables).
@@ -647,33 +710,33 @@ impl AsmGenerator {
                     iterable,
                     body,
                 } => {
-                    // Only string iterables are supported: they are represented
-                    // as a pointer to NUL-terminated data, so the loop is a
-                    // pointer walk over bytes (each character is a byte of the
-                    // string).  The binding is declared as a string so `put`
-                    // routes it through the strlen writer.
-                    if !matches!(iterable.as_ref(), Expression::Identifier(_)) {
-                        return Err(
-                            "Assembly backend for-in requires a string variable as the iterable"
-                                .to_string(),
-                        );
-                    }
+                    // Two iterable kinds are supported, both identified by a
+                    // descriptor the variable holds:
+                    // - strings: a pointer to NUL-terminated data, walked one
+                    //   byte at a time (the binding is a char cursor);
+                    // - Vec<T>: a static `{element_ptr, length}` descriptor,
+                    //   iterated by index with 8-byte elements.
                     let iter_name = match iterable.as_ref() {
                         Expression::Identifier(name) => name.clone(),
-                        _ => unreachable!(),
+                        _ => {
+                            return Err(
+                                "Assembly backend for-in requires a variable as the iterable"
+                                    .to_string(),
+                            )
+                        }
                     };
                     let iter_loc = frame
                         .get(&iter_name)
                         .ok_or_else(|| format!("Undefined variable `{iter_name}`"))?;
+                    let is_vector = frame
+                        .var_types
+                        .contains_key(&format!("__vecelem_{iter_name}"));
                     let var_loc = frame.allocate(variable);
-                    if let Location::Stack(var_off) = var_loc {
-                        if let Location::Stack(iter_off) = iter_loc {
-                            // Initialize the cursor with the string's address.
-                            let _ = writeln!(self.output, "    movq -{iter_off}(%rbp), %rax");
-                            let _ = writeln!(self.output, "    movq %rax, -{var_off}(%rbp)");
-                        }
-                    }
-                    frame.var_types.insert(variable.clone(), "char".to_string());
+                    let idx_loc = if is_vector {
+                        Some(frame.allocate(&format!("__forin_idx_{variable}")))
+                    } else {
+                        None
+                    };
 
                     let check_label = self.fresh_label("forin_check");
                     let body_label = self.fresh_label("forin_body");
@@ -683,24 +746,72 @@ impl AsmGenerator {
                         continue_label: incr_label.clone(),
                         break_label: end_label.clone(),
                     });
-                    let _ = writeln!(self.output, "    jmp {check_label}");
-                    let _ = writeln!(self.output, "{body_label}:");
+                    if let Some(idx_loc) = idx_loc {
+                        // Vector iteration: index starts at 0.
+                        self.emit_store_const(idx_loc, 0);
+                        let _ = writeln!(self.output, "    jmp {check_label}");
+                        let _ = writeln!(self.output, "{body_label}:");
+                        // binding = elements[index]: load the descriptor,
+                        // then ptr = desc.ptr + index * 8, value = *ptr.
+                        self.load_to_reg(iter_loc, "%rax", frame)?;
+                        self.output.push_str("    movq (%rax), %rax\n");
+                        self.load_to_reg(idx_loc, "%rcx", frame)?;
+                        self.output.push_str("    shlq $3, %rcx\n");
+                        self.output.push_str("    addq %rcx, %rax\n");
+                        self.output.push_str("    movq (%rax), %rax\n");
+                        self.move_to_loc(Location::Reg("%rax"), var_loc, frame)?;
+                        // The binding's print routing follows the vector's
+                        // element type (int vs char vs string).
+                        let elem_name = frame
+                            .var_types
+                            .get(&format!("__vecelem_{iter_name}"))
+                            .cloned()
+                            .unwrap_or_else(|| "int".to_string());
+                        frame.var_types.insert(variable.clone(), elem_name);
+                    } else {
+                        // String iteration: the binding is a byte cursor over
+                        // NUL-terminated data.
+                        if let Location::Stack(var_off) = var_loc {
+                            if let Location::Stack(iter_off) = iter_loc {
+                                // Initialize the cursor with the string's address.
+                                let _ = writeln!(self.output, "    movq -{iter_off}(%rbp), %rax");
+                                let _ = writeln!(self.output, "    movq %rax, -{var_off}(%rbp)");
+                            }
+                        }
+                        frame.var_types.insert(variable.clone(), "char".to_string());
+                        let _ = writeln!(self.output, "    jmp {check_label}");
+                        let _ = writeln!(self.output, "{body_label}:");
+                    }
                     for stmt in body {
                         self.emit_statement(&stmt.node, frame)?;
                     }
                     let _ = writeln!(self.output, "{incr_label}:");
-                    // Advance the cursor by one byte.
-                    if let Location::Stack(var_off) = var_loc {
-                        let _ = writeln!(self.output, "    incq -{var_off}(%rbp)");
+                    if let Some(idx_loc) = idx_loc {
+                        // Advance the index by one element.
+                        self.load_to_reg(idx_loc, "%rax", frame)?;
+                        self.output.push_str("    addq $1, %rax\n");
+                        self.move_to_loc(Location::Reg("%rax"), idx_loc, frame)?;
+                        let _ = writeln!(self.output, "{check_label}:");
+                        // Loop while index < descriptor.length (second qword).
+                        self.load_to_reg(iter_loc, "%rax", frame)?;
+                        self.output.push_str("    movq 8(%rax), %rax\n");
+                        self.load_to_reg(idx_loc, "%rcx", frame)?;
+                        self.output.push_str("    cmpq %rax, %rcx\n");
+                        let _ = writeln!(self.output, "    jl {body_label}");
+                    } else {
+                        // Advance the cursor by one byte.
+                        if let Location::Stack(var_off) = var_loc {
+                            let _ = writeln!(self.output, "    incq -{var_off}(%rbp)");
+                        }
+                        let _ = writeln!(self.output, "{check_label}:");
+                        // Loop while the current byte is not the NUL terminator.
+                        if let Location::Stack(var_off) = var_loc {
+                            let _ = writeln!(self.output, "    movq -{var_off}(%rbp), %rax");
+                            self.output.push_str("    movb (%rax), %al\n");
+                            self.output.push_str("    testb %al, %al\n");
+                        }
+                        let _ = writeln!(self.output, "    jnz {body_label}");
                     }
-                    let _ = writeln!(self.output, "{check_label}:");
-                    // Loop while the current byte is not the NUL terminator.
-                    if let Location::Stack(var_off) = var_loc {
-                        let _ = writeln!(self.output, "    movq -{var_off}(%rbp), %rax");
-                        self.output.push_str("    movb (%rax), %al\n");
-                        self.output.push_str("    testb %al, %al\n");
-                    }
-                    let _ = writeln!(self.output, "    jnz {body_label}");
                     let _ = writeln!(self.output, "{end_label}:");
                     self.loop_stack.pop();
                 }
@@ -1135,8 +1246,61 @@ impl AsmGenerator {
                 let _ = writeln!(self.output, "{end_label}:");
                 Ok(result_loc)
             }
+            Expression::ArrayLiteral(elements) => {
+                // The asm subset has no heap: vectors are immutable static
+                // data. Each literal becomes a `{element_ptr, length}`
+                // descriptor in .data, and the variable holds the descriptor
+                // address (8 bytes, like a string). Only integer elements are
+                // supported (chars would need per-element NUL strings).
+                let mut values: Vec<i64> = Vec::with_capacity(elements.len());
+                for element in elements {
+                    match element {
+                        Expression::IntLiteral(v) => {
+                            let parsed: i64 = v
+                                .parse()
+                                .map_err(|_| format!("Invalid integer literal: {v}"))?;
+                            values.push(parsed);
+                        }
+                        Expression::BoolLiteral(b) => values.push(if *b { 1 } else { 0 }),
+                        // Chars are stored as code points; `put` of a char
+                        // element writes the low byte (ASCII, consistent with
+                        // the subset's byte-level string handling).
+                        Expression::UnicodeCharLiteral(ch) => values.push(*ch as u64 as i64),
+                        _ => {
+                            return Err(
+                                "Assembly backend array literals only support integer/bool/char elements"
+                                    .to_string(),
+                            )
+                        }
+                    }
+                }
+                let label = self.intern_vector(&values);
+                let loc = frame.allocate("__vec");
+                self.emit_string_addr(&label, loc);
+                Ok(loc)
+            }
+            Expression::Index { object, index } => {
+                // Vectors are descriptor-backed static data: load
+                // `*(descriptor.ptr + index * 8)`. Bounds are not checked (the
+                // checker validates only that object/index type-check).
+                let obj_loc = self.emit_expr(object, frame)?;
+                let idx_loc = self.emit_expr(index, frame)?;
+                let ptr_slot = frame.allocate("__vecptr");
+                let result_loc = frame.allocate("__vecelem_result");
+                // ptr = descriptor.ptr (first qword of the descriptor)
+                self.load_to_reg(obj_loc, "%rax", frame)?;
+                self.output.push_str("    movq (%rax), %rax\n");
+                self.move_to_loc(Location::Reg("%rax"), ptr_slot, frame)?;
+                // rax = ptr + index * 8
+                self.load_to_reg(ptr_slot, "%rax", frame)?;
+                self.load_to_reg(idx_loc, "%rcx", frame)?;
+                self.output.push_str("    shlq $3, %rcx\n");
+                self.output.push_str("    addq %rcx, %rax\n");
+                self.output.push_str("    movq (%rax), %rax\n");
+                self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
+                Ok(result_loc)
+            }
             Expression::TupleIndex { .. }
-            | Expression::Index { .. }
             | Expression::Range { .. }
             | Expression::LoopRange { .. }
             | Expression::ForLoop { .. }
@@ -1148,7 +1312,6 @@ impl AsmGenerator {
             | Expression::UnsafeBlock(_)
             | Expression::MethodCall { .. }
             | Expression::TupleLiteral(_)
-            | Expression::ArrayLiteral(_)
             | Expression::UnicodeCharLiteral(_)
             | Expression::FloatLiteral(_)
             | Expression::ByteLiteral(_) => Err(
@@ -1203,6 +1366,45 @@ impl AsmGenerator {
         if self.is_string_typed_expr(expr) {
             self.emit_string_typed_put(expr, frame)?;
             return Ok(());
+        }
+        // An indexed vector element prints per the vector's element type:
+        // integer elements through _print_int (the default below), char
+        // elements as a single byte, string elements via the strlen writer.
+        if let Expression::Index { object, .. } = expr {
+            if let Expression::Identifier(vec_name) = object.as_ref() {
+                if let Some(elem_name) = frame
+                    .var_types
+                    .get(&format!("__vecelem_{vec_name}"))
+                    .cloned()
+                {
+                    match elem_name.as_str() {
+                        "char" => {
+                            // Write the element's low byte through the 32-byte
+                            // _itoa_buf scratch area (sys_write needs an
+                            // address, and the value itself is a code point).
+                            let loc = self.emit_expr(expr, frame)?;
+                            self.load_to_reg(loc, "%rax", frame)?;
+                            self.output.push_str("    leaq _itoa_buf+31(%rip), %rsi\n");
+                            self.output.push_str("    movb %al, (%rsi)\n");
+                            self.output.push_str("    movq $1, %rax\n");
+                            self.output.push_str("    movq $1, %rdi\n");
+                            self.output.push_str("    movq $1, %rdx\n");
+                            self.output.push_str("    syscall\n");
+                            self.emit_newline();
+                            return Ok(());
+                        }
+                        "string" => {
+                            return Err(
+                                "Assembly backend `put` of a string vector element is not supported; copy it to a string variable first"
+                                    .to_string(),
+                            );
+                        }
+                        _ => {
+                            // Integer element: fall through to the integer path.
+                        }
+                    }
+                }
+            }
         }
         // A bare string-typed variable holds a pointer, not an integer: printing
         // it through _print_int would emit the address. Route it through the
@@ -1480,6 +1682,30 @@ impl AsmGenerator {
         matches!(ty, TypeAnnotation::Reference(_, _))
     }
 
+    /// `Vec<T>` annotations are supported as immutable static descriptor-backed
+    /// vectors (no heap in the asm subset).
+    fn is_vector_type(&self, _ty: &TypeAnnotation) -> bool {
+        // The parameter keeps the call site symmetric with the other type
+        // helpers; `Vec` is a dedicated annotation variant.
+        matches!(_ty, TypeAnnotation::Vec(_))
+    }
+
+    /// The element type annotation of a `Vec<T>` annotation.
+    fn vector_element_type(ty: &TypeAnnotation) -> Option<TypeAnnotation> {
+        match ty {
+            TypeAnnotation::Vec(inner) => Some((**inner).clone()),
+            _ => None,
+        }
+    }
+
+    /// Whether the vector element type prints as an integer (vs a char).
+    fn vector_element_is_integer(elem: &TypeAnnotation) -> bool {
+        matches!(elem, TypeAnnotation::Named(name) if matches!(
+            name.as_str(),
+            "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" | "byte" | "usize" | "isize"
+        ))
+    }
+
     fn is_struct_type(&self, ty: &TypeAnnotation) -> bool {
         matches!(ty, TypeAnnotation::Named(name) if self.structs.contains_key(name))
     }
@@ -1641,9 +1867,37 @@ put name"#,
     }
 
     #[test]
+    fn supports_vector_literal_and_indexing() {
+        let output = transpile_source("var xs Vec<i32> := [10, 20, 30]\nvar a i32 := xs[1]\nput a");
+        // Static descriptor data: element array plus {ptr, length} pair.
+        assert!(output.contains("vec_"));
+        assert!(output.contains("vecdesc_"));
+        assert!(output.contains(".quad 10, 20, 30"));
+        assert!(output.contains(".quad 3"));
+        // Indexed load: ptr = desc.ptr, element = *(ptr + index * 8).
+        assert!(output.contains("shlq $3, %rcx"));
+        assert!(output.contains("movq (%rax), %rax"));
+    }
+
+    #[test]
+    fn supports_for_in_over_vector() {
+        let output = transpile_source("var xs Vec<i32> := [1, 2]\nfor x in xs\n    put x\nend for");
+        // Vector for-in iterates by index against the descriptor length.
+        assert!(output.contains("movq 8(%rax), %rax"));
+        assert!(output.contains("shlq $3, %rcx"));
+        assert!(output.contains("cmpq %rax, %rcx"));
+    }
+
+    #[test]
+    fn rejects_non_integer_vector_elements() {
+        let err = transpile_source_err("var xs Vec<i32> := [\"a\", \"b\"]\nput xs[0]");
+        assert!(err.contains("only support integer"));
+    }
+
+    #[test]
     fn for_in_rejects_non_variable_iterables() {
         let err = transpile_source_err("for c in \"ab\"\n    put c\nend for");
-        assert!(err.contains("requires a string variable"));
+        assert!(err.contains("requires a variable"));
     }
 
     #[test]

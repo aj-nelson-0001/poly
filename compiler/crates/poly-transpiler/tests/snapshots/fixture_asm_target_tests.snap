@@ -18,6 +18,7 @@ _asm_msg_len = . - _asm_msg
     movq $_asm_msg_len, %rdx
     syscall
 
+.section .data
 # String literals
 str_0: .asciz "hello from asm"
 str_11: .asciz "Poly "
@@ -31,12 +32,12 @@ double_val:
     movq %rsp, %rbp
     subq $32, %rsp
     movq %rdi, -8(%rbp)
-    movq $2, -24(%rbp)
+    movq $2, -16(%rbp)
     movq -8(%rbp), %rax
-    movq -24(%rbp), %rcx
+    movq -16(%rbp), %rcx
     imulq %rcx, %rax
-    movq %rax, -32(%rbp)
-    movq -32(%rbp), %rax
+    movq %rax, -24(%rbp)
+    movq -24(%rbp), %rax
     movq %rbp, %rsp
     popq %rbp
     retq
@@ -56,12 +57,12 @@ add_three:
     movq -8(%rbp), %rax
     movq -16(%rbp), %rcx
     addq %rcx, %rax
-    movq %rax, -40(%rbp)
-    movq -40(%rbp), %rax
+    movq %rax, -32(%rbp)
+    movq -32(%rbp), %rax
     movq -24(%rbp), %rcx
     addq %rcx, %rax
-    movq %rax, -40(%rbp)
-    movq -40(%rbp), %rax
+    movq %rax, -32(%rbp)
+    movq -32(%rbp), %rax
     movq %rbp, %rsp
     popq %rbp
     retq

@@ -9,6 +9,7 @@ _newline: .byte 10
 _minus:   .byte 45
 
 
+.section .data
 # String literals
 str_0: .asciz "Poly"
 str_3: .asciz "hello "

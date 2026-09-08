@@ -1,6 +1,8 @@
 #!/usr/bin/env poly
-# extern asm + dereference integration test
-# The #asm block defines the symbol the extern declares; deref loads through it.
+# asm target integration: extern asm, dereference, vectors, for-in
+# The #asm block defines the symbol the extern declares; deref loads
+# through it. Vectors are static descriptor-backed data; for-in walks
+# them by index against the descriptor length.
 
 extern asm fn get_ptr(): &i32
 #asm
@@ -14,6 +16,19 @@ get_ptr:
 #endasm
 
 fn main()
+    # deref through an extern asm pointer: prints 42
     var p &i32 := get_ptr()
     put *p
+
+    # vector literal + indexing: 10, 30
+    var xs Vec<i32> := [10, 20, 30]
+    put xs[0]
+    put xs[2]
+
+    # for-in over a vector: sum is 60
+    var total i32 := 0
+    for x in xs
+        total := total + x
+    end for
+    put total
 end fn

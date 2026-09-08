@@ -3,6 +3,85 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-08.
 
+## asm target: extern asm, vector support, frame-size fix (2026-09-08)
+
+Continuation pass completing the asm target's feature gaps and fixing a
+serious pre-existing codegen bug the new work surfaced.
+
+### `extern asm` declarations
+
+- The parser accepts `extern asm fn ...` alongside `extern rust`/`extern c`.
+  Previously extern declarations were target-filtered before the asm
+  pipeline, so pure Poly code on the asm target had no way to source a
+  reference — which is what blocked the end-to-end deref check last pass.
+- The asm backend accepts `&T` locals as plain 8-byte pointer slots
+  (`is_reference_type`); `extern asm` helpers and `#asm` blocks define the
+  symbols the declarations name.
+- Verified end-to-end: an extern asm helper returning `&i32`, dereferenced
+  with `*p`, prints 42. Fixture `tests/extern_asm_deref.poly` + a CI job
+  (`Check and run asm target fixture`, Linux) that checks, compiles, runs,
+  and verifies the output.
+
+### `_start` now calls `fn main`
+
+- Pre-existing gap found while testing: the asm backend emitted `fn main`
+  bodies as a `main:` label but `_start` never called it — any program that
+  put its logic in `fn main` silently did nothing (all existing asm fixtures
+  used only top-level statements, so it was invisible). `_start` now calls
+  `main` when the program declares one, mirroring the Rust target, which
+  wraps top-level statements in a generated `fn main`.
+
+### Vector support (static descriptor-backed)
+
+- The asm subset has no heap, so `Vec<T>` is immutable static data: array
+  literals intern an element array plus a `{element_ptr, length}` descriptor
+  in `.data`; the variable holds the descriptor address.
+- Supported: literals of integer/bool/char elements, `xs[i]` indexing
+  (`ptr + index * 8` load), and `for x in xs` (index loop against the
+  descriptor length). Element typing is tracked per vector
+  (`__vecelem_<name>` in the frame's `var_types`): integer elements print
+  via `_print_int`, char elements via a 1-byte sys_write through the
+  `_itoa_buf` scratch (sys_write needs an address; the element is a code
+  point), string element `put` is rejected with guidance.
+- Verified end-to-end: `xs[0]`/`xs[2]` print 10/30, for-in sum prints 60,
+  char vector prints `h`/`i`.
+
+### Frame-size bug fixed (two-phase function emit)
+
+- The vector work exposed a pre-existing stack corruption: functions sized
+  their frame from one pre-reserved slot per *statement*, but expression
+  codegen allocates temporaries (`__imm_*`, `__call_*`, concat spills, and
+  now `__vecptr`/`__vecelem_result`/`__forin_idx_*`) during emission, so
+  any function using many temporaries wrote locals below `%rsp` —
+  clobbered by `_print_int`'s call frame. The fixture's `fn main` printed
+  garbage for its third statement; plain local count overestimated the
+  need only by luck elsewhere.
+- Fixed properly: function bodies are emitted into a scratch buffer first,
+  and the prologue's `subq` is written from the *final* frame size. The
+  per-statement reservation hack is gone. Snapshot diffs show the
+  affected functions now pack slots tightly (e.g. `-24/-32` → `-16/-24`).
+
+### Data-section hygiene
+
+- `emit_string_data`/`emit_vector_data` re-establish `.section .data`:
+  `#asm` blocks leave the assembler in whatever section they choose, and
+  string/vector data emitted afterwards previously landed in read-only
+  `.text` (DT_TEXTREL warnings, segfault at runtime).
+
+### Verification
+
+- `cargo test --workspace`: all 25 suites pass (396 tests; +3 asm codegen
+  tests for vector literal/indexing, vector for-in, and non-integer element
+  rejection).
+- Snapshot tests regenerated intentionally (section directive + frame
+  packing); `POLY_UPDATE_SNAPSHOTS=1` process per snapshot docs.
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- `cargo fmt --all -- --check`: clean.
+- Markdown/doc audits: 49 files pass; 565 blocks, 229 complete pass
+  `--check`, 0 unmarked failures.
+- asm fixture: `--check` ok, compiled, run, output verified (42/10/30/60).
+- Playground wasm rebuilt and Node smoke test passes.
+
 ## LSP positions, source maps, and ASM backend gaps (2026-09-08)
 
 Follow-up pass addressing the 2026-08-15 review's remaining items: LSP

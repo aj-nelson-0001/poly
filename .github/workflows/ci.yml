@@ -116,8 +116,9 @@ jobs:
           "$POLY_BIN" --target asm tests/extern_asm_deref.poly -o tests/extern_asm_deref.S
           cc tests/extern_asm_deref.S -o tests/extern_asm_deref_bin -nostartfiles
           actual_output=$(./tests/extern_asm_deref_bin)
-          if [ "$actual_output" != "42" ]; then
-            printf 'Unexpected asm fixture output: %s\n' "$actual_output"
+          expected_asm_output=$'42\n10\n30\n60'
+          if [ "$actual_output" != "$expected_asm_output" ]; then
+            printf 'Unexpected asm fixture output:\n%s\n' "$actual_output"
             exit 1
           fi
           rm -f tests/extern_asm_deref.S tests/extern_asm_deref_bin

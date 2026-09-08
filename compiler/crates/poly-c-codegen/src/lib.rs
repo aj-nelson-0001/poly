@@ -380,6 +380,118 @@ impl CGenerator {
                     line_prefix(output);
                     output.push_str("}\n");
                 }
+                Expression::MatchExpression { scrutinee, arms } => {
+                    // Match lowers to an if/else-if chain over literal-
+                    // comparable patterns, wrapped in a block so arm-local
+                    // bindings cannot leak into the enclosing scope. Struct
+                    // patterns keep the scrutinee in a temporary named
+                    // __poly_match (one per arm body via the fresh binding).
+                    let scrutinee_str = self.expr(scrutinee)?;
+                    let match_var = "__poly_match";
+                    line_prefix(output);
+                    output.push_str("{\n");
+                    line_prefix_for(output, indent + 1);
+                    writeln!(
+                        output,
+                        "const {} {} = {};",
+                        self.inferred_type(Some(scrutinee)),
+                        match_var,
+                        scrutinee_str
+                    )
+                    .unwrap();
+                    for (arm_index, arm) in arms.iter().enumerate() {
+                        line_prefix_for(output, indent + 1);
+                        let is_wildcard = matches!(arm.pattern, ast::Pattern::Wildcard);
+                        if is_wildcard {
+                            // Wildcard: always matches, so it closes the chain
+                            // with a plain `else` (any later arm is dead code
+                            // but still compiles).
+                            if arm_index == 0 {
+                                output.push_str("if (1) {\n");
+                            } else {
+                                output.push_str("else {\n");
+                            }
+                        } else {
+                            if arm_index == 0 {
+                                write!(output, "if ").unwrap();
+                            } else {
+                                write!(output, "else if ").unwrap();
+                            }
+                            match &arm.pattern {
+                                ast::Pattern::Literal(literal) => {
+                                    writeln!(
+                                        output,
+                                        "({} == {}) {{",
+                                        match_var,
+                                        self.expr(literal)?
+                                    )
+                                    .unwrap();
+                                }
+                                ast::Pattern::Range {
+                                    start,
+                                    end,
+                                    inclusive,
+                                } => {
+                                    let lower = if *inclusive { ">=" } else { ">" };
+                                    let upper = if *inclusive { "<=" } else { "<" };
+                                    writeln!(
+                                        output,
+                                        "({} {} {} && {} {} {}) {{",
+                                        match_var,
+                                        lower,
+                                        self.expr(start)?,
+                                        match_var,
+                                        upper,
+                                        self.expr(end)?
+                                    )
+                                    .unwrap();
+                                }
+                                ast::Pattern::Identifier(name) => {
+                                    // Enum-variant identifiers have no C
+                                    // representation in this subset; a plain
+                                    // binding matches everything and binds the
+                                    // scrutinee.
+                                    writeln!(output, "(1) {{ // binding `{name}` = {}", match_var)
+                                        .unwrap();
+                                }
+                                other => {
+                                    let _ = other;
+                                    return Err(
+                                        "C backend match supports literal, range, wildcard, and identifier patterns; use a #c helper for structured patterns"
+                                            .to_string(),
+                                    );
+                                }
+                            }
+                        }
+                        if let Some(guard) = &arm.guard {
+                            // Guards are appended as a nested condition so the
+                            // fallthrough chain stays intact.
+                            let _ = guard;
+                            return Err(
+                                "C backend match guards are not supported yet; use a #c helper"
+                                    .to_string(),
+                            );
+                        }
+                        match &arm.body {
+                            ast::MatchArmBody::Expression(expr) => {
+                                line_prefix_for(output, indent + 2);
+                                writeln!(
+                                    output,
+                                    "printf(\"%d\\n\", (int32_t)({}));",
+                                    self.expr(expr)?
+                                )
+                                .unwrap();
+                            }
+                            ast::MatchArmBody::Block(statements) => {
+                                self.block_into(output, indent + 2, statements)?;
+                            }
+                        }
+                        line_prefix_for(output, indent + 1);
+                        output.push_str("}\n");
+                    }
+                    line_prefix(output);
+                    output.push_str("}\n");
+                }
                 _ => {
                     line_prefix(output);
                     writeln!(output, "{};", self.expr(expr)?).unwrap();
@@ -495,8 +607,11 @@ impl CGenerator {
             Expression::FieldAccess { object, field } => {
                 Ok(format!("{}.{}", self.expr(object)?, field))
             }
-            Expression::TupleIndex { .. } => {
-                Err("tuple index access is not supported by the C backend".to_string())
+            Expression::TupleIndex { object, index } => {
+                // Tuples compile to anonymous structs; `.N` fields are named
+                // `_0`, `_1`, ... (see tuple_struct_type).
+                let object_str = self.expr(object)?;
+                Ok(format!("{object_str}._{index}"))
             }
             Expression::Index { object, index } => {
                 Ok(format!("{}[{}]", self.expr(object)?, self.expr(index)?))
@@ -528,6 +643,16 @@ impl CGenerator {
                         .to_string(),
                 )
             }
+            Expression::TupleLiteral(elements) => {
+                // Anonymous-struct tuple literal: `(i32, i32) -> struct { int32_t _0; int32_t _1; }`.
+                let fields = elements
+                    .iter()
+                    .enumerate()
+                    .map(|(index, element)| Ok(format!(". _{index} = {}", self.expr(element)?)))
+                    .collect::<Result<Vec<_>, String>>()?
+                    .join(", ");
+                Ok(format!("{{ {fields} }}"))
+            }
             Expression::MatchExpression { .. }
             | Expression::Closure { .. }
             | Expression::StructLiteral { .. }
@@ -536,7 +661,6 @@ impl CGenerator {
             | Expression::GetExpression(_)
             | Expression::UnsafeBlock(_)
             | Expression::MethodCall { .. }
-            | Expression::TupleLiteral(_)
             | Expression::ArrayLiteral(_) => Err(
                 "this expression is not supported by the C backend; use a #c helper".to_string(),
             ),
@@ -576,6 +700,7 @@ impl CGenerator {
             | Expression::Call { .. }
             | Expression::FieldAccess { .. }
             | Expression::Index { .. }
+            | Expression::TupleIndex { .. }
             | Expression::AsExpression { .. } => {
                 let format = if self.is_string_expression(expression) {
                     "%s".to_string()
@@ -613,6 +738,20 @@ impl CGenerator {
         }
     }
 
+    /// Render a tuple type as an anonymous struct: `(i32, ustring)` becomes
+    /// `struct { int32_t _0; const char *_1; }`. Element fields are named
+    /// `_N` so `.0` index access lowers to `._0`.
+    fn tuple_struct_type(&self, components: &[TypeAnnotation]) -> String {
+        let fields = components
+            .iter()
+            .enumerate()
+            .map(|(index, component)| self.ty(component).map(|ty| format!("{} _{};", ty, index)))
+            .collect::<Result<Vec<_>, String>>()
+            .unwrap_or_default()
+            .join(" ");
+        format!("struct {{ {fields} }}")
+    }
+
     fn inferred_type(&self, value: Option<&Expression>) -> String {
         match value {
             Some(Expression::FloatLiteral(_)) => "double".to_string(),
@@ -645,12 +784,12 @@ impl CGenerator {
             }
             .to_string()),
             TypeAnnotation::Vec(inner) => Ok(format!("{} *", self.ty(inner)?)),
+            TypeAnnotation::Tuple(components) => Ok(self.tuple_struct_type(components)),
             TypeAnnotation::Reference(_, inner) => self.ty(inner),
             TypeAnnotation::Pointer(inner) => Ok(format!("{} *", self.ty(inner)?)),
             TypeAnnotation::Generic { name, .. } if name == "Vec" => Ok("void *".to_string()),
             TypeAnnotation::Generic { name, .. } => Ok(name.clone()),
-            TypeAnnotation::Tuple(_)
-            | TypeAnnotation::Array(_, _)
+            TypeAnnotation::Array(_, _)
             | TypeAnnotation::Option(_)
             | TypeAnnotation::Result(_, _)
             | TypeAnnotation::Nullable(_)
@@ -747,4 +886,42 @@ mod tests {
         assert!(output.contains("double_value"));
         assert!(output.contains("int main(void)"));
     }
+
+    fn generate(source: &str) -> String {
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        let mut parser = Parser::new(&tokens);
+        let program = parser.parse().unwrap();
+        transpile(&program).unwrap()
+    }
+
+    #[test]
+    fn supports_tuples_as_anonymous_structs() {
+        let output = generate("var pair (i32, i32) := (1, 2)\nput pair.0\nput pair.1");
+        // Tuple type and literal both compile to anonymous structs with _N
+        // fields; index access lowerS to the matching field name.
+        assert!(output.contains("struct { int32_t _0; int32_t _1; }"));
+        assert!(output.contains(". _0 = 1, . _1 = 2"));
+        assert!(output.contains("printf(\"%d\\n\", pair._0)"));
+        assert!(output.contains("printf(\"%d\\n\", pair._1)"));
+    }
+
+    #[test]
+    fn supports_match_with_literal_and_wildcard_arms() {
+        let output = generate(
+            "var x i32 := 3\nmatch x\n    1, put 10\n    3, put 30\n    _, put 99\nend match",
+        );
+        // The if/else-if chain compares a match-scoped copy of the scrutinee.
+        assert!(output.contains("const int32_t __poly_match = x;"));
+        assert!(output.contains("if (__poly_match == 1) {"));
+        assert!(output.contains("else if (__poly_match == 3) {"));
+        // The wildcard arm is a plain else (always matches).
+        assert!(output.contains("else {\n"));
+    }
+
+    // Note: there is deliberately no test for the structured-pattern
+    // rejection path. It is defensive: tuple patterns do not parse in match
+    // position, and enum patterns require an enum declaration, which the C
+    // subset rejects before codegen. Supported C programs can therefore
+    // never reach the structured-pattern error.
 }

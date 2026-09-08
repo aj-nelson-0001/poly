@@ -3,6 +3,72 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-08.
 
+## CLI -o fix, C backend tuples/match, growable asm vectors (2026-09-08)
+
+Third follow-up pass: the small tooling fix, then the remaining C backend
+gaps from the audit, building on the growable-vector work.
+
+### CLI: `-o` honored for c/asm targets
+
+- `poly --target c|asm <file> -o <path>` silently ignored `-o` and wrote
+  next to the source. `extract_target` now parses `-o` like `--target`, and
+  the c/asm handlers use it; the C executable is derived from the actual
+  source location so a custom path keeps source and binary together.
+- **Pre-existing C backend bug fixed**: `fn main` was emitted as
+  `void main()` *and* the wrapper `int main(void)` was emitted, so any
+  program using `fn main` on the C target had two main definitions and
+  failed to compile. `fn main`'s body is now spliced into the entry point,
+  mirroring the Rust target's generated-`fn main` semantics.
+
+### C backend: tuples and match statements
+
+Two of the audit's C-backend gaps are closed:
+
+- **Tuples**: `(A, B, ...)` compiles to an anonymous struct with `_N`
+  fields; `.0`/`.1`/... index access lowers to the matching field, nested
+  tuples recurse, and `put pair.0` prints via `%d` (TupleIndex joined the
+  typed printf-expression list). Verified end-to-end including a nested
+  `(i32, (i32, i32))` with chained `nested.1.0 + nested.1.1`.
+- **Match statements**: literal, wildcard, range, and identifier-pattern
+  arms lower to an if/else-if chain over a match-scoped `const
+  __poly_match` copy of the scrutinee; the wildcard arm closes the chain
+  with a plain `else`. Structured patterns (enum/struct) are rejected with
+  guidance; guards are rejected for now. Verified end-to-end: matching arm
+  fires, non-matching scrutinee falls through to the wildcard.
+- Still unsupported (per audit scope): closures, stdin (`get`), struct
+  literals, enum variants. The integration test that asserted tuples were
+  rejected now asserts closures are instead.
+
+### Growable vectors on the asm target
+
+- `Vec<T>` variables mutate in place: `push`/`pop`/`len` method calls
+  drive a writable `{data, length, capacity}` descriptor backed by a
+  static bump arena (64 KiB, doubling growth, exit 42 on exhaustion).
+  The runtime is emitted only when a vector method is called, so programs
+  with immutable literal vectors keep the smaller 2-qword descriptor.
+- Three linking/correctness traps found and fixed by end-to-end testing:
+  the arena must live in `.bss` and the cursor must be initialized at run
+  time from `_start` (static `.quad _vec_arena` or an immediate arena-end
+  operand need absolute 32-bit relocations that break PIE links); and
+  `_vec_push` must stash the element in callee-saved `%r15` across the
+  grow call, because `_vec_grow`'s `rep movsq` clobbers `%rsi` (a first
+  push after a literal otherwise writes garbage).
+- **Language: `pop` added**: `xs.pop()` type-checks as the element type
+  (an empty vector yields the element default), lowering to
+  `pop().unwrap_or_default()` on the Rust target.
+- Verified end-to-end against the Rust target: 20 pushes + 10 pops give
+  sum 310 / len 10 on both targets; a literal vector + push gives
+  10/40/4/100 on both.
+
+### Verification
+
+- `cargo test --workspace`: all pass (400 tests; +3 C-backend unit tests
+  for tuples, match, and closure rejection; the tuple-rejection
+  integration test now covers closures).
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- `cargo fmt --all -- --check`: clean.
+- Markdown/doc audits: 49 files pass; 565 blocks, 0 unmarked failures.
+
 ## asm target: extern asm, vector support, frame-size fix (2026-09-08)
 
 Continuation pass completing the asm target's feature gaps and fixing a

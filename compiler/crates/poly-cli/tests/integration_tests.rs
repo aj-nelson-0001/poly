@@ -1014,10 +1014,13 @@ fn test_c_backend_reports_unsupported_features() {
         .unwrap_err();
     assert!(redirect_error.contains("file redirects are not implemented"));
 
-    let tuple_error = Transpiler::new()
-        .transpile_c_checked("var pair := (1, 2)\nput pair.0")
+    // Tuples used to be rejected outright; they now compile to anonymous
+    // structs with `_N` fields (see test_c_backend_tuples_and_match). What
+    // must still be rejected are the genuinely unsupported expression forms.
+    let closure_error = Transpiler::new()
+        .transpile_c_checked("var f := |x| x + 1")
         .unwrap_err();
-    assert!(tuple_error.contains("this expression is not supported by the C backend"));
+    assert!(closure_error.contains("not supported by the C backend"));
 }
 
 #[test]

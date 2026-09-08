@@ -1737,6 +1737,14 @@ impl TypeChecker {
                     }
                     PolyType::Unknown
                 }
+                // `xs.pop()` removes and returns the last element (`Option<T>`
+                // in Rust); Poly models it as returning the element type with
+                // an empty vector yielding 0/false — cheap on targets without
+                // option-boxing.
+                "pop" => {
+                    self.expect_no_arguments(method, &argument_types, (**inner).clone());
+                    (**inner).clone()
+                }
                 "enumerate" => PolyType::Unknown,
                 "join" => {
                     self.expect_argument_count(method, &argument_types, 1);

@@ -1293,6 +1293,13 @@ impl IntermediateRepresentationCodeGen {
                     }
                     "len" => format!("({}.len() as i32)", object_str),
                     "clear" if args.is_empty() => format!("{}.clear()", object_str),
+                    // `pop` returns the last element; an empty vector yields
+                    // the element default (0/false) instead of unwrapping an
+                    // Option, matching the checker's non-Option `pop` type.
+                    "pop" if args.is_empty() => format!(
+                        "{{ let __poly_popped = {}.pop(); __poly_popped.unwrap_or_default() }}",
+                        object_str
+                    ),
                     "reserve" if args.len() == 1 => {
                         format!("{}.reserve({} as usize)", object_str, args_str[0])
                     }

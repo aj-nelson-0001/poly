@@ -105,6 +105,9 @@ struct AsmGenerator {
     /// (descriptor label, element label, element values as pre-rendered qwords).
     /// The asm subset has no heap, so vectors are immutable static data.
     vector_data: Vec<(String, String, Vec<String>)>,
+    /// Whether any `push`/`pop` method call was emitted; gates the growable
+    /// vector runtime (writable descriptors + bump arena helpers).
+    uses_vector_methods: bool,
     loop_stack: Vec<LoopContext>,
     /// Struct name -> (field name -> FieldInfo)
     structs: std::collections::HashMap<String, std::collections::HashMap<String, FieldInfo>>,
@@ -119,6 +122,7 @@ impl AsmGenerator {
             label_counter: 0,
             string_data: Vec::new(),
             vector_data: Vec::new(),
+            uses_vector_methods: false,
             loop_stack: Vec::new(),
             structs: std::collections::HashMap::new(),
             enums: std::collections::HashMap::new(),
@@ -163,7 +167,6 @@ impl AsmGenerator {
             let _ = writeln!(self.output, "{label}: .asciz \"{escaped}\"");
         }
     }
-
     fn emit_vector_data(&mut self) {
         if self.vector_data.is_empty() {
             return;
@@ -179,10 +182,22 @@ impl AsmGenerator {
                 elements.join(", ")
             );
             let len = elements.len();
-            let _ = writeln!(
-                self.output,
-                "{descriptor_label}: .quad {element_label}\n.quad {len}"
-            );
+            if self.uses_vector_methods {
+                // Growable layout: {data_ptr, length, capacity}. The literal
+                // elements start in read-only .rodata-style storage, so
+                // capacity is 0 — the first push copies them into the arena
+                // via _vec_grow.
+                let _ = writeln!(
+                    self.output,
+                    "{descriptor_label}: .quad {element_label}\n.quad {len}\n.quad 0"
+                );
+            } else {
+                // Immutable layout: {data_ptr, length}.
+                let _ = writeln!(
+                    self.output,
+                    "{descriptor_label}: .quad {element_label}\n.quad {len}"
+                );
+            }
         }
     }
 
@@ -230,6 +245,7 @@ impl AsmGenerator {
         self.output.push_str("    pushq %rbp\n");
         self.output.push_str("    movq %rsp, %rbp\n");
         self.output.push_str("    subq $4088, %rsp\n");
+        self.emit_vector_runtime_init();
         let mut frame = StackFrame::new();
         for stmt in &top_level {
             self.emit_statement(&stmt.node, &mut frame)?;
@@ -311,7 +327,163 @@ impl AsmGenerator {
         self.output.push_str("    popq %rbp\n");
         self.output.push_str("    retq\n\n");
 
+        self.emit_vector_runtime();
+
         Ok(std::mem::take(&mut self.output))
+    }
+
+    /// Runtime helpers for growable vectors.
+    ///
+    /// A growable vector is a writable descriptor `{data_ptr, length,
+    /// capacity}` whose element storage comes from a static bump arena
+    /// (`_vec_arena`). The arena is never freed (programs are run-once),
+    /// which keeps the subset free of allocator complexity while allowing
+    /// `push`/`pop` to mutate vectors declared with `var`.
+    ///
+    /// - `_vec_grow(%rdi=descriptor) -> %rax = new data ptr`: doubles the
+    ///   capacity (starting at 8), copies elements into fresh arena space.
+    /// - `_vec_push(%rdi=descriptor, %rsi=value)`: appends, growing if
+    ///   `length == capacity`.
+    /// - `_vec_pop(%rdi=descriptor) -> %rax = value`: removes and returns
+    ///   the last element, or 0 when empty.
+    fn emit_vector_runtime(&mut self) {
+        if !self.uses_vector_methods {
+            return;
+        }
+        self.output.push_str("\n# Growable vector runtime\n");
+        // Static bump arena: 64 KiB is ample for the subset's demo scale.
+        // It must live in .bss (writable, no disk image) — emitting it in
+        // .text made writes fault and absolute references unresolvable in
+        // PIE links.
+        self.output.push_str("\n.section .bss\n");
+        self.output.push_str("_vec_arena:");
+        self.output.push_str("    .zero 65536\n_vec_arena_end:\n\n");
+        self.output.push_str(".section .text\n");
+
+        // _vec_grow: rdi = descriptor. Returns new data pointer in rax and
+        // updates descriptor {data, capacity}; length is caller-managed.
+        self.output.push_str("_vec_grow:\n");
+        self.output.push_str("    pushq %rbp\n");
+        self.output.push_str("    movq %rsp, %rbp\n");
+        self.output.push_str("    pushq %rbx\n");
+        self.output.push_str("    pushq %r12\n");
+        self.output.push_str("    pushq %r13\n");
+        self.output.push_str("    pushq %r14\n");
+        self.output.push_str("    movq %rdi, %rbx\n"); // rbx = descriptor
+                                                       // r12 = new capacity = max(8, capacity * 2)
+        self.output.push_str("    movq 16(%rbx), %r12\n");
+        self.output.push_str("    testq %r12, %r12\n");
+        let have_cap = self.fresh_label("grow_cap");
+        let _ = writeln!(self.output, "    jnz {have_cap}");
+        self.output.push_str("    movq $8, %r12\n");
+        let _ = writeln!(self.output, "{have_cap}:");
+        self.output.push_str("    addq %r12, %r12\n");
+        // r13 = byte size = capacity * 8
+        self.output.push_str("    movq %r12, %r13\n");
+        self.output.push_str("    shlq $3, %r13\n");
+        // Bump-allocate: r14 = old arena cursor; advance by size.
+        self.output
+            .push_str("    movq _vec_arena_cursor(%rip), %r14\n");
+        self.output.push_str("    movq %r14, %rax\n");
+        self.output.push_str("    addq %r13, %rax\n");
+        let arena_full = self.fresh_label("grow_full");
+        // RIP-relative compare: an immediate `_vec_arena_end` operand would
+        // need an absolute 32-bit relocation, which breaks PIE linking.
+        self.output
+            .push_str("    leaq _vec_arena_end(%rip), %rcx\n");
+        self.output.push_str("    cmpq %rcx, %rax\n");
+        let _ = writeln!(self.output, "    ja {arena_full}");
+        // Commit the bump: cursor lives in a reserved .qword after the arena.
+        self.output
+            .push_str("    movq %rax, _vec_arena_cursor(%rip)\n");
+        let grown = self.fresh_label("grown");
+        let _ = writeln!(self.output, "    jmp {grown}");
+        // Arena exhausted: fail loudly (exit code 42) rather than corrupt.
+        let _ = writeln!(self.output, "{arena_full}:");
+        self.output.push_str("    movq $60, %rax\n");
+        self.output.push_str("    movq $42, %rdi\n");
+        self.output.push_str("    syscall\n");
+        let _ = writeln!(self.output, "{grown}:");
+        // Copy old elements (length in descriptor[1]) into the new block.
+        self.output.push_str("    movq 0(%rbx), %rsi\n"); // old data
+        self.output.push_str("    movq %rax, %rdi\n"); // new data
+        self.output.push_str("    movq 8(%rbx), %rcx\n"); // length
+        self.output.push_str("    rep movsq\n");
+        // Update descriptor: new data pointer and capacity.
+        self.output.push_str("    movq %rax, 0(%rbx)\n");
+        self.output.push_str("    movq %r12, 16(%rbx)\n");
+        self.output.push_str("    popq %r14\n");
+        self.output.push_str("    popq %r13\n");
+        self.output.push_str("    popq %r12\n");
+        self.output.push_str("    popq %rbx\n");
+        self.output.push_str("    popq %rbp\n");
+        self.output.push_str("    retq\n\n");
+
+        // _vec_push: rdi = descriptor, rsi = element value.
+        // The value in %rsi must survive the grow call (`rep movsq` inside
+        // _vec_grow clobbers %rsi/%rdi/%rcx), so it is stashed in %r15 —
+        // callee-saved and unused by the rest of the runtime.
+        self.output.push_str("_vec_push:\n");
+        self.output.push_str("    pushq %rbp\n");
+        self.output.push_str("    movq %rsp, %rbp\n");
+        self.output.push_str("    pushq %rbx\n");
+        self.output.push_str("    pushq %r15\n");
+        self.output.push_str("    movq %rdi, %rbx\n");
+        self.output.push_str("    movq %rsi, %r15\n");
+        self.output.push_str("    movq 8(%rbx), %rax\n");
+        self.output.push_str("    cmpq 16(%rbx), %rax\n");
+        let push_room = self.fresh_label("push_room");
+        let _ = writeln!(self.output, "    jb {push_room}");
+        self.output.push_str("    movq %rbx, %rdi\n");
+        let _ = writeln!(self.output, "    callq _vec_grow");
+        let _ = writeln!(self.output, "{push_room}:");
+        // data[length] = value; length += 1
+        self.output.push_str("    movq 0(%rbx), %rcx\n");
+        self.output.push_str("    movq 8(%rbx), %rax\n");
+        self.output.push_str("    movq %r15, (%rcx,%rax,8)\n");
+        self.output.push_str("    addq $1, %rax\n");
+        self.output.push_str("    movq %rax, 8(%rbx)\n");
+        self.output.push_str("    popq %r15\n");
+        self.output.push_str("    popq %rbx\n");
+        self.output.push_str("    popq %rbp\n");
+        self.output.push_str("    retq\n\n");
+
+        // _vec_pop: rdi = descriptor. Returns last element (0 if empty).
+        self.output.push_str("_vec_pop:\n");
+        self.output.push_str("    movq 8(%rdi), %rax\n");
+        let pop_have = self.fresh_label("pop_have");
+        let _ = writeln!(self.output, "    testq %rax, %rax\n");
+        let _ = writeln!(self.output, "    jnz {pop_have}");
+        self.output.push_str("    xorq %rax, %rax\n");
+        self.output.push_str("    retq\n");
+        let _ = writeln!(self.output, "{pop_have}:");
+        self.output.push_str("    subq $1, %rax\n");
+        self.output.push_str("    movq %rax, 8(%rdi)\n");
+        self.output.push_str("    movq 0(%rdi), %rcx\n");
+        self.output.push_str("    movq (%rcx,%rax,8), %rax\n");
+        self.output.push_str("    retq\n\n");
+
+        // Arena allocation cursor lives in .bss (writable, zero at load).
+        // It cannot be initialized statically to `_vec_arena` — a `.quad
+        // _vec_arena` in .data would need an absolute 32-bit relocation,
+        // which fails under PIE linking — so _start initializes it at
+        // runtime (see emit_vector_runtime_init).
+        self.output.push_str("\n.section .bss\n");
+        self.output.push_str("_vec_arena_cursor: .zero 8\n\n");
+        self.output.push_str(".section .text\n");
+    }
+
+    /// One-time initialization of the vector arena cursor, emitted at the top
+    /// of `_start` before any user code runs.
+    fn emit_vector_runtime_init(&mut self) {
+        if !self.uses_vector_methods {
+            return;
+        }
+        self.output
+            .push_str("    # Initialize growable-vector arena cursor\n");
+        self.output.push_str("    leaq _vec_arena(%rip), %rax\n");
+        self.output
+            .push_str("    movq %rax, _vec_arena_cursor(%rip)\n");
     }
 
     fn emit_exit(&mut self) {
@@ -1041,6 +1213,61 @@ impl AsmGenerator {
                 self.move_to_loc(Location::Reg("%rax"), loc, frame)?;
                 Ok(loc)
             }
+            Expression::MethodCall {
+                object,
+                method,
+                args,
+            } => {
+                // Growable-vector methods on `Vec<T>` variables. The vector
+                // variable holds a writable descriptor; push/pop mutate the
+                // descriptor via the runtime helpers (arena-backed storage).
+                if let Expression::Identifier(vec_name) = object.as_ref() {
+                    let is_vec = frame
+                        .var_types
+                        .contains_key(&format!("__vecelem_{vec_name}"));
+                    if is_vec {
+                        let vec_loc = frame
+                            .get(vec_name)
+                            .ok_or_else(|| format!("Undefined variable `{vec_name}`"))?;
+                        self.uses_vector_methods = true;
+                        match method.as_str() {
+                            "push" if args.len() == 1 => {
+                                let value_loc = self.emit_expr(&args[0], frame)?;
+                                self.load_to_reg(vec_loc, "%rdi", frame)?;
+                                self.load_to_reg(value_loc, "%rsi", frame)?;
+                                self.output.push_str("    callq _vec_push\n");
+                                let result_loc = frame.allocate("__vecpush");
+                                self.emit_store_const(result_loc, 0);
+                                return Ok(result_loc);
+                            }
+                            "pop" if args.is_empty() => {
+                                self.load_to_reg(vec_loc, "%rdi", frame)?;
+                                self.output.push_str("    callq _vec_pop\n");
+                                let result_loc = frame.allocate("__vecpop");
+                                self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
+                                return Ok(result_loc);
+                            }
+                            "len" if args.is_empty() => {
+                                // Length is the descriptor's second qword.
+                                let result_loc = frame.allocate("__veclen");
+                                self.load_to_reg(vec_loc, "%rax", frame)?;
+                                self.output.push_str("    movq 8(%rax), %rax\n");
+                                self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
+                                return Ok(result_loc);
+                            }
+                            _ => {
+                                return Err(format!(
+                                    "Assembly backend supports push/pop/len on vectors; `{method}` is not available"
+                                ));
+                            }
+                        }
+                    }
+                }
+                Err(
+                    "Assembly backend only supports direct function calls; method calls are limited to vector push/pop/len"
+                        .to_string(),
+                )
+            }
             Expression::Parenthesized(inner) => self.emit_expr(inner, frame),
             Expression::AsExpression { expr, ty } => {
                 if self.is_integer_type(ty) {
@@ -1310,7 +1537,6 @@ impl AsmGenerator {
             | Expression::TryExpression(_)
             | Expression::GetExpression(_)
             | Expression::UnsafeBlock(_)
-            | Expression::MethodCall { .. }
             | Expression::TupleLiteral(_)
             | Expression::UnicodeCharLiteral(_)
             | Expression::FloatLiteral(_)
@@ -1877,6 +2103,33 @@ put name"#,
         // Indexed load: ptr = desc.ptr, element = *(ptr + index * 8).
         assert!(output.contains("shlq $3, %rcx"));
         assert!(output.contains("movq (%rax), %rax"));
+    }
+
+    #[test]
+    fn supports_vector_push_pop_len() {
+        let output = transpile_source(
+            "var xs Vec<i32> := []\nxs.push(5)\nvar last i32 := xs.pop()\nput xs.len()",
+        );
+        // Growable runtime: arena helpers are emitted and called.
+        assert!(output.contains("_vec_arena"));
+        assert!(output.contains("callq _vec_push"));
+        assert!(output.contains("callq _vec_pop"));
+        // Length reads the writable descriptor's second qword.
+        assert!(output.contains("movq 8(%rax), %rax"));
+        // Growable descriptors carry a capacity slot (initially 0: the first
+        // push copies the (empty) elements into the arena).
+        assert!(output.contains(".quad 0"));
+        // The arena cursor is initialized at run time (PIE-safe).
+        assert!(output.contains("movq %rax, _vec_arena_cursor(%rip)"));
+    }
+
+    #[test]
+    fn growable_runtime_stashes_push_value_across_grow() {
+        let output = transpile_source("var xs Vec<i32> := [1]\nxs.push(5)\nput xs[1]");
+        // The element value must survive _vec_grow's `rep movsq` (which
+        // clobbers rsi/rdi/rcx), so push stashes it in the callee-saved %r15.
+        assert!(output.contains("movq %rsi, %r15"));
+        assert!(output.contains("movq %r15, (%rcx,%rax,8)"));
     }
 
     #[test]

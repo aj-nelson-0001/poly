@@ -57,7 +57,24 @@ impl CGenerator {
                 Statement::ForeignBlock { .. } => {}
                 Statement::ExternFunctionDeclaration(_) => {}
                 Statement::FunctionDeclaration(function) => {
-                    self.functions.push(self.function(function)?)
+                    // `fn main` is the program entry on the C target: its body
+                    // becomes the body of the emitted `int main(void)` (with
+                    // the `return 0;` tail), mirroring how the Rust target
+                    // wraps top-level statements in a generated `fn main`.
+                    // Emitting it as a separate `void main()` duplicated the
+                    // C entry point and failed to compile.
+                    if function.name == "main"
+                        && function.return_type.is_none()
+                        && function.params.is_empty()
+                        && !function.is_async
+                        && function.generics.is_empty()
+                    {
+                        if let Some(body) = &function.body {
+                            self.main_statements.extend(body.clone());
+                        }
+                    } else {
+                        self.functions.push(self.function(function)?)
+                    }
                 }
                 Statement::StructDeclaration(structure) => {
                     self.structs.push(self.structure(structure)?)

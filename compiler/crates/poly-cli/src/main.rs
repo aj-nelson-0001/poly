@@ -50,8 +50,13 @@ impl Target {
 /// Extract and remove `--target <lang>` from the argument list.
 /// The target is handled before subcommand dispatch so every CLI mode, including
 /// `--check`, `--emit-*`, and project generation, selects the same backend.
-fn extract_target(args: &[String]) -> Result<(Target, Vec<String>)> {
+fn extract_target(args: &[String]) -> Result<(Target, Option<PathBuf>, Vec<String>)> {
     let mut target = Target::Rust;
+    // `-o <path>` overrides the default output location for the c/asm
+    // targets (the rust target builds a Cargo project and has no single
+    // output file). Filtered out here so command handlers see a clean arg
+    // list, mirroring how `--target` is handled.
+    let mut output_path: Option<PathBuf> = None;
     let mut filtered = Vec::new();
     let mut i = 0;
     while i < args.len() {
@@ -61,19 +66,25 @@ fn extract_target(args: &[String]) -> Result<(Target, Vec<String>)> {
                 bail!("--target requires a language argument (e.g. --target rust)");
             }
             target = Target::from_str(&args[i])?;
+        } else if args[i] == "-o" {
+            i += 1;
+            if i >= args.len() {
+                bail!("-o requires an output path argument (e.g. -o out.S)");
+            }
+            output_path = Some(PathBuf::from(&args[i]));
         } else {
             filtered.push(args[i].clone());
         }
         i += 1;
     }
-    Ok((target, filtered))
+    Ok((target, output_path, filtered))
 }
 
 fn main() -> Result<()> {
     // Keep argument parsing dependency-free: the CLI is also used as a small
     // standalone binary in generated-project and integration-test workflows.
     let raw_args: Vec<String> = std::env::args().collect();
-    let (target, args) = extract_target(&raw_args)?;
+    let (target, custom_output, args) = extract_target(&raw_args)?;
 
     if args.len() < 2 {
         eprintln!("Poly Language Compiler v{}", env!("CARGO_PKG_VERSION"));
@@ -518,7 +529,13 @@ fn main() -> Result<()> {
                     );
                 }
                 Target::C => {
-                    let output_path = default_c_output_path(&path);
+                    // Honor `-o` for the emitted C source; the executable is
+                    // then derived from the actual source location so a custom
+                    // output path keeps source and binary together.
+                    let output_path = custom_output
+                        .clone()
+                        .unwrap_or_else(|| default_c_output_path(&path));
+                    let binary_path = c_binary_path(&output_path);
                     let source = std::fs::read_to_string(&path)
                         .with_context(|| format!("Failed to read file: {}", path.display()))?;
                     let code = poly_transpiler::Transpiler::new()
@@ -526,15 +543,17 @@ fn main() -> Result<()> {
                         .map_err(|e| anyhow::anyhow!(e))?;
                     std::fs::write(&output_path, &code)
                         .with_context(|| format!("Failed to write {}", output_path.display()))?;
-                    compile_c_binary(&output_path, &c_binary_path(&path))?;
+                    compile_c_binary(&output_path, &binary_path)?;
                     println!(
                         "Generated and built {} -> {}",
                         path.display(),
-                        c_binary_path(&path).display()
+                        binary_path.display()
                     );
                 }
                 Target::Asm => {
-                    let output_path = default_asm_output_path(&path);
+                    let output_path = custom_output
+                        .clone()
+                        .unwrap_or_else(|| default_asm_output_path(&path));
                     let source = std::fs::read_to_string(&path)
                         .with_context(|| format!("Failed to read file: {}", path.display()))?;
                     let code = poly_transpiler::Transpiler::new()

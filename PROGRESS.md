@@ -3,6 +3,63 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-08.
 
+## C backend: struct literals, enum variants, `get`, closures (2026-09-08)
+
+Fourth follow-up pass: closing the four remaining C-backend gaps from the
+audit. All features verified end-to-end and cross-checked against the Rust
+target's output.
+
+### Struct literals
+
+- `Point { x: 3, y: 4 }` lowers to a C99 compound literal
+  `(Point){ .x = 3, .y = 4 }` against the struct typedef that the backend
+  already emits; field access was already supported.
+- `var p := Point { ... }` infers the struct name for the declaration type
+  (new `StructLiteral` arm in `inferred_type`); tuple-literal inference was
+  also factored into `tuple_inferred_type`.
+
+### Enum declarations and variants in match
+
+- Enum declarations now emit `typedef enum` (previously they fell through to
+  the "not supported in a C function" error path). Enumerators are qualified
+  (`Color_Red`) so Poly's `Color::Red` lowers to a unique C identifier.
+- `EnumVariant` expressions emit the qualified enumerator; `Enum` patterns
+  in match lower to enumerator comparisons in the existing if/else-if chain.
+- Tuple/struct variants (payload-carrying) are rejected with guidance both
+  at declaration and use sites: C enums cannot carry payloads.
+- Verified: `match c` selects `Color_Green` arm and falls through to `_`.
+
+### `get` (stdin)
+
+- Plain `get` and `get unicode "prompt"` lower to a shared `__poly_get_line`
+  helper (malloc/realloc line reader, prompt flushed to stdout, trailing
+  newline stripped) emitted once before main when any `get` is present.
+- The read result is treated as a C string: `var` declarations infer
+  `const char *`, the variable joins the string-variable set so `put "hi " + name`
+  prints via `%s` (verified against the Rust target: identical output).
+- File sources, flags (`--bytes`, `--timeout`, `--mask`, `--until`), and
+  `with` clauses are rejected with guidance.
+
+### Non-capturing closures
+
+- `var twice := |x: i32| x * 2` lowers to `static int32_t __poly_closure_0(int32_t x)
+  { return ((x * 2)); }` plus a function-pointer variable
+  `int32_t (*twice)(int32_t) = __poly_closure_0;` with the inferred signature.
+- Capturing closures are detected (new `closure_captures` walker collects
+  body identifiers not bound by parameters) and rejected with guidance.
+- Main's body now renders into a scratch buffer before assembly so that
+  definitions surfaced during rendering (closure functions, the `get`
+  runtime) can be emitted before the entry point; snapshots unchanged.
+
+### Verification
+
+- 6 new unit tests (struct literal, enum match, tuple-variant rejection,
+  get runtime + ordering, closure lowering + ordering, capture rejection);
+  the integration test that asserted closures were rejected now asserts
+  capturing closures are (non-capturing ones work).
+- 406 workspace tests pass, clippy `-D warnings` clean, fmt clean, and the
+  combined enum+struct+get fixture matches the Rust target's output exactly.
+
 ## CLI -o fix, C backend tuples/match, growable asm vectors (2026-09-08)
 
 Third follow-up pass: the small tooling fix, then the remaining C backend

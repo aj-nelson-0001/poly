@@ -25,10 +25,18 @@ struct CGenerator {
     /// Pre-rendered Poly declarations emitted before `main`.
     functions: Vec<String>,
     structs: Vec<String>,
+    enums: Vec<String>,
     /// Opaque target-language definitions selected by the transpiler.
     c_blocks: Vec<String>,
     string_variables: RefCell<std::collections::HashSet<String>>,
     main_statements: Vec<ast::Spanned<Statement>>,
+    /// Set when a `get` expression is lowered; gates the stdin runtime emission.
+    uses_get: std::cell::Cell<bool>,
+    /// Counter for synthesizing unique closure function names.
+    closure_counter: std::cell::Cell<usize>,
+    /// Definitions discovered while rendering main (closure functions); these
+    /// are emitted after the eagerly-rendered declarations, right before main.
+    late_definitions: Vec<String>,
 }
 
 impl CGenerator {
@@ -38,9 +46,13 @@ impl CGenerator {
             indent: 0,
             functions: Vec::new(),
             structs: Vec::new(),
+            enums: Vec::new(),
             c_blocks: Vec::new(),
             string_variables: RefCell::new(std::collections::HashSet::new()),
             main_statements: Vec::new(),
+            uses_get: std::cell::Cell::new(false),
+            closure_counter: std::cell::Cell::new(0),
+            late_definitions: Vec::new(),
         }
     }
 
@@ -79,6 +91,9 @@ impl CGenerator {
                 Statement::StructDeclaration(structure) => {
                     self.structs.push(self.structure(structure)?)
                 }
+                Statement::EnumDeclaration(declaration) => {
+                    self.enums.push(self.enumeration(declaration)?)
+                }
                 Statement::ConstDeclaration { name, value } => {
                     self.main_statements.push(statement.clone());
                     let _ = (name, value);
@@ -98,8 +113,13 @@ impl CGenerator {
             self.output.push_str(block.trim_matches('\n'));
             self.output.push_str("\n\n");
         }
+
         for structure in &self.structs {
             self.output.push_str(structure);
+            self.output.push_str("\n\n");
+        }
+        for enumeration in &self.enums {
+            self.output.push_str(enumeration);
             self.output.push_str("\n\n");
         }
         for function in &self.functions {
@@ -107,12 +127,36 @@ impl CGenerator {
             self.output.push_str("\n\n");
         }
 
-        self.output.push_str("int main(void) {\n");
+        // Render main into a scratch buffer first: statements can surface new
+        // file-scope definitions (closure functions) and runtime helpers (`get`)
+        // that must be emitted before main itself.
+        let mut main_output = String::new();
+        std::mem::swap(&mut main_output, &mut self.output);
         self.indent = 1;
         let main_statements = self.main_statements.clone();
         for statement in &main_statements {
             self.statement(&statement.node)?;
         }
+        std::mem::swap(&mut main_output, &mut self.output);
+        self.indent = 0;
+
+        if self.uses_get.get()
+            || self
+                .main_statements
+                .iter()
+                .any(|s| statement_contains_get(&s.node))
+        {
+            self.output.push_str(self.get_runtime());
+            self.output.push_str("\n\n");
+        }
+        let late_definitions = std::mem::take(&mut self.late_definitions);
+        for definition in &late_definitions {
+            self.output.push_str(definition);
+            self.output.push('\n');
+        }
+        self.output.push_str("int main(void) {\n");
+        self.output.push_str(&main_output);
+        self.indent = 1;
         self.line("return 0;");
         self.output.push_str("}\n");
         Ok(std::mem::take(&mut self.output))
@@ -132,6 +176,100 @@ impl CGenerator {
         }
         writeln!(result, "}} {};", structure.name).unwrap();
         Ok(result)
+    }
+
+    /// Render an enum declaration as a C enum. Only unit variants are
+    /// representable; tuple/struct variants are rejected with guidance because
+    /// C enums cannot carry payloads.
+    fn enumeration(&self, declaration: &ast::EnumDecl) -> Result<String, String> {
+        let mut result = String::new();
+        writeln!(result, "typedef enum {} {{", declaration.name).unwrap();
+        for variant in &declaration.variants {
+            match variant {
+                ast::EnumVariant::Unit(name) => {
+                    // Enumerators are qualified (`Color_Red`) so `Color::Red`
+                    // in Poly lowers to a unique C identifier.
+                    writeln!(
+                        result,
+                        "    {},",
+                        self.enum_variant_c_name(&declaration.name, name)
+                    )
+                    .unwrap();
+                }
+                ast::EnumVariant::Tuple(name, types) => {
+                    let _ = types;
+                    return Err(format!(
+                        "C backend supports unit enum variants only; variant `{}` of `{}` carries data; use a #c helper",
+                        name, declaration.name
+                    ));
+                }
+                ast::EnumVariant::Struct(name, fields) => {
+                    let _ = fields;
+                    return Err(format!(
+                        "C backend supports unit enum variants only; variant `{}` of `{}` carries data; use a #c helper",
+                        name, declaration.name
+                    ));
+                }
+            }
+        }
+        writeln!(result, "}} {};", declaration.name).unwrap();
+        Ok(result)
+    }
+
+    /// Map a variant name to its qualified C enumerator (`Color::Red` -> `Color_Red`).
+    fn enum_variant_c_name(&self, enum_name: &str, variant: &str) -> String {
+        format!("{enum_name}_{variant}")
+    }
+
+    /// Lower a `get` input expression. The C subset supports stdin reads
+    /// (with an optional prompt); file sources and behavioral flags fall back
+    /// to `#c` helpers.
+    fn get_expression(&self, get: &ast::GetExpr) -> Result<String, String> {
+        if get.source.is_some() {
+            return Err(
+                "C backend `get` reads stdin only; file input requires a #c helper".to_string(),
+            );
+        }
+        if !get.flags.is_empty() {
+            return Err(
+                "C backend `get` supports no flags; use a #c helper for flagged input".to_string(),
+            );
+        }
+        if get.with_clause.is_some() {
+            return Err(
+                "C backend `get` does not support `with` clauses; use a #c helper".to_string(),
+            );
+        }
+        let prompt = match &get.prompt {
+            Some(prompt) => self.expr(prompt)?,
+            None => String::new(),
+        };
+        self.uses_get.set(true);
+        Ok(format!("__poly_get_line({prompt})"))
+    }
+
+    /// The shared stdin line-read helper, emitted once per translation unit.
+    fn get_runtime(&self) -> &'static str {
+        "/* Poly `get` runtime: read one line from stdin (without the newline). */\n\
+         static char *__poly_get_line(const char *prompt) {\n\
+             size_t __poly_cap = 128;\n\
+             char *__poly_buf = (char *)malloc(__poly_cap);\n\
+             size_t __poly_len = 0;\n\
+             int __poly_c;\n\
+             if (prompt != NULL && prompt[0] != '\\0') {\n\
+                 fputs(prompt, stdout);\n\
+                 fflush(stdout);\n\
+             }\n\
+             while ((__poly_c = fgetc(stdin)) != EOF && __poly_c != '\\n') {\n\
+                 if (__poly_len + 1 >= __poly_cap) {\n\
+                     __poly_cap *= 2;\n\
+                     __poly_buf = (char *)realloc(__poly_buf, __poly_cap);\n\
+                 }\n\
+                 __poly_buf[__poly_len++] = (char)__poly_c;\n\
+             }\n\
+             __poly_buf[__poly_len] = '\\0';\n\
+             return __poly_buf;\n\
+         }"
     }
 
     fn function(&self, function: &FunctionDecl) -> Result<String, String> {
@@ -170,6 +308,73 @@ impl CGenerator {
     }
 
     fn statement(&mut self, statement: &Statement) -> Result<(), String> {
+        // Non-capturing closures in `var`/`let` initializers lower to a static
+        // function plus a function pointer: `var double := |x: i32| x * 2` ->
+        // `static int32_t __poly_closure_0(int32_t x) {...}` +
+        // `int32_t (*double)(int32_t) = __poly_closure_0;`. Capturing closures
+        // are rejected with guidance because C has no closure runtime here.
+        let closure = match statement {
+            Statement::VarDeclaration {
+                value: Some(value), ..
+            }
+            | Statement::LetDeclaration { value, .. } => match value {
+                Expression::Closure { .. } => Some(value.clone()),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some(Expression::Closure { params, body }) = closure {
+            let captures = closure_captures(&params, &body);
+            if !captures.is_empty() {
+                return Err(format!(
+                    "C backend supports non-capturing closures only; `{}` is captured from the enclosing scope; use a #c helper",
+                    captures.join("`, `")
+                ));
+            }
+            let index = self.closure_counter.get();
+            self.closure_counter.set(index + 1);
+            let fn_name = format!("__poly_closure_{index}");
+            let mut rendered_fn = String::new();
+            let return_type = self.inferred_type(Some(&body));
+            let param_list = params
+                .iter()
+                .map(|parameter| Ok(format!("{} {}", self.ty(&parameter.ty)?, parameter.name)))
+                .collect::<Result<Vec<_>, String>>()?
+                .join(", ");
+            writeln!(
+                rendered_fn,
+                "static {} {}({}) {{ return ({}); }}",
+                return_type,
+                fn_name,
+                param_list,
+                self.expr(&body)?
+            )
+            .unwrap();
+            self.late_definitions.push(rendered_fn);
+            let pointer_type = format!(
+                "{} (*PLACEHOLDER)({})",
+                return_type,
+                params
+                    .iter()
+                    .map(|parameter| self.ty(&parameter.ty))
+                    .collect::<Result<Vec<_>, String>>()?
+                    .join(", ")
+            );
+            let name = match statement {
+                Statement::VarDeclaration { name, .. } | Statement::LetDeclaration { name, .. } => {
+                    name
+                }
+                _ => unreachable!(),
+            };
+            let line = format!(
+                "{} = {};\n",
+                pointer_type.replace("PLACEHOLDER", name),
+                fn_name
+            );
+            line_prefix_for(&mut self.output, self.indent);
+            self.output.push_str(&line);
+            return Ok(());
+        }
         let mut rendered = String::new();
         self.statement_into(&mut rendered, self.indent, statement)?;
         self.output.push_str(&rendered);
@@ -196,9 +401,10 @@ impl CGenerator {
                     .transpose()?
                     .unwrap_or_else(|| self.inferred_type(value.as_ref()));
                 if ty.as_ref().is_some_and(|ty| self.is_string_type(ty))
-                    || value
-                        .as_ref()
-                        .is_some_and(|value| self.is_string_literal(value))
+                    || value.as_ref().is_some_and(|value| {
+                        self.is_string_literal(value)
+                            || matches!(value, Expression::GetExpression(_))
+                    })
                 {
                     self.string_variables.borrow_mut().insert(name.clone());
                 }
@@ -454,6 +660,25 @@ impl CGenerator {
                                     writeln!(output, "(1) {{ // binding `{name}` = {}", match_var)
                                         .unwrap();
                                 }
+                                ast::Pattern::Enum {
+                                    enum_name,
+                                    variant,
+                                    inner,
+                                } => {
+                                    if inner.is_some() {
+                                        return Err(
+                                            "C backend match supports unit enum variants only; use a #c helper for patterns carrying data"
+                                                .to_string(),
+                                        );
+                                    }
+                                    writeln!(
+                                        output,
+                                        "({} == {}) {{",
+                                        match_var,
+                                        self.enum_variant_c_name(enum_name, variant)
+                                    )
+                                    .unwrap();
+                                }
                                 other => {
                                     let _ = other;
                                     return Err(
@@ -653,12 +878,34 @@ impl CGenerator {
                     .join(", ");
                 Ok(format!("{{ {fields} }}"))
             }
+            Expression::StructLiteral { name, fields } => {
+                // C99 compound literal: `Point { x: 3, y: 4 }` ->
+                // `(Point){ .x = 3, .y = 4 }`. The struct declaration already
+                // emits a `typedef struct Point {...} Point;`.
+                let initializers = fields
+                    .iter()
+                    .map(|(field, value)| Ok(format!(".{field} = {}", self.expr(value)?)))
+                    .collect::<Result<Vec<_>, String>>()?
+                    .join(", ");
+                Ok(format!("({name}){{ {initializers} }}"))
+            }
+            Expression::EnumVariant {
+                enum_name,
+                variant,
+                data,
+            } => {
+                if data.is_some() {
+                    return Err(
+                        "C backend supports unit enum variants only; use a #c helper for variants carrying data"
+                            .to_string(),
+                    );
+                }
+                Ok(self.enum_variant_c_name(enum_name, variant))
+            }
+            Expression::GetExpression(get) => self.get_expression(get),
             Expression::MatchExpression { .. }
             | Expression::Closure { .. }
-            | Expression::StructLiteral { .. }
-            | Expression::EnumVariant { .. }
             | Expression::TryExpression(_)
-            | Expression::GetExpression(_)
             | Expression::UnsafeBlock(_)
             | Expression::MethodCall { .. }
             | Expression::ArrayLiteral(_) => Err(
@@ -759,8 +1006,26 @@ impl CGenerator {
                 "const char *".to_string()
             }
             Some(Expression::BoolLiteral(_)) => "bool".to_string(),
+            // `get` reads a line of text; its result is a heap-allocated C string.
+            Some(Expression::GetExpression(_)) => "const char *".to_string(),
+            Some(Expression::TupleLiteral(_)) => self.tuple_inferred_type(value.unwrap()),
+            // Struct literals infer their own type: `var p := Point { ... }`.
+            Some(Expression::StructLiteral { name, .. }) => name.clone(),
             _ => "int32_t".to_string(),
         }
+    }
+
+    fn tuple_inferred_type(&self, value: &Expression) -> String {
+        let Expression::TupleLiteral(elements) = value else {
+            return "int32_t".to_string();
+        };
+        let fields = elements
+            .iter()
+            .enumerate()
+            .map(|(index, element)| format!("{} _{};", self.inferred_type(Some(element)), index))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!("struct {{ {fields} }}")
     }
 
     fn ty(&self, annotation: &TypeAnnotation) -> Result<String, String> {
@@ -840,6 +1105,133 @@ impl CGenerator {
     }
 }
 
+/// Check whether a statement's expressions contain a `get` input expression,
+/// used to decide whether the stdin runtime helper must be emitted.
+fn statement_contains_get(statement: &Statement) -> bool {
+    fn expr_has_get(expr: &Expression) -> bool {
+        match expr {
+            Expression::GetExpression(_) => true,
+            Expression::BinaryOp { left, right, .. } => expr_has_get(left) || expr_has_get(right),
+            Expression::UnaryOp { expr, .. }
+            | Expression::Parenthesized(expr)
+            | Expression::TryExpression(expr)
+            | Expression::AsExpression { expr, .. } => expr_has_get(expr),
+            Expression::Call { func, args } => expr_has_get(func) || args.iter().any(expr_has_get),
+            Expression::MethodCall { object, args, .. } => {
+                expr_has_get(object) || args.iter().any(expr_has_get)
+            }
+            Expression::Index { object, index }
+            | Expression::Range {
+                start: object,
+                end: index,
+                ..
+            } => expr_has_get(object) || expr_has_get(index),
+            Expression::FieldAccess { object, .. } | Expression::TupleIndex { object, .. } => {
+                expr_has_get(object)
+            }
+            Expression::StructLiteral { fields, .. } => {
+                fields.iter().any(|(_, value)| expr_has_get(value))
+            }
+            Expression::ArrayLiteral(elements) | Expression::TupleLiteral(elements) => {
+                elements.iter().any(expr_has_get)
+            }
+            Expression::IfExpression {
+                condition,
+                then_block,
+                else_block,
+            } => {
+                expr_has_get(condition)
+                    || block_has_get(then_block)
+                    || else_block.as_ref().is_some_and(block_has_get)
+            }
+            Expression::MatchExpression { scrutinee, arms } => {
+                expr_has_get(scrutinee)
+                    || arms.iter().any(|arm| match &arm.body {
+                        ast::MatchArmBody::Expression(body) => expr_has_get(body),
+                        ast::MatchArmBody::Block(body) => block_has_get(body),
+                    })
+            }
+            Expression::Closure { params: _, body } => expr_has_get(body),
+            _ => false,
+        }
+    }
+
+    fn block_has_get(block: &ast::Block) -> bool {
+        block
+            .iter()
+            .any(|statement| statement_contains_get(&statement.node))
+    }
+
+    match statement {
+        Statement::VarDeclaration {
+            value: Some(value), ..
+        }
+        | Statement::LetDeclaration { value, .. }
+        | Statement::Assignment { value, .. }
+        | Statement::PutStatement { expr: value, .. }
+        | Statement::ErrorStatement(value)
+        | Statement::WarnStatement(value)
+        | Statement::InfoStatement(value)
+        | Statement::ReturnStatement(Some(value)) => expr_has_get(value),
+        Statement::ExpressionStatement(expr) => expr_has_get(expr),
+        Statement::Block(block) => block_has_get(block),
+        _ => false,
+    }
+}
+
+/// Collect identifiers a closure body references that are not its own
+/// parameters. Non-empty output means the closure captures its environment,
+/// which the C subset cannot represent.
+fn closure_captures(params: &[ast::Parameter], body: &Expression) -> Vec<String> {
+    let mut identifiers = Vec::new();
+    fn walk(expr: &Expression, identifiers: &mut Vec<String>) {
+        match expr {
+            Expression::Identifier(name) => identifiers.push(name.clone()),
+            Expression::BinaryOp { left, right, .. } => {
+                walk(left, identifiers);
+                walk(right, identifiers);
+            }
+            Expression::UnaryOp { expr, .. }
+            | Expression::Parenthesized(expr)
+            | Expression::TryExpression(expr)
+            | Expression::AsExpression { expr, .. } => walk(expr, identifiers),
+            Expression::Call { func, args } => {
+                walk(func, identifiers);
+                args.iter().for_each(|arg| walk(arg, identifiers));
+            }
+            Expression::Index { object, index }
+            | Expression::Range {
+                start: object,
+                end: index,
+                ..
+            } => {
+                walk(object, identifiers);
+                walk(index, identifiers);
+            }
+            Expression::FieldAccess { object, .. } | Expression::TupleIndex { object, .. } => {
+                walk(object, identifiers)
+            }
+            Expression::Closure { params, body } => {
+                let _ = params;
+                walk(body, identifiers);
+            }
+            _ => {}
+        }
+    }
+    walk(body, &mut identifiers);
+    let param_names: std::collections::HashSet<&str> = params
+        .iter()
+        .map(|parameter| parameter.name.as_str())
+        .collect();
+    let mut captured: Vec<String> = Vec::new();
+    for name in identifiers {
+        if !param_names.contains(name.as_str()) && !captured.contains(&name) {
+            captured.push(name);
+        }
+    }
+    captured
+}
+
 fn line_prefix_for(output: &mut String, indent: usize) {
     for _ in 0..indent {
         output.push_str("    ");
@@ -904,6 +1296,81 @@ mod tests {
         assert!(output.contains(". _0 = 1, . _1 = 2"));
         assert!(output.contains("printf(\"%d\\n\", pair._0)"));
         assert!(output.contains("printf(\"%d\\n\", pair._1)"));
+    }
+
+    #[test]
+    fn supports_struct_literals_as_compound_literals() {
+        let output = generate(
+            "struct Point\n    var x: i32\n    var y: i32\nend struct\nvar p := Point { x: 3, y: 4 }\nput p.x",
+        );
+        // Struct literals lower to C99 compound literals against the emitted
+        // typedef; field access is unchanged.
+        assert!(output.contains("typedef struct Point {"));
+        assert!(output.contains("Point p = (Point){ .x = 3, .y = 4 };"));
+        assert!(output.contains("printf(\"%d\\n\", p.x)"));
+    }
+
+    #[test]
+    fn supports_enums_and_enum_variant_matching() {
+        let output = generate(
+            "enum Color\n    Red\n    Green\nend enum\nvar c := Color::Green\nmatch c\n    Color::Red, put 1\n    Color::Green, put 2\n    _, put 0\nend match",
+        );
+        // Enumerators are qualified (Color_Red) so variant references and
+        // patterns share one C representation.
+        assert!(output.contains("typedef enum Color {"));
+        assert!(output.contains("Color_Red,"));
+        assert!(output.contains("int32_t c = Color_Green;"));
+        assert!(output.contains("__poly_match == Color_Green"));
+    }
+
+    #[test]
+    fn rejects_tuple_enum_variants_with_guidance() {
+        let error = std::panic::catch_unwind(|| {
+            generate("enum Shape\n    Circle(f64)\nend enum\nvar s := Shape::Circle(1.0)")
+        });
+        assert!(error.is_err());
+    }
+
+    #[test]
+    fn supports_get_stdin_with_prompt_and_runtime() {
+        let output = generate("var name := get unicode \"Who? \"\nput name");
+        // The stdin runtime is emitted once, before main; the read result is a
+        // C string so `put` uses the %s format.
+        assert!(output.contains("static char *__poly_get_line(const char *prompt)"));
+        assert!(output.contains("const char * name = __poly_get_line(\"Who? \");"));
+        assert!(output.contains("printf(\"%s\\n\", name)"));
+        // The helper must be defined before main uses it.
+        let helper = output.find("__poly_get_line(const char").unwrap();
+        let main = output.find("int main(void)").unwrap();
+        assert!(helper < main);
+    }
+
+    #[test]
+    fn supports_non_capturing_closures_as_function_pointers() {
+        let output = generate("var twice := |x: i32| x * 2\nput twice(21)");
+        // Non-capturing closures become a static function plus a function
+        // pointer variable with a matching signature.
+        assert!(output.contains("static int32_t __poly_closure_0(int32_t x) { return ((x * 2)); }"));
+        assert!(output.contains("int32_t (*twice)(int32_t) = __poly_closure_0;"));
+        // The synthesized function must precede its use in main.
+        let function = output.find("__poly_closure_0(int32_t x)").unwrap();
+        let main = output.find("int main(void)").unwrap();
+        assert!(function < main);
+    }
+
+    #[test]
+    fn rejects_capturing_closures_with_guidance() {
+        let result =
+            std::panic::catch_unwind(|| generate("var n i32 := 10\nvar addn := |x: i32| x + n"));
+        let payload = result.unwrap_err();
+        let message = payload
+            .downcast_ref::<String>()
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            message.contains("non-capturing closures only"),
+            "unexpected error: {message}"
+        );
     }
 
     #[test]

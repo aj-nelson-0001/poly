@@ -1015,12 +1015,14 @@ fn test_c_backend_reports_unsupported_features() {
     assert!(redirect_error.contains("file redirects are not implemented"));
 
     // Tuples used to be rejected outright; they now compile to anonymous
-    // structs with `_N` fields (see test_c_backend_tuples_and_match). What
-    // must still be rejected are the genuinely unsupported expression forms.
+    // structs with `_N` fields (see test_c_backend_tuples_and_match).
+    // Non-capturing closures likewise now lower to a static function plus a
+    // function pointer. What must still be rejected is environment capture,
+    // which has no C representation in this subset.
     let closure_error = Transpiler::new()
-        .transpile_c_checked("var f := |x| x + 1")
+        .transpile_c_checked("var n i32 := 10\nvar f := |x: i32| x + n")
         .unwrap_err();
-    assert!(closure_error.contains("not supported by the C backend"));
+    assert!(closure_error.contains("non-capturing closures only"));
 }
 
 #[test]

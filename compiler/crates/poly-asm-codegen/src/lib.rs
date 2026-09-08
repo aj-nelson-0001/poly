@@ -632,8 +632,67 @@ impl AsmGenerator {
                     self.load_to_reg(saved_r12, "%r12", frame)?;
                     self.loop_stack.pop();
                 }
-                Expression::ForLoop { .. } => {
-                    return Err("Assembly backend does not support for-in loops yet".to_string());
+                Expression::ForLoop {
+                    variable,
+                    iterable,
+                    body,
+                } => {
+                    // Only string iterables are supported: they are represented
+                    // as a pointer to NUL-terminated data, so the loop is a
+                    // pointer walk over bytes (each character is a byte of the
+                    // string).  The binding is declared as a string so `put`
+                    // routes it through the strlen writer.
+                    if !matches!(iterable.as_ref(), Expression::Identifier(_)) {
+                        return Err(
+                            "Assembly backend for-in requires a string variable as the iterable"
+                                .to_string(),
+                        );
+                    }
+                    let iter_name = match iterable.as_ref() {
+                        Expression::Identifier(name) => name.clone(),
+                        _ => unreachable!(),
+                    };
+                    let iter_loc = frame
+                        .get(&iter_name)
+                        .ok_or_else(|| format!("Undefined variable `{iter_name}`"))?;
+                    let var_loc = frame.allocate(variable);
+                    if let Location::Stack(var_off) = var_loc {
+                        if let Location::Stack(iter_off) = iter_loc {
+                            // Initialize the cursor with the string's address.
+                            let _ = writeln!(self.output, "    movq -{iter_off}(%rbp), %rax");
+                            let _ = writeln!(self.output, "    movq %rax, -{var_off}(%rbp)");
+                        }
+                    }
+                    frame.var_types.insert(variable.clone(), "char".to_string());
+
+                    let check_label = self.fresh_label("forin_check");
+                    let body_label = self.fresh_label("forin_body");
+                    let incr_label = self.fresh_label("forin_incr");
+                    let end_label = self.fresh_label("forin_end");
+                    self.loop_stack.push(LoopContext {
+                        continue_label: incr_label.clone(),
+                        break_label: end_label.clone(),
+                    });
+                    let _ = writeln!(self.output, "    jmp {check_label}");
+                    let _ = writeln!(self.output, "{body_label}:");
+                    for stmt in body {
+                        self.emit_statement(&stmt.node, frame)?;
+                    }
+                    let _ = writeln!(self.output, "{incr_label}:");
+                    // Advance the cursor by one byte.
+                    if let Location::Stack(var_off) = var_loc {
+                        let _ = writeln!(self.output, "    incq -{var_off}(%rbp)");
+                    }
+                    let _ = writeln!(self.output, "{check_label}:");
+                    // Loop while the current byte is not the NUL terminator.
+                    if let Location::Stack(var_off) = var_loc {
+                        let _ = writeln!(self.output, "    movq -{var_off}(%rbp), %rax");
+                        self.output.push_str("    movb (%rax), %al\n");
+                        self.output.push_str("    testb %al, %al\n");
+                    }
+                    let _ = writeln!(self.output, "    jnz {body_label}");
+                    let _ = writeln!(self.output, "{end_label}:");
+                    self.loop_stack.pop();
                 }
                 Expression::InfiniteLoop(body) => {
                     let loop_label = self.fresh_label("loop");
@@ -824,9 +883,9 @@ impl AsmGenerator {
                     }
                     UnaryOp::BitNot => self.output.push_str("    notq %rax\n"),
                     UnaryOp::Deref => {
-                        return Err(
-                            "Assembly backend does not support dereferencing yet".to_string()
-                        );
+                        // A pointer value lives in a stack slot or register;
+                        // dereferencing is a single qword load through it.
+                        self.output.push_str("    movq (%rax), %rax\n");
                     }
                 }
                 let loc = frame.allocate("__unary");
@@ -1142,6 +1201,20 @@ impl AsmGenerator {
             if let Some(type_name) = frame.var_types.get(name).cloned() {
                 if type_name == "string" || type_name == "ustring" {
                     self.emit_string_concat(expr, frame)?;
+                    self.emit_newline();
+                    return Ok(());
+                }
+                // A for-in cursor over a string points at one byte: write just
+                // that character, then the trailing newline.
+                if type_name == "char" {
+                    let loc = frame
+                        .get(name)
+                        .ok_or_else(|| format!("Undefined variable `{name}`"))?;
+                    self.load_to_reg(loc, "%rsi", frame)?;
+                    self.output.push_str("    movq $1, %rax\n");
+                    self.output.push_str("    movq $1, %rdi\n");
+                    self.output.push_str("    movq $1, %rdx\n");
+                    self.output.push_str("    syscall\n");
                     self.emit_newline();
                     return Ok(());
                 }
@@ -1536,6 +1609,31 @@ put name"#,
         let output = transpile_source("loop i 0..10\n    put i\nend loop");
         assert!(output.contains("for"));
         assert!(output.contains("addq"));
+    }
+
+    #[test]
+    fn supports_for_in_string_loop() {
+        let output = transpile_source("var s string := \"ab\"\nfor c in s\n    put c\nend for");
+        // The cursor walks the NUL-terminated data one byte at a time.
+        assert!(output.contains("forin_check"));
+        assert!(output.contains("forin_body"));
+        assert!(output.contains("movb (%rax), %al"));
+        assert!(output.contains("testb %al, %al"));
+        assert!(output.contains("incq"));
+    }
+
+    #[test]
+    fn for_in_rejects_non_variable_iterables() {
+        let err = transpile_source_err("for c in \"ab\"\n    put c\nend for");
+        assert!(err.contains("requires a string variable"));
+    }
+
+    #[test]
+    fn supports_dereference() {
+        // Pointers only arise from #asm helpers; the `*expr` prefix lowers to
+        // a single qword load through the pointer.
+        let output = transpile_source("#asm\nget_ptr:\n    leaq val(%rip), %rax\n    retq\n#endasm\nvar p i32 := get_ptr()\nvar v i32 := *p\nput v");
+        assert!(output.contains("movq (%rax), %rax"));
     }
 
     #[test]

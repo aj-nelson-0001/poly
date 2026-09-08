@@ -6,12 +6,15 @@
 //! to re-derive control-flow shapes from the AST.
 
 /// Location of an intermediate representation node in the original Poly source.
+///
+/// Positions are byte offsets into the original source text.  Consumers that
+/// need 1-based line/column pairs convert offsets with
+/// `poly_lexer::diagnostics::line_col` while they still hold the source text;
+/// the generator itself only sees the AST and cannot compute lines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SourceLocation {
-    /// 1-based line in the Poly source.
-    pub line: usize,
-    /// 1-based column in the Poly source.
-    pub column: usize,
+    /// Byte offset of the node's start in the original Poly source.
+    pub byte_offset: usize,
 }
 
 /// A complete intermediate representation program.
@@ -33,6 +36,11 @@ pub struct Program {
     /// Raw Rust blocks from `#rust ... #endrust`, emitted verbatim at
     /// the top level of the generated Rust file.
     pub top_level_rust_blocks: Vec<String>,
+    /// Source byte offsets for `main_body`, element-for-element.  A `None`
+    /// entry (or a shorter vector) means "no precise location" and codegen
+    /// simply omits the mapping; the zip-based lookup never panics when the
+    /// optimizer removes statements without touching this array.
+    pub main_body_locations: Vec<Option<SourceLocation>>,
 }
 
 /// intermediate representation function.
@@ -44,6 +52,9 @@ pub struct Function {
     pub params: Vec<Parameter>,
     pub return_type: Option<Type>,
     pub body: Vec<Statement>,
+    /// Source byte offsets for `body`, element-for-element (see
+    /// `Program::main_body_locations` for the desync guard).
+    pub body_locations: Vec<Option<SourceLocation>>,
     /// Async is retained until codegen because it changes both the signature
     /// and the generated entry-point/runtime dependencies.
     pub is_async: bool,

@@ -3,6 +3,8 @@
 //! This module exposes the default Poly-to-Rust API and target-aware parsing
 //! shared by the CLI and alternate backends.
 
+use std::collections::HashMap;
+
 use poly_lexer::Lexer;
 use poly_parser::{Parser, Program};
 
@@ -163,15 +165,44 @@ impl Transpiler {
     }
 
     /// Transpile Poly source code to Rust code with source map.
+    ///
+    /// Runs the unoptimized IR pipeline so codegen can report the exact
+    /// target line of every statement whose AST span is known; lines without
+    /// a statement (headers, closing braces, generated helpers) inherit the
+    /// closest previous mapping, matching how source-map consumers resolve
+    /// positions between recorded points.
     pub fn transpile_with_source_map(
         &mut self,
         source: &str,
     ) -> Result<(String, SourceMap), String> {
-        let rust_code = self.transpile(source)?;
+        let program = Self::parse_target(source, "rust")?;
+        let intermediate_representation =
+            poly_intermediate_representation::generator::generate(&program);
+        let mut codegen =
+            poly_intermediate_representation::IntermediateRepresentationCodeGen::new();
+        let rust_code = codegen.generate(&intermediate_representation);
+        let statement_locations = codegen.statement_locations().to_vec();
+
         let mut source_map = SourceMap::new(source, &rust_code);
         let source_line_count = source.lines().count().max(1);
+        use poly_lexer::diagnostics::line_col;
+        let precise: HashMap<usize, usize> = statement_locations
+            .iter()
+            .map(|(target_line, byte_offset)| {
+                let (line, _) = line_col(source, *byte_offset);
+                (*target_line, line.min(source_line_count))
+            })
+            .collect();
+        let mut last_source_line = 1usize;
         for (index, _) in rust_code.lines().enumerate() {
-            source_map.add_mapping(index + 1, (index + 1).min(source_line_count));
+            let target_line = index + 1;
+            let source_line = precise
+                .get(&target_line)
+                .copied()
+                .unwrap_or(last_source_line)
+                .min(source_line_count);
+            source_map.add_mapping(target_line, source_line);
+            last_source_line = source_line;
         }
         self.register_statement_symbols(source, &mut source_map);
         self.source_map = Some(source_map.clone());
@@ -243,6 +274,53 @@ mod tests {
         let (rust, map) = t.transpile_with_source_map("put \"hi\"").unwrap();
         assert!(rust.contains("println!"));
         assert!(map.lookup_target_line(1).is_some());
+    }
+
+    #[test]
+    fn source_map_maps_statements_precisely() {
+        // The generated Rust adds header lines, so a line-identity mapping
+        // would point the `var x` statement at its own Rust line instead of
+        // Poly line 2.  The span-precise map must resolve the real origin.
+        let mut t = Transpiler::with_source_map();
+        let source = "fn main()\n    var x i32 := 1\n    put x\nend fn\n";
+        let (rust, map) = t.transpile_with_source_map(source).unwrap();
+        let target_line = rust
+            .lines()
+            .enumerate()
+            .find(|(_, line)| line.contains("let mut x: i32 = 1;"))
+            .map(|(index, _)| index + 1)
+            .expect("generated Rust should declare x");
+        assert_eq!(map.lookup_target_line(target_line), Some(2));
+        let put_line = rust
+            .lines()
+            .enumerate()
+            .find(|(_, line)| line.contains("println!") && line.contains(", x)"))
+            .map(|(index, _)| index + 1)
+            .expect("generated Rust should print x");
+        assert_eq!(map.lookup_target_line(put_line), Some(3));
+    }
+
+    #[test]
+    fn source_map_maps_top_level_statements_precisely() {
+        // Top-level statements go through `main_body`; their offsets come
+        // from the parallel location array rather than function bodies.
+        let mut t = Transpiler::with_source_map();
+        let source = "var a i32 := 1\nvar b i32 := 2\nput a + b\n";
+        let (rust, map) = t.transpile_with_source_map(source).unwrap();
+        let a_line = rust
+            .lines()
+            .enumerate()
+            .find(|(_, line)| line.contains("let mut a: i32 = 1;"))
+            .map(|(index, _)| index + 1)
+            .expect("generated Rust should declare a");
+        assert_eq!(map.lookup_target_line(a_line), Some(1));
+        let b_line = rust
+            .lines()
+            .enumerate()
+            .find(|(_, line)| line.contains("let mut b: i32 = 2;"))
+            .map(|(index, _)| index + 1)
+            .expect("generated Rust should declare b");
+        assert_eq!(map.lookup_target_line(b_line), Some(2));
     }
 
     #[test]

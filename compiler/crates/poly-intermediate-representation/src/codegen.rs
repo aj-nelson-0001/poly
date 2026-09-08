@@ -13,6 +13,10 @@ use crate::intermediate_representation::*;
 pub struct IntermediateRepresentationCodeGen {
     indent: usize,
     output: String,
+    /// 1-based line number of the next character appended to `output`.
+    /// Maintained only by `writeln`/`writeln_fmt` (the two paths that append
+    /// to `self.output`), so every recorded mapping is exact.
+    current_line: usize,
     /// Names whose values have Poly's `string` type (needed for `+` lowering).
     /// Mutated from `&self` inside `gen_statement_str` (loop/match bodies),
     /// hence the cell.
@@ -55,6 +59,13 @@ pub struct IntermediateRepresentationCodeGen {
     /// Per-function names returned from a `return` statement. Closure
     /// declarations bound to these names must own their captures as well.
     returned_closure_names: RefCell<Vec<HashSet<String>>>,
+    /// Exact target-line → source-byte-offset mappings for statements whose
+    /// source location is known.  Filled while emitting `main_body` and
+    /// function bodies; the source-map layer converts offsets to lines.
+    statement_locations: Vec<(usize, usize)>,
+    /// Source byte offset of the statement currently being emitted, when
+    /// known.  Set by the emit loops around `gen_statement`.
+    active_statement_offset: Option<usize>,
 }
 
 impl IntermediateRepresentationCodeGen {
@@ -80,6 +91,9 @@ impl IntermediateRepresentationCodeGen {
             pattern_aliases: RefCell::new(Vec::new()),
             closure_move: RefCell::new(false),
             returned_closure_names: RefCell::new(Vec::new()),
+            current_line: 1,
+            statement_locations: Vec::new(),
+            active_statement_offset: None,
         }
     }
 
@@ -164,9 +178,15 @@ impl IntermediateRepresentationCodeGen {
             });
             self.indent += 1;
             self.enter_scope();
-            for statement in &program.main_body {
+            for (statement, location) in program
+                .main_body
+                .iter()
+                .zip(program.main_body_locations.iter())
+            {
+                self.active_statement_offset = location.map(|loc| loc.byte_offset);
                 self.gen_statement(statement);
             }
+            self.active_statement_offset = None;
             self.exit_scope();
             self.indent -= 1;
             self.writeln("}");
@@ -381,9 +401,11 @@ impl IntermediateRepresentationCodeGen {
             ret
         ));
         self.indent += 1;
-        for statement in &function.body {
+        for (statement, location) in function.body.iter().zip(function.body_locations.iter()) {
+            self.active_statement_offset = location.map(|loc| loc.byte_offset);
             self.gen_statement(statement);
         }
+        self.active_statement_offset = None;
         self.indent -= 1;
         self.writeln("}");
         self.returned_closure_names.borrow_mut().pop();
@@ -3275,22 +3297,40 @@ impl IntermediateRepresentationCodeGen {
     /// Write a line with indent. Writes indent characters directly to avoid
     /// allocating a String via `repeat()` on every line.
     fn writeln(&mut self, s: &str) {
+        // Record the exact target line for the statement being emitted, if
+        // the emit loop knows its source offset.  The offset is consumed
+        // once so nested statements inside a multi-line construct record at
+        // their own (later) lines.
+        if let Some(offset) = self.active_statement_offset.take() {
+            self.statement_locations.push((self.current_line, offset));
+        }
         for _ in 0..self.indent {
             self.output.push_str("    ");
         }
         self.output.push_str(s);
         self.output.push('\n');
+        self.current_line += 1;
     }
 
     /// Write a formatted line directly to the output buffer, avoiding the
     /// intermediate String allocation from `format!`.
     fn writeln_fmt(&mut self, args: std::fmt::Arguments<'_>) {
+        if let Some(offset) = self.active_statement_offset.take() {
+            self.statement_locations.push((self.current_line, offset));
+        }
         for _ in 0..self.indent {
             self.output.push_str("    ");
         }
         use std::fmt::Write;
         self.output.write_fmt(args).unwrap();
         self.output.push('\n');
+        self.current_line += 1;
+    }
+
+    /// Exact (target line, source byte offset) mappings recorded while
+    /// generating.  The source-map layer converts offsets to source lines.
+    pub fn statement_locations(&self) -> &[(usize, usize)] {
+        &self.statement_locations
     }
 }
 

@@ -14,6 +14,12 @@ pub fn generate(program: &ast::Program) -> Program {
     // Keep this pass structural: semantic meaning belongs to the checker and
     // target-specific lowering belongs to codegen, which keeps the IR reusable.
     let mut intermediate_representation = Program::default();
+    // Statement byte offsets ride alongside the lowered statements so codegen
+    // can emit precise source-map mappings.  Bodies and `main_body` keep a
+    // parallel `Vec<Option<SourceLocation>>`; nested blocks (if/match/loop
+    // bodies) are covered by the same per-statement offsets of their
+    // enclosing list, so only top-level lists need the array.
+    let mut main_body_locations: Vec<Option<SourceLocation>> = Vec::new();
     for spanned in &program.statements {
         let statement = &spanned.node;
         match statement {
@@ -78,16 +84,33 @@ pub fn generate(program: &ast::Program) -> Program {
             ast::Statement::ForeignBlock { .. } => {}
             ast::Statement::ExternFunctionDeclaration(_) => {}
             _ => {
+                main_body_locations.push(Some(SourceLocation {
+                    byte_offset: spanned.span.start,
+                }));
                 intermediate_representation
                     .main_body
                     .push(gen_statement(statement));
             }
         }
     }
+    intermediate_representation.main_body_locations = main_body_locations;
     intermediate_representation
 }
 
 fn gen_function(function: &ast::FunctionDecl) -> Function {
+    let body_locations: Vec<Option<SourceLocation>> = function
+        .body
+        .as_ref()
+        .map(|body| {
+            body.iter()
+                .map(|spanned| {
+                    Some(SourceLocation {
+                        byte_offset: spanned.span.start,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     Function {
         name: function.name.clone(),
         params: function.params.iter().map(gen_parameter).collect(),
@@ -101,6 +124,7 @@ fn gen_function(function: &ast::FunctionDecl) -> Function {
                     .collect()
             })
             .unwrap_or_default(),
+        body_locations,
         is_async: function.is_async,
         generics: function.generics.iter().map(gen_generic_param).collect(),
         source_location: None,

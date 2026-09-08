@@ -1,7 +1,65 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-07.
+Last updated: 2026-09-08.
+
+## LSP positions, source maps, and ASM backend gaps (2026-09-08)
+
+Follow-up pass addressing the 2026-08-15 review's remaining items: LSP
+`document_symbols` ranges, precise source-map line mappings, and the two
+ASM backend gaps (for-in loops, dereferencing).
+
+### LSP: `document_symbols` now UTF-16-correct
+
+- Hover/completion positions were already UTF-16-based, but
+  `document_symbols` built symbol ranges from **byte** offsets
+  (`line.find` column and `trimmed.len()` byte length), shifting reported
+  ranges on non-ASCII lines. Ranges are now computed in UTF-16 code units,
+  matching the rest of the server.
+- Regression test added; poly-lsp 18/18 tests pass. The JSON parser's
+  surrogate-pair escape handling was verified already covered by tests.
+
+### Source maps: AST-span-precise line mappings
+
+- Previously `--source-map` line mappings were a line-identity heuristic.
+  Now the IR carries per-statement source locations in parallel arrays
+  (`Program.main_body_locations`, `Function.body_locations`), filled by the
+  generator from the precise AST statement spans (with length guards so
+  optimizer truncation of the statement vectors cannot desync them).
+- IR codegen tracks its output line counter incrementally in
+  `writeln`/`writeln_fmt` and records `target line -> source line` for every
+  statement that starts a fresh output line.
+- `poly-transpiler`'s source-map layer consumes these exact mappings instead
+  of guessing. Snapshot output is byte-identical; 2 new tests verify
+  statement-level mapping accuracy.
+
+### ASM backend: for-in loops and dereferencing
+
+- **`for x in <string>`**: emits a pointer walk over the NUL-terminated
+  string bytes, copying each byte into a stack slot for the loop variable;
+  `put c` on a char-typed variable routes through a 1-byte `sys_write` so
+  characters print instead of integer codes. Verified end-to-end: the
+  generated `.S` assembles and prints the expected characters.
+- **Dereferencing (`*p`)**: a pointer load is one `movq (%rax)` into a
+  result slot. Covered by unit tests. An end-to-end runtime check is
+  currently blocked by the language surface, not the backend: `extern`
+  declarations are target-filtered (`extern rust` is stripped before the
+  asm pipeline), `#rust` blocks are likewise filtered, and there is no
+  address-of expression in the language (`&` is type-position only; the
+  operator form is the retired `bitand` spelling). Sourcing a reference
+  from pure Poly code for the asm target will need a language decision
+  (e.g. `extern asm` or auto-ref on `&mut` arguments).
+
+### Verification
+
+- `cargo test --workspace`: all pass (393 tests, up from 383).
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- `cargo fmt --all -- --check`: clean.
+- `scripts/check_markdown.py`: passes (49 files, 1,312 tilde fences).
+- `scripts/check_poly_examples.py`: passes — 565 blocks, 229 complete
+  blocks pass `--check`, 336 marked fragments, 0 unmarked failures.
+- Playground wasm rebuilt and Node smoke test passes (5 good + 6 rejected
+  cases).
 
 ## Playground and VS Code keyword-operator sync (2026-09-07)
 

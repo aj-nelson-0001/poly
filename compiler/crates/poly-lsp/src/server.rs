@@ -647,7 +647,13 @@ fn document_symbols(source: &str) -> Vec<Symbol> {
         if name.is_empty() {
             continue;
         }
-        let start = line.find(trimmed).unwrap_or(0);
+        // LSP ranges are UTF-16 code units, not bytes: convert both the
+        // column of the declaration and its length so non-ASCII identifiers
+        // or trailing comments do not shift the reported range.
+        let start = line
+            .find(trimmed)
+            .map(|byte_index| line[..byte_index].encode_utf16().count())
+            .unwrap_or(0);
         symbols.push(Symbol {
             name: name.to_string(),
             kind,
@@ -655,7 +661,7 @@ fn document_symbols(source: &str) -> Vec<Symbol> {
             start_line: index,
             start_character: start,
             end_line: index,
-            end_character: start + trimmed.len(),
+            end_character: start + trimmed.encode_utf16().count(),
         });
     }
     symbols
@@ -1009,6 +1015,19 @@ mod tests {
         assert_eq!(word_at("put 42", 0), Some(("put".to_string(), 0, 3)));
         assert_eq!(word_at("put 42", 3), None);
         assert_eq!(word_at("  put 42", 2), Some(("put".to_string(), 2, 5)));
+    }
+
+    #[test]
+    fn document_symbols_report_utf16_ranges() {
+        // é is one UTF-16 unit but two bytes; a byte-based end column would
+        // overshoot by one for every such character in the declaration.
+        let symbols = document_symbols("struct café\n");
+        assert_eq!(symbols.len(), 1);
+        assert_eq!(symbols[0].start_character, 0);
+        assert_eq!(
+            symbols[0].end_character,
+            "struct café".encode_utf16().count()
+        );
     }
 
     #[test]

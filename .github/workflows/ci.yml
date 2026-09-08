@@ -201,6 +201,9 @@ jobs:
           sha256sum "$wasm_file"
           wc -c < "$wasm_file"
 
+      - name: Run playground wasm smoke test
+        run: node scripts/playground_wasm_smoke.mjs
+
   release:
     name: Release
     runs-on: ubuntu-latest

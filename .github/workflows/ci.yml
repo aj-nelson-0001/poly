@@ -107,6 +107,22 @@ jobs:
           fi
           rm -f tests/c_target_tests.c tests/c_target_tests tests/c_target_tests.exe
 
+      - name: Check and run asm target fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          POLY_BIN="./compiler/target/release/poly"
+          "$POLY_BIN" --target asm --check tests/extern_asm_deref.poly
+          "$POLY_BIN" --target asm tests/extern_asm_deref.poly -o tests/extern_asm_deref.S
+          cc tests/extern_asm_deref.S -o tests/extern_asm_deref_bin -nostartfiles
+          actual_output=$(./tests/extern_asm_deref_bin)
+          if [ "$actual_output" != "42" ]; then
+            printf 'Unexpected asm fixture output: %s\n' "$actual_output"
+            exit 1
+          fi
+          rm -f tests/extern_asm_deref.S tests/extern_asm_deref_bin
+          rm -f tests/c_target_tests.c tests/c_target_tests tests/c_target_tests.exe
+
       - name: Verify mixed target selection
         shell: bash
         run: |

@@ -172,18 +172,27 @@ impl AsmGenerator {
         }
         let funcs_buf = std::mem::take(&mut self.output);
 
-        // Pass 1b: emit _start body so strings are collected.
+        // Pass 1b: emit _start body so strings are collected. When the
+        // program declares `fn main`, _start calls it (mirroring the Rust
+        // target, which wraps top-level statements in a generated `fn main`);
+        // otherwise top-level statements run directly in _start.
+        let has_main = functions.iter().any(|f| f.name == "main");
         self.output.push_str(".section .text\n");
         self.output.push_str(".globl _start\n\n");
         self.output.push_str("_start:\n");
         // _start is entered by the kernel with rsp 16-byte aligned.
-        // pushq %rbp makes it 8 mod 16; subq must be 8 mod 16.
+        // pushq %rbp makes it 8 mod 16; subq must be 8 mod 16 so rsp is
+        // 0 mod 16 for the statements' frame AND for the `callq main`
+        // (the ABI requires 16-byte alignment immediately before a call).
         self.output.push_str("    pushq %rbp\n");
         self.output.push_str("    movq %rsp, %rbp\n");
         self.output.push_str("    subq $4088, %rsp\n");
         let mut frame = StackFrame::new();
         for stmt in &top_level {
             self.emit_statement(&stmt.node, &mut frame)?;
+        }
+        if has_main {
+            let _ = writeln!(self.output, "    callq main");
         }
         self.emit_exit();
         let start_body = std::mem::take(&mut self.output);
@@ -355,6 +364,7 @@ impl AsmGenerator {
                         && !self.is_string_type(ty)
                         && !self.is_struct_type(ty)
                         && !self.is_enum_type(ty)
+                        && !self.is_reference_type(ty)
                     {
                         return Err(format!(
                             "Assembly backend does not support type `{ty:?}` for `{name}`; use integer, bool, string, struct, or enum"
@@ -1460,6 +1470,14 @@ impl AsmGenerator {
 
     fn is_string_type(&self, ty: &TypeAnnotation) -> bool {
         matches!(ty, TypeAnnotation::Named(name) if name == "string" || name == "ustring")
+    }
+
+    /// A reference type (`&T`) is a plain 8-byte pointer. Values of this type
+    /// only come from `extern asm` helpers or `#asm` blocks, which are the
+    /// asm target's only way to source a reference (there is no Poly-level
+    /// address-of expression).
+    fn is_reference_type(&self, ty: &TypeAnnotation) -> bool {
+        matches!(ty, TypeAnnotation::Reference(_, _))
     }
 
     fn is_struct_type(&self, ty: &TypeAnnotation) -> bool {

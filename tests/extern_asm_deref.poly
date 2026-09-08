@@ -1,0 +1,19 @@
+#!/usr/bin/env poly
+# extern asm + dereference integration test
+# The #asm block defines the symbol the extern declares; deref loads through it.
+
+extern asm fn get_ptr(): &i32
+#asm
+.section .data
+val: .quad 42
+.section .text
+.globl get_ptr
+get_ptr:
+    leaq val(%rip), %rax
+    ret
+#endasm
+
+fn main()
+    var p &i32 := get_ptr()
+    put *p
+end fn

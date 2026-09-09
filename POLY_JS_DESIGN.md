@@ -1,6 +1,9 @@
 # Poly JavaScript Backend Design
 
-**Status:** Proposal for review — not yet implemented.
+**Status:** Proposal for review — not yet implemented. Design review updated
+2026-09-09: the integration touchpoints below are verified against the
+codebase, and the checker's strict foreign-call mode (`--strict`) applies to
+this target automatically.
 
 This document specifies a fourth Poly compilation target: JavaScript, runnable
 both under Node.js and in the browser (the playground already ships a
@@ -61,6 +64,34 @@ Foreign-block selection: only `#js` blocks are emitted for the JS target;
 `#rust`/`#c`/`#asm` blocks are dropped. `#cpp` stays rejected globally.
 `extern js fn ...` declarations are validated by the checker and never
 emitted.
+
+## Verified Integration Touchpoints
+
+Each place the JS backend must touch, confirmed against the current code:
+
+| Touchpoint | File | Current state | Required change |
+|---|---|---|---|
+| Foreign-block lexer | `poly-lexer/src/lexer.rs` (`foreign_block_language_at_current`) | Matches the list `["rust", "cpp", "c", "asm"]` by prefix | Add `"js"` to the list |
+| `extern` target validation | `poly-parser/src/parser.rs` (`parse_extern_function_declaration`) | Accepts `rust`\|`c`\|`asm`, otherwise errors | Add `"js"` and extend the error message |
+| Target filtering | `poly-transpiler/src/codegen.rs` (`select_target`) | Rejects `#cpp`, keeps blocks where `declaration.target == language` | No change — `js` flows through |
+| Target dispatch | `poly-transpiler/src/codegen.rs` (`transpile_target`) | Maps `rust`/`c`/`asm` names | Add `"js"` → `transpile_js_checked` |
+| Checker | `poly-transpiler/src/checker.rs` | Extern declarations for any target register via `register_extern_functions`; non-selected targets are filtered before checking | No change — see strict-mode note below |
+| Workspace | `compiler/Cargo.toml` | Members list + `workspace.dependencies` | Add `crates/poly-js-codegen` |
+| CLI target enum | `poly-cli/src/main.rs` (`Target::from_str`, `language_name`, extension) | `rust`/`c`/`asm`/`s`/`S` | Add `js`\|`mjs` → `Target::Js` |
+| CLI validation | `poly-cli/src/main.rs` (`verify_*_compiles`) | `rustc`/`cc`/assembler checks, `POLY_CC` override | Add `verify_js_compiles` via `node --check` (`POLY_NODE` override; Node-absent fallback matches the C target) |
+| CLI emission | `poly-cli/src/main.rs` (`--emit-*` arms, build path, `--project`) | `--emit-rust`/`--emit-c`/`--emit-asm` | Add `--emit-js` arm, JS build path (`node out.js` is a run step, so build = write + syntax check), and `generate_js_project` |
+| CI | `.github/workflows/ci.yml` | C/asm fixture jobs | Add a `js` fixture check/execute step (Node is preinstalled on all runners) |
+
+Checker strict mode note: the checker registers foreign function names with a
+line heuristic that already handles JS `function name(...)` declarations (the
+generic "contains `(`" branch strips `function `), so opaque `#js` calls
+resolve the same way C calls do. Arrow-function constants and class methods do
+**not** register — the first cut requires top-level `function` declarations in
+`#js` blocks, documented like C's prototype expectations. The new
+`--strict` mode (`check_program_strict_foreign_with_warnings`, added
+2026-09-09) applies to this target without further work; the CLI should enable
+it by default for `--target js` because the browser has no native compiler to
+fall back on.
 
 ## Execution
 
@@ -134,19 +165,33 @@ re-declaration is safe when the artifact is imported twice.
 1. **`compiler/crates/poly-js-codegen`** — new crate mirroring
    `poly-c-codegen`'s structure (`JsGenerator`, `transpile(&Program)`),
    reusing its statement/expression walker shape. ~600–800 lines.
-2. **Target plumbing** — `transpile_target` gains `"js"` (reject `#cpp`
-   as today; select `#js` blocks); `poly-cli` gains `--target js`,
-   `--emit-js`, and Node-based `--check`/build steps.
-3. **Checker** — no new rules needed beyond existing target-aware extern
-   filtering; async/generic rejection mirrors the C backend's errors.
+2. **Target plumbing** — add `"js"` to the lexer's foreign-language list and
+   the parser's `extern` target validation (see the touchpoints table);
+   `transpile_target` gains `"js"`; `poly-cli` gains `Target::Js`, `--emit-js`,
+   and Node-based `--check`/build steps (`POLY_NODE` override).
+3. **Checker** — no new rules: target-aware extern filtering already works for
+   any target name, and `--strict` foreign-call checking applies automatically.
+   Async/generic rejection mirrors the C backend's errors.
 4. **Tests** — unit tests in the crate (mirroring `poly-asm-codegen`'s),
    snapshot tests added to `snapshot_tests.rs` (`*_js.snap`), plus a
-   `tests/js_target_tests.poly` fixture with `#js` blocks.
+   `tests/js_target_tests.poly` fixture with `#js` blocks and a CI step that
+   executes it with Node.
 5. **Docs** — new `POLY_JS_BLOCKS.md` (modeled on `POLY_C_BLOCKS.md`);
    `POLY_V2_SUPPORT_MATRIX.md` gains a JS column; README/CHANGELOG updated.
 6. **Playground** — `poly-wasm`'s `transpile` export already runs the checked
    pipeline; expose the JS target there so the playground can compile and run
    Poly in-browser end-to-end.
+
+### Acceptance Criteria
+
+- `poly --target js --emit-js program.poly` prints valid ES2020 for every
+  construct listed as supported above, matching the C table where applicable.
+- `poly --target js --check program.poly` passes with Node present and still
+  parses/checks with Node absent (warning, matching the C target's fallback).
+- `tests/js_target_tests.poly` executes under Node with verified output in CI.
+- All existing targets' fixtures and snapshots are unchanged (no regressions
+  from the lexer/parser list extensions — `js` cannot collide with any current
+  Poly keyword or existing marker).
 
 ## Risks / Open Questions
 

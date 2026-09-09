@@ -9,9 +9,8 @@
 //! API (called from JS):
 //! - `poly_alloc(len) -> ptr`            allocate a writable buffer
 //! - `transpile(ptr, len) -> result_ptr` run the full pipeline (Rust target)
-//! - `transpile_target(ptr, len, tptr, tlen) -> result_ptr`
-//!                                       run the pipeline for the selected
-//!                                       target (`rust`, `c`, `asm`, or `js`)
+//! - `transpile_target(ptr, len, tptr, tlen) -> result_ptr` run the pipeline
+//!   for the selected target (`rust`, `c`, `asm`, or `js`)
 //! - `result_ptr(result) -> usize`        output buffer pointer
 //! - `result_len(result) -> usize`        output byte length
 //! - `result_is_error(result) -> i32`     1 when the result is an error

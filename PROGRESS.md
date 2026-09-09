@@ -1,7 +1,45 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-08.
+Last updated: 2026-09-09.
+
+## Audit risk 1: `--strict` foreign-call checking; JS design review (2026-09-09)
+
+### `poly --strict`
+
+- The checker gains `strict_foreign` mode: calls to foreign functions without
+  an explicit `extern <target> fn ...` declaration are rejected with guidance
+  instead of being left permissive (`Unknown` types, native-compiler
+  validation only). Implemented at both call-checking sites (`check_arguments`
+  and the generic-call path); plain `fn`s, impl methods, and builtins are
+  unaffected.
+- CLI: `--strict` flag parsed alongside `--target`/`-o`, help text in both
+  usage listings, `--check` selects `check_program_strict_foreign_with_warnings`
+  when set. Library surface: `TypeChecker::set_strict_foreign`,
+  `check_with_warnings_strict_foreign`, `check_program_strict_foreign{,_with_warnings}`.
+- Five checker unit tests: opaque call rejected (and permissive by default),
+  explicit declaration accepted, extern arity mismatch still surfaced, plain
+  Poly programs unaffected, and dropped-target behavior (a call to a
+  non-selected target's function is already `unknown function` in permissive
+  mode — target filtering runs before checking — so strict mode is a no-op
+  there).
+- Verified end-to-end: `--target c --check` passes an opaque call permissively
+  and fails it under `--strict` (exit 1) with the extern-declaration message;
+  a declared extern passes strict; a plain Poly program passes strict.
+- Docs: audit risk 1 updated, support-matrix foreign-interface rule notes the
+  flag, README documents `--strict`.
+
+### JS design review
+
+- `POLY_JS_DESIGN.md` upgraded from a proposal to an implementation-ready
+  review: verified integration-touchpoints table (lexer foreign-language
+  list, parser extern validation, `select_target`, `transpile_target`,
+  checker, CLI enum/verification/emission, CI), discovered that the checker's
+  foreign-name heuristic already registers `function name(...)` declarations
+  (so `#js` calls resolve like C calls), specified the first-cut requirement
+  for top-level `function` declarations in `#js` blocks, wired the new
+  `--strict` mode in (default-on for the JS target since the browser has no
+  native compiler), and added acceptance criteria.
 
 ## Version sync: 2.0.0-preview.2 (2026-09-08)
 

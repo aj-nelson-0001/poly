@@ -4,6 +4,25 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- **`poly --strict`**: rejects calls to foreign functions that have no explicit
+  `extern <target> fn ...` declaration. By default, opaque foreign calls remain
+  permissive (argument and return compatibility is delegated to the native
+  target compiler); strict mode closes that gap for CI and audits. Calls that
+  resolve through ordinary Poly declarations — plain `fn`s, impl methods,
+  builtins — are unaffected, and target filtering still removes non-selected
+  foreign blocks before checking. Implemented as
+  `check_program_strict_foreign*` in the checker with unit tests covering the
+  reject/declare/arity/plain-program/dropped-target cases.
+
+### Documentation
+
+- `POLY_JS_DESIGN.md` upgraded to an implementation-ready review: verified
+  integration touchpoints table (lexer, parser, target dispatch, CLI, CI),
+  strict-mode interaction, first-cut `#js` declaration requirements, and
+  acceptance criteria.
+
 ## [2.0.0-preview.2] - 2026-09-08
 
 Follow-up passes for the target-aware compiler model: a new assembly target,

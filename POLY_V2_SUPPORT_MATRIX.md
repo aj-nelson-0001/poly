@@ -79,7 +79,7 @@ Rules:
 - Explicit declarations validate arity and Poly-visible types.
 - The native compiler remains authoritative for the foreign definition, ABI, pointer layout, ownership, lifetimes, calling convention, and target-specific types.
 - An explicit declaration does not emit a duplicate prototype or function body.
-- Existing calls without an explicit declaration remain permissive and are validated by `rustc` or the C compiler.
+- By default, existing calls without an explicit declaration remain permissive and are validated by `rustc` or the C compiler. `poly --strict` rejects such calls at check time instead; use it in CI when every foreign call should be declared.
 
 ## Unsupported Behavior
 

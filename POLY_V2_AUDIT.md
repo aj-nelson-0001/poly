@@ -28,7 +28,7 @@ LSP symbol ranges span-precise.
 
 ## Remaining Risks, In Priority Order
 
-1. **Opaque foreign calls remain permissive, while explicit signatures are available.** Poly accepts legacy calls after extracting names, but argument and return compatibility is delegated entirely to Rust or C unless the source adds `extern rust fn ...` or `extern c fn ...`.
+1. **Opaque foreign calls remain permissive by default, while explicit signatures are available.** Poly accepts legacy calls after extracting names, but argument and return compatibility is delegated entirely to Rust or C unless the source adds `extern rust fn ...` or `extern c fn ...`. Since 2026-09-09, `poly --strict` rejects calls to foreign functions that lack an explicit `extern <target> fn ...` declaration (ordinary Poly declarations and builtins are unaffected), giving CI and audits an enforcement path; the default remains permissive for compatibility.
 2. **C backend scope remains intentionally narrow.** File redirects, file input, vectors, async, capturing closures, and complex Poly types should use `#c` helpers or remain unsupported until their C representation is designed. Tuples, match statements, struct literals, enum variants, plain `get`, and non-capturing closures are supported as of `2.0.0-preview.2`.
 3. **C++ is syntax-only.** `#cpp` blocks are recognized and preserved in the AST, but no C++ target or native build path exists.
 4. **The v2 preview still has compatibility-oriented parser paths.** They are covered by tests and kept for migration diagnostics; future cleanup should remove only paths proven unused by the test suite.

@@ -72,6 +72,11 @@ put answer
 Use `poly --target c --check program.poly` to validate generated C, or
 `poly --target c program.poly` to emit and compile the C executable.
 
+Add `--strict` to reject calls to foreign functions that lack an explicit
+`extern <target> fn ...` declaration — opaque calls are allowed by default
+(the native compiler validates them), but strict mode makes Poly surface
+them, which is useful in CI.
+
 ### What's New in 2.0.0-preview.2
 
 Preview 2 adds an **assembly target** (`--target asm`, Linux x86-64) with
@@ -488,6 +493,7 @@ Use `poly --emit-rust file.poly` when you want the generated Rust on stdout. Asy
 | `poly --tokens <file>` | Print tokens and exit |
 | `poly --ast <file>` | Print AST and exit |
 | `poly --check <file>` | Validate code and verify the selected target compilation |
+| `poly --strict <file>` | Also reject foreign calls without an explicit `extern <target> fn` declaration |
 | `poly --emit-rust <file>` | Print generated Rust to stdout |
 | `poly --intermediate-representation <file>` | Print the intermediate representation pipeline output (optimized Rust); `--ir` is an alias |
 | `poly --source-map <file>` | Print the generated Poly→Rust source map |

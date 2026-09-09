@@ -117,6 +117,12 @@ pub struct TypeChecker {
     // `PolyType::Named(name)` markers instead of `Unknown`, so declared
     // function signatures can be unified against concrete argument types.
     keep_type_variable_names: bool,
+    // When set (the CLI `--strict` flag), calls to foreign functions without
+    // an explicit `extern <target> fn ...` declaration are rejected instead of
+    // left permissive with `Unknown` types. The call may still type-check
+    // through ordinary Poly declarations (a plain `fn`, impl method, or
+    // builtin); only opaque foreign names are affected.
+    strict_foreign: bool,
 }
 
 impl TypeChecker {
@@ -134,7 +140,16 @@ impl TypeChecker {
             loop_depth: 0,
             type_variables: std::collections::HashSet::new(),
             keep_type_variable_names: false,
+            strict_foreign: false,
         }
+    }
+
+    /// Enable strict foreign-call checking: calls to names supplied only by a
+    /// foreign block (no explicit `extern <target> fn ...` declaration) are
+    /// rejected with a diagnostic instead of delegating validation entirely
+    /// to the native target compiler.
+    pub fn set_strict_foreign(&mut self, strict: bool) {
+        self.strict_foreign = strict;
     }
 
     /// Check a complete program and return every semantic error found.
@@ -147,6 +162,24 @@ impl TypeChecker {
         program: &Program,
     ) -> (Result<(), Vec<TypeCheckError>>, Vec<String>) {
         let mut checker = Self::new();
+        checker.check_program(program);
+        let warnings = std::mem::take(&mut checker.warnings);
+        if checker.errors.is_empty() {
+            (Ok(()), warnings)
+        } else {
+            (Err(checker.errors), warnings)
+        }
+    }
+
+    /// Strict-mode variant of [`Self::check_with_warnings`]: calls to foreign
+    /// functions without an explicit `extern <target> fn ...` declaration are
+    /// rejected. Ordinary Poly declarations (plain `fn`, impl methods,
+    /// builtins) are unaffected.
+    pub fn check_with_warnings_strict_foreign(
+        program: &Program,
+    ) -> (Result<(), Vec<TypeCheckError>>, Vec<String>) {
+        let mut checker = Self::new();
+        checker.set_strict_foreign(true);
         checker.check_program(program);
         let warnings = std::mem::take(&mut checker.warnings);
         if checker.errors.is_empty() {
@@ -1160,6 +1193,10 @@ impl TypeChecker {
                         let expected = substitute_generic(declared, &signature.generics, &bindings);
                         self.require_compatible(actual, &expected, format!("argument to `{name}`"));
                     }
+                } else if self.strict_foreign {
+                    self.error(TypeCheckError::new(format!(
+                        "strict mode: call to foreign function `{name}` has no explicit `extern <target> fn {name}(...)` declaration"
+                    )));
                 }
                 return signature
                     .declared_return
@@ -1368,6 +1405,11 @@ impl TypeChecker {
         // Opaque foreign functions remain permissive; explicit extern
         // declarations opt into normal interface checking.
         if signature.is_foreign && !signature.has_explicit_signature {
+            if self.strict_foreign {
+                self.error(TypeCheckError::new(format!(
+                    "strict mode: call to foreign function `{name}` has no explicit `extern <target> fn {name}(...)` declaration"
+                )));
+            }
             return;
         }
         if signature.params.len() != args.len() {
@@ -2669,6 +2711,20 @@ pub fn check_program_with_warnings(
     TypeChecker::check_with_warnings(program)
 }
 
+/// Check a parsed program in strict mode: foreign calls require an explicit
+/// `extern <target> fn ...` declaration. Errors and non-fatal warnings.
+pub fn check_program_strict_foreign_with_warnings(
+    program: &Program,
+) -> (Result<(), Vec<TypeCheckError>>, Vec<String>) {
+    TypeChecker::check_with_warnings_strict_foreign(program)
+}
+
+/// Check a parsed program in strict mode: foreign calls require an explicit
+/// `extern <target> fn ...` declaration.
+pub fn check_program_strict_foreign(program: &Program) -> Result<(), Vec<TypeCheckError>> {
+    TypeChecker::check_with_warnings_strict_foreign(program).0
+}
+
 /// Unify a declared generic type against a concrete argument type, recording
 /// each type-variable binding (`T -> i32`) in `bindings`.
 ///
@@ -3548,5 +3604,98 @@ mod tests {
         let source =
             "fn main()\n    var json ustring := \"{{\\\"a\\\": 1}}\"\n    put json\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+    }
+
+    fn check_strict(source: &str) -> Result<(), Vec<TypeCheckError>> {
+        let (tokens, lexer_errors) = Lexer::lex(source);
+        assert!(lexer_errors.is_empty(), "lexer errors: {lexer_errors:?}");
+        let mut parser = Parser::new(&tokens);
+        let program = parser.parse().expect("source should parse");
+        TypeChecker::check_with_warnings_strict_foreign(&program).0
+    }
+
+    #[test]
+    fn strict_mode_rejects_opaque_foreign_call() {
+        // Without --strict the opaque foreign call is permissive.
+        let permissive =
+            "#c\nint double_value(int value) { return value * 2; }\n#endc\nvar result i32 := double_value(21)\nput result";
+        assert!(check(permissive).is_ok(), "{:?}", check(permissive).err());
+        // With --strict the same program is rejected with guidance.
+        let errors = check_strict(permissive).expect_err("strict mode should reject");
+        assert!(
+            errors.iter().any(|error| {
+                error.to_string().contains("strict mode")
+                    && error.to_string().contains("double_value")
+                    && error.to_string().contains("extern")
+            }),
+            "unexpected errors: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn strict_mode_allows_explicit_extern_declaration() {
+        let source = "extern c fn double_value(value: i32): i32\n#c\nint double_value(int value) { return value * 2; }\n#endc\nvar result i32 := double_value(21)\nput result";
+        assert!(
+            check_strict(source).is_ok(),
+            "{:?}",
+            check_strict(source).err()
+        );
+    }
+
+    #[test]
+    fn strict_mode_reports_extern_arity_mismatch() {
+        // An explicit declaration opts into interface checking: strict mode
+        // surfaces the arity mismatch instead of silently delegating to cc.
+        let source = "extern c fn double_value(value: i32): i32\n#c\nint double_value(int value) { return value * 2; }\n#endc\nvar result i32 := double_value(21, 22)";
+        let errors = check_strict(source).expect_err("arity mismatch should be rejected");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.to_string().contains("expects 1 arguments, got 2")),
+            "unexpected errors: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn strict_mode_allows_poly_and_builtin_calls() {
+        // Ordinary Poly declarations and builtins are unaffected by strict mode.
+        let source = "fn add_one(value: i32): i32\n    return value + 1\nend fn\nfn main()\n    var n i32 := add_one(41)\n    put n\n    put abs(-3)\nend fn";
+        assert!(
+            check_strict(source).is_ok(),
+            "{:?}",
+            check_strict(source).err()
+        );
+    }
+
+    #[test]
+    fn strict_mode_ignores_foreign_blocks_for_other_targets() {
+        // Target filtering (Transpiler::parse_target) removes non-selected
+        // foreign blocks and their extern declarations before checking, so a
+        // #rust call under the c target is an `unknown function` error in
+        // permissive mode already — strict mode changes nothing there.
+        let dropped = "#rust\nfn rust_helper(x: i32) -> i32 { x }\n#endrust\n#c\nint c_helper(int x) { return x; }\n#endc\nvar n i32 := rust_helper(1)\nput n";
+        let program = crate::codegen::Transpiler::parse_target(dropped, "c").expect("parse");
+        let errors = TypeChecker::check(&program).expect_err("unknown function");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.to_string().contains("unknown function `rust_helper`")),
+            "unexpected errors: {errors:?}"
+        );
+
+        // A call into the selected target's foreign block is permissive
+        // without strict mode and rejected with guidance under it.
+        let selected = "#rust\nfn rust_helper(x: i32) -> i32 { x }\n#endrust\n#c\nint c_helper(int x) { return x; }\n#endc\nvar n i32 := c_helper(1)\nput n";
+        let program = crate::codegen::Transpiler::parse_target(selected, "c").expect("parse");
+        assert!(TypeChecker::check(&program).is_ok());
+        let errors = TypeChecker::check_with_warnings_strict_foreign(&program)
+            .0
+            .expect_err("reject");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.to_string().contains("c_helper")),
+            "unexpected errors: {errors:?}"
+        );
     }
 }

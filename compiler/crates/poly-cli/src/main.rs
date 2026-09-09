@@ -50,13 +50,16 @@ impl Target {
 /// Extract and remove `--target <lang>` from the argument list.
 /// The target is handled before subcommand dispatch so every CLI mode, including
 /// `--check`, `--emit-*`, and project generation, selects the same backend.
-fn extract_target(args: &[String]) -> Result<(Target, Option<PathBuf>, Vec<String>)> {
+fn extract_target(args: &[String]) -> Result<(Target, Option<PathBuf>, bool, Vec<String>)> {
     let mut target = Target::Rust;
     // `-o <path>` overrides the default output location for the c/asm
     // targets (the rust target builds a Cargo project and has no single
     // output file). Filtered out here so command handlers see a clean arg
     // list, mirroring how `--target` is handled.
     let mut output_path: Option<PathBuf> = None;
+    // `--strict` rejects calls to foreign functions that have no explicit
+    // `extern <target> fn ...` declaration (audit risk 1 mitigation).
+    let mut strict = false;
     let mut filtered = Vec::new();
     let mut i = 0;
     while i < args.len() {
@@ -72,19 +75,21 @@ fn extract_target(args: &[String]) -> Result<(Target, Option<PathBuf>, Vec<Strin
                 bail!("-o requires an output path argument (e.g. -o out.S)");
             }
             output_path = Some(PathBuf::from(&args[i]));
+        } else if args[i] == "--strict" {
+            strict = true;
         } else {
             filtered.push(args[i].clone());
         }
         i += 1;
     }
-    Ok((target, output_path, filtered))
+    Ok((target, output_path, strict, filtered))
 }
 
 fn main() -> Result<()> {
     // Keep argument parsing dependency-free: the CLI is also used as a small
     // standalone binary in generated-project and integration-test workflows.
     let raw_args: Vec<String> = std::env::args().collect();
-    let (target, custom_output, args) = extract_target(&raw_args)?;
+    let (target, custom_output, strict, args) = extract_target(&raw_args)?;
 
     if args.len() < 2 {
         eprintln!("Poly Language Compiler v{}", env!("CARGO_PKG_VERSION"));
@@ -93,6 +98,7 @@ fn main() -> Result<()> {
         eprintln!();
         eprintln!("Options:");
         eprintln!("  --target <lang>   Target language (default: rust; options: rust, c, asm)");
+        eprintln!("  --strict          Reject foreign calls without an explicit `extern <target> fn` declaration");
         eprintln!("  --tokens          Print tokens and exit");
         eprintln!("  --ast             Print AST and exit");
         eprintln!("  --check           Validate code and verify compilation");
@@ -126,6 +132,7 @@ fn main() -> Result<()> {
             println!();
             println!("Options:");
             println!("  --target <lang>   Target language (default: rust; options: rust, c, asm)");
+            println!("  --strict          Reject foreign calls without an explicit `extern <target> fn` declaration");
             println!("  --tokens          Print tokens and exit");
             println!("  --ast             Print AST and exit");
             println!("  --check           Validate code and verify compilation");
@@ -290,10 +297,17 @@ fn main() -> Result<()> {
                     }
                 };
 
-                // Run semantic type checking before transpilation.
+                // Run semantic type checking before transpilation. In strict
+                // mode, foreign calls without an explicit `extern <target> fn`
+                // declaration are rejected (audit risk 1 mitigation).
                 if !has_errors {
-                    let (check_result, warnings) =
-                        poly_transpiler::check_program_with_warnings(&selected_program);
+                    let (check_result, warnings) = if strict {
+                        poly_transpiler::check_program_strict_foreign_with_warnings(
+                            &selected_program,
+                        )
+                    } else {
+                        poly_transpiler::check_program_with_warnings(&selected_program)
+                    };
                     for warning in warnings {
                         eprintln!("Warning: {}", warning);
                     }

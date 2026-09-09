@@ -389,15 +389,20 @@ put message"></textarea>
             <div class="panel">
                 <div class="panel-header">
                     <span class="panel-title">
-                        <span class="icon">🦀</span>
-                        Rust Output
+                        <span class="icon" id="output-icon">🦀</span>
+                        <span id="output-title">Rust Output</span>
                     </span>
                     <div class="panel-actions">
+                        <select id="target-select" onchange="transpile()" title="Target backend" style="margin-right:8px; background:#1e2235; color:#e2e8f0; border:1px solid #2d3550; border-radius:6px; padding:4px 8px; font: inherit; cursor:pointer;">
+                            <option value="rust" selected>Rust</option>
+                            <option value="c">C</option>
+                            <option value="js">JavaScript</option>
+                        </select>
                         <button class="btn" onclick="copyOutput()">Copy</button>
                     </div>
                 </div>
                 <div class="editor-container">
-                    <textarea id="rust-output" readonly placeholder="Rust code will appear here..."></textarea>
+                    <textarea id="rust-output" readonly placeholder="Generated code will appear here..."></textarea>
                 </div>
                 <div class="status-bar">
                     <span class="status-item" id="engine-status">Engine: loading…</span>
@@ -733,10 +738,21 @@ end fn`
 
         function transpileWithWasm(source) {
             const exp = wasmInstance.exports;
+            const target = document.getElementById('target-select').value;
             const bytes = textEncoder.encode(source);
             const bufPtr = exp.poly_alloc(bytes.length);
             new Uint8Array(exp.memory.buffer, bufPtr, bytes.length).set(bytes);
-            const result = exp.transpile(bufPtr, bytes.length);
+            let result;
+            if (exp.transpile_target) {
+                const targetBytes = textEncoder.encode(target);
+                const targetPtr = exp.poly_alloc(targetBytes.length);
+                new Uint8Array(exp.memory.buffer, targetPtr, targetBytes.length).set(targetBytes);
+                result = exp.transpile_target(bufPtr, bytes.length, targetPtr, targetBytes.length);
+                exp.poly_free(targetPtr, targetBytes.length);
+            } else {
+                // Older wasm builds only expose the Rust pipeline.
+                result = exp.transpile(bufPtr, bytes.length);
+            }
             exp.poly_free(bufPtr, bytes.length);
             const outPtr = exp.result_ptr(result);
             const outLen = exp.result_len(result);
@@ -750,6 +766,19 @@ end fn`
             const polyCode = document.getElementById('poly-editor').value;
             const rustOutput = document.getElementById('rust-output');
             const errorDiv = document.getElementById('poly-error');
+            const target = document.getElementById('target-select').value;
+            const outputIcon = document.getElementById('output-icon');
+            const outputTitle = document.getElementById('output-title');
+            if (target === 'c') {
+                outputIcon.textContent = '⚙️';
+                outputTitle.textContent = 'C Output';
+            } else if (target === 'js') {
+                outputIcon.textContent = '🟨';
+                outputTitle.textContent = 'JavaScript Output';
+            } else {
+                outputIcon.textContent = '🦀';
+                outputTitle.textContent = 'Rust Output';
+            }
 
             updateStatus('Transpiling...', false);
             try {

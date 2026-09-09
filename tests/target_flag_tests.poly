@@ -12,6 +12,7 @@
 extern rust fn double(x: i32): i32
 extern rust fn triple(x: i32): i32
 extern rust fn is_even(x: i32): bool
+extern rust fn point_distance_sq(p1x: f64, p1y: f64, p2x: f64, p2y: f64): f64
 
 # First #rust block: utility functions
 #rust
@@ -31,11 +32,11 @@ fn is_even(x: i32) -> bool {
 # Second #rust block: struct definition
 #rust
 struct Point {
-    x: f32,
-    y: f32,
+    x: f64,
+    y: f64,
 }
 
-fn point_distance_sq(p1x: f32, p1y: f32, p2x: f32, p2y: f32) -> f32 {
+fn point_distance_sq(p1x: f64, p1y: f64, p2x: f64, p2y: f64) -> f64 {
     let dx = p2x - p1x;
     let dy = p2y - p1y;
     dx * dx + dy * dy

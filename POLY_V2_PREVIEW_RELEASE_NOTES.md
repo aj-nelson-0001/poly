@@ -22,9 +22,10 @@ For the 2.0.0-preview.1 highlights, see [CHANGELOG.md](CHANGELOG.md).
 | Rust | Default target and complete v2 baseline | `rustc` or generated Cargo project |
 | C | C11 orchestration subset | `POLY_CC` C compiler |
 | Asm | Linux x86-64 assembly subset | GNU assembler and linker (Linux CI) |
+| JS | ES2020 orchestration subset, no runtime dependencies | `node --check` plus execution (Linux CI) |
 | C++ | Reserved only | Explicitly rejected; no backend exists |
 
-For the complete feature boundary, see [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md). For foreign block syntax and C type mappings, see [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md).
+For the complete feature boundary, see [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md). For foreign block syntax and C type mappings, see [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md); for the JS backend, see [POLY_JS_BLOCKS.md](POLY_JS_BLOCKS.md).
 
 ## Compatibility Notes
 
@@ -32,7 +33,7 @@ For the complete feature boundary, see [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPO
 - Append output uses `put value to "file" -append`.
 - `put` always writes a newline.
 - Foreign blocks and `extern` declarations must be top-level.
-- Opaque foreign calls remain permissive for compatibility. Add an explicit `extern` declaration when Poly-side interface diagnostics are useful.
+- Opaque foreign calls remain permissive for compatibility. Add an explicit `extern` declaration when Poly-side interface diagnostics are useful, or run `poly --strict` / the CI checks, which enforce declarations.
 - C does not provide the full Rust runtime surface. File redirects, file input, typed input flags, vectors, maps/sets, async features, SQLite, and network helpers remain Rust-only or must be implemented behind a foreign helper. Plain `get`, tuples, simple `match` patterns, struct literals, enum variants, and non-capturing closures have C support as of `2.0.0-preview.2`.
 
 ## Verification Evidence

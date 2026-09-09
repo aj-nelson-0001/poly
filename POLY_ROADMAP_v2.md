@@ -206,6 +206,8 @@ All 20+ `POLY_*_GUIDE.md` files. The language is simple enough that the spec + e
 | Phase 1: Core Passthrough | ✅ Complete | ~2 hours |
 | Phase 2: Language Boundary | ✅ Preview contract documented | Ongoing design work |
 | Phase 2.5: C backend | ✅ Hardened Preview | ~1 day |
+| Phase 2.6: Asm backend | ✅ Linux x86-64 subset shipped | `2.0.0-preview.2` |
+| Phase 2.7: JS backend | ✅ ES2020 subset shipped | Strict-mode CI + playground selector |
 | Phase 3: Polish & Tooling | 🟡 In progress | Cross-platform CI and interface diagnostics are now implemented; packaging and UX remain |
 | Phase 3.5: Preview Release Hardening | 📋 Current | Support matrix, release checklist, and clean-tree review |
 | Phase 4: Documentation | ✅ Maintained v2 set indexed | Ongoing historical cleanup |

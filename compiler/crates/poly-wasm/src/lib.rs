@@ -8,7 +8,10 @@
 //!
 //! API (called from JS):
 //! - `poly_alloc(len) -> ptr`            allocate a writable buffer
-//! - `transpile(ptr, len) -> result_ptr` run the full pipeline
+//! - `transpile(ptr, len) -> result_ptr` run the full pipeline (Rust target)
+//! - `transpile_target(ptr, len, tptr, tlen) -> result_ptr`
+//!                                       run the pipeline for the selected
+//!                                       target (`rust`, `c`, `asm`, or `js`)
 //! - `result_ptr(result) -> usize`        output buffer pointer
 //! - `result_len(result) -> usize`        output byte length
 //! - `result_is_error(result) -> i32`     1 when the result is an error
@@ -140,10 +143,61 @@ fn run_pipeline(source: &str) -> Result<String, String> {
     transpiler.transpile_checked(source)
 }
 
+/// Run the real Poly pipeline for the selected backend. Unknown targets fall
+/// back to Rust so old callers keep working.
+fn run_pipeline_for_target(source: &str, target: &str) -> Result<String, String> {
+    let transpiler = poly_transpiler::Transpiler::new();
+    transpiler.transpile_target(source, target)
+}
+
 /// Read the output pointer from a result block.
 #[no_mangle]
 pub extern "C" fn result_ptr(result: *const u8) -> usize {
     read_usize(result, RESULT_PTR_OFFSET)
+}
+
+/// Transpile Poly source held at `ptr`/`len` to the backend named in the
+/// UTF-8 string at `target_ptr`/`target_len` (`rust`, `c`, `asm`, or `js`).
+/// Returns a pointer to the same result-block layout as `transpile`.
+///
+/// # Safety
+///
+/// `ptr` and `target_ptr` must point to `len`/`target_len` readable bytes for
+/// the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn transpile_target(
+    ptr: *const u8,
+    len: usize,
+    target_ptr: *const u8,
+    target_len: usize,
+) -> *mut u8 {
+    let source_bytes = if ptr.is_null() || len == 0 {
+        &[][..]
+    } else {
+        unsafe { slice::from_raw_parts(ptr, len) }
+    };
+    let target_bytes = if target_ptr.is_null() || target_len == 0 {
+        &[][..]
+    } else {
+        unsafe { slice::from_raw_parts(target_ptr, target_len) }
+    };
+    let source = String::from_utf8_lossy(source_bytes);
+    let target = String::from_utf8_lossy(target_bytes);
+    let (output, is_error) = match run_pipeline_for_target(&source, &target) {
+        Ok(code) => (code, false),
+        Err(message) => (message, true),
+    };
+
+    let result = poly_alloc(RESULT_BLOCK_SIZE);
+    if result.is_null() {
+        return std::ptr::null_mut();
+    }
+    let output_ptr = into_wasm_memory(output.as_bytes());
+    let mut result_block = Buffer::from_raw(result, RESULT_BLOCK_SIZE);
+    result_block.write(&(output_ptr as usize).to_ne_bytes());
+    result_block.write(&output.len().to_ne_bytes());
+    result_block.write(&(is_error as u32).to_le_bytes());
+    result
 }
 
 /// Read the output length from a result block.
@@ -225,15 +279,27 @@ mod tests {
     /// Run the full JS-visible cycle: write source into a `poly_alloc` buffer,
     /// transpile, read the output, then release both blocks.
     fn round_trip(source: &str) -> Result<(Vec<u8>, bool), String> {
+        round_trip_for_target(source, "rust")
+    }
+
+    /// `round_trip` against a selected backend via `transpile_target`.
+    fn round_trip_for_target(source: &str, target: &str) -> Result<(Vec<u8>, bool), String> {
         let src = source.as_bytes();
         let buf = poly_alloc(src.len());
         assert!(!buf.is_null(), "poly_alloc returned null");
         unsafe {
             std::ptr::copy_nonoverlapping(src.as_ptr(), buf, src.len());
         }
-        let result = unsafe { transpile(buf, src.len()) };
+        let tgt = target.as_bytes();
+        let tgt_buf = poly_alloc(tgt.len());
+        assert!(!tgt_buf.is_null(), "poly_alloc returned null");
+        unsafe {
+            std::ptr::copy_nonoverlapping(tgt.as_ptr(), tgt_buf, tgt.len());
+        }
+        let result = unsafe { transpile_target(buf, src.len(), tgt_buf, tgt.len()) };
         unsafe { poly_free(buf, src.len()) };
-        assert!(!result.is_null(), "transpile returned null");
+        unsafe { poly_free(tgt_buf, tgt.len()) };
+        assert!(!result.is_null(), "transpile_target returned null");
         let out_ptr = result_ptr(result);
         let out_len = result_len(result);
         let is_error = result_is_error(result) != 0;
@@ -263,5 +329,25 @@ mod tests {
         assert!(!is_error);
         let text = String::from_utf8_lossy(&output);
         assert!(text.contains("héllo wörld"), "unicode round trip: {text}");
+    }
+
+    #[test]
+    fn round_trip_targets_c_and_js() {
+        for (target, marker) in [("c", "int main"), ("js", "function main")] {
+            let (output, is_error) = round_trip_for_target("put 42", target).unwrap();
+            assert!(!is_error, "{target}: unexpected error");
+            let text = String::from_utf8_lossy(&output);
+            assert!(
+                text.contains(marker),
+                "{target}: missing `{marker}` in: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn round_trip_reports_unknown_target() {
+        let (output, is_error) = round_trip_for_target("put 42", "cpp").unwrap();
+        assert!(is_error, "unknown targets should be reported as errors");
+        assert!(String::from_utf8_lossy(&output).contains("Unknown target"));
     }
 }

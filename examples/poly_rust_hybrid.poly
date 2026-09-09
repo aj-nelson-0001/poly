@@ -3,6 +3,10 @@
 # ============================================================
 # Foreign block: provide data structures and algorithms in Rust
 # These are DECLARATIONS ONLY — no executable code.
+# Strict mode requires explicit declarations for the foreign calls below.
+extern rust fn fibonacci(n: i32): i32
+extern rust fn is_prime(n: i32): bool
+extern rust fn make_greeting(name: ustring): ustring
 
 #rust
 fn fibonacci(n: u32) -> u64 {

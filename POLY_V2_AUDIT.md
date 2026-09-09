@@ -17,6 +17,9 @@ LSP symbol ranges span-precise.
 
 ## Completed In This Pass
 
+- Added a JavaScript backend (`poly-js-codegen`, `--target js`) lowering the C-target orchestration subset to dependency-free ES2020, with `#js` blocks, `extern js fn` declarations, `--emit-js`, JS project generation, unit/snapshot/fixture tests, and a Linux CI job that verifies emitted output with `node --check` plus execution.
+- Adopted strict mode across CI: all examples and fixtures now declare their foreign calls, and every CI check runs `--strict`.
+- Fixed a pre-existing Windows-only snapshot failure by normalizing line endings before comparison.
 - Replaced the single-language passthrough node with a language-tagged foreign block representation.
 - Enforced top-level foreign block placement in the parser.
 - Made block end markers line-oriented and opaque inside foreign content.
@@ -28,7 +31,7 @@ LSP symbol ranges span-precise.
 
 ## Remaining Risks, In Priority Order
 
-1. **Opaque foreign calls remain permissive by default, while explicit signatures are available.** Poly accepts legacy calls after extracting names, but argument and return compatibility is delegated entirely to Rust or C unless the source adds `extern rust fn ...` or `extern c fn ...`. Since 2026-09-09, `poly --strict` rejects calls to foreign functions that lack an explicit `extern <target> fn ...` declaration (ordinary Poly declarations and builtins are unaffected), giving CI and audits an enforcement path; the default remains permissive for compatibility.
+1. **Opaque foreign calls remain permissive by default, while explicit signatures are available.** Poly accepts legacy calls after extracting names, but argument and return compatibility is delegated entirely to the native target compiler unless the source adds `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, or `extern js fn ...`. Since 2026-09-09, `poly --strict` rejects calls to foreign functions that lack an explicit `extern <target> fn ...` declaration (ordinary Poly declarations and builtins are unaffected), giving CI and audits an enforcement path; the default remains permissive for compatibility. All repository examples and fixtures now carry explicit declarations, and every CI `--check` step runs with `--strict`.
 2. **C backend scope remains intentionally narrow.** File redirects, file input, vectors, async, capturing closures, and complex Poly types should use `#c` helpers or remain unsupported until their C representation is designed. Tuples, match statements, struct literals, enum variants, plain `get`, and non-capturing closures are supported as of `2.0.0-preview.2`.
 3. **C++ is syntax-only.** `#cpp` blocks are recognized and preserved in the AST, but no C++ target or native build path exists.
 4. **The v2 preview still has compatibility-oriented parser paths.** They are covered by tests and kept for migration diagnostics; future cleanup should remove only paths proven unused by the test suite.

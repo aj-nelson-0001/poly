@@ -6,7 +6,12 @@
 # - Conditionals (if/else)
 # - Loops (numeric ranges)
 # - stdout/stderr output (put, error, warn, info)
-# - Foreign C functions via #c blocks
+# Foreign C functions via #c blocks.
+# Strict-mode-friendly: each foreign call below has an explicit extern declaration.
+extern c fn c_multiply(a: i32, b: i32): i32
+extern c fn c_square(x: i32): i32
+extern rust fn c_multiply(a: i32, b: i32): i32
+extern rust fn c_square(x: i32): i32
 #
 # C target limitations (not shown):
 # - No .to_string() (use raw values with put)

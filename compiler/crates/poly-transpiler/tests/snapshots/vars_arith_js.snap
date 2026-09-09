@@ -1,0 +1,11 @@
+/* Generated from Poly source code. */
+'use strict';
+
+function main() {
+  let x = 10;
+  let y = ((((x) * (4))) + (2));
+  console.log(String(y));
+  console.log(String(((x) - (1))));
+}
+
+main();

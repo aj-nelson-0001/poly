@@ -5,6 +5,8 @@
 # Executable statements (put, var, loops) go at top level and become main().
 
 # Foreign blocks: provide definitions in the target language
+# Strict mode requires explicit declarations for foreign calls.
+extern rust fn rust_helper(x: i32): i32
 #rust
 use std::collections::HashMap;
 

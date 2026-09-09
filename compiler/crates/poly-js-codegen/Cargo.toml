@@ -1,0 +1,12 @@
+[package]
+name = "poly-js-codegen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "JavaScript code generator for the Poly language"
+
+[dependencies]
+poly-parser.workspace = true
+
+[dev-dependencies]
+poly-lexer.workspace = true

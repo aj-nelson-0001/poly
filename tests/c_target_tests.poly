@@ -1,4 +1,6 @@
 # Poly C target smoke test
+# Strict mode requires an explicit declaration for the foreign call below.
+extern c fn double_value(x: i32): i32
 #c
 int double_value(int x) {
     return x * 2;

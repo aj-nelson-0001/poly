@@ -1,0 +1,47 @@
+#!/usr/bin/env poly
+# JavaScript target smoke test (runs under Node.js)
+# Strict mode requires explicit declarations for foreign calls below.
+extern js fn double_value(n: i32): i32
+extern js fn greet(name: ustring): ustring
+
+#js
+function double_value(n) {
+    return n * 2;
+}
+
+function greet(name) {
+    return "hello " + name;
+}
+#endjs
+
+# Scalars and output
+var x i32 := 21
+put double_value(x)
+put greet(unicode "world")
+
+# Arithmetic and control flow
+var total i32 := 0
+loop i 1..5
+    total := total + i
+end loop
+put total
+
+if total = 15
+    put 1
+else
+    put 0
+end if
+
+# Range loop and for-in loop
+loop j 0..2
+    put j
+end loop
+loop k in [10, 20]
+    put k
+end loop
+
+# Function defined in Poly, lowered to JS
+fn add(a: i32, b: i32): i32
+    return a + b
+end fn
+put add(2, 3)

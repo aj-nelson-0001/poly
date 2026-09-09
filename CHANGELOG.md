@@ -6,18 +6,42 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Added
 
-- **`poly --strict`**: rejects calls to foreign functions that have no explicit
-  `extern <target> fn ...` declaration. By default, opaque foreign calls remain
-  permissive (argument and return compatibility is delegated to the native
-  target compiler); strict mode closes that gap for CI and audits. Calls that
-  resolve through ordinary Poly declarations — plain `fn`s, impl methods,
-  builtins — are unaffected, and target filtering still removes non-selected
-  foreign blocks before checking. Implemented as
-  `check_program_strict_foreign*` in the checker with unit tests covering the
-  reject/declare/arity/plain-program/dropped-target cases.
+- **JavaScript target (`--target js`).** Poly now compiles the same
+  orchestration subset as the C target to plain ES2020 JavaScript with no
+  runtime dependencies, runnable under Node.js and in the browser.
+  - New `poly-js-codegen` crate mirrors the C backend: scalars, arithmetic
+    (integer `/` truncates via `Math.trunc`), `if`/`else`, `while`, inclusive
+    numeric `loop` ranges with optional `step`, `for x in` / `loop x in`
+    lowering to `for...of`, `match` to `switch`, `break`/`continue`,
+    `put`/`error`/`warn`/`info` output, simple Poly functions, and verbatim
+    `#js` foreign blocks emitted at module scope inside a generated
+    `function main()`.
+  - `extern js fn name(param: type): type` declarations are accepted by the
+    parser and checked by the type checker; the checker's foreign-name
+    heuristic already resolves JS-style `function name(...)` declarations, so
+    `#js` calls type-check like C calls with no checker changes.
+  - CLI: `--target js` and `--emit-js` (print to stdout); generated output is
+    verified with `node --check` plus execution when Node is available.
+  - `--project` generates a JS project directory with a `package.json`.
+  - Tests: 7 `poly-js-codegen` unit tests, 7 new JS snapshot variants, and a
+    `tests/js_target_tests.poly` fixture checked, emitted, `node --check`ed,
+    and executed with output verification on the Linux CI job.
+- **Strict mode adopted in CI.** Every CI `--check` step now passes `--strict`:
+  examples and fixtures declare all their foreign calls with explicit
+  `extern <target> fn ...` declarations (`tests/c_target_tests.poly`,
+  `tests/target_flag_tests.poly`, and the `c_target_demo`,
+  `comprehensive_demo`, and `poly_rust_hybrid` examples gained declarations).
+- **Windows CI fix:** snapshot tests normalize line endings before comparing,
+  fixing a pre-existing failure where `git` CRLF conversion broke byte-for-byte
+  snapshot comparison on `windows-latest`.
 
 ### Documentation
 
+- New `POLY_JS_BLOCKS.md` documents the JS target contract, supported surface,
+  rejections, type mapping, and strict-mode usage.
+- `POLY_V2_SUPPORT_MATRIX.md` gains a JS target column, the Language Surface
+  table now carries consistent Rust/C/Asm/JS columns, and the verification
+  contract includes the new doc.
 - `POLY_JS_DESIGN.md` upgraded to an implementation-ready review: verified
   integration touchpoints table (lexer, parser, target dispatch, CLI, CI),
   strict-mode interaction, first-cut `#js` declaration requirements, and

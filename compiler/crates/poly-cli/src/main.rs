@@ -15,6 +15,7 @@ enum Target {
     Rust,
     C,
     Asm,
+    Js,
 }
 
 impl Target {
@@ -23,8 +24,9 @@ impl Target {
             "rust" | "rs" => Ok(Target::Rust),
             "c" => Ok(Target::C),
             "asm" | "s" | "S" => Ok(Target::Asm),
+            "js" | "mjs" => Ok(Target::Js),
             other => bail!(
-                "Unknown target '{}'. Supported targets: rust, c, asm",
+                "Unknown target '{}'. Supported targets: rust, c, asm, js",
                 other
             ),
         }
@@ -35,6 +37,7 @@ impl Target {
             Target::Rust => "rs",
             Target::C => "c",
             Target::Asm => "S",
+            Target::Js => "js",
         }
     }
 
@@ -43,6 +46,7 @@ impl Target {
             Target::Rust => "rust",
             Target::C => "c",
             Target::Asm => "asm",
+            Target::Js => "js",
         }
     }
 }
@@ -97,7 +101,7 @@ fn main() -> Result<()> {
         eprintln!("Usage: poly [options] <file.poly>");
         eprintln!();
         eprintln!("Options:");
-        eprintln!("  --target <lang>   Target language (default: rust; options: rust, c, asm)");
+        eprintln!("  --target <lang>   Target language (default: rust; options: rust, c, asm, js)");
         eprintln!("  --strict          Reject foreign calls without an explicit `extern <target> fn` declaration");
         eprintln!("  --tokens          Print tokens and exit");
         eprintln!("  --ast             Print AST and exit");
@@ -105,6 +109,7 @@ fn main() -> Result<()> {
         eprintln!("  --emit-rust       Print transpiled Rust instead of compiling");
         eprintln!("  --emit-c          Print transpiled C instead of compiling");
         eprintln!("  --emit-asm        Print transpiled x86-64 assembly instead of compiling");
+        eprintln!("  --emit-js         Print transpiled JavaScript instead of compiling");
         eprintln!(
             "  --intermediate-representation  Print the IR pipeline output (rust target only)"
         );
@@ -131,7 +136,9 @@ fn main() -> Result<()> {
             println!("Usage: poly [options] <file.poly>");
             println!();
             println!("Options:");
-            println!("  --target <lang>   Target language (default: rust; options: rust, c, asm)");
+            println!(
+                "  --target <lang>   Target language (default: rust; options: rust, c, asm, js)"
+            );
             println!("  --strict          Reject foreign calls without an explicit `extern <target> fn` declaration");
             println!("  --tokens          Print tokens and exit");
             println!("  --ast             Print AST and exit");
@@ -139,6 +146,7 @@ fn main() -> Result<()> {
             println!("  --emit-rust       Print transpiled Rust instead of compiling");
             println!("  --emit-c          Print transpiled C instead of compiling");
             println!("  --emit-asm        Print transpiled x86-64 assembly instead of compiling");
+            println!("  --emit-js         Print transpiled JavaScript instead of compiling");
             println!(
                 "  --intermediate-representation  Print the IR pipeline output (rust target only)"
             );
@@ -160,6 +168,7 @@ fn main() -> Result<()> {
             println!("  rust              Transpile to Rust (default)");
             println!("  c                 Transpile to C (C11 subset)");
             println!("  asm               Transpile to x86-64 assembly (Linux syscalls)");
+            println!("  js                Transpile to JavaScript (Node / browser)");
             Ok(())
         }
         "--version" | "-v" => {
@@ -329,6 +338,7 @@ fn main() -> Result<()> {
                                 Target::Rust => verify_rust_compiles(&code),
                                 Target::C => verify_c_compiles(&code),
                                 Target::Asm => verify_asm_compiles(&code),
+                                Target::Js => verify_js_compiles(&code),
                             };
                             match compile_result {
                                 Ok(_) => println!(
@@ -360,7 +370,7 @@ fn main() -> Result<()> {
 
             Ok(())
         }
-        "--emit-rust" | "--emit-c" | "--emit-asm" => {
+        "--emit-rust" | "--emit-c" | "--emit-asm" | "--emit-js" => {
             if args.len() < 3 {
                 eprintln!("Error: emit option requires a file argument");
                 process::exit(1);
@@ -373,6 +383,7 @@ fn main() -> Result<()> {
             let requested_target = match args[1].as_str() {
                 "--emit-asm" => "asm",
                 "--emit-c" => "c",
+                "--emit-js" => "js",
                 _ => "rust",
             };
             let code = transpiler
@@ -465,6 +476,16 @@ fn main() -> Result<()> {
                     generate_asm_project(&source_path, &output_dir)?;
                     println!(
                         "Generated assembly project at {} (source: {})",
+                        output_dir.display(),
+                        source_path.display()
+                    );
+                }
+                Target::Js => {
+                    // A JS "project" is the emitted artifact next to a copy of
+                    // the source; there is no build system to generate.
+                    generate_js_project(&source_path, &output_dir)?;
+                    println!(
+                        "Generated JavaScript project at {} (source: {})",
                         output_dir.display(),
                         source_path.display()
                     );
@@ -575,6 +596,27 @@ fn main() -> Result<()> {
                         .map_err(|e| anyhow::anyhow!(e))?;
                     std::fs::write(&output_path, &code)
                         .with_context(|| format!("Failed to write {}", output_path.display()))?;
+                    println!("Generated {} -> {}", path.display(), output_path.display());
+                }
+                Target::Js => {
+                    // The JS artifact needs no compile step: writing the file
+                    // and syntax-checking it with `node --check` (best effort,
+                    // matching the C target's missing-compiler fallback) is
+                    // the whole build. Running is `node <file>`.
+                    let output_path = custom_output
+                        .clone()
+                        .unwrap_or_else(|| path.with_extension("js"));
+                    let source = std::fs::read_to_string(&path)
+                        .with_context(|| format!("Failed to read file: {}", path.display()))?;
+                    let code = poly_transpiler::Transpiler::new()
+                        .transpile_js_checked(&source)
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                    std::fs::write(&output_path, &code)
+                        .with_context(|| format!("Failed to write {}", output_path.display()))?;
+                    match verify_js_compiles(&code) {
+                        Ok(()) => {}
+                        Err(error) => eprintln!("Warning: JS syntax check unavailable: {error}"),
+                    }
                     println!("Generated {} -> {}", path.display(), output_path.display());
                 }
             }
@@ -1091,6 +1133,61 @@ make run\n\
     Ok(())
 }
 
+/// Generate a standalone JavaScript project from a Poly source file: the
+/// emitted artifact, the original Poly source, and a README. There is no
+/// build system to generate; `node main.js` runs the project.
+fn generate_js_project(source_path: &Path, output_dir: &Path) -> Result<()> {
+    if source_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        != Some("poly")
+    {
+        bail!(
+            "Source file must have a .poly extension: {}",
+            source_path.display()
+        );
+    }
+    let source = std::fs::read_to_string(source_path)
+        .with_context(|| format!("Failed to read source file: {}", source_path.display()))?;
+    let code = poly_transpiler::Transpiler::new()
+        .transpile_js_checked(&source)
+        .map_err(|error| anyhow::anyhow!(error))?;
+    if output_dir.exists() && output_dir.read_dir()?.next().is_some() {
+        bail!(
+            "Refusing to overwrite existing files in {}",
+            output_dir.display()
+        );
+    }
+    std::fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "Failed to create project directory: {}",
+            output_dir.display()
+        )
+    })?;
+    std::fs::write(output_dir.join("main.js"), &code)
+        .with_context(|| format!("Failed to write main.js in {}", output_dir.display()))?;
+    std::fs::copy(source_path, output_dir.join("main.poly"))
+        .with_context(|| format!("Failed to copy source into {}", output_dir.display()))?;
+    let readme = format!(
+        "# Poly JS project\n\
+\n\
+Generated from `{}`.\n\
+\n\
+## Run\n\
+\n\
+```\n\
+node main.js\n\
+```\n",
+        source_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+    );
+    std::fs::write(output_dir.join("README.md"), &readme)
+        .with_context(|| format!("Failed to write README.md in {}", output_dir.display()))?;
+    Ok(())
+}
+
 /// Verify generated x86-64 assembly syntax using `as`.
 fn verify_asm_compiles(code: &str) -> Result<()> {
     use std::process::Command;
@@ -1129,6 +1226,39 @@ fn c_binary_path(source_path: &Path) -> PathBuf {
     let mut output = source_path.to_path_buf();
     output.set_extension(std::env::consts::EXE_EXTENSION);
     output
+}
+
+/// Syntax-check generated JavaScript with `node --check`. `POLY_NODE`
+/// overrides the Node binary; when Node is absent the caller degrades to a
+/// warning, mirroring how the C target treats a missing compiler.
+fn verify_js_compiles(code: &str) -> Result<()> {
+    let unique_id = format!(
+        "{}-{}",
+        process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
+    let temp_dir = std::env::temp_dir();
+    let source_path = temp_dir.join(format!("poly_check_{unique_id}.js"));
+    std::fs::write(&source_path, code).context("Failed to write temporary JS source")?;
+    let node = std::env::var("POLY_NODE").unwrap_or_else(|_| "node".to_string());
+    let output = std::process::Command::new(&node)
+        .arg("--check")
+        .arg(&source_path)
+        .output();
+    let _ = std::fs::remove_file(&source_path);
+    let output = output.map_err(|error| {
+        anyhow::anyhow!("failed to run `{node}` (set POLY_NODE to override): {error}")
+    })?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            String::from_utf8_lossy(&output.stderr).to_string()
+        ))
+    }
 }
 
 fn verify_c_compiles(code: &str) -> Result<()> {

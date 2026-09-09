@@ -1,0 +1,11 @@
+/* Generated from Poly source code. */
+'use strict';
+
+function main() {
+  let a = true;
+  let b = false;
+  let c = ((a) !== (b));
+  console.log(String(c));
+}
+
+main();

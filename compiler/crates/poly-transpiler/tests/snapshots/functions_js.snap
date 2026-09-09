@@ -1,0 +1,13 @@
+/* Generated from Poly source code. */
+'use strict';
+
+function double(v) {
+  return ((v) * (2));
+}
+
+
+function main() {
+  console.log(String(double(21)));
+}
+
+main();

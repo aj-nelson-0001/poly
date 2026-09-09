@@ -8,6 +8,11 @@
 # 4. Structs defined in #rust blocks are usable
 # 5. The checker accepts foreign function calls
 
+# Explicit extern declarations: strict mode requires them for foreign calls.
+extern rust fn double(x: i32): i32
+extern rust fn triple(x: i32): i32
+extern rust fn is_even(x: i32): bool
+
 # First #rust block: utility functions
 #rust
 fn double(x: i32) -> i32 {

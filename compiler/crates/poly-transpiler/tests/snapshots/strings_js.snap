@@ -1,0 +1,10 @@
+/* Generated from Poly source code. */
+'use strict';
+
+function main() {
+  let name = "Poly";
+  console.log(name);
+  console.log((("hello ") + (name)));
+}
+
+main();

@@ -1,7 +1,48 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-09.
+Last updated: 2026-09-10.
+
+## JS backend implementation; strict mode adopted in CI (2026-09-10)
+
+### JavaScript target (`--target js`)
+
+- New `poly-js-codegen` crate lowers the C-target orchestration subset to
+  dependency-free ES2020: scalars, arithmetic (integer `/` via `Math.trunc`),
+  `if`/`else`, `while`, inclusive `loop` ranges with optional `step`,
+  `for x in` / `loop x in` → `for...of` (the parser models both as `LoopRange`;
+  the `Value` part is the collection form), `match` → `switch`,
+  `break`/`continue`, `put`/`error`/`warn`/`info`, simple functions, and
+  verbatim `#js` blocks inside a generated `function main()` + `main();` call.
+- Wired `js` through the lexer foreign-language list, parser extern-target
+  validation, transpiler dispatch, CLI `Target`/`--emit-js`/`--project`, and
+  workspace members.
+- Tests: 7 codegen unit tests, 7 JS snapshot variants (snapshots committed),
+  and `tests/js_target_tests.poly` checked/emitted/executed end-to-end
+  (output verified: 42, hello world, 15, 1, 0, 1, 2, 10, 20, 5).
+- New Linux CI job: `--check --strict`, `--emit-js` → `node --check` → execute
+  → compare output.
+- Docs: new `POLY_JS_BLOCKS.md`; support matrix gains a JS column with the
+  Language Surface table normalized to consistent Rust/C/Asm/JS columns;
+  README badge, feature notes, project tree, and CLI table updated; CHANGELOG
+  `Unreleased` entry added; audit doc updated.
+
+### Strict mode adopted in CI
+
+- All CI `--check` steps now pass `--strict`; repository examples and fixtures
+  declare their foreign calls with explicit `extern <target> fn ...`
+  declarations (`tests/c_target_tests.poly`, `tests/target_flag_tests.poly`,
+  `examples/c_target_demo.poly`, `examples/comprehensive_demo.poly`,
+  `examples/poly_rust_hybrid.poly`).
+- Verified every example passes `--target rust --check --strict` (26 files)
+  and all fixtures pass strict checks for their targets; C fixture output
+  re-verified (`30`/`3`).
+
+### Windows CI fix
+
+- Snapshot tests normalize CRLF→LF before comparison, fixing the pre-existing
+  `windows-latest` failure caused by git line-ending conversion of committed
+  snapshots (all snapshots now pass on every platform).
 
 ## Audit risk 1: `--strict` foreign-call checking; JS design review (2026-09-09)
 

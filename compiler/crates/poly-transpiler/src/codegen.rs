@@ -91,14 +91,28 @@ impl Transpiler {
         poly_asm_codegen::transpile(&program)
     }
 
-    /// Transpile Poly source to the selected target (`rust`, `c`, or `asm`).
+    /// Transpile a parsed program to JavaScript after checking Poly semantics.
+    pub fn transpile_js_checked(&self, source: &str) -> Result<String, String> {
+        let program = Self::parse_target(source, "js")?;
+        check_program(&program).map_err(|errors| {
+            errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })?;
+        poly_js_codegen::transpile(&program)
+    }
+
+    /// Transpile Poly source to the selected target (`rust`, `c`, `asm`, or `js`).
     pub fn transpile_target(&self, source: &str, target: &str) -> Result<String, String> {
         match target {
             "rust" | "rs" => self.transpile_checked(source),
             "c" => self.transpile_c_checked(source),
             "asm" | "s" | "S" => self.transpile_asm_checked(source),
+            "js" | "mjs" => self.transpile_js_checked(source),
             other => Err(format!(
-                "Unknown target '{}'. Supported targets: rust, c, asm",
+                "Unknown target '{}'. Supported targets: rust, c, asm, js",
                 other
             )),
         }
@@ -124,7 +138,7 @@ impl Transpiler {
             )
         }) {
             return Err(
-                "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm"
+                "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js"
                     .to_string(),
             );
         }

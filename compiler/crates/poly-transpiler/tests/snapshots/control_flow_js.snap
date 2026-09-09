@@ -1,0 +1,20 @@
+/* Generated from Poly source code. */
+'use strict';
+
+function main() {
+  let x = 10;
+  if (((x) > (5))) {
+    console.log(String(1));
+  } else {
+    console.log(String(0));
+  }
+  let i = 0;
+  while (((i) < (3))) {
+    i = ((i) + (1));
+  }
+  for (let j = 0; j <= 3; j += 1) {
+    console.log(String(j));
+  }
+}
+
+main();

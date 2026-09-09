@@ -1,0 +1,9 @@
+/* Generated from Poly source code. */
+'use strict';
+
+function main() {
+  console.log("hello world");
+  console.log(String(42));
+}
+
+main();

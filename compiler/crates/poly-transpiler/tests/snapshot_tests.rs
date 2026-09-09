@@ -1,4 +1,4 @@
-//! Snapshot tests for the rust, c, and asm codegen targets.
+//! Snapshot tests for the rust, c, asm, and js codegen targets.
 //!
 //! Each test transpiles a fixed Poly source file and compares the generated
 //! output byte-for-byte against a snapshot in `snapshots/`. To regenerate all
@@ -65,6 +65,11 @@ const TARGET_FIXTURES: &[(&str, &str, &str)] = &[
         "../../../tests/asm_target_tests.poly",
     ),
     ("c_target_tests", "c", "../../../tests/c_target_tests.poly"),
+    (
+        "js_target_tests",
+        "js",
+        "../../../tests/js_target_tests.poly",
+    ),
 ];
 
 fn transpile_source(source: &str, target: &str) -> Result<String, String> {
@@ -84,8 +89,14 @@ fn check_snapshot(name: &str, output: &str) {
             path.display()
         )
     });
+    // Compare on normalized line endings: `git checkout` with `core.autocrlf`
+    // on Windows converts the committed LF snapshots to CRLF in the working
+    // tree, while generated output always uses `\n`. Byte-for-byte comparison
+    // would fail on Windows only (CI: Test (windows-latest)).
+    let normalize = |text: &str| text.replace("\r\n", "\n");
     assert_eq!(
-        output, expected,
+        normalize(output),
+        normalize(&expected),
         "codegen output for '{name}' diverged from the committed snapshot.\n\
          If this change is intentional, regenerate with:\n  \
          POLY_UPDATE_SNAPSHOTS=1 cargo test -p poly-transpiler --test snapshot_tests"
@@ -95,7 +106,7 @@ fn check_snapshot(name: &str, output: &str) {
 #[test]
 fn snapshots_all_targets() {
     for (name, source) in SAMPLES {
-        for target in ["rust", "c", "asm"] {
+        for target in ["rust", "c", "asm", "js"] {
             let snapshot_name = format!("{name}_{target}");
             match transpile_source(source, target) {
                 Ok(output) => check_snapshot(&snapshot_name, &output),

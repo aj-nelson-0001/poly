@@ -84,7 +84,7 @@ jobs:
           fi
           for f in examples/*.poly; do
             echo "Checking $f..."
-            "$POLY_BIN" --target rust --check "$f"
+            "$POLY_BIN" --target rust --check --strict "$f"
           done
 
       - name: Check and run C target fixture
@@ -97,7 +97,7 @@ jobs:
             POLY_BIN="./compiler/target/release/poly"
             C_BINARY="./tests/c_target_tests"
           fi
-          "$POLY_BIN" --target c --check tests/c_target_tests.poly
+          "$POLY_BIN" --target c --check --strict tests/c_target_tests.poly
           "$POLY_BIN" --target c tests/c_target_tests.poly
           actual_output=$("$C_BINARY" | tr -d '\r')
           expected_output=$'30\n3'
@@ -112,7 +112,7 @@ jobs:
         shell: bash
         run: |
           POLY_BIN="./compiler/target/release/poly"
-          "$POLY_BIN" --target asm --check tests/extern_asm_deref.poly
+          "$POLY_BIN" --target asm --check --strict tests/extern_asm_deref.poly
           "$POLY_BIN" --target asm tests/extern_asm_deref.poly -o tests/extern_asm_deref.S
           cc tests/extern_asm_deref.S -o tests/extern_asm_deref_bin -nostartfiles
           actual_output=$(./tests/extern_asm_deref_bin)
@@ -132,8 +132,24 @@ jobs:
           else
             POLY_BIN="./compiler/target/release/poly"
           fi
-          "$POLY_BIN" --target rust --check tests/target_flag_tests.poly
-          "$POLY_BIN" --target c --check tests/c_target_tests.poly
+          "$POLY_BIN" --target rust --check --strict tests/target_flag_tests.poly
+          "$POLY_BIN" --target c --check --strict tests/c_target_tests.poly
+
+      - name: Check and run JS target fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          POLY_BIN="./compiler/target/release/poly"
+          "$POLY_BIN" --target js --check --strict tests/js_target_tests.poly
+          "$POLY_BIN" --target js --emit-js tests/js_target_tests.poly > tests/js_target_tests.js
+          node --check tests/js_target_tests.js
+          actual_output=$(node tests/js_target_tests.js)
+          expected_js_output=$'42\nhello world\n15\n1\n0\n1\n2\n10\n20\n5'
+          if [ "$actual_output" != "$expected_js_output" ]; then
+            printf 'Unexpected JS fixture output:\n%s\n' "$actual_output"
+            exit 1
+          fi
+          rm -f tests/js_target_tests.js
 
   lint:
     name: Lint and documentation
@@ -170,7 +186,7 @@ jobs:
         run: >-
           python3 scripts/check_poly_examples.py
           README.md POLY_SPEC_v2.md POLY_ROADMAP_v2.md POLY_C_BLOCKS.md
-          POLY_V2_AUDIT.md POLY_MIGRATION_GUIDE_v2.md
+          POLY_JS_BLOCKS.md POLY_V2_AUDIT.md POLY_MIGRATION_GUIDE_v2.md
           POLY_V2_SUPPORT_MATRIX.md POLY_PREVIEW_RELEASE_CHECKLIST.md
           POLY_V2_PREVIEW_RELEASE_NOTES.md
 

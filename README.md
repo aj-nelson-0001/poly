@@ -4,11 +4,11 @@
 
 ![Version](https://img.shields.io/badge/version-2.0--preview-green)
 ![Status](https://img.shields.io/badge/status-Active%20Development-blue)
-![Backend](https://img.shields.io/badge/backends-Rust%20%7C%20C%20%7C%20Asm-black)
+![Backend](https://img.shields.io/badge/backends-Rust%20%7C%20C%20%7C%20Asm%20%7C%20JS-black)
 
 ## Overview
 
-Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with an assembly-inspired syntax. For target-specific or advanced work, users provide definitions in foreign language blocks (`#rust`, `#c`, or `#asm`). The parser models additional Rust-oriented constructs, but the supported backend and target determine what is runnable.
+Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with an assembly-inspired syntax. For target-specific or advanced work, users provide definitions in foreign language blocks (`#rust`, `#c`, `#asm`, or `#js`). The parser models additional Rust-oriented constructs, but the supported backend and target determine what is runnable.
 
 **Key principle:** Foreign blocks provide target-language definitions. Poly provides the orchestration. Foreign blocks must be top-level; the native compiler validates their contents.
 
@@ -84,7 +84,9 @@ Preview 2 adds an **assembly target** (`--target asm`, Linux x86-64) with
 pointer dereference, and `for x in <string>` iteration; **widens the C
 backend** (tuples, `match` statements, struct literals, enums in `match`,
 plain stdin `get`, non-capturing closures); and adds language-wide `pop()`,
-span-precise source maps, and UTF-16 LSP symbol ranges. See
+span-precise source maps, and UTF-16 LSP symbol ranges. Preview 2 also adds a
+**JavaScript target** (`--target js`, ES2020, no runtime dependencies) with
+`extern js fn` declarations and `#js` blocks. See
 [CHANGELOG.md](CHANGELOG.md) for the full list.
 
 ## Historical Release Notes
@@ -333,6 +335,7 @@ Poly/
 │   ├── poly-lsp/                  # Dependency-free JSON-RPC language server
 │   ├── poly-c-codegen/            # C11 backend (`--target c`)
 │   ├── poly-asm-codegen/          # x86-64 assembly backend (`--target asm`)
+│   ├── poly-js-codegen/           # JavaScript backend (`--target js`)
 │   └── poly-cli/                  # Command-line interface
     └── grammar/
         └── poly.bnf                   # Formal grammar
@@ -360,7 +363,7 @@ Poly/
 
 ## Transpilation
 
-Poly currently targets Rust by default and supports a documented C11 orchestration subset with `--target c`. Every supported Poly construct has a direct equivalent in the selected target:
+Poly currently targets Rust by default and supports documented C11, assembly, and JavaScript orchestration subsets with `--target c`, `--target asm`, and `--target js`. Every supported Poly construct has a direct equivalent in the selected target:
 
 | Poly | Rust |
 |------|------|
@@ -510,6 +513,8 @@ Use `poly --emit-rust file.poly` when you want the generated Rust on stdout. Asy
 | `poly --target c file.poly` | Generate and build a C program |
 | `poly --target asm --emit-asm file.poly` | Print generated x86-64 assembly to stdout |
 | `poly --target asm file.poly` | Generate and build an assembly program (Linux x86-64) |
+| `poly --target js --emit-js file.poly` | Emit JavaScript to stdout (run with Node) |
+| `poly --target js file.poly` | Emit JavaScript and run it with Node |
 
 ---
 

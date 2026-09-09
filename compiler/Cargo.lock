@@ -361,6 +361,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "poly-js-codegen"
+version = "2.0.0-preview.2"
+dependencies = [
+ "poly-lexer",
+ "poly-parser",
+]
+
+[[package]]
 name = "poly-lexer"
 version = "2.0.0-preview.2"
 dependencies = [
@@ -391,6 +399,7 @@ dependencies = [
  "poly-asm-codegen",
  "poly-c-codegen",
  "poly-intermediate-representation",
+ "poly-js-codegen",
  "poly-lexer",
  "poly-parser",
  "poly-types",

@@ -1,0 +1,40 @@
+/* Generated from Poly source code. */
+'use strict';
+
+function double_value(n) {
+    return n * 2;
+}
+
+function greet(name) {
+    return "hello " + name;
+}
+
+function add(a, b) {
+  return ((a) + (b));
+}
+
+
+function main() {
+  let x = 21;
+  console.log(String(double_value(x)));
+  console.log(String(greet("world")));
+  let total = 0;
+  for (let i = 1; i <= 5; i += 1) {
+    total = ((total) + (i));
+  }
+  console.log(String(total));
+  if (((total) === (15))) {
+    console.log(String(1));
+  } else {
+    console.log(String(0));
+  }
+  for (let j = 0; j <= 2; j += 1) {
+    console.log(String(j));
+  }
+  for (const k of [10, 20]) {
+    console.log(String(k));
+  }
+  console.log(String(add(2, 3)));
+}
+
+main();

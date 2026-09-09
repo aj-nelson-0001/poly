@@ -4,37 +4,64 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
-### Changed
+## [2.0.0-preview.2] - 2026-09-08
 
-- **Playground**: rewrote the embedded JS demo transpiler and example programs
-  for the keyword-operator dialect. The demo now maps `and`/`or`/`not`/
-  `mod`/`xor`/`bitand`/`bitor`/`bitnot`/`shift left`/`shift right` onto the
-  Rust symbol operators and lowers Poly `=` equality to Rust `==` inside
-  expressions (string-literal aware); the legacy `+=` handler was removed,
-  assignment now supports tuple/field paths (`pair.0 := 99`), and `for`
-  supports destructured patterns. All nine playground examples were rewritten
-  to syntax that passes the real compiler (`while` instead of counter `loop`,
-  `mod`/`=` in filter closures, `pair.0 := 99` instead of `set ... to`), and
-  the checked-in `playground/poly.wasm` was rebuilt from the current
-  compiler so the browser engine matches the CLI.
-- **VS Code extension**: the TextMate grammar now highlights the keyword
-  operators (`and`, `or`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`,
-  `shift left/right`) and the retained `<<`/`>>` shift alternatives; retired
-  symbol operators (`&&`, `||`, `!`, `^`, `%`, `&`, `|`, `==`) and compound
-  assignments (`+=`, `%=`, `&&=`, …) are no longer highlighted as valid.
-
-- **Operator keywords**: logical, bitwise, and remainder operators are now
-  spelled as keywords — `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`,
-  `bitnot`, and `shift left` / `shift right`. The retired symbol spellings
-  `&&`, `||`, `!`, `^`, `%`, `&`, `|`, and `~` are tokenized only to produce
-  migration diagnostics ("use `and`" etc.), mirroring the `==` rejection.
-  `<<` and `>>` remain valid alternative shift syntax, and `left`/`right`
-  stay usable as ordinary identifiers. All examples, fixtures, and tests
-  were migrated to the keyword spellings.
+Follow-up passes for the target-aware compiler model: a new assembly target,
+a substantially widened C backend, and cross-target fixes.
 
 ### Added
 
-- Pinned development and CI builds to Rust 1.98.0 and refreshed the checked-in playground WASM artifact for reproducible releases.
+- **Assembly target (`--target asm`, Linux x86-64).** Poly now compiles a
+  subset of the language to freestanding x86-64 assembly with Linux syscalls
+  and a `_start` entry point that calls `fn main` when it is declared.
+  - `extern asm fn ...` declarations give the asm target a Poly-level way to
+    source foreign values (previously extern declarations were stripped before
+    the asm pipeline, so pure Poly code could never reference one).
+  - `#asm` blocks are accepted as foreign passthrough sections selected by the
+    asm target.
+  - `Vec<T>` on the asm target: immutable literal vectors are static
+    descriptor-backed data with index access and `for x in xs` iteration
+    (integer elements print via `_print_int`, char elements via a 1-byte
+    `sys_write`); `push`/`pop`/`len` switch to a growable in-place form backed
+    by a static bump arena (64 KiB, doubling growth; exhaustion exits 42
+    rather than corrupting memory).
+  - Pointer dereference (`*ptr` via `movq (%rax)`) and `&T` locals as plain
+    8-byte pointer slots.
+  - `for x in some_string` iterates through a NUL-terminated pointer walk.
+- **`pop()` language-wide.** `xs.pop()` type-checks as the vector's element
+  type (an empty vector yields the default) and lowers to
+  `pop().unwrap_or_default()` on the Rust target; the asm backend supports it
+  in the growable runtime.
+- **C backend expansion** (previously rejected, now compiled and verified
+  end-to-end against the Rust target's output):
+  - Tuple types compile to anonymous structs with `_N` fields; `.N` index
+    access, nested tuples, and printing of tuple indexes all work.
+  - `match` statements lower to an if/else-if chain over a match-scoped `const`
+    copy of the scrutinee; literal, wildcard, range, and identifier arms are
+    supported.
+  - Struct literals lower to C99 compound literals (`Point { x: 3, y: 4 }` →
+    `(Point){ .x = 3, .y = 4 }`), and `var p := Point { ... }` infers the
+    struct type.
+  - Enum declarations emit `typedef enum` with qualified enumerators
+    (`Color_Red`), and `Color::Red` variants work in expressions and match
+    patterns (payload-carrying variants are rejected with guidance).
+  - Plain `get` (with optional prompt) reads a stdin line through an emitted
+    runtime helper; the result participates in string concatenation output.
+  - Non-capturing closures compile to a static function plus a typed function
+    pointer; capturing closures are rejected with guidance.
+- **Span-precise source maps.** The intermediate representation carries
+  per-statement source locations, and `poly --source-map` reports exact
+  statement-level line mappings instead of a line-identity heuristic.
+- **LSP**: `textDocument/documentSymbol` reports UTF-16 ranges (previously
+  byte offsets, which shifted on lines with non-ASCII text), and the JSON
+  parser handles `\uD83D\uDE00`-style surrogate-pair escapes.
+- CI smoke-tests the rebuilt playground wasm artifact with
+  `scripts/playground_wasm_smoke.mjs` (five valid programs must transpile to
+  the expected Rust symbols; six legacy-syntax programs must be rejected), and
+  a `tests/extern_asm_deref.poly` job checks, compiles, runs, and verifies asm
+  target output on Linux.
+- Pinned development and CI builds to Rust 1.98.0 and refreshed the checked-in
+  playground WASM artifact for reproducible releases.
 - Added the frozen [Rust/C v2 support matrix](POLY_V2_SUPPORT_MATRIX.md),
   [preview release checklist](POLY_PREVIEW_RELEASE_CHECKLIST.md), and
   [preview release notes](POLY_V2_PREVIEW_RELEASE_NOTES.md).
@@ -45,6 +72,29 @@ All notable changes to the Poly language compiler will be documented in this fil
 - Added cross-platform Rust/C CI for Linux, macOS, and Windows. The CLI honors
   `POLY_CC`, with documented platform compiler fallbacks.
 
+### Changed
+
+- **Operator keywords**: logical, bitwise, and remainder operators are now
+  spelled as keywords — `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`,
+  `bitnot`, and `shift left` / `shift right`. The retired symbol spellings
+  `&&`, `||`, `!`, `^`, `%`, `&`, `|`, and `~` are tokenized only to produce
+  migration diagnostics ("use `and`" etc.), mirroring the `==` rejection.
+  `<<` and `>>` remain valid alternative shift syntax, and `left`/`right`
+  stay usable as ordinary identifiers. All examples, fixtures, and tests
+  were migrated to the keyword spellings.
+- **Playground**: rewrote the embedded JS demo transpiler and example programs
+  for the keyword-operator dialect. The demo now maps the keyword operators
+  onto the Rust symbol operators and lowers Poly `=` equality to Rust `==`
+  inside expressions; the legacy `+=` handler was removed, assignment now
+  supports tuple/field paths (`pair.0 := 99`), and `for` supports destructured
+  patterns. All nine playground examples were rewritten to syntax that passes
+  the real compiler, and the checked-in `playground/poly.wasm` was rebuilt
+  from the current compiler so the browser engine matches the CLI.
+- **VS Code extension**: the TextMate grammar now highlights the keyword
+  operators and the retained `<<`/`>>` shift alternatives; retired symbol
+  operators (`&&`, `||`, `!`, `^`, `%`, `&`, `|`, `==`) and compound
+  assignments (`+=`, `%=`, `&&=`, …) are no longer highlighted as valid.
+
 ### Performance
 
 - Optimized IR codegen output path: pre-allocated buffer, direct indent
@@ -53,9 +103,31 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Fixed
 
+- `poly --target c|asm <file> -o <path>` now honors the requested output path
+  instead of silently writing next to the source file.
+- The asm backend sized function frames from one slot per statement, but
+  expression codegen allocates temporaries during emission, so programs with
+  many temporaries wrote locals below `%rsp` where call frames clobbered them
+  (fixtures printed garbage). Bodies are now emitted into a scratch buffer and
+  the prologue is sized from the final frame.
+- `#asm` blocks left the assembler in an arbitrary section, so data emitted
+  afterwards landed in read-only `.text` (DT_TEXTREL + segfault);
+  `emit_string_data`/`emit_vector_data` re-establish `.section .data`.
+- `_start` now actually calls `fn main` on the asm target (top-level `fn main`
+  bodies were previously emitted but unreachable).
+- The C backend emitted `void main()` for `fn main` alongside the generated
+  `int main(void)` wrapper, so any C program using `fn main` had two main
+  definitions; `fn main`'s body is now spliced into the entry point.
+- Corrected `poly --help` inaccuracies around `--emit-asm` and `--target`.
 - Removed the unfinished `process_config` builtin lowering that silently
   generated `()`; unknown calls now fail through the normal checker path.
 - Removed the generated `compiler/output.txt` artifact from the working tree.
+
+### Documentation
+
+- Modernized seven v1-era guides' example blocks to the live keyword-operator
+  syntax and refreshed the release PR evidence to branch-tip verification
+  results.
 
 ## [2.0.0-preview.1] - 2026-08-22
 

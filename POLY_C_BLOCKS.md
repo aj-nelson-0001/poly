@@ -1,6 +1,6 @@
 # Poly C11 Backend
 
-**Status:** Current for Poly 2.0.0-preview.1
+**Status:** Current for Poly 2.0.0-preview.2
 
 This document describes the implemented C target. It is not a proposal for a future general-purpose C translator.
 
@@ -38,12 +38,17 @@ The C backend currently supports:
 
 - scalar variable, `let`, and `const` declarations
 - primitive C-compatible types: booleans, signed/unsigned integers through `i64`/`u64`, `f32`, `f64`, `char`, `string`, and `ustring`
-- plain structs without methods or generics
+- plain structs without methods or generics, plus struct literals lowering to C99 compound literals
+- enum declarations emitting `typedef enum` with qualified enumerators; simple variant values and match patterns (payload-carrying variants are rejected)
+- tuple types (anonymous structs with `_N` fields), `.N` index access, nested tuples, and printing of tuple indexes
 - simple Poly functions without async or generics
 - assignments, arithmetic, comparisons, logical and bitwise operators
 - `if`/`else`, `while`, inclusive numeric `loop` ranges, infinite loops, and `break`/`continue`
+- `match` statements lowered to an if/else-if chain over a match-scoped `const` copy of the scrutinee; literal, wildcard, range, and identifier arms are supported (structured patterns and guards are rejected with guidance)
+- non-capturing closures compiled to a static function plus a typed function pointer (capturing closures are rejected with guidance)
 - calls to functions defined in `#c` blocks
 - `put`, `error`, `warn`, and `info` for scalar values and string concatenation in output expressions
+- plain `get` (with optional prompt) reading a line of stdin through an emitted runtime helper
 
 A C target source must keep unsupported operations in a `#c` helper and call that helper from supported Poly orchestration, or use the Rust target instead.
 
@@ -67,10 +72,11 @@ The mapping is intentionally shallow. Poly does not add ownership, bounds checki
 
 The C backend rejects these Poly constructs with diagnostics:
 
-- `get` and stdin/file input
+- file input, typed input flags (`--as`, `--bytes`, `--timeout`, `--mask`, `--until`), and `get ... from ...`
 - `put ... to ...` redirects
-- vectors, arrays, tuples, maps, sets, and option/result values
-- pattern matching, closures, method calls, async, generic functions, and generic structs
+- vectors, arrays, maps, sets, and option/result values
+- capturing closures, method calls, async, generic functions, and generic structs
+- payload-carrying enum variants and structured/guarded match patterns
 - file I/O flags and Rust-only runtime builtins
 
 A `#c` block may contain any valid C needed by the program, but Poly still treats it as opaque text and does not type-check its declarations. Invalid or incompatible C is reported by `cc`/`clang` during `--check` or build.

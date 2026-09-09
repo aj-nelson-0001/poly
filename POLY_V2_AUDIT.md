@@ -1,12 +1,19 @@
 # Poly 2.0 Preview Audit
 
-Updated 2026-08-22.
+Updated 2026-09-08.
 
 ## Milestone Status
 
 The preview hardening milestone is complete: the C fixture now executes in CI,
 C unsupported features have explicit diagnostics, Rust/C target selection is
 covered, and `#cpp` is rejected clearly until a backend exists.
+
+Since `2.0.0-preview.1`, the follow-up passes added an assembly target
+(`--target asm` with `extern asm` declarations, descriptor-backed vectors,
+pointer dereference, and string for-in), widened the C backend (tuples, match
+statements, struct literals, enum variants in match, plain stdin `get`,
+non-capturing closures), added language-wide `pop()`, and made source maps and
+LSP symbol ranges span-precise.
 
 ## Completed In This Pass
 
@@ -22,11 +29,12 @@ covered, and `#cpp` is rejected clearly until a backend exists.
 ## Remaining Risks, In Priority Order
 
 1. **Opaque foreign calls remain permissive, while explicit signatures are available.** Poly accepts legacy calls after extracting names, but argument and return compatibility is delegated entirely to Rust or C unless the source adds `extern rust fn ...` or `extern c fn ...`.
-2. **C backend scope is intentionally narrow.** File redirects, stdin, vectors, tuples, pattern matching, closures, async, and complex Poly types should use `#c` helpers or remain unsupported until their C representation is designed.
+2. **C backend scope remains intentionally narrow.** File redirects, file input, vectors, async, capturing closures, and complex Poly types should use `#c` helpers or remain unsupported until their C representation is designed. Tuples, match statements, struct literals, enum variants, plain `get`, and non-capturing closures are supported as of `2.0.0-preview.2`.
 3. **C++ is syntax-only.** `#cpp` blocks are recognized and preserved in the AST, but no C++ target or native build path exists.
 4. **The v2 preview still has compatibility-oriented parser paths.** They are covered by tests and kept for migration diagnostics; future cleanup should remove only paths proven unused by the test suite.
-5. **The old v1 documentation set is historical.** It is now indexed and marked as non-normative; the v2 index, spec, grammar, migration guide, and target documents are the maintained sources of truth.
-6. **Cross-platform C coverage is now part of the contract.** CI exercises the Rust/C workflow on Linux, macOS, and Windows with an explicit `POLY_CC` compiler. Platform-specific native compiler behavior remains a residual risk and should be reviewed when CI toolchain images change.
+5. **The asm target is a narrow Linux x86-64 subset.** It emits freestanding assembly with Linux syscalls, runs under CI on Linux only, and rejects general string values, maps/sets, and unsupported methods with guidance. Grow-heap exhaustion exits with status 42 rather than corrupting memory.
+6. **The old v1 documentation set is historical.** It is now indexed and marked as non-normative; the v2 index, spec, grammar, migration guide, and target documents are the maintained sources of truth.
+7. **Cross-platform C coverage is now part of the contract.** CI exercises the Rust/C workflow on Linux, macOS, and Windows with an explicit `POLY_CC` compiler. Platform-specific native compiler behavior remains a residual risk and should be reviewed when CI toolchain images change.
 
 ## Recommended Next Milestone
 

@@ -3,6 +3,48 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-08.
 
+## Version sync: 2.0.0-preview.2 (2026-09-08)
+
+Release-metadata pass consolidating the asm/C follow-up passes into a versioned
+preview.
+
+- Workspace version bumped 2.0.0-preview.1 → **2.0.0-preview.2**
+  (`compiler/Cargo.toml` + `Cargo.lock`, all 10 crates); `poly --version`, the
+  REPL banner, and the playground footer now agree.
+- CHANGELOG: new `2.0.0-preview.2` section covering the assembly target, the
+  C backend expansion, `pop()`, source maps, LSP UTF-16 symbols, the `-o` fix,
+  and the CI wasm/asm smoke jobs; the keyword-operator work and the preview.1-era
+  entries that had accumulated under `[Unreleased]` were folded into their
+  releases; `[Unreleased]` is empty again.
+- Maintained docs updated to match the implementation: README (asm badge,
+  `#asm`/`extern asm`, asm CLI rows, c/asm codegen crates, prime-numbers example
+  moved off retired `mod`/`+=` syntax), POLY_DOCUMENTATION_INDEX (asm in the
+  target contract), POLY_V2_SUPPORT_MATRIX (asm column; C tuples/match/struct
+  literals/enums/`get`/non-capturing closures rows; vectors row), POLY_SPEC_v2
+  (`add`/`sub`/`inc`/`dec`/`+=` moved to a retired-syntax table — verified the
+  parser rejects them), POLY_GRAMMAR (`#asm`/`extern asm`/asm targets),
+  POLY_C_BLOCKS (expanded support and rejection lists), POLY_V2_AUDIT, and the
+  preview release notes/checklist.
+- Verified: markdown audit 49 files OK, doc example audit 0 unmarked failures,
+  `cargo fmt --check` + `clippy -D warnings` clean, 406 workspace tests pass,
+  `--check` green for the Rust example set and the C fixture.
+
+### Full CI matrix (local replication)
+
+- Release build; all 22 `examples/*.poly` pass `--target rust --check`; the
+  mixed-target fixture passes for both rust and c.
+- C fixture: checked, built, executed — output `30`/`3` matches. Asm fixture:
+  checked, built with `-o`, assembled with `cc -nostartfiles`, executed —
+  output `42`/`10`/`30`/`60` matches.
+- `cargo audit`: 0 vulnerabilities (81 dependencies).
+- Playground wasm rebuilt from the preview.2 compiler (408K); the smoke script
+  passes (5 good + 6 rejected cases); all 9 embedded playground examples pass
+  `poly --check`.
+- Full-tree doc audit: 564 blocks (229 passed, 335 marked fragments),
+  0 unmarked check failures.
+- Release PR evidence refreshed to `RELEASE_PR_v2.0.0-preview.2.md` (the
+  preview.1 document was removed; nothing else referenced it).
+
 ## C backend: struct literals, enum variants, `get`, closures (2026-09-08)
 
 Fourth follow-up pass: closing the four remaining C-backend gaps from the

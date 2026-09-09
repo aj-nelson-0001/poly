@@ -1,6 +1,6 @@
 # Poly Documentation Index
 
-Poly 2.0.0-preview.1 is the current implementation baseline. The files below are the maintained sources of truth for syntax, targets, tooling, and migration.
+Poly 2.0.0-preview.2 is the current implementation baseline. The files below are the maintained sources of truth for syntax, targets, tooling, and migration.
 
 ## Current Documentation
 
@@ -28,8 +28,9 @@ Complete runnable Poly programs live in [`examples/`](examples/); executable beh
 
 - `--target rust` is the default and emits Rust through the AST, IR, optimizer, and Rust code generator.
 - `--target c` emits and checks a C11 orchestration subset through `poly-c-codegen`.
-- `#rust` and `#c` blocks are top-level, opaque to Poly, and selected by target.
-- `extern rust fn ...` and `extern c fn ...` provide opt-in Poly-side checks for opaque foreign calls.
+- `--target asm` emits freestanding Linux x86-64 assembly through `poly-asm-codegen`.
+- `#rust`, `#c`, and `#asm` blocks are top-level, opaque to Poly, and selected by target.
+- `extern rust fn ...`, `extern c fn ...`, and `extern asm fn ...` provide opt-in Poly-side checks for opaque foreign calls.
 - `#cpp` syntax is reserved and rejected explicitly because no C++ backend exists.
 - `=` is equality; `:=` is assignment. `==` is rejected legacy syntax.
 - Append output uses `put value to "file" -append`.

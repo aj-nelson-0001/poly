@@ -1,19 +1,19 @@
-# Poly 2.0.0-preview.1 Release Notes
+# Poly 2.0 Preview Release Notes
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.1 establishes the target-aware Rust/C compiler model. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, while C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.2 extends the target-aware compiler model established by 2.0.0-preview.1. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, and C++ syntax is reserved and explicitly rejected.
 
-## Highlights
+## What's New in 2.0.0-preview.2
 
-- Added `--target rust` and `--target c` target selection across checking, emission, project generation, and native builds.
-- Added top-level `#rust` and `#c` foreign blocks. Only the block matching the selected target is emitted; foreign bodies remain opaque to Poly and are validated by the native compiler.
-- Added optional top-level `extern rust fn ...` and `extern c fn ...` declarations for Poly-side arity, argument-type, and return-type checks.
-- Added the C11 backend with scalar declarations, control flow, simple functions, plain structs, diagnostics, and calls into `#c` helpers.
-- Added native C syntax checks, executable builds, C project generation, and end-to-end runtime regression coverage.
-- Added `POLY_CC` configuration with platform compiler fallbacks and CI coverage for Linux, macOS, and Windows.
-- Removed the unfinished `process_config` compatibility path so unknown calls fail instead of silently lowering to `()`.
-- Reconciled maintained documentation around a frozen Rust/C support matrix and migration guide.
+- Added `--target asm`: freestanding Linux x86-64 assembly with Linux syscalls, a `_start` entry point that calls `fn main`, `#asm` foreign blocks, `extern asm fn ...` interface declarations, static and growable descriptor-backed vectors (`push`/`pop`/`len`), pointer dereference, and `for x in <string>` iteration.
+- Widened the C backend: tuples (anonymous structs with `_N` fields), `match` statements (literal, wildcard, range, and identifier arms), struct literals (C99 compound literals), enum declarations with qualified enumerators in expressions and match patterns, plain stdin `get` with optional prompt, and non-capturing closures.
+- Added language-wide `pop()` on vectors: it type-checks as the element type and lowers to `pop().unwrap_or_default()` on the Rust target.
+- Added span-precise source maps (`poly --source-map` reports exact statement-level line mappings) and UTF-16 LSP document-symbol ranges.
+- Fixed `--target c|asm -o <path>` output-path handling, the asm frame-size bug that clobbered locals below `%rsp`, `#asm` section restoration, the asm `_start`-to-`fn main` call, the duplicate C `main` definition for `fn main` programs, and `--help` inaccuracies.
+- CI now smoke-tests the rebuilt playground wasm artifact and verifies asm-target fixture output end-to-end on Linux.
+
+For the 2.0.0-preview.1 highlights, see [CHANGELOG.md](CHANGELOG.md).
 
 ## Target Contract
 
@@ -21,6 +21,7 @@ Poly 2.0.0-preview.1 establishes the target-aware Rust/C compiler model. Rust re
 |---|---|---|
 | Rust | Default target and complete v2 baseline | `rustc` or generated Cargo project |
 | C | C11 orchestration subset | `POLY_CC` C compiler |
+| Asm | Linux x86-64 assembly subset | GNU assembler and linker (Linux CI) |
 | C++ | Reserved only | Explicitly rejected; no backend exists |
 
 For the complete feature boundary, see [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md). For foreign block syntax and C type mappings, see [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md).
@@ -32,7 +33,7 @@ For the complete feature boundary, see [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPO
 - `put` always writes a newline.
 - Foreign blocks and `extern` declarations must be top-level.
 - Opaque foreign calls remain permissive for compatibility. Add an explicit `extern` declaration when Poly-side interface diagnostics are useful.
-- C does not provide the Rust runtime surface. Input, file redirects, collections, tuples, pattern matching, closures, async features, SQLite, and network helpers remain Rust-only or must be implemented behind a `#c` helper.
+- C does not provide the full Rust runtime surface. File redirects, file input, typed input flags, vectors, maps/sets, async features, SQLite, and network helpers remain Rust-only or must be implemented behind a foreign helper. Plain `get`, tuples, simple `match` patterns, struct literals, enum variants, and non-capturing closures have C support as of `2.0.0-preview.2`.
 
 ## Verification Evidence
 

@@ -4,13 +4,11 @@
 
 ![Version](https://img.shields.io/badge/version-2.0--preview-green)
 ![Status](https://img.shields.io/badge/status-Active%20Development-blue)
-![Backend](https://img.shields.io/badge/backends-Rust%20%7C%20C-black)
-
----
+![Backend](https://img.shields.io/badge/backends-Rust%20%7C%20C%20%7C%20Asm-black)
 
 ## Overview
 
-Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with an assembly-inspired syntax. For target-specific or advanced work, users provide definitions in foreign language blocks (`#rust` or `#c`). The parser models additional Rust-oriented constructs, but the supported backend and target determine what is runnable.
+Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with an assembly-inspired syntax. For target-specific or advanced work, users provide definitions in foreign language blocks (`#rust`, `#c`, or `#asm`). The parser models additional Rust-oriented constructs, but the supported backend and target determine what is runnable.
 
 **Key principle:** Foreign blocks provide target-language definitions. Poly provides the orchestration. Foreign blocks must be top-level; the native compiler validates their contents.
 
@@ -50,7 +48,7 @@ put result
 
 Foreign blocks provide target-language definitions at file scope. Poly does not parse their bodies; the selected native compiler validates them. Poly owns the generated entry point (`fn main()` for Rust or `int main(void)` for C).
 
-This model currently supports `#rust` for Rust and `#c` for C. Optional `extern rust fn ...` and `extern c fn ...` declarations add Poly-side interface checks for foreign calls. `#cpp` syntax is reserved and rejected until a C++ backend is designed.
+This model currently supports `#rust` for Rust, `#c` for C, and `#asm` for Linux x86-64 assembly. Optional `extern rust fn ...`, `extern c fn ...`, and `extern asm fn ...` declarations add Poly-side interface checks for foreign calls. `#cpp` syntax is reserved and rejected until a C++ backend is designed.
 
 See [POLY_SPEC_v2.md](POLY_SPEC_v2.md) for the full specification, [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the frozen target contract, and [POLY_ROADMAP_v2.md](POLY_ROADMAP_v2.md) for the implementation plan.
 
@@ -74,15 +72,27 @@ put answer
 Use `poly --target c --check program.poly` to validate generated C, or
 `poly --target c program.poly` to emit and compile the C executable.
 
+### What's New in 2.0.0-preview.2
+
+Preview 2 adds an **assembly target** (`--target asm`, Linux x86-64) with
+`extern asm fn` declarations, static and growable descriptor-backed vectors,
+pointer dereference, and `for x in <string>` iteration; **widens the C
+backend** (tuples, `match` statements, struct literals, enums in `match`,
+plain stdin `get`, non-capturing closures); and adds language-wide `pop()`,
+span-precise source maps, and UTF-16 LSP symbol ranges. See
+[CHANGELOG.md](CHANGELOG.md) for the full list.
+
 ## Historical Release Notes
 
 The v1.x notes below describe prior releases and are retained for migration context. They are not the v2 preview contract.
 
 ## What's New in v1.8.0
 
-🔁 **Tuple power-ups.** Assign to tuple elements (`pair.0 := 99`,
-`pair.1 = false`), destructure in `for` loops (`for (idx, val) in
-items.enumerate()`), and read them by position (`pair.0`, `nested.1.0`).
+✂️ **Syntax simplification.** `loop i 0..10` (colon removed), `x := x + 5`
+replaces `add x`/`inc x`, `x := y` replaces `set x to y`, file I/O uses
+`put expr to "file"` / `put expr to "file" -append` and `get from "file"`,
+and compound mutation operators (`+=`, `-=`, …) are removed. The compiler
+suggests the new syntax when old forms are detected.
 
 ## What's New in v1.7.6
 
@@ -121,7 +131,7 @@ fn complex_algorithm(data: &[i32]) -> Vec<i32> {
 # Poly orchestrates the calls
 var count i32 := 0
 loop i 0..5
-    add count
+    count := count + 1
 end loop
 put "Count: " + count
 
@@ -198,6 +208,7 @@ end loop
 |---------|--------|-------------|
 | Rust block | `#rust ... #endrust` | Rust definitions emitted at module scope |
 | C block | `#c ... #endc` | C declarations emitted at file scope |
+| Asm block | `#asm ... #endasm` | Assembly definitions emitted at file scope (Linux x86-64) |
 | C++ block | `#cpp ... #endcpp` | Reserved; rejected until a backend exists |
 
 **Rule:** Foreign blocks are top-level target-language definitions and are opaque to Poly. Poly always generates `fn main()` for Rust or `int main(void)` for C. The native compiler validates foreign contents.
@@ -266,7 +277,7 @@ end loop
 - **Math functions**: `abs`, `sqrt`, `pow`, `min`, `max`
 - **Generic containers**: `Vec<T>`, `Map<K, V>`, `Set<T>`, `Box<T>`, `Rc<T>`, `Arc<T>`
 - **Unsafe**: `unsafe ... end unsafe`
-- **Mutation**: `count += 1`, `total -= amount`
+- **Mutation**: `count := count + 1`, `total := total - amount`
 
 ---
 
@@ -313,9 +324,11 @@ Poly/
     │   ├── poly-types/                # Type system
     │   ├── poly-intermediate-representation/  # Intermediate representation + optimizer
     │   ├── poly-transpiler/           # Rust code generator (routes through the shared IR pipeline)
-    │   ├── poly-wasm/                 # WebAssembly bindings for the playground
-    │   ├── poly-lsp/                  # Dependency-free JSON-RPC language server
-    │   └── poly-cli/                  # Command-line interface
+│   ├── poly-wasm/                 # WebAssembly bindings for the playground
+│   ├── poly-lsp/                  # Dependency-free JSON-RPC language server
+│   ├── poly-c-codegen/            # C11 backend (`--target c`)
+│   ├── poly-asm-codegen/          # x86-64 assembly backend (`--target asm`)
+│   └── poly-cli/                  # Command-line interface
     └── grammar/
         └── poly.bnf                   # Formal grammar
 ~~~
@@ -373,10 +386,10 @@ fn is_prime(n: i32): bool
     end if
     var i i32 := 2
     while i * i <= n
-        if n % i = 0
+        if n mod i = 0
             return false
         end if
-        i += 1
+        i := i + 1
     end while
     return true
 end fn
@@ -386,7 +399,7 @@ var count i32 := 0
 loop num 2..200
     if is_prime(num)
         put num
-        count += 1
+        count := count + 1
         if count >= 20
             break
         end if
@@ -489,6 +502,8 @@ Use `poly --emit-rust file.poly` when you want the generated Rust on stdout. Asy
 | `poly --target c --emit-c file.poly` | Emit C source to stdout |
 | `poly --target c --check file.poly` | Validate the C backend |
 | `poly --target c file.poly` | Generate and build a C program |
+| `poly --target asm --emit-asm file.poly` | Print generated x86-64 assembly to stdout |
+| `poly --target asm file.poly` | Generate and build an assembly program (Linux x86-64) |
 
 ---
 

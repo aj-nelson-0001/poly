@@ -1,16 +1,16 @@
 # Poly v2 Preview Release Checklist
 
-**Target release:** Poly `2.0.0-preview.1`
+**Target release:** Poly `2.0.0-preview.2`
 
 This checklist describes release readiness for the current preview. It does not create a release or tag one automatically.
 
 ## Contract
 
 - [x] Review `POLY_SPEC_v2.md` and `POLY_V2_SUPPORT_MATRIX.md` together.
-- [x] Confirm Rust remains the default and C remains the documented C11 subset.
+- [x] Confirm Rust remains the default, C remains the documented C11 subset, and asm remains the documented Linux x86-64 subset.
 - [x] Confirm `#cpp` remains explicitly rejected; do not advertise a C++ backend.
 - [x] Confirm all unsupported constructs have actionable diagnostics.
-- [x] Confirm `extern rust fn` and `extern c fn` declarations are documented as opt-in interface checking.
+- [x] Confirm `extern rust fn`, `extern c fn`, and `extern asm fn` declarations are documented as opt-in interface checking.
 - [x] Confirm historical v1 documents are linked through `POLY_DOCUMENTATION_INDEX.md` and are not presented as current syntax.
 
 ## Implementation

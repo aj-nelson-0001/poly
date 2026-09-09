@@ -1,6 +1,6 @@
 # Poly Language Grammar v2 Preview
 
-**Status:** Current preview grammar for Poly 2.0.0-preview.1
+**Status:** Current preview grammar for Poly 2.0.0-preview.2
 
 This document describes the syntax accepted by the current lexer and parser. It is intentionally a compact grammar, not a promise that every parsed construct is supported by every target backend.
 
@@ -22,11 +22,12 @@ top_level_item ::= statement | foreign_block | extern_function_declaration
 
 foreign_block ::= "#rust" foreign_text "#endrust"
                 | "#c" foreign_text "#endc"
+                | "#asm" foreign_text "#endasm"
                 | "#cpp" foreign_text "#endcpp"
 
 extern_function_declaration ::= "extern" foreign_target "fn" identifier
                                 "(" [ parameters ] ")" [ ":" type ]
-foreign_target ::= "rust" | "c"
+foreign_target ::= "rust" | "c" | "asm"
 
 // Foreign markers are line-oriented. Leading whitespace is allowed, but the
 // marker must occupy the line; foreign_text is opaque to the Poly lexer.
@@ -222,6 +223,10 @@ poly --target rust program.poly
 poly --target c program.poly
 poly --target c --check program.poly
 poly --target c --emit-c program.poly
+poly --target asm --emit-asm program.poly
+poly --target asm program.poly
 ~~~
 
-`#rust` blocks are selected for Rust and `#c` blocks for C. A source containing `#cpp` is rejected explicitly because no C++ backend exists yet.
+`#rust` blocks are selected for Rust, `#c` blocks for C, and `#asm` blocks for
+the Linux x86-64 assembly target. A source containing `#cpp` is rejected
+explicitly because no C++ backend exists yet.

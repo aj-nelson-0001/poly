@@ -46,6 +46,10 @@ put "Server starting on port " + port
 run_server(port as u32)
 ~~~
 
+The same model covers `--target c` with `#c` blocks and `extern c fn`
+declarations, and `--target asm` with `#asm` blocks and `extern asm fn`
+declarations.
+
 ### Foreign Blocks
 
 Delimited by `#<lang>` and `#end<lang>`. The content contains target-language definitions at file scope — for example functions, structs, enums, constants, type aliases, impl blocks, traits, use statements, and required helper definitions. Poly does not parse or rewrite the content; the selected native compiler validates it.
@@ -142,18 +146,13 @@ name = other               # equality comparison, not assignment
 ### Mutation
 
 ~~~poly fragment
-name += value              # add-assign
-name -= value              # sub-assign
+name := name + value       # explicit re-assignment
+vector.pop()               # remove and yield the last element
 ~~~
 
-### Assembly-Style Ops
-
-~~~poly fragment
-add counter                # counter += 1
-sub counter                # counter -= 1
-inc counter                # counter += 1 (alias for add)
-dec counter                # counter -= 1 (alias for sub)
-~~~
+Compound assignment operators (`+=`, `-=`) and the assembly-style `add` /
+`sub` / `inc` / `dec` statements are retired syntax: the parser rejects them
+and suggests the explicit `name := name + value` form.
 
 ---
 
@@ -348,16 +347,20 @@ end struct
 
 ---
 
-## 10. Assembly-Style Operators
+## 10. Removed Assembly-Style Operators
 
-| Poly | Rust | Description |
-|------|------|-------------|
-| `add x` | `x += 1` | Increment by 1 |
-| `sub x` | `x -= 1` | Decrement by 1 |
-| `inc x` | `x += 1` | Increment (alias) |
-| `dec x` | `x -= 1` | Decrement (alias) |
-| `x += n` | `x += n` | Add-assign |
-| `x -= n` | `x -= n` | Sub-assign |
+The assembly-style mutation statements and compound assignment operators from
+earlier versions are retired. The parser rejects them with a migration hint
+pointing at the explicit form:
+
+| Retired syntax | Replacement |
+|------|-------------|
+| `add x` | `x := x + 1` |
+| `sub x` | `x := x - 1` |
+| `inc x` | `x := x + 1` |
+| `dec x` | `x := x - 1` |
+| `x += n` | `x := x + n` |
+| `x -= n` | `x := x - n` |
 
 ### Bitwise
 
@@ -454,7 +457,7 @@ fn rust_multiply(x: i32, y: i32) -> i32 {
 
 var count i32 := 0
 loop i 0..5
-    add count
+    count := count + 1
 end loop
 put "Count: " + count
 put "Rust says: " + rust_multiply(count, 2)
@@ -492,7 +495,7 @@ fn main() {
 | `put` / `get` I/O | ✅ | |
 | File I/O (`to` / `from`) | ✅ | |
 | `error` / `warn` / `info` | ✅ | |
-| `add` / `sub` / `inc` / `dec` | ✅ | |
+| Explicit mutation (`x := x + 1`) | ✅ | |
 | `if` / `while` / `loop` | ✅ | |
 | Simple `fn` (no generics) | ✅ | |
 | Simple `struct` (no methods) | ✅ | |

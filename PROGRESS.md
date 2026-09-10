@@ -3,6 +3,51 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-10.
 
+## Hosted CI verification; JS target in the playground (2026-09-10)
+
+### Hosted CI results
+
+- First push runs exposed two issues, both fixed:
+  1. The `Verify mixed target selection` step failed on **all three
+     platforms** — `tests/target_flag_tests.poly` called `point_distance_sq`
+     from a second `#rust` block with no extern declaration. Added the
+     declaration and changed the signature from `f32` to `f64` to match how
+     the checker types float literals (strict checking then caught the
+     mismatch the permissive path never surfaced).
+  2. Clippy's doc-lint gate rejected an over-indented doc list item in the
+     new `poly-wasm` module docs.
+- After the fixes, the full workflow is **green on Linux, macOS, and
+  Windows**, including the new JS fixture job and `--strict` everywhere:
+  `Test (ubuntu/macos/windows)` ✓, `Lint and documentation` ✓,
+  `Dependency Audit` ✓, `WebAssembly Artifact` ✓. The long-standing
+  Windows snapshot failure is fixed by CRLF normalization.
+
+### JS target in the wasm playground
+
+- `poly-wasm` gains `transpile_target(ptr, len, tptr, tlen)` alongside the
+  existing `transpile` (Rust-only), dispatching through
+  `Transpiler::transpile_target` so the browser can transpile to Rust, C, or
+  JS with the same checked pipeline as the CLI. Unknown targets error with
+  the CLI's message; two new native test target tests cover C/JS output and
+  the unknown-target error.
+- Playground UI: target selector (Rust / C / JavaScript) in the output panel
+  header with per-target icon and title; the wasm call path passes the
+  selected target and degrades gracefully to the Rust-only export on older
+  wasm builds.
+- `playground/poly.wasm` rebuilt from the preview.2 compiler (564K); smoke
+  test extended with target-aware cases: `5 good + 6 rejected + 2 target
+  cases pass`.
+
+### Roadmap status
+
+- `POLY_ROADMAP_v2.md` timeline adds Phase 2.6 (asm backend) and Phase 2.7
+  (JS backend) as shipped; `POLY_V2_PREVIEW_RELEASE_NOTES.md` target table
+  gains the JS row with its `node --check` + execution verification.
+
+Commits: `a46b816` (JS backend + strict CI), `9375f38` (strict-declaration
+fix + playground JS target), `6d5218e` (doc lint). CI run `34418838258`:
+success.
+
 ## JS backend implementation; strict mode adopted in CI (2026-09-10)
 
 ### JavaScript target (`--target js`)

@@ -77,6 +77,16 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.3
+
+Audit hardening release: **CLI flags are accepted in any position** (file-first
+invocations no longer silently fall through to a default build), the
+**JavaScript target runs generated programs with Node** on a default build,
+**retired-syntax diagnostics are restored** (`set x to y`, `add`/`sub`/`inc`/
+`dec`, and `x += v` / `x -= v` now produce named errors with migration
+suggestions), and **macros expand in value position** (`var y := double(21)`
+works for single-expression macro bodies). Also adds the project `LICENSE`.
+
 ### What's New in 2.0.0-preview.2
 
 Preview 2 adds an **assembly target** (`--target asm`, Linux x86-64) with

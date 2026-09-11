@@ -1,9 +1,9 @@
 # Poly JavaScript Backend Design
 
-**Status:** Proposal for review — not yet implemented. Design review updated
-2026-09-09: the integration touchpoints below are verified against the
-codebase, and the checker's strict foreign-call mode (`--strict`) applies to
-this target automatically.
+**Status:** Implemented — shipped in 2.0.0-preview.2 (see `POLY_JS_BLOCKS.md`
+for the shipped contract). The integration touchpoints below were verified
+against the codebase during design review, and the checker's strict
+foreign-call mode (`--strict`) applies to this target automatically.
 
 This document specifies a fourth Poly compilation target: JavaScript, runnable
 both under Node.js and in the browser (the playground already ships a

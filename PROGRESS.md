@@ -1,7 +1,41 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-10.
+Last updated: 2026-09-11.
+
+## Audit fixes: CLI flag order, JS auto-run, retired-syntax diagnostics, value-position macros (2026-09-11)
+
+- **CLI flags in any position.** Argument dispatch keyed only on `args[1]`, so
+  `poly file.poly --emit-rust` silently ignored the flag and ran a default
+  build. Arguments are now pre-parsed into flags plus positionals; documented
+  invocations work in any order and unknown flags are rejected in every
+  position. Covered by new `parse_args` unit tests.
+- **`--target js` runs the generated program with Node** on a default build,
+  matching the README's documented behavior (mirrors the Rust target's
+  auto-build). Falls back to `node --check` verification when Node is
+  unavailable; `POLY_NODE` overrides the interpreter.
+- **Retired-syntax diagnostics restored.** The `set x to y` detector matched
+  `Identifier("to")`, but `to` lexes as a keyword token, so the migration hint
+  never fired (dead since introduction). `set x to y`, `add x n`, `sub x n`,
+  `inc x`, `dec x` now produce named errors with `x := ...` suggestions, and
+  `x += value` / `x -= value` get the same treatment at the operator sites.
+  Assignments to variables named `add` (`add := 5`) and calls like
+  `inc(counter)` are still accepted. Historical note: the 2026-09-08 entry
+  below claiming `add s, "text"` / `s += "text"` string mutation type-checks
+  is stale — string mutation via `add`/`+=` no longer parses; string
+  concatenation uses `+`.
+- **Value-position macro expansion.** `var y := double(21)` previously failed
+  with `unknown function` because expansion only ran at statement position.
+  Single-expression / `return expr` macro bodies now lower to their expression
+  in value position; multi-statement bodies still expand only at statement
+  position; arity errors are reported in both positions. 8 new parser tests.
+- Also: added the missing MIT `LICENSE` file (declared by every workspace
+  `Cargo.toml`), synced the roadmap's kept-features table (arithmetic row no
+  longer lists retired `add`/`sub`/`inc`/`dec`), updated `POLY_JS_DESIGN.md`
+  status from "proposal" to "implemented", and recorded all fixes in the
+  CHANGELOG's `[Unreleased]` section.
+- Verification: 430/430 workspace tests, clippy `-D warnings` clean, `cargo
+  fmt` clean, doc-audit scripts green (566 blocks, 0 unmarked failures).
 
 ## Hosted CI verification; JS target in the playground (2026-09-10)
 

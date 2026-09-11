@@ -51,54 +51,162 @@ impl Target {
     }
 }
 
-/// Extract and remove `--target <lang>` from the argument list.
-/// The target is handled before subcommand dispatch so every CLI mode, including
-/// `--check`, `--emit-*`, and project generation, selects the same backend.
-fn extract_target(args: &[String]) -> Result<(Target, Option<PathBuf>, bool, Vec<String>)> {
+/// High-level command requested by mode flags. Mode flags and the file
+/// argument may appear in any relative order on the command line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Command {
+    DefaultBuild,
+    Tokens,
+    Ast,
+    Check,
+    Emit,
+    IntermediateRepresentation,
+    SourceMap,
+    Format,
+    Diff,
+    Watch,
+    Project,
+    Repl,
+    Help,
+    Version,
+}
+
+/// Parsed command line: the requested command plus position-independent
+/// options, with all remaining operands in the order they appeared.
+struct ParsedArgs {
+    command: Command,
+    target: Target,
+    output_path: Option<PathBuf>,
+    strict: bool,
+    positionals: Vec<String>,
+}
+
+/// Parse raw command-line arguments (including argv[0]).
+///
+/// `--target <lang>`, `-o <path>`, and `--strict` are handled here (before
+/// command dispatch) so every CLI mode, including `--check`, `--emit-*`, and
+/// project generation, selects the same backend. Mode flags (`--check`,
+/// `--emit-*`, ...) may appear in any position relative to the file argument:
+/// `poly file.poly --emit-rust` and `poly --emit-rust file.poly` are
+/// equivalent, and unknown flags are rejected wherever they appear instead of
+/// being silently dropped.
+fn parse_args(raw_args: &[String]) -> Result<ParsedArgs> {
+    let mut command: Option<Command> = None;
+    // `--emit-<lang>` pins the target to that language; a conflicting
+    // explicit `--target` is an error instead of a silent override.
+    let mut emit_target: Option<Target> = None;
+    let mut explicit_target: Option<Target> = None;
     let mut target = Target::Rust;
-    // `-o <path>` overrides the default output location for the c/asm
+    // `-o <path>` overrides the default output location for the c/asm/js
     // targets (the rust target builds a Cargo project and has no single
-    // output file). Filtered out here so command handlers see a clean arg
-    // list, mirroring how `--target` is handled.
+    // output file).
     let mut output_path: Option<PathBuf> = None;
     // `--strict` rejects calls to foreign functions that have no explicit
     // `extern <target> fn ...` declaration (audit risk 1 mitigation).
     let mut strict = false;
-    let mut filtered = Vec::new();
-    let mut i = 0;
-    while i < args.len() {
-        if args[i] == "--target" {
-            i += 1;
-            if i >= args.len() {
-                bail!("--target requires a language argument (e.g. --target rust)");
+    let mut positionals = Vec::new();
+
+    let mut i = 1; // skip argv[0]
+    while i < raw_args.len() {
+        let arg = raw_args[i].as_str();
+        match arg {
+            "--help" | "-h" => command = Some(Command::Help),
+            "--version" | "-v" => command = Some(Command::Version),
+            "--tokens" => command = Some(Command::Tokens),
+            "--ast" => command = Some(Command::Ast),
+            "--check" => command = Some(Command::Check),
+            "--emit-rust" => emit_target = Some(Target::Rust),
+            "--emit-c" => emit_target = Some(Target::C),
+            "--emit-asm" => emit_target = Some(Target::Asm),
+            "--emit-js" => emit_target = Some(Target::Js),
+            "--intermediate-representation" | "--ir" => {
+                command = Some(Command::IntermediateRepresentation)
             }
-            target = Target::from_str(&args[i])?;
-        } else if args[i] == "-o" {
-            i += 1;
-            if i >= args.len() {
-                bail!("-o requires an output path argument (e.g. -o out.S)");
+            "--source-map" => command = Some(Command::SourceMap),
+            "--format" => command = Some(Command::Format),
+            "--diff" => command = Some(Command::Diff),
+            "--watch" => command = Some(Command::Watch),
+            "--project" => command = Some(Command::Project),
+            "--repl" => command = Some(Command::Repl),
+            "--target" => {
+                i += 1;
+                let language = raw_args.get(i).ok_or_else(|| {
+                    anyhow::anyhow!("--target requires a language argument (e.g. --target rust)")
+                })?;
+                target = Target::from_str(language)?;
+                explicit_target = Some(target);
             }
-            output_path = Some(PathBuf::from(&args[i]));
-        } else if args[i] == "--strict" {
-            strict = true;
-        } else {
-            filtered.push(args[i].clone());
+            "-o" => {
+                i += 1;
+                let path = raw_args.get(i).ok_or_else(|| {
+                    anyhow::anyhow!("-o requires an output path argument (e.g. -o out.S)")
+                })?;
+                output_path = Some(PathBuf::from(path));
+            }
+            "--strict" => strict = true,
+            other if other.starts_with("--") => {
+                bail!(
+                    "Unknown option '{}'. Run 'poly --help' for usage information.",
+                    other
+                );
+            }
+            other => positionals.push(other.to_string()),
         }
         i += 1;
     }
-    Ok((target, output_path, strict, filtered))
+
+    if let Some(emit) = emit_target {
+        if !matches!(command, None | Some(Command::Help) | Some(Command::Version)) {
+            bail!("--emit-<lang> cannot be combined with another command");
+        }
+        if let Some(explicit) = explicit_target {
+            if explicit != emit {
+                bail!(
+                    "--target {} conflicts with --emit-{}; the emit flag already selects its target",
+                    explicit.language_name(),
+                    emit.language_name()
+                );
+            }
+        }
+        target = emit;
+        command = Some(Command::Emit);
+    }
+
+    let command = command.unwrap_or(Command::DefaultBuild);
+
+    Ok(ParsedArgs {
+        command,
+        target,
+        output_path,
+        strict,
+        positionals,
+    })
+}
+
+/// Require exactly one file operand for single-file commands, mirroring the
+/// historical per-command argument errors.
+fn require_file_operand(command: &str, positionals: &[String]) -> Result<PathBuf> {
+    if positionals.is_empty() {
+        eprintln!("Error: {command} requires a file argument");
+        process::exit(1);
+    }
+    if positionals.len() > 1 {
+        eprintln!("Error: {command} accepts at most one file argument");
+        process::exit(1);
+    }
+    Ok(PathBuf::from(&positionals[0]))
 }
 
 fn main() -> Result<()> {
     // Keep argument parsing dependency-free: the CLI is also used as a small
     // standalone binary in generated-project and integration-test workflows.
     let raw_args: Vec<String> = std::env::args().collect();
-    let (target, custom_output, strict, args) = extract_target(&raw_args)?;
 
-    if args.len() < 2 {
+    if raw_args.len() == 1 {
         eprintln!("Poly Language Compiler v{}", env!("CARGO_PKG_VERSION"));
         eprintln!();
         eprintln!("Usage: poly [options] <file.poly>");
+        eprintln!("Mode flags and the file argument may appear in any order.");
         eprintln!();
         eprintln!("Options:");
         eprintln!("  --target <lang>   Target language (default: rust; options: rust, c, asm, js)");
@@ -129,11 +237,17 @@ fn main() -> Result<()> {
         process::exit(1);
     }
 
-    match args[1].as_str() {
-        "--help" | "-h" => {
+    let parsed = parse_args(&raw_args)?;
+    let target = parsed.target;
+    let custom_output = parsed.output_path;
+    let strict = parsed.strict;
+
+    match parsed.command {
+        Command::Help => {
             println!("Poly Language Compiler v{}", env!("CARGO_PKG_VERSION"));
             println!();
             println!("Usage: poly [options] <file.poly>");
+            println!("Mode flags and the file argument may appear in any order.");
             println!();
             println!("Options:");
             println!(
@@ -171,16 +285,12 @@ fn main() -> Result<()> {
             println!("  js                Transpile to JavaScript (Node / browser)");
             Ok(())
         }
-        "--version" | "-v" => {
+        Command::Version => {
             println!("poly {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        "--tokens" => {
-            if args.len() < 3 {
-                eprintln!("Error: --tokens requires a file argument");
-                process::exit(1);
-            }
-            let path = PathBuf::from(&args[2]);
+        Command::Tokens => {
+            let path = require_file_operand("--tokens", &parsed.positionals)?;
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
@@ -204,12 +314,8 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        "--ast" => {
-            if args.len() < 3 {
-                eprintln!("Error: --ast requires a file argument");
-                process::exit(1);
-            }
-            let path = PathBuf::from(&args[2]);
+        Command::Ast => {
+            let path = require_file_operand("--ast", &parsed.positionals)?;
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
             let label = path.display().to_string();
@@ -244,14 +350,10 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        "--check" => {
+        Command::Check => {
             // `--check` runs every compiler phase and the selected native
             // compiler, so success means the target output is buildable.
-            if args.len() < 3 {
-                eprintln!("Error: --check requires a file argument");
-                process::exit(1);
-            }
-            let path = PathBuf::from(&args[2]);
+            let path = require_file_operand("--check", &parsed.positionals)?;
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
             let label = path.display().to_string();
@@ -370,26 +472,16 @@ fn main() -> Result<()> {
 
             Ok(())
         }
-        "--emit-rust" | "--emit-c" | "--emit-asm" | "--emit-js" => {
-            if args.len() < 3 {
-                eprintln!("Error: emit option requires a file argument");
-                process::exit(1);
-            }
-            let path = PathBuf::from(&args[2]);
+        Command::Emit => {
+            let path = require_file_operand("--emit-<lang>", &parsed.positionals)?;
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
             let transpiler = poly_transpiler::Transpiler::new();
-            let requested_target = match args[1].as_str() {
-                "--emit-asm" => "asm",
-                "--emit-c" => "c",
-                "--emit-js" => "js",
-                _ => "rust",
-            };
             let code = transpiler
-                .transpile_target(&source, requested_target)
+                .transpile_target(&source, target.language_name())
                 .map_err(|e| anyhow::anyhow!(e))?;
-            if requested_target == "rust" {
+            if target == Target::Rust {
                 let formatted = format_with_rustfmt(&code).unwrap_or(code);
                 println!("{}", formatted);
             } else {
@@ -397,12 +489,8 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        "--intermediate-representation" | "--ir" => {
-            if args.len() < 3 {
-                eprintln!("Error: --intermediate-representation requires a file argument");
-                process::exit(1);
-            }
-            let path = PathBuf::from(&args[2]);
+        Command::IntermediateRepresentation => {
+            let path = require_file_operand("--intermediate-representation", &parsed.positionals)?;
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
@@ -421,12 +509,8 @@ fn main() -> Result<()> {
             println!("{}", formatted);
             Ok(())
         }
-        "--source-map" => {
-            if args.len() < 3 {
-                eprintln!("Error: --source-map requires a file argument");
-                process::exit(1);
-            }
-            let path = PathBuf::from(&args[2]);
+        Command::SourceMap => {
+            let path = require_file_operand("--source-map", &parsed.positionals)?;
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
@@ -437,24 +521,20 @@ fn main() -> Result<()> {
             println!("{}", source_map.summary());
             Ok(())
         }
-        "--watch" => {
-            if args.len() < 3 {
-                eprintln!("Error: --watch requires a file argument");
-                process::exit(1);
-            }
-            let path = PathBuf::from(&args[2]);
+        Command::Watch => {
+            let path = require_file_operand("--watch", &parsed.positionals)?;
             watch_file(&path)?;
             Ok(())
         }
-        "--project" => {
-            if args.len() < 4 {
+        Command::Project => {
+            if parsed.positionals.len() != 2 {
                 eprintln!("Error: --project requires an output directory and a .poly file");
                 eprintln!("Usage: poly --project <dir> <file.poly>");
                 process::exit(1);
             }
 
-            let output_dir = PathBuf::from(&args[2]);
-            let source_path = PathBuf::from(&args[3]);
+            let output_dir = PathBuf::from(&parsed.positionals[0]);
+            let source_path = PathBuf::from(&parsed.positionals[1]);
             match target {
                 Target::Rust => {
                     generate_cargo_project(&source_path, &output_dir)?;
@@ -493,12 +573,8 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        "--diff" => {
-            if args.len() < 3 {
-                eprintln!("Error: --diff requires a file argument");
-                process::exit(1);
-            }
-            let path = PathBuf::from(&args[2]);
+        Command::Diff => {
+            let path = require_file_operand("--diff", &parsed.positionals)?;
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
@@ -521,12 +597,8 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        "--format" => {
-            if args.len() < 3 {
-                eprintln!("Error: --format requires a file argument");
-                process::exit(1);
-            }
-            let path = PathBuf::from(&args[2]);
+        Command::Format => {
+            let path = require_file_operand("--format", &parsed.positionals)?;
             let source = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
@@ -545,11 +617,22 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        "--repl" => {
+        Command::Repl => {
             repl::run();
             Ok(())
         }
-        file if file.ends_with(".poly") => {
+        Command::DefaultBuild => {
+            if parsed.positionals.len() != 1 {
+                eprintln!("Usage: poly [options] <file.poly>");
+                eprintln!("Run 'poly --help' for the full option list.");
+                process::exit(1);
+            }
+            let file = &parsed.positionals[0];
+            if !file.ends_with(".poly") {
+                eprintln!("Error: Unknown option '{}'", file);
+                eprintln!("Run 'poly --help' for usage information.");
+                process::exit(1);
+            }
             let path = PathBuf::from(file);
             match target {
                 Target::Rust => {
@@ -602,7 +685,8 @@ fn main() -> Result<()> {
                     // The JS artifact needs no compile step: writing the file
                     // and syntax-checking it with `node --check` (best effort,
                     // matching the C target's missing-compiler fallback) is
-                    // the whole build. Running is `node <file>`.
+                    // the whole build. The file is then run with Node, as the
+                    // README documents for `--target js`.
                     let output_path = custom_output
                         .clone()
                         .unwrap_or_else(|| path.with_extension("js"));
@@ -618,14 +702,21 @@ fn main() -> Result<()> {
                         Err(error) => eprintln!("Warning: JS syntax check unavailable: {error}"),
                     }
                     println!("Generated {} -> {}", path.display(), output_path.display());
+                    // Execute the generated artifact, streaming the program's
+                    // output. A missing Node degrades to a warning (mirroring
+                    // the other targets' missing-compiler fallbacks); a
+                    // failing program propagates its exit status.
+                    let node = std::env::var("POLY_NODE").unwrap_or_else(|_| "node".to_string());
+                    match std::process::Command::new(&node).arg(&output_path).status() {
+                        Ok(status) if status.success() => {}
+                        Ok(status) => process::exit(status.code().unwrap_or(1)),
+                        Err(error) => eprintln!(
+                            "Warning: could not run {node} (set POLY_NODE to override): {error}"
+                        ),
+                    }
                 }
             }
             Ok(())
-        }
-        other => {
-            eprintln!("Error: Unknown option '{}'", other);
-            eprintln!("Run 'poly --help' for usage information.");
-            process::exit(1);
         }
     }
 }
@@ -1569,6 +1660,81 @@ mod tests {
         assert_eq!(Target::from_str("c").unwrap(), Target::C);
         assert!(Target::from_str("cpp").is_err());
         assert_eq!(Target::C.extension(), "c");
+    }
+
+    #[test]
+    fn parse_args_accepts_flags_in_any_position() {
+        let raw =
+            |items: &[&str]| -> Vec<String> { items.iter().map(|item| item.to_string()).collect() };
+
+        let parsed = parse_args(&raw(&["poly", "file.poly", "--emit-rust"])).unwrap();
+        assert_eq!(parsed.command, Command::Emit);
+        assert_eq!(parsed.target, Target::Rust);
+        assert_eq!(parsed.positionals, vec!["file.poly".to_string()]);
+
+        let parsed = parse_args(&raw(&["poly", "--emit-rust", "file.poly"])).unwrap();
+        assert_eq!(parsed.command, Command::Emit);
+
+        let parsed = parse_args(&raw(&[
+            "poly",
+            "--target",
+            "js",
+            "file.poly",
+            "--check",
+            "--strict",
+        ]))
+        .unwrap();
+        assert_eq!(parsed.command, Command::Check);
+        assert_eq!(parsed.target, Target::Js);
+        assert!(parsed.strict);
+
+        let parsed = parse_args(&raw(&["poly", "out", "--project", "file.poly"])).unwrap();
+        assert_eq!(parsed.command, Command::Project);
+        assert_eq!(
+            parsed.positionals,
+            vec!["out".to_string(), "file.poly".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_args_defaults_to_build_for_poly_file() {
+        let raw = vec!["poly".to_string(), "file.poly".to_string()];
+        let parsed = parse_args(&raw).unwrap();
+        assert_eq!(parsed.command, Command::DefaultBuild);
+    }
+
+    #[test]
+    fn parse_args_emit_flag_pins_target() {
+        let raw = vec![
+            "poly".to_string(),
+            "--emit-js".to_string(),
+            "file.poly".to_string(),
+        ];
+        let parsed = parse_args(&raw).unwrap();
+        assert_eq!(parsed.command, Command::Emit);
+        assert_eq!(parsed.target, Target::Js);
+    }
+
+    #[test]
+    fn parse_args_rejects_conflicting_target_and_emit() {
+        let raw = vec![
+            "poly".to_string(),
+            "--target".to_string(),
+            "c".to_string(),
+            "--emit-rust".to_string(),
+            "file.poly".to_string(),
+        ];
+        assert!(parse_args(&raw).is_err());
+    }
+
+    #[test]
+    fn parse_args_rejects_unknown_flags_in_any_position() {
+        let raw = vec![
+            "poly".to_string(),
+            "file.poly".to_string(),
+            "--frobnicate".to_string(),
+        ];
+        assert!(parse_args(&raw).is_err());
     }
 
     #[test]

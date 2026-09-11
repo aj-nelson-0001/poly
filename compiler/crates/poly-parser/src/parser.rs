@@ -59,22 +59,6 @@ impl<'a> Parser<'a> {
                     ));
                     i += 2;
                 }
-                // `set x to y` → suggest `x := y`
-                TokenKind::Identifier(name) if name == "set" && i + 3 < self.tokens.len() => {
-                    if let TokenKind::Identifier(_) = &self.tokens[i + 1].kind {
-                        if matches!(&self.tokens[i + 2].kind, TokenKind::Identifier(t) if t == "to")
-                        {
-                            let span =
-                                Span::new(self.tokens[i].span.start, self.tokens[i].span.end);
-                            self.errors.push(ParseError::with_suggestion(
-                                "`set x to y` syntax has been removed".to_string(),
-                                span,
-                                "Use `x := y` instead of `set x to y`".to_string(),
-                            ));
-                        }
-                    }
-                    i += 1;
-                }
                 // `put ... > "file"` → suggest `to "file"`
                 TokenKind::Put => {
                     // Scan ahead for `> "..."` or `>> "..."` (but NOT `to>>` or `from>>`)
@@ -457,10 +441,16 @@ impl<'a> Parser<'a> {
                 Ok(Statement::ForeignBlock { language, content })
             }
             _ => {
+                if let Some(error) = self.detect_retired_statement() {
+                    return Err(error);
+                }
                 if self.starts_assignment_statement() {
                     return self.parse_assignment_statement();
                 }
                 let expr = self.parse_expression()?;
+                // Statement-position macro invocation: `name(args)` expands
+                // the whole macro body into a block. Macro calls in value
+                // position are expanded by `parse_postfix`.
                 if let Expression::Call { func, args } = &expr {
                     if let Expression::Identifier(name) = func.as_ref() {
                         if let Some(declaration) = self.macros.get(name).cloned() {
@@ -471,6 +461,131 @@ impl<'a> Parser<'a> {
                 Ok(Statement::ExpressionStatement(expr))
             }
         }
+    }
+
+    /// Reject retired assembly-style mutation statements with a migration
+    /// hint, mirroring the `==`/`&`/`^` operator rejections.
+    fn detect_retired_statement(&mut self) -> Option<ParseError> {
+        let (name, span) = self.statement_starts_retired()?;
+        let (message, suggestion) = match name {
+            "set" => (
+                "`set x to y` syntax has been removed",
+                "Use `x := y` instead of `set x to y`",
+            ),
+            "add" => (
+                "`add x n` syntax has been removed",
+                "Use `x := x + n` instead of `add x n`",
+            ),
+            "sub" => (
+                "`sub x n` syntax has been removed",
+                "Use `x := x - n` instead of `sub x n`",
+            ),
+            "inc" => (
+                "`inc x` syntax has been removed",
+                "Use `x := x + 1` instead of `inc x`",
+            ),
+            _ => (
+                "`dec x` syntax has been removed",
+                "Use `x := x - 1` instead of `dec x`",
+            ),
+        };
+        Some(ParseError::with_suggestion(
+            message.to_string(),
+            span,
+            suggestion.to_string(),
+        ))
+    }
+
+    /// If the current statement begins with a retired mutation statement
+    /// (`set x to y`, `add x n`, `sub x n`, `inc x`, `dec x`), return its name
+    /// and span. Assignments to variables that happen to be named `add`
+    /// (`add := 5`) and calls like `inc(counter)` are still valid, so the
+    /// retired shape — a bare name followed by another identifier — is
+    /// required before flagging anything.
+    fn statement_starts_retired(&self) -> Option<(&'static str, Span)> {
+        let span = self.current().span;
+        // Map the borrowed lexeme back to a `'static` literal so the match
+        // borrow of `self` ends here and only literals escape this function.
+        let name = match &self.tokens[self.pos].kind {
+            TokenKind::Identifier(name)
+                if matches!(name.as_str(), "set" | "add" | "sub" | "inc" | "dec") =>
+            {
+                match name.as_str() {
+                    "set" => "set",
+                    "add" => "add",
+                    "sub" => "sub",
+                    "inc" => "inc",
+                    _ => "dec",
+                }
+            }
+            _ => return None,
+        };
+        // The retired forms all continue with the mutated variable's name.
+        if !matches!(
+            self.tokens.get(self.pos + 1).map(|token| &token.kind),
+            Some(TokenKind::Identifier(_))
+        ) {
+            return None;
+        }
+        // `set` is only retired in the `set x to y` shape.
+        if name == "set"
+            && !matches!(
+                self.tokens.get(self.pos + 2).map(|token| &token.kind),
+                Some(TokenKind::To)
+            )
+        {
+            return None;
+        }
+        Some((name, span))
+    }
+
+    /// Build the migration diagnostic for the retired compound assignments
+    /// (`+=`, `-=`), which the lexer emits as two separate tokens.
+    fn compound_assignment_error(&self, op: &str, arithmetic: &str) -> ParseError {
+        ParseError::with_suggestion(
+            format!("`x {op} value` compound assignment is retired syntax"),
+            self.current().span,
+            format!("Use `x := x {arithmetic} value` instead"),
+        )
+    }
+
+    /// Expand a macro invocation in value position. Returns `Some(expr)` for
+    /// single-statement bodies that are one expression or `return expr`;
+    /// `Ok(None)` means the body produces no value, in which case the caller
+    /// keeps a plain `Expression::Call` so the statement-level expansion can
+    /// still handle it. Arity mismatches are hard errors in both positions.
+    fn expand_macro_expression(
+        &self,
+        declaration: &MacroDecl,
+        args: &[Expression],
+    ) -> Result<Option<Expression>, ParseError> {
+        if declaration.params.len() != args.len() {
+            return Err(ParseError::new(
+                format!(
+                    "macro `{}` expects {} arguments, got {}",
+                    declaration.name,
+                    declaration.params.len(),
+                    args.len()
+                ),
+                self.current().span,
+            ));
+        }
+        let mut substitutions = HashMap::new();
+        for (param, arg) in declaration.params.iter().zip(args.iter()) {
+            substitutions.insert(param.clone(), arg.clone());
+        }
+        if declaration.body.len() == 1 {
+            match &declaration.body[0].node {
+                Statement::ReturnStatement(Some(value)) => {
+                    return Ok(Some(substitute_expression(value, &substitutions)));
+                }
+                Statement::ExpressionStatement(expr) => {
+                    return Ok(Some(substitute_expression(expr, &substitutions)));
+                }
+                _ => {}
+            }
+        }
+        Ok(None) // not value-producing; caller keeps a plain call node
     }
 
     /// Parse the strict variable declaration syntax:
@@ -1725,6 +1840,11 @@ impl<'a> Parser<'a> {
             match self.peek() {
                 TokenKind::Plus => {
                     self.advance();
+                    // The lexer emits `+=` as two tokens, so `+` followed by
+                    // `=` here is the retired compound assignment.
+                    if self.peek() == &TokenKind::Eq {
+                        return Err(self.compound_assignment_error("+=", "+"));
+                    }
                     let right = self.parse_mul_div()?;
                     left = Expression::BinaryOp {
                         op: BinaryOp::Add,
@@ -1744,6 +1864,11 @@ impl<'a> Parser<'a> {
                         break;
                     }
                     self.advance();
+                    // `-=` lexes as `-` followed by `=`; the `--`-flag guard
+                    // above has already broken out for that case.
+                    if self.peek() == &TokenKind::Eq {
+                        return Err(self.compound_assignment_error("-=", "-"));
+                    }
                     let right = self.parse_mul_div()?;
                     left = Expression::BinaryOp {
                         op: BinaryOp::Sub,
@@ -2168,6 +2293,31 @@ impl<'a> Parser<'a> {
                             method: field,
                             args,
                         };
+                    } else if let Expression::Identifier(name) = &expr {
+                        if let Some(declaration) = self.macros.get(name).cloned() {
+                            // Value-position macro invocation: a macro whose
+                            // body is a single expression or `return expr`
+                            // lowers to that expression. Other bodies stay a
+                            // plain call so statement-position expansion can
+                            // still handle them.
+                            if let Some(expanded) =
+                                self.expand_macro_expression(&declaration, &args)?
+                            {
+                                expr = expanded;
+                            } else {
+                                let func = expr.clone();
+                                expr = Expression::Call {
+                                    func: Box::new(func),
+                                    args,
+                                };
+                            }
+                        } else {
+                            let func = expr.clone();
+                            expr = Expression::Call {
+                                func: Box::new(func),
+                                args,
+                            };
+                        }
                     } else {
                         expr = Expression::Call {
                             func: Box::new(expr),
@@ -4769,6 +4919,135 @@ end fn"#;
                 }
             }
             other => panic!("expected outer TupleIndex, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn retired_set_statement_carries_migration_suggestion() {
+        let error = parse_source("set x to 2").unwrap_err();
+        assert!(error.message.contains("removed"), "got: {}", error.message);
+        assert_eq!(
+            error.suggestion.as_deref(),
+            Some("Use `x := y` instead of `set x to y`")
+        );
+    }
+    #[test]
+    fn retired_add_statement_carries_migration_suggestion() {
+        let error = parse_source("add x, 5").unwrap_err();
+        assert!(error.message.contains("removed"), "got: {}", error.message);
+        assert_eq!(
+            error.suggestion.as_deref(),
+            Some("Use `x := x + n` instead of `add x n`")
+        );
+    }
+
+    #[test]
+    fn retired_inc_and_dec_statements_carry_migration_suggestions() {
+        for (source, expected) in [
+            ("inc x", "Use `x := x + 1` instead of `inc x`"),
+            ("dec x", "Use `x := x - 1` instead of `dec x`"),
+        ] {
+            let error = parse_source(source).unwrap_err();
+            assert!(error.message.contains("removed"), "got: {}", error.message);
+            assert_eq!(error.suggestion.as_deref(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn compound_assignments_are_rejected_with_migration_suggestions() {
+        let plus = parse_source("var x i32 := 1\nx += 2").unwrap_err();
+        assert!(
+            plus.message.contains("compound assignment is retired"),
+            "got: {}",
+            plus.message
+        );
+        assert_eq!(
+            plus.suggestion.as_deref(),
+            Some("Use `x := x + value` instead")
+        );
+
+        let minus = parse_source("var x i32 := 1\nx -= 2").unwrap_err();
+        assert_eq!(
+            minus.suggestion.as_deref(),
+            Some("Use `x := x - value` instead")
+        );
+    }
+
+    #[test]
+    fn assignments_to_variables_named_like_retired_forms_are_accepted() {
+        // `add := 5` assigns a variable named `add`; `inc(counter)` is a call.
+        // Neither has the retired statement shape, so neither is flagged.
+        let prog = parse_source("var add i32 := 0\nadd := 5\nvar counter i32 := 0\nreset(counter)")
+            .unwrap();
+        assert_eq!(prog.statements.len(), 4);
+    }
+
+    #[test]
+    fn macros_expand_in_value_position() {
+        let prog = parse_source(
+            "macro double(x)\n    return x * 2\nend macro\n\
+             fn main()\n    var y i32 := double(21)\n    put y\nend fn",
+        )
+        .unwrap();
+        // The macro declaration is consumed; only main remains.
+        assert_eq!(prog.statements.len(), 1);
+        let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
+            panic!("expected function declaration");
+        };
+        let body = function.body.as_ref().expect("main has a body");
+        let Statement::VarDeclaration {
+            value: Some(value), ..
+        } = &body[0].node
+        else {
+            panic!("expected var declaration inside main");
+        };
+        match value {
+            Expression::BinaryOp {
+                op: BinaryOp::Mul,
+                left,
+                right,
+            } => {
+                // The parameter `x` is substituted with the argument `21`.
+                assert!(matches!(&**left, Expression::IntLiteral(v) if v == "21"));
+                assert!(matches!(&**right, Expression::IntLiteral(v) if v == "2"));
+            }
+            other => panic!("expected substituted macro body, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn macros_in_value_position_keep_arity_errors() {
+        let error = parse_source(
+            "macro double(x)\n    return x * 2\nend macro\n\
+             var y i32 := double(1, 2)",
+        )
+        .unwrap_err();
+        assert!(
+            error.message.contains("expects 1 arguments, got 2"),
+            "got: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn statement_position_macros_still_expand_multi_statement_bodies() {
+        // Regression guard: the value-position hook in `parse_postfix` must
+        // leave non-value macro calls untouched so the statement-level path
+        // expands the full body.
+        let prog = parse_source(
+            "macro showit(x)\n    put x\nend macro\n\
+             fn main()\n    showit(42)\nend fn",
+        )
+        .unwrap();
+        let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
+            panic!("expected function declaration");
+        };
+        let body = function.body.as_ref().expect("main has a body");
+        match &body[0].node {
+            Statement::Block(statements) => {
+                assert!(matches!(statements[0].node, Statement::PutStatement { .. }));
+            }
+            other => panic!("expected expanded macro block, got {other:?}"),
         }
     }
 }

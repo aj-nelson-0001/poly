@@ -361,6 +361,12 @@ pointing at the explicit form:
 | `dec x` | `x := x - 1` |
 | `x += n` | `x := x + n` |
 | `x -= n` | `x := x - n` |
+| `a ^ b` | `a xor b` (symbol spelling retired) |
+
+Poly has **no exponentiation operator**. `^` is *not* power — it is the
+retired spelling of bitwise xor and the parser rejects it. For exponentiation,
+compute it in a `#rust` helper (e.g. `i32::pow`) or with repeated
+multiplication in a loop.
 
 ### Bitwise
 
@@ -368,7 +374,7 @@ pointing at the explicit form:
 |------|------|
 | `a bitand b` | `a & b` |
 | `a bitor b` | `a \| b` |
-| `a xor b` | `a ^ b` |
+| `a xor b` | `a ^ b` (write `xor` in Poly; a literal `^` is rejected) |
 | `bitnot a` | `!a` |
 | `a shift left n` (or `a << n`) | `a << n` |
 | `a shift right n` (or `a >> n`) | `a >> n` |

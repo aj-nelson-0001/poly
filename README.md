@@ -98,7 +98,10 @@ The v1.x notes below describe prior releases and are retained for migration cont
 ✂️ **Syntax simplification.** `loop i 0..10` (colon removed), `x := x + 5`
 replaces `add x`/`inc x`, `x := y` replaces `set x to y`, file I/O uses
 `put expr to "file"` / `put expr to "file" -append` and `get from "file"`,
-and compound mutation operators (`+=`, `-=`, …) are removed. The compiler
+and compound mutation operators (`+=`, `-=`, …) are removed. Symbol operator
+spellings (`^`, `&`, `|`, `!`, `%`, `==`) are retired too — bitwise exclusive
+or is spelled `xor`, and there is no power operator (`^` does **not** mean
+exponentiation; use a `#rust` helper for that). The compiler
 suggests the new syntax when old forms are detected.
 
 ## What's New in v1.7.6
@@ -486,7 +489,7 @@ cd prime_numbers
 cargo run
 ~~~
 
-Use `poly --emit-rust file.poly` when you want the generated Rust on stdout. Async Poly programs automatically receive the Tokio dependency in their generated Cargo project.
+Use `poly --emit-rust file.poly` when you want the generated Rust on stdout. Flags may appear in any order: `poly file.poly --emit-rust` is accepted too. Async Poly programs automatically receive the Tokio dependency in their generated Cargo project.
 
 ### CLI Options
 

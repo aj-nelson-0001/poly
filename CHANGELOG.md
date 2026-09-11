@@ -35,6 +35,34 @@ All notable changes to the Poly language compiler will be documented in this fil
   fixing a pre-existing failure where `git` CRLF conversion broke byte-for-byte
   snapshot comparison on `windows-latest`.
 
+### Fixed
+
+- **CLI flags are now accepted in any position.** `poly file.poly --emit-rust`,
+  `poly file.poly --check`, and every other flag previously worked only when
+  the flag preceded the file (`poly --emit-rust file.poly`); a file-first
+  invocation silently fell through to a default build. Arguments are now
+  pre-parsed into flags plus positionals, so documented invocations work in
+  any order, unknown flags are rejected in every position, and `--project`
+  accepts its two operands either way around.
+- **`--target js` now runs the generated program with Node** when a default
+  build produces a `.js` file, matching the documented CLI behavior (the
+  Rust target mirrors this by building the generated project). When Node is
+  unavailable the emitted file is still verified with `node --check` and the
+  build succeeds.
+- **Retired-syntax diagnostics restored.** The `set x to y` detector matched
+  an `Identifier("to")` token, but `to` lexes as a keyword, so the migration
+  hint never fired. `set x to y`, `add x n`, `sub x n`, `inc x`, and `dec x`
+  now all produce named errors with targeted suggestions, and `x += value` /
+  `x -= value` (lexed as two tokens) get the same treatment. Assignments to
+  variables that happen to be named `add` (`add := 5`) and calls like
+  `inc(counter)` are still accepted.
+- **Macros now expand in value position.** `var y := double(21)` previously
+  failed with `unknown function` because expansion only ran for
+  statement-position calls. A macro whose body is a single expression or
+  `return expr` lowers to that expression; multi-statement macros still
+  expand only at statement position, with a clear arity error in both
+  positions.
+
 ### Documentation
 
 - New `POLY_JS_BLOCKS.md` documents the JS target contract, supported surface,

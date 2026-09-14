@@ -1,0 +1,6 @@
+# Poly Example: Hello World
+# The simplest possible Poly program.
+
+fn main()
+    put "Hello, World!"
+end fn

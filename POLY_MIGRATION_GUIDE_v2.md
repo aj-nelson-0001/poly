@@ -6,7 +6,7 @@ Poly 2.0 preview keeps the compact orchestration syntax and adds explicit target
 
 Use the target flag when a source file contains definitions for more than one backend:
 
-~~~poly
+~~~poly fragment
 #rust
 fn double_value(x: i32) -> i32 { x * 2 }
 #endrust
@@ -15,8 +15,10 @@ fn double_value(x: i32) -> i32 { x * 2 }
 int double_value(int x) { return x * 2; }
 #endc
 
-var result i32 := double_value(21)
-put result
+fn main()
+    var result i32 := double_value(21)
+    put result
+end fn
 ~~~
 
 ~~~bash

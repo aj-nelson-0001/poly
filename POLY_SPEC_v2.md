@@ -41,9 +41,11 @@ async fn run_server(port: u32) {
 #endrust
 
 # Poly: orchestrates the calls
-var port i32 := 8080
-put "Server starting on port " + port
-run_server(port as u32)
+fn main()
+    var port i32 := 8080
+    put "Server starting on port " + port
+    run_server(port as u32)
+end fn
 ~~~
 
 The same model covers `--target c` with `#c` blocks and `extern c fn`
@@ -71,7 +73,7 @@ struct Config {
 **Rules for foreign blocks:**
 - Must appear at the top level (not inside Poly function bodies)
 - Content is emitted at module scope in the target language
-- Poly generates `fn main()` which calls into these definitions
+- The program declares `fn main() ... end fn`, which calls into these definitions
 - No executable statements — only declarations
 - Multiple blocks for the selected language are allowed; they are emitted in order.
 - `#rust` is selected by `--target rust`; `#c` is selected by `--target c`.
@@ -199,7 +201,7 @@ put expr to "file.txt" -append     # append
 
 ### Stderr
 
-~~~poly
+~~~poly fragment
 error "something went wrong"       # [ERROR] prefix
 warn "deprecated"                  # [WARN] prefix
 info "debug info"                  # [INFO] prefix
@@ -207,7 +209,7 @@ info "debug info"                  # [INFO] prefix
 
 ### String Interpolation
 
-~~~poly
+~~~poly fragment
 var name := "Alice"
 put "Hello, {name}!"
 ~~~
@@ -216,7 +218,7 @@ put "Hello, {name}!"
 
 ## 6. I/O: The `get` Command
 
-~~~poly
+~~~poly fragment
 var x := get                        # read from stdin
 var x ustring := get                # typed read
 var x := get from "file.txt"        # read from file
@@ -225,7 +227,7 @@ var x := get from "file.txt" --bytes 42  # read N bytes
 
 ### Flags
 
-~~~poly
+~~~poly fragment
 get --timeout 3000                  # timeout in ms
 get --default "fallback"            # default on empty
 get --mask "*"                      # hide input (passwords)
@@ -234,7 +236,7 @@ get --until ","                     # read until delimiter
 
 ### Input Conversion
 
-~~~poly
+~~~poly fragment
 var age i32 := get --as i32
 ~~~
 
@@ -268,7 +270,7 @@ end while
 
 ### Loop (Infinite)
 
-~~~poly
+~~~poly fragment
 loop
     # runs forever until break
 end loop
@@ -276,7 +278,7 @@ end loop
 
 ### Loop Ranges
 
-~~~poly
+~~~poly fragment
 loop i 0..10
     put i
 end loop

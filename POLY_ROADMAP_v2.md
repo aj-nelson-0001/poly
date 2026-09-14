@@ -51,17 +51,19 @@ source.poly
 
 ### Verified Working
 
-~~~poly
+~~~poly fragment
 #rust
 fn rust_function(x: i32) -> i32 {
     x * 2
 }
 #endrust
 
-var greeting ustring := unicode "Hello from Poly!"
-put greeting
-var result i32 := rust_function(21)
-put "Result: " + result
+fn main()
+    var greeting ustring := unicode "Hello from Poly!"
+    put greeting
+    var result i32 := rust_function(21)
+    put "Result: " + result
+end fn
 ~~~
 
 Transpiles to valid Rust: `#rust` block emits `rust_function` at module scope, Poly generates `fn main()` which calls it. Compiles and runs.
@@ -187,7 +189,7 @@ All 20+ `POLY_*_GUIDE.md` files. The language is simple enough that the spec + e
 
 ### Q: What about `fn main()`?
 
-**A:** Poly **always** generates `fn main()`. The `#rust` blocks provide declarations; Poly provides the entry point. Users cannot override `fn main()` — that would defeat the purpose.
+**A:** Poly requires an explicit `fn main() ... end fn` entry point; top-level executable statements are rejected at check time (as of the entry-point enforcement). The `#rust` blocks provide declarations; the declared Poly `fn main()` orchestrates them.
 
 ### Q: Can I have multiple `#rust` blocks?
 

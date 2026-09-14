@@ -134,7 +134,9 @@ See [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md) for the maintaine
 ### Hello, World!
 
 ~~~poly
-put "Hello, World!"
+fn main()
+    put "Hello, World!"
+end fn
 ~~~
 
 ### Poly + Foreign Definitions
@@ -163,17 +165,21 @@ put "Rust result: " + result
 ### Variables & Output
 
 ~~~poly
-var name ustring := unicode "Poly"
-var version i32 := 1
-put "Language: " + name + ", Version: " + version
+fn main()
+    var name ustring := unicode "Poly"
+    var version i32 := 1
+    put "Language: " + name + ", Version: " + version
+end fn
 ~~~
 
 ### Typed Input
 
 ~~~poly
-put "Enter your age: "
-var age i32 := get --as i32
-put "You are " + age + " years old."
+fn main()
+    put "Enter your age: "
+    var age i32 := get --as i32
+    put "You are " + age + " years old."
+end fn
 ~~~
 
 ### Error Handling
@@ -189,11 +195,13 @@ fn read_config(path: ustring): Result<ustring, FileError>
     return Ok(content)
 end fn
 
-match read_config(unicode "config.txt")
-    Ok(content), put "Config loaded: " + content
-    Error(NotFound), error "Config file not found"
-    Error(PermissionDenied), error "Permission denied"
-end match
+fn main()
+    match read_config(unicode "config.txt")
+        Ok(content), put "Config loaded: " + content
+        Error(NotFound), error "Config file not found"
+        Error(PermissionDenied), error "Permission denied"
+    end match
+end fn
 ~~~
 
 ### Loop Ranges (SuperBASIC-inspired)
@@ -202,20 +210,22 @@ The loop variable must be named explicitly after `loop`: `loop <var_name> <range
 Collection iteration uses `loop <var_name> in <collection>`. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`.
 
 ~~~poly
-# Simple range
-loop i 0..10
-    put i
-end loop
+fn main()
+    # Simple range
+    loop i 0..10
+        put i
+    end loop
 
-# Multiple ranges and specific values
-loop value 1..3, 7, 19..20
-    put value  # Iterates: 1, 2, 3, 7, 19, 20
-end loop
+    # Multiple ranges and specific values
+    loop value 1..3, 7, 19..20
+        put value  # Iterates: 1, 2, 3, 7, 19, 20
+    end loop
 
-# With step
-loop i 0..10 step 2
-    put i  # Iterates: 0, 2, 4, 6, 8, 10
-end loop
+    # With step
+    loop i 0..10 step 2
+        put i  # Iterates: 0, 2, 4, 6, 8, 10
+    end loop
+end fn
 ~~~
 
 ---
@@ -231,7 +241,7 @@ end loop
 | Asm block | `#asm ... #endasm` | Assembly definitions emitted at file scope (Linux x86-64) |
 | C++ block | `#cpp ... #endcpp` | Reserved; rejected until a backend exists |
 
-**Rule:** Foreign blocks are top-level target-language definitions and are opaque to Poly. Poly always generates `fn main()` for Rust or `int main(void)` for C. The native compiler validates foreign contents.
+**Rule:** Foreign blocks are top-level target-language definitions and are opaque to Poly. Poly programs declare their own `fn main() ... end fn`, which the backends emit as `fn main()` (Rust), `int main(void)` (C), `main:` (asm), or `function main()` (JS). The native compiler validates foreign contents.
 
 ### I/O System
 

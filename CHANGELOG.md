@@ -52,6 +52,22 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- **Explicit `fn main() ... end fn` is now required.** Poly programs must
+  declare their entry point; top-level executable statements (`var`, `put`,
+  loops, assignments, expressions) are rejected at check time with a named
+  error. Declaration statements (functions, structs, enums, traits, impls,
+  modules, consts, aliases, `use`, foreign blocks, `extern <target> fn`
+  declarations) remain top-level. The transpiler no longer synthesizes an
+  implicit `main` from leftover top-level statements; generated Rust, C, asm,
+  and JS output is unchanged for programs that already declared `fn main`.
+  Enforcement is shared (`poly-parser/src/entry_point.rs`) across the checker,
+  the unchecked transpile path, and the IR pipeline; the REPL wraps sessions
+  without an explicit `fn main` in a synthetic one so interactive use is
+  unchanged. All repository examples, fixtures, benches, doc examples, and
+  playground samples were migrated, and 19 codegen snapshots were regenerated.
+
 ### Added
 
 - **JavaScript target (`--target js`).** Poly now compiles the same

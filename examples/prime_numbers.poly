@@ -17,17 +17,19 @@ fn is_prime(n: i32): bool
 end fn
 
 # Main program
-put unicode "First 20 prime numbers:"
+fn main()
+    put unicode "First 20 prime numbers:"
 
-var count i32 := 0
-loop i 2..200
-    if is_prime(i),
-        put i
-        count := count + 1
-        if count >= 20,
-            break
+    var count i32 := 0
+    loop i 2..200
+        if is_prime(i),
+            put i
+            count := count + 1
+            if count >= 20,
+                break
+            end if
         end if
-    end if
-end loop
+    end loop
 
-put unicode "\nDone!"
+    put unicode "\nDone!"
+end fn

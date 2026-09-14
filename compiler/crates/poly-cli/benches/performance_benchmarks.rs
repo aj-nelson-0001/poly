@@ -137,7 +137,7 @@ fn bench_parser_large(c: &mut Criterion) {
 // =============================================================================
 
 fn bench_transpiler_simple(c: &mut Criterion) {
-    let source = "var x i32 := 42\nput x";
+    let source = "fn main()\n    var x i32 := 42\n    put x\nend fn";
 
     c.bench_function("transpiler_simple", |b| {
         b.iter(|| {
@@ -320,7 +320,7 @@ fn bench_memory_usage(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_usage");
 
     // Small program
-    let small = "var x i32 := 42";
+    let small = "fn main()\n    var x i32 := 42\nend fn";
     group.bench_function("small_program", |b| {
         b.iter(|| {
             let t = Transpiler::new();
@@ -345,10 +345,12 @@ fn factorial(n: i32): i32
     return n * factorial(n - 1)
 end fn
 
-var fib10 := fibonacci(10)
-var fact10 := factorial(10)
-put fib10
-put fact10
+fn main()
+    var fib10 := fibonacci(10)
+    var fact10 := factorial(10)
+    put fib10
+    put fact10
+end fn
 "#;
     group.bench_function("medium_program", |b| {
         b.iter(|| {
@@ -385,7 +387,7 @@ fn bench_throughput(c: &mut Criterion) {
     let mut group = c.benchmark_group("throughput");
 
     // Measure bytes per second
-    let small = "var x i32 := 42";
+    let small = "fn main()\n    var x i32 := 42\nend fn";
     group.throughput(criterion::Throughput::Bytes(small.len() as u64));
     group.bench_function("small_throughput", |b| {
         b.iter(|| {
@@ -395,7 +397,7 @@ fn bench_throughput(c: &mut Criterion) {
         })
     });
 
-    let medium = "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nvar x := add(1, 2)";
+    let medium = "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nfn main()\n    var x := add(1, 2)\nend fn";
     group.throughput(criterion::Throughput::Bytes(medium.len() as u64));
     group.bench_function("medium_throughput", |b| {
         b.iter(|| {

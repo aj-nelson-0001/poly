@@ -2700,7 +2700,13 @@ impl Default for TypeChecker {
 }
 
 /// Check a parsed program using the default semantic rules.
+///
+/// Also enforces the language's entry-point rule: a program must declare
+/// `fn main() ... end fn` (top-level executable statements are rejected).
 pub fn check_program(program: &Program) -> Result<(), Vec<TypeCheckError>> {
+    if let Err(entry_point_error) = poly_parser::require_explicit_main(program) {
+        return Err(vec![TypeCheckError::new(entry_point_error)]);
+    }
     TypeChecker::check(program)
 }
 
@@ -2708,6 +2714,12 @@ pub fn check_program(program: &Program) -> Result<(), Vec<TypeCheckError>> {
 pub fn check_program_with_warnings(
     program: &Program,
 ) -> (Result<(), Vec<TypeCheckError>>, Vec<String>) {
+    if let Err(entry_point_error) = poly_parser::require_explicit_main(program) {
+        return (
+            Err(vec![TypeCheckError::new(entry_point_error)]),
+            Vec::new(),
+        );
+    }
     TypeChecker::check_with_warnings(program)
 }
 
@@ -2716,6 +2728,12 @@ pub fn check_program_with_warnings(
 pub fn check_program_strict_foreign_with_warnings(
     program: &Program,
 ) -> (Result<(), Vec<TypeCheckError>>, Vec<String>) {
+    if let Err(entry_point_error) = poly_parser::require_explicit_main(program) {
+        return (
+            Err(vec![TypeCheckError::new(entry_point_error)]),
+            Vec::new(),
+        );
+    }
     TypeChecker::check_with_warnings_strict_foreign(program)
 }
 

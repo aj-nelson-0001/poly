@@ -1,144 +1,146 @@
 # Poly Input Tests
 # Tests for the `get` command with new syntax.
 
-# ============================================================
-# Test 1: Basic Input
-# ============================================================
-put "\n=== Test 1: Basic Input ==="
-put "Enter your name: "
-var name_input ustring := get
-put "Hello, " + name_input + "!"
+fn main()
+    # ============================================================
+    # Test 1: Basic Input
+    # ============================================================
+    put "\n=== Test 1: Basic Input ==="
+    put "Enter your name: "
+    var name_input ustring := get
+    put "Hello, " + name_input + "!"
 
-# ============================================================
-# Test 2: Typed Input
-# ============================================================
-put "\n=== Test 2: Typed Input ==="
-put "Enter your age: "
-var age i32 := get
-put "In 10 years you will be: " + (age + 10)
+    # ============================================================
+    # Test 2: Typed Input
+    # ============================================================
+    put "\n=== Test 2: Typed Input ==="
+    put "Enter your age: "
+    var age i32 := get
+    put "In 10 years you will be: " + (age + 10)
 
-# ============================================================
-# Test 3: Input with Default Value (--default flag)
-# ============================================================
-put "\n=== Test 3: Input with Default Value ==="
-put "Enter color (or press Enter for default): "
-var color ustring := get --default unicode "blue"
-put "Color: " + color
+    # ============================================================
+    # Test 3: Input with Default Value (--default flag)
+    # ============================================================
+    put "\n=== Test 3: Input with Default Value ==="
+    put "Enter color (or press Enter for default): "
+    var color ustring := get --default unicode "blue"
+    put "Color: " + color
 
-# ============================================================
-# Test 4: Input with Mask (--mask flag)
-# ============================================================
-put "\n=== Test 4: Input with Mask ==="
-put "Enter password (masked): "
-var password ustring := get --mask unicode "*"
-put "Password length: " + password.len()
+    # ============================================================
+    # Test 4: Input with Mask (--mask flag)
+    # ============================================================
+    put "\n=== Test 4: Input with Mask ==="
+    put "Enter password (masked): "
+    var password ustring := get --mask unicode "*"
+    put "Password length: " + password.len()
 
-# ============================================================
-# Test 5: Input with Timeout (--timeout flag)
-# ============================================================
-put "\n=== Test 5: Input with Timeout ==="
-put "Quick! Type something within 3 seconds: "
-match get --timeout 3000
-    Ok(input), put "You typed: " + input
-    Timeout, warn "Too slow!"
-    Error(e), error "Error: " + e
-end match
+    # ============================================================
+    # Test 5: Input with Timeout (--timeout flag)
+    # ============================================================
+    put "\n=== Test 5: Input with Timeout ==="
+    put "Quick! Type something within 3 seconds: "
+    match get --timeout 3000
+        Ok(input), put "You typed: " + input
+        Timeout, warn "Too slow!"
+        Error(e), error "Error: " + e
+    end match
 
-# ============================================================
-# Test 6: Input with Validation
-# ============================================================
-put "\n=== Test 6: Input with Validation ==="
-put "Enter a number between 1 and 100: "
-var validated i32 := get with validate |x| x >= 1 and x <= 100
-put "You entered: " + validated
+    # ============================================================
+    # Test 6: Input with Validation
+    # ============================================================
+    put "\n=== Test 6: Input with Validation ==="
+    put "Enter a number between 1 and 100: "
+    var validated i32 := get with validate |x| x >= 1 and x <= 100
+    put "You entered: " + validated
 
-# ============================================================
-# Test 7: Input with Delimiter (--until flag)
-# ============================================================
-put "\n=== Test 7: Input with Delimiter ==="
-put "Enter CSV line (comma-separated): "
-var csv_line ustring := get --until unicode ","
-put "First field: " + csv_line
+    # ============================================================
+    # Test 7: Input with Delimiter (--until flag)
+    # ============================================================
+    put "\n=== Test 7: Input with Delimiter ==="
+    put "Enter CSV line (comma-separated): "
+    var csv_line ustring := get --until unicode ","
+    put "First field: " + csv_line
 
-# ============================================================
-# Test 8: Type Conversion (--as flag)
-# ============================================================
-put "\n=== Test 8: Type Conversion ==="
-put "Enter a number: "
-var num i32 := get --as i32
-put "You entered: " + num.to_string()
-put "Doubled: " + (num * 2).to_string()
-
-# ============================================================
-# Test 9: File Input
-# ============================================================
-put "\n=== Test 9: File Input ==="
-put "Reading from test_output.txt..."
-var file_content ustring := get from "test_output.txt"
-put "File content:\n" + file_content
-
-# ============================================================
-# Test 10: Binary File Input
-# ============================================================
-put "\n=== Test 10: Binary File Input ==="
-put "Reading binary from test_output.txt..."
-var binary_data bytes := get from "test_output.txt"
-put "Binary size: " + binary_data.len() + " bytes"
-
-# ============================================================
-# Test 11: Input with Bytes Flag (--bytes flag)
-# ============================================================
-put "\n=== Test 11: Input with Bytes Flag ==="
-put "Creating test file..."
-put "Hello, World!" to "test_bytes.txt"
-put "Reading first 5 bytes..."
-var first_five bytes := get from "test_bytes.txt" --bytes 5
-put "First 5 bytes: " + first_five.len() + " bytes"
-
-# ============================================================
-# Test 12: Completion
-# ============================================================
-put "\n=== Test 12: Completion ==="
-put "Choose a command (start/stop/pause): "
-var command ustring := get with complete [unicode "start", unicode "stop", unicode "pause"]
-put "You chose: " + command
-
-# ============================================================
-# Test 13: Structured Input
-# ============================================================
-put "\n=== Test 13: Structured Input ==="
-put "Enter person as 'name,age' (e.g., Alice,30): "
-var input ustring := get
-var parts := input.split(unicode ",")
-put "Name: " + parts[0] + ", Age: " + parts[1]
-
-# ============================================================
-# Test 14: Input Loop
-# ============================================================
-put "\n=== Test 14: Input Loop ==="
-put "Enter numbers (type 'quit' to exit):"
-var inputs Vec<ustring> := []
-loop
-    var input ustring := get
-    if input = unicode "quit",
-        break
-    end if
-    put "Stored: " + input
-    inputs.push(input)
-end loop
-put "You entered " + inputs.len() + " numbers."
-
-# ============================================================
-# Test 15: Error Recovery
-# ============================================================
-put "\n=== Test 15: Error Recovery ==="
-loop
-    put "Enter a positive number: "
+    # ============================================================
+    # Test 8: Type Conversion (--as flag)
+    # ============================================================
+    put "\n=== Test 8: Type Conversion ==="
+    put "Enter a number: "
     var num i32 := get --as i32
-    if num > 0,
-        put "You entered: " + num.to_string()
-        break
-    else
-        warn "Please enter a positive number"
-    end if
-end loop
+    put "You entered: " + num.to_string()
+    put "Doubled: " + (num * 2).to_string()
+
+    # ============================================================
+    # Test 9: File Input
+    # ============================================================
+    put "\n=== Test 9: File Input ==="
+    put "Reading from test_output.txt..."
+    var file_content ustring := get from "test_output.txt"
+    put "File content:\n" + file_content
+
+    # ============================================================
+    # Test 10: Binary File Input
+    # ============================================================
+    put "\n=== Test 10: Binary File Input ==="
+    put "Reading binary from test_output.txt..."
+    var binary_data bytes := get from "test_output.txt"
+    put "Binary size: " + binary_data.len() + " bytes"
+
+    # ============================================================
+    # Test 11: Input with Bytes Flag (--bytes flag)
+    # ============================================================
+    put "\n=== Test 11: Input with Bytes Flag ==="
+    put "Creating test file..."
+    put "Hello, World!" to "test_bytes.txt"
+    put "Reading first 5 bytes..."
+    var first_five bytes := get from "test_bytes.txt" --bytes 5
+    put "First 5 bytes: " + first_five.len() + " bytes"
+
+    # ============================================================
+    # Test 12: Completion
+    # ============================================================
+    put "\n=== Test 12: Completion ==="
+    put "Choose a command (start/stop/pause): "
+    var command ustring := get with complete [unicode "start", unicode "stop", unicode "pause"]
+    put "You chose: " + command
+
+    # ============================================================
+    # Test 13: Structured Input
+    # ============================================================
+    put "\n=== Test 13: Structured Input ==="
+    put "Enter person as 'name,age' (e.g., Alice,30): "
+    var input ustring := get
+    var parts := input.split(unicode ",")
+    put "Name: " + parts[0] + ", Age: " + parts[1]
+
+    # ============================================================
+    # Test 14: Input Loop
+    # ============================================================
+    put "\n=== Test 14: Input Loop ==="
+    put "Enter numbers (type 'quit' to exit):"
+    var inputs Vec<ustring> := []
+    loop
+        var input ustring := get
+        if input = unicode "quit",
+            break
+        end if
+        put "Stored: " + input
+        inputs.push(input)
+    end loop
+    put "You entered " + inputs.len() + " numbers."
+
+    # ============================================================
+    # Test 15: Error Recovery
+    # ============================================================
+    put "\n=== Test 15: Error Recovery ==="
+    loop
+        put "Enter a positive number: "
+        var num i32 := get --as i32
+        if num > 0,
+            put "You entered: " + num.to_string()
+            break
+        else
+            warn "Please enter a positive number"
+        end if
+    end loop
+end fn

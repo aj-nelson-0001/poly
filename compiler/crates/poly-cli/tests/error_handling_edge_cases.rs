@@ -488,9 +488,11 @@ end fn
 #[test]
 fn test_transpiler_complex_expressions() {
     let source = r#"
-var x := (1 + 2) * (3 + 4) / (5 - 6)
-var y := if x > 0, x else -x
-var z := [1, 2, 3, 4, 5]
+fn main()
+    var x := (1 + 2) * (3 + 4) / (5 - 6)
+    var y := if x > 0, x else -x
+    var z := [1, 2, 3, 4, 5]
+end fn
 "#;
     let t = Transpiler::new();
     let result = t.transpile(source);
@@ -630,16 +632,29 @@ fn test_transpiler_handles_parser_errors() {
 
 #[test]
 fn test_large_program_transpilation() {
-    let mut source = String::new();
+    let mut source = String::from("fn main()\n");
     for i in 0..100 {
-        source.push_str(&format!("var x_{} i32 := {}\n", i, i));
+        source.push_str(&format!("    var x_{} i32 := {}\n", i, i));
     }
+    source.push_str("end fn\n");
 
     let t = Transpiler::new();
     let result = t.transpile(&source);
     assert!(
         result.is_ok(),
         "Large program should transpile successfully"
+    );
+}
+
+#[test]
+fn test_missing_main_entry_point_is_rejected() {
+    let t = Transpiler::new();
+    let result = t.transpile("put \"hello\"");
+    assert!(result.is_err(), "Top-level statements must be rejected");
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("fn main"),
+        "Error should point at the missing entry point, got: {err}"
     );
 }
 

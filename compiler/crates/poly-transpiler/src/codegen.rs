@@ -47,8 +47,12 @@ impl Transpiler {
     }
 
     /// Transpile Poly source code to Rust code.
+    ///
+    /// Like the checked paths, this rejects programs without an explicit
+    /// `fn main() ... end fn` entry point.
     pub fn transpile(&self, source: &str) -> Result<String, String> {
         let program = Self::parse_target(source, "rust")?;
+        poly_parser::require_explicit_main(&program)?;
         self.generate_rust(&program)
     }
 
@@ -271,7 +275,9 @@ mod tests {
     #[test]
     fn transpile_routes_through_shared_pipeline() {
         let t = Transpiler::new();
-        let rust = t.transpile("var x i32 := 42").unwrap();
+        let rust = t
+            .transpile("fn main()\n    var x i32 := 42\nend fn")
+            .unwrap();
         assert!(rust.contains("let mut x: i32 = 42"));
     }
 
@@ -285,7 +291,9 @@ mod tests {
     #[test]
     fn source_map_maps_lines_best_effort() {
         let mut t = Transpiler::with_source_map();
-        let (rust, map) = t.transpile_with_source_map("put \"hi\"").unwrap();
+        let (rust, map) = t
+            .transpile_with_source_map("fn main()\n    put \"hi\"\nend fn")
+            .unwrap();
         assert!(rust.contains("println!"));
         assert!(map.lookup_target_line(1).is_some());
     }
@@ -354,7 +362,7 @@ mod tests {
 
     #[test]
     fn target_selection_keeps_only_matching_foreign_blocks() {
-        let source = "extern rust fn rust_value(): i32\nextern c fn c_value(): i32\n#rust\nfn rust_value() -> i32 { 1 }\n#endrust\n#c\nint c_value(void) { return 2; }\n#endc\nvar result i32 := rust_value()\nput result";
+        let source = "extern rust fn rust_value(): i32\nextern c fn c_value(): i32\n#rust\nfn rust_value() -> i32 { 1 }\n#endrust\n#c\nint c_value(void) { return 2; }\n#endc\nfn main()\n    var result i32 := rust_value()\n    put result\nend fn";
         let rust = Transpiler::new().transpile_target(source, "rust").unwrap();
         assert!(rust.contains("rust_value"));
         assert!(!rust.contains("c_value"));

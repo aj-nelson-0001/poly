@@ -166,8 +166,14 @@ fn test_all_examples_transpile() {
 #[test]
 fn test_transpile_basic_programs() {
     let test_cases = vec![
-        ("var x i32 := 42", "let mut x: i32 = 42"),
-        (r#"put "Hello""#, r#"println!("{}", String::from("Hello"))"#),
+        (
+            "fn main()\n    var x i32 := 42\nend fn",
+            "let mut x: i32 = 42",
+        ),
+        (
+            "fn main()\n    put \"Hello\"\nend fn",
+            r#"println!("{}", String::from("Hello"))"#,
+        ),
         ("const PI := 3.14", "const PI"),
         (
             "fn sum(a: i32, b: i32): i32\n    return a + b\nend fn",
@@ -196,8 +202,10 @@ fn greet(name: ustring): ustring
     return "Hello, " + name
 end fn
 
-var greeting := greet("World")
-put greeting
+fn main()
+    var greeting := greet("World")
+    put greeting
+end fn
 "#;
     let t = Transpiler::new();
     let result = t.transpile(source);
@@ -223,11 +231,13 @@ fn test_if_else_chains_compiles_to_valid_rust() {
 #[test]
 fn test_string_match_compiles_to_valid_rust() {
     let source = r#"
-var value := "hello"
-match value
-    "hello", put "matched"
-    _, put "other"
-end match
+fn main()
+    var value := "hello"
+    match value
+        "hello", put "matched"
+        _, put "other"
+    end match
+end fn
 "#;
     let rust_code = Transpiler::new().transpile(source).unwrap();
     verify_rust_compiles(&rust_code)
@@ -949,10 +959,12 @@ fn test_c_backend_runtime_control_flow_and_foreign_calls() {
 int double_value(int x) { return x * 2; }
 #endc
 
-var total i32 := 0
-loop i 1..5
-    total := total + double_value(i)
-end loop    if total = 30
+fn main()
+    var total i32 := 0
+    loop i 1..5
+        total := total + double_value(i)
+    end loop
+    if total = 30
         put "total=30"
     else
         put "bad"
@@ -962,14 +974,15 @@ end loop    if total = 30
     end if
 
     var n i32 := 5
-while n > 1
-    n := n - 2
-end while
-put n
-loop i 5..1 step -2
-    put i
-end loop
-put "100% complete"
+    while n > 1
+        n := n - 2
+    end while
+    put n
+    loop i 5..1 step -2
+        put i
+    end loop
+    put "100% complete"
+end fn
 "#;
     assert_eq!(
         compile_and_run_c(source),
@@ -980,10 +993,12 @@ put "100% complete"
 #[test]
 fn test_c_backend_diagnostic_streams() {
     let source = r#"
-error "failure"
-warn "warning"
-info "details"
-put "done"
+fn main()
+    error "failure"
+    warn "warning"
+    info "details"
+    put "done"
+end fn
 "#;
     let (stdout, stderr) = compile_and_run_c_capture(source);
     assert_eq!(stdout, "done\n");
@@ -1001,8 +1016,10 @@ int double_value(int value) {
 }
 #endc
 
-var result i32 := double_value(21)
-put result
+fn main()
+    var result i32 := double_value(21)
+    put result
+end fn
 "#;
     assert_eq!(compile_and_run_c(source), "42\n");
 }
@@ -1010,7 +1027,7 @@ put result
 #[test]
 fn test_c_backend_reports_unsupported_features() {
     let redirect_error = Transpiler::new()
-        .transpile_c_checked("put 1 to \"output.txt\"")
+        .transpile_c_checked("fn main()\n    put 1 to \"output.txt\"\nend fn")
         .unwrap_err();
     assert!(redirect_error.contains("file redirects are not implemented"));
 
@@ -1020,7 +1037,7 @@ fn test_c_backend_reports_unsupported_features() {
     // function pointer. What must still be rejected is environment capture,
     // which has no C representation in this subset.
     let closure_error = Transpiler::new()
-        .transpile_c_checked("var n i32 := 10\nvar f := |x: i32| x + n")
+        .transpile_c_checked("fn main()\n    var n i32 := 10\n    var f := |x: i32| x + n\nend fn")
         .unwrap_err();
     assert!(closure_error.contains("non-capturing closures only"));
 }

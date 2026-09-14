@@ -8,3 +8,4 @@ fn double(v: i32) -> i32 {
 fn main() {
     println!("{}", double(21));
 }
+

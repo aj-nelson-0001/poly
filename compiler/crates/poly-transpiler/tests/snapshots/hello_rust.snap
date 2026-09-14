@@ -5,3 +5,4 @@ fn main() {
     println!("{}", String::from("hello world"));
     println!("{}", 42);
 }
+

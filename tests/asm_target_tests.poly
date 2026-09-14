@@ -14,37 +14,24 @@ _asm_msg_len = . - _asm_msg
     syscall
 #endasm
 
-# ── String literal put ──
-put "hello from asm"
+# ── Struct support ──
+struct Point
+    var x: i32
+    var y: i32
+end struct
 
-# ── Integer arithmetic ──
-var x i32 := 10
-var y i32 := 32
-put x + y
+# ── Enum support ──
+enum Color
+    Red
+    Green
+    Blue
+end enum
 
-# ── Boolean comparisons ──
-var flag bool := 5 > 3
-if flag
-    put 1
-else
-    put 0
-end if
-
-# ── While loop ──
-var i i32 := 0
-var sum i32 := 0
-while i < 5
-    sum := sum + i
-    i := i + 1
-end while
-put sum
-
-# ── Range loop ──
-var total i32 := 0
-loop j 0..4
-    total := total + j
-end loop
-put total
+# ── Enum tuple variant ──
+enum Shape
+    Circle(i32)
+    Rect(i32, i32)
+end enum
 
 # ── Functions ──
 fn double_val(v: i32)
@@ -55,88 +42,103 @@ fn add_three(a: i32, b: i32, c: i32)
     return a + b + c
 end fn
 
-var d i32 := double_val(21)
-put d
+fn main()
+    # ── String literal put ──
+    put "hello from asm"
 
-var s i32 := add_three(10, 20, 30)
-put s
+    # ── Integer arithmetic ──
+    var x i32 := 10
+    var y i32 := 32
+    put x + y
 
-# ── String concatenation ──
-put "Poly " + "asm " + "works!"
-
-# ── Break and continue ──
-var found i32 := 0
-loop k 1..100
-    if k = 7
-        found := k
-        break
+    # ── Boolean comparisons ──
+    var flag bool := 5 > 3
+    if flag
+        put 1
+    else
+        put 0
     end if
-end loop
-put found
 
-var odd_sum i32 := 0
-loop n 1..10
-    if n mod 2 = 0
-        continue
-    end if
-    odd_sum := odd_sum + n
-end loop
-put odd_sum
+    # ── While loop ──
+    var i i32 := 0
+    var sum i32 := 0
+    while i < 5
+        sum := sum + i
+        i := i + 1
+    end while
+    put sum
 
-# ── Nested loop break ──
-var nested_total i32 := 0
-loop outer 0..5
-    loop inner 0..100
-        if inner = 3
+    # ── Range loop ──
+    var total i32 := 0
+    loop j 0..4
+        total := total + j
+    end loop
+    put total
+
+    var d i32 := double_val(21)
+    put d
+
+    var s i32 := add_three(10, 20, 30)
+    put s
+
+    # ── String concatenation ──
+    put "Poly " + "asm " + "works!"
+
+    # ── Break and continue ──
+    var found i32 := 0
+    loop k 1..100
+        if k = 7
+            found := k
             break
         end if
-        nested_total := nested_total + 1
     end loop
-end loop
-put nested_total
+    put found
 
-# ── Struct support ──
-struct Point
-    var x: i32
-    var y: i32
-end struct
+    var odd_sum i32 := 0
+    loop n 1..10
+        if n mod 2 = 0
+            continue
+        end if
+        odd_sum := odd_sum + n
+    end loop
+    put odd_sum
 
-var p Point := Point { x: 10, y: 20 }
-put p.x
-put p.y
-put p.x + p.y
+    # ── Nested loop break ──
+    var nested_total i32 := 0
+    loop outer 0..5
+        loop inner 0..100
+            if inner = 3
+                break
+            end if
+            nested_total := nested_total + 1
+        end loop
+    end loop
+    put nested_total
 
-# ── Enum support ──
-enum Color
-    Red
-    Green
-    Blue
-end enum
+    var p Point := Point { x: 10, y: 20 }
+    put p.x
+    put p.y
+    put p.x + p.y
 
-var c Color := Color::Green
-match c
-    Color::Red, put 100
-    Color::Green, put 200
-    Color::Blue, put 300
-    _, put 0
-end match
+    var c Color := Color::Green
+    match c
+        Color::Red, put 100
+        Color::Green, put 200
+        Color::Blue, put 300
+        _, put 0
+    end match
 
-# ── Enum tuple variant ──
-enum Shape
-    Circle(i32)
-    Rect(i32, i32)
-end enum
+    var s1 Shape := Shape::Circle(42)
+    match s1
+        Shape::Circle(r), put r
+        Shape::Rect(w, h), put w
+        _, put 0
+    end match
 
-var s1 Shape := Shape::Circle(42)
-match s1
-    Shape::Circle(r), put r
-    Shape::Rect(w, h), put w
-    _, put 0
-end match
-
-var s2 Shape := Shape::Rect(10, 20)
-match s2
-    Shape::Circle(r), put r
-    Shape::Rect(w, h), put w + h
-    _, put 0
-end match
+    var s2 Shape := Shape::Rect(10, 20)
+    match s2
+        Shape::Circle(r), put r
+        Shape::Rect(w, h), put w + h
+        _, put 0
+    end match
+end fn

@@ -858,7 +858,7 @@ mod tests {
         server.dispatch(&initialize_message());
         let result = server.dispatch(&did_open_message(
             "file:///test.poly",
-            "var x i32 := 42\nput x\n",
+            "fn main()\n    var x i32 := 42\n    put x\nend fn\n",
         ));
         let diagnostics = result.outputs[0]
             .get("params")

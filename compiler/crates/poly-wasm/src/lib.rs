@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn round_trip_generates_rust() {
-        let (output, is_error) = round_trip("put \"Hello, wasm!\"").unwrap();
+        let (output, is_error) = round_trip("fn main()\n    put \"Hello, wasm!\"\nend fn").unwrap();
         let text = String::from_utf8_lossy(&output);
         assert!(!is_error, "unexpected error: {text}");
         assert!(text.contains("println!"), "missing Rust output: {text}");
@@ -317,14 +317,16 @@ mod tests {
 
     #[test]
     fn round_trip_reports_type_errors() {
-        let (output, is_error) = round_trip("var x i32 := \"oops\"").unwrap();
+        let (output, is_error) =
+            round_trip("fn main()\n    var x i32 := \"oops\"\nend fn").unwrap();
         assert!(is_error, "type mismatch should be reported as an error");
         assert!(String::from_utf8_lossy(&output).contains("expected i32"));
     }
 
     #[test]
     fn round_trip_handles_unicode_source() {
-        let (output, is_error) = round_trip("put unicode \"héllo wörld\"").unwrap();
+        let (output, is_error) =
+            round_trip("fn main()\n    put unicode \"héllo wörld\"\nend fn").unwrap();
         assert!(!is_error);
         let text = String::from_utf8_lossy(&output);
         assert!(text.contains("héllo wörld"), "unicode round trip: {text}");
@@ -333,7 +335,8 @@ mod tests {
     #[test]
     fn round_trip_targets_c_and_js() {
         for (target, marker) in [("c", "int main"), ("js", "function main")] {
-            let (output, is_error) = round_trip_for_target("put 42", target).unwrap();
+            let (output, is_error) =
+                round_trip_for_target("fn main()\n    put 42\nend fn", target).unwrap();
             assert!(!is_error, "{target}: unexpected error");
             let text = String::from_utf8_lossy(&output);
             assert!(

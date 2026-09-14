@@ -56,6 +56,25 @@ impl Session {
     fn source(&self) -> String {
         self.program_lines.join("\n")
     }
+
+    /// Source prepared for transpilation: the language requires an explicit
+    /// `fn main() ... end fn` entry point, so REPL sessions without one get
+    /// their accumulated statements wrapped in a synthetic main. Sessions that
+    /// declare `fn main` themselves keep their own entry point.
+    fn transpile_source(&self) -> String {
+        let raw = self.source();
+        let declares_main = self.program_lines.iter().any(|line| {
+            let trimmed = line.trim_start();
+            trimmed == "fn main()"
+                || trimmed.starts_with("fn main(")
+                || trimmed.starts_with("async fn main(")
+        });
+        if declares_main || raw.is_empty() {
+            raw
+        } else {
+            format!("fn main()\n{}\nend fn", raw)
+        }
+    }
 }
 
 /// Run the interactive REPL.
@@ -339,10 +358,9 @@ fn print_session_vars(session: &Session) {
 /// Submit a completed statement to the session and show the new Rust.
 fn submit_statement(session: &mut Session, source: &str) {
     session.program_lines.push(source.trim().to_string());
-    let full_source = session.source();
 
     let transpiler = Transpiler::new();
-    match transpiler.transpile_checked(&full_source) {
+    match transpiler.transpile_checked(&session.transpile_source()) {
         Ok(rust_code) => {
             println!("{}// Generated Rust:{}", DIM, RESET);
             let added = added_lines(&session.last_rust, &rust_code);

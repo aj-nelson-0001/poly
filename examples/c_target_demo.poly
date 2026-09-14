@@ -52,120 +52,120 @@ fn factorial(n: i32): i32
         return 1
     end if
     return n * factorial(n - 1)
-end fn
-
-# ===========================================
+end fn# ===========================================
 #  C target demo: executable statements
 # ===========================================
 
-put "==========================================="
-put "  Poly C Target Demo"
-put "==========================================="
-put ""
+fn main()
+    put "==========================================="
+    put "  Poly C Target Demo"
+    put "==========================================="
+    put ""
 
-# Arithmetic
-put "-- Arithmetic --"
-var x i32 := 10
-var y i32 := 3
-put add(x, y)
-put x - y
-put x * y
-put x / y
-put x mod y
-put ""
+    # Arithmetic
+    put "-- Arithmetic --"
+    var x i32 := 10
+    var y i32 := 3
+    put add(x, y)
+    put x - y
+    put x * y
+    put x / y
+    put x mod y
+    put ""
 
-# Bitwise operations (avoid >> in put)
-put "-- Bitwise ops --"
-var a i32 := 10
-var b i32 := 12
-var band i32 := a bitand b
-put band
-var bor i32 := a bitor b
-put bor
-var bxor i32 := a xor b
-put bxor
-var lshift i32 := a << 2
-put lshift
-var rshift i32 := a >> 1
-put rshift
-put ""
+    # Bitwise operations (avoid >> in put)
+    put "-- Bitwise ops --"
+    var a i32 := 10
+    var b i32 := 12
+    var band i32 := a bitand b
+    put band
+    var bor i32 := a bitor b
+    put bor
+    var bxor i32 := a xor b
+    put bxor
+    var lshift i32 := a << 2
+    put lshift
+    var rshift i32 := a >> 1
+    put rshift
+    put ""
 
-# Functions
-put "-- Functions --"
-put factorial(6)
-put factorial(10)
-put ""
+    # Functions
+    put "-- Functions --"
+    put factorial(6)
+    put factorial(10)
+    put ""
 
-# Conditionals
-put "-- Conditionals --"
-var score i32 := 85
-if score >= 90,
-    put "Grade: A"
-else if score >= 80,
-    put "Grade: B"
-else if score >= 70,
-    put "Grade: C"
-else,
-    put "Grade: F"
-end if
-put ""
+    # Conditionals
+    put "-- Conditionals --"
+    var score i32 := 85
+    if score >= 90,
+        put "Grade: A"
+    else if score >= 80,
+        put "Grade: B"
+    else if score >= 70,
+        put "Grade: C"
+    else,
+        put "Grade: F"
+    end if
+    put ""
 
-# While loop
-put "-- While loop --"
-var countdown i32 := 5
-while countdown > 0
-    put countdown
-    countdown := countdown - 1
-end while
-put "Liftoff!"
-put ""
+    # While loop
+    put "-- While loop --"
+    var countdown i32 := 5
+    while countdown > 0
+        put countdown
+        countdown := countdown - 1
+    end while
+    put "Liftoff!"
+    put ""
 
-# Numeric range loop
-put "-- Loop range (0..10) --"
-loop i 0..10
-    put i
-end loop
-put ""
+    # Numeric range loop
+    put "-- Loop range (0..10) --"
+    loop i 0..10
+        put i
+    end loop
+    put ""
 
-# Step loop
-put "-- Loop range with step (0..20 step 4) --"
-loop i 0..20 step 4
-    put i
-end loop
-put ""
+    # Step loop
+    put "-- Loop range with step (0..20 step 4) --"
+    loop i 0..20 step 4
+        put i
+    end loop
+    put ""
 
-# Foreign function calls
-put "-- Foreign C functions --"
-put c_multiply(6, 7)
-put c_square(9)
-put ""
+    # Foreign function calls
+    put "-- Foreign C functions --"
+    put c_multiply(6, 7)
+    put c_square(9)
+    put ""
 
-# Accumulation pattern
-put "-- Accumulation --"
-var total i32 := 0
-loop i 1..6
-    total := total + i
-end loop
-put total
-put ""
+    # Accumulation pattern
+    put "-- Accumulation --"
+    var total i32 := 0
+    loop i 1..6
+        total := total + i
+    end loop
+    put total
+    put ""
 
-# Logging
-put "-- Logging --"
-info "This is an info message"
-warn "This is a warning"
-error "This is an error"
-put ""
+    # Logging
+    put "-- Logging --"
+    info "This is an info message"
+    warn "This is a warning"
+    error "This is an error"
+    put ""
 
-# Mutation
-put "-- Mutation --"
-var counter i32 := 0
-counter := counter + 1
-counter := counter + 1
-counter := counter + 1
-counter := counter - 1
-put counter
-put ""
+    # Mutation
+    put "-- Mutation --"
+    var counter i32 := 0
+    counter := counter + 1
+    counter := counter + 1
+    counter := counter + 1
+    counter := counter - 1
+    put counter
+    put ""
 
-put "==========================================="
-put "  C target demo complete!"
-put "==========================================="
+    put "==========================================="
+    put "  C target demo complete!"
+    put "==========================================="
+end fn

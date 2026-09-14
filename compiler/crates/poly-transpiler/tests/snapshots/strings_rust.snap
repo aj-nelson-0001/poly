@@ -6,3 +6,4 @@ fn main() {
     println!("{}", name);
     println!("{}", format!("{}{}", String::from("hello "), name));
 }
+

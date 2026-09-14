@@ -1788,7 +1788,7 @@ mod tests {
         let source_path = root.join("hello.poly");
         let output_dir = root.join("generated");
         std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(&source_path, "put \"Hello\"").unwrap();
+        std::fs::write(&source_path, "fn main()\n    put \"Hello\"\nend fn").unwrap();
 
         generate_cargo_project(&source_path, &output_dir).unwrap();
 
@@ -1807,7 +1807,7 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let source_path = root.join("hello.txt");
 
-        std::fs::write(&source_path, "put \"Hello\"").unwrap();
+        std::fs::write(&source_path, "fn main()\n    put \"Hello\"\nend fn").unwrap();
         assert!(generate_cargo_project(&source_path, &root.join("generated")).is_err());
 
         std::fs::remove_dir_all(root).unwrap();

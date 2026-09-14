@@ -7,19 +7,21 @@ int double_value(int x) {
 }
 #endc
 
-var total i32 := 0
-loop i 1..5
-    total := total + double_value(i)
-end loop
+fn main()
+    var total i32 := 0
+    loop i 1..5
+        total := total + double_value(i)
+    end loop
 
-if total = 30
-    put total
-else
-    error "unexpected total"
-end if
+    if total = 30
+        put total
+    else
+        error "unexpected total"
+    end if
 
-var remaining i32 := 0
-while remaining < 3
-    remaining := remaining + 1
-end while
-put remaining
+    var remaining i32 := 0
+    while remaining < 3
+        remaining := remaining + 1
+    end while
+    put remaining
+end fn

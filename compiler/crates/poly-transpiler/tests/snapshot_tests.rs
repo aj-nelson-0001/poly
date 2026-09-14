@@ -33,27 +33,27 @@ fn snapshot_path(name: &str) -> PathBuf {
 const SAMPLES: &[(&str, &str)] = &[
     (
         "hello",
-        "put \"hello world\"\nput 42\n",
+        "fn main()\n    put \"hello world\"\n    put 42\nend fn\n",
     ),
     (
         "vars_arith",
-        "var x i32 := 10\nvar y i32 := x * 4 + 2\nput y\nput x - 1\n",
+        "fn main()\n    var x i32 := 10\n    var y i32 := x * 4 + 2\n    put y\n    put x - 1\nend fn\n",
     ),
     (
         "strings",
-        "var name string := \"Poly\"\nput name\nput \"hello \" + name\n",
+        "fn main()\n    var name string := \"Poly\"\n    put name\n    put \"hello \" + name\nend fn\n",
     ),
     (
         "control_flow",
-        "var x i32 := 10\nif x > 5,\n    put 1\nelse\n    put 0\nend if\nvar i i32 := 0\nwhile i < 3\n    i := i + 1\nend while\nloop j 0..3\n    put j\nend loop\n",
+        "fn main()\n    var x i32 := 10\n    if x > 5,\n        put 1\n    else\n        put 0\n    end if\n    var i i32 := 0\n    while i < 3\n        i := i + 1\n    end while\n    loop j 0..3\n        put j\n    end loop\nend fn\n",
     ),
     (
         "functions",
-        "fn double(v: i32): i32\n    return v * 2\nend fn\nput double(21)\n",
+        "fn double(v: i32): i32\n    return v * 2\nend fn\n\nfn main()\n    put double(21)\nend fn\n",
     ),
     (
         "bools",
-        "var a bool := true\nvar b bool := false\nvar c bool := a != b\nput c\n",
+        "fn main()\n    var a bool := true\n    var b bool := false\n    var c bool := a != b\n    put c\nend fn\n",
     ),
 ];
 

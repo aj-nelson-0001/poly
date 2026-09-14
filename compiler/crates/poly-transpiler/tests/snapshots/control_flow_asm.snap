@@ -10,14 +10,11 @@ _minus:   .byte 45
 
 .section .text
 
-
-.section .text
-.globl _start
-
-_start:
+.globl main
+main:
     pushq %rbp
     movq %rsp, %rbp
-    subq $4088, %rsp
+    subq $96, %rsp
     movq $10, -16(%rbp)
     movq -16(%rbp), %rax
     movq %rax, -8(%rbp)
@@ -88,6 +85,20 @@ for_check_6:
     jle for_body_7
 for_end_9:
     movq -80(%rbp), %r12
+    movq $0, %rax
+    movq %rbp, %rsp
+    popq %rbp
+    retq
+
+
+.section .text
+.globl _start
+
+_start:
+    pushq %rbp
+    movq %rsp, %rbp
+    subq $4088, %rsp
+    callq main
     # sys_exit(0)
     movq $60, %rax
     xorq %rdi, %rdi

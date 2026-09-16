@@ -67,11 +67,12 @@ All notable changes to the Poly language compiler will be documented in this fil
 ### Fixed
 
 - Range loops whose start bound is a non-literal expression
-  (`loop i BUF..TOTAL - 1`, `loop i xs[0]..n`) now parse correctly; they were
-  previously rejected with `Unexpected token: DotDot`. A leading literal in
-  the loop-variable position (`loop 0..10`) is a var-less counted loop whose
-  counter is discarded — previously it was silently mis-parsed as an infinite
-  loop containing a bare range-expression statement.
+  (`loop i BUF..TOTAL - 1`, `loop i TOTAL - 4..TOTAL - 1`, `loop i xs[0]..n`)
+  now parse correctly; they were previously rejected with
+  `Unexpected token: DotDot`. A leading literal in the loop-variable position
+  (`loop 0..10`) is a var-less counted loop whose counter is discarded —
+  previously it was silently mis-parsed as an infinite loop containing a bare
+  range-expression statement.
 
 ### Documented
 

@@ -23,13 +23,25 @@ now fixed.
   (`for 0 in ...` is not valid Rust, so the literal cannot double as the
   variable). Detector requires a literal *followed by* `..`/`..=`, so a body
   starting with a literal stays infinite.
-- Tests: 3 added/expanded in `poly-parser`
+- Tests: 4 added/expanded in `poly-parser`
   (`test_parse_loop_range_requires_explicit_variable` now asserts the
-  `LoopRange`/`_` shape, plus `test_parse_loop_range_identifier_start` and
-  `test_parse_infinite_loop_body_starting_with_identifier`); full workspace
-  suite green (449 tests). Docs (spec/grammar/cheatsheet/quick-reference)
-  rewritten from "use a while workaround" to the now-correct grammar; the
-  Tetris `while` rewrites remain valid but are no longer required.
+  `LoopRange`/`_` shape, plus `test_parse_loop_range_identifier_start`,
+  `test_parse_infinite_loop_body_starting_with_identifier`, and
+  `test_parse_loop_range_expression_start`); full workspace suite green.
+  Docs (spec/grammar/cheatsheet/quick-reference) rewritten from "use a while
+  workaround" to the now-correct grammar. Tetris's nine `while` rewrites are
+  restored to natural range loops (`loop r BUF..TOTAL - 1`) and the game
+  re-verified (self-test + GUI smoke test).
+- **Deeper root cause found later: greedy range consumption in
+  `parse_primary`.** The IntLiteral branch attaches `..` to the literal on its
+  left, so in `TOTAL - 4..TOTAL - 1` the `4..TOTAL - 1` became the *right
+  operand of the subtraction* — `Sub(TOTAL, Range(4..TOTAL-1))` instead of
+  `Range(TOTAL-4 .. TOTAL-1)`. This is also why the original detection only
+  worked for literal starts. Fixed by re-associating: `parse_loop_range_part`
+  and the detection probe use `extract_range`, which lifts a
+  literal-started range out of an arithmetic right operand back into a top
+  level range. Restricted to literal range starts so ordinary arithmetic is
+  never reshaped.
 
 ## Nested-while codegen fix; Tetris example; loop/move-semantics docs (2026-09-16)
 

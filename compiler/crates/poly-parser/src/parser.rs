@@ -2089,15 +2089,20 @@ impl<'a> Parser<'a> {
                     | TokenKind::FloatLiteral(_) => true,
                     // Expression start (`BUF..`, `xs[0]..`, `f(1)..`) or a
                     // body statement (`obj.tick()`): decide by parsing the
-                    // expression with backtracking.
+                    // expression with backtracking. A range swallowed into an
+                    // arithmetic right operand (`TOTAL - 4..TOTAL - 1`)
+                    // counts too via `extract_range`.
                     _ => {
                         let is_range = match self.parse_expression() {
-                            // A full range was consumed (`i BUF..TOTAL - 1`).
-                            Ok(Expression::Range { .. }) => true,
-                            Ok(_) => matches!(
-                                self.peek(),
-                                TokenKind::DotDot | TokenKind::DotDotEq | TokenKind::Comma
-                            ),
+                            Ok(expr) => {
+                                Parser::extract_range(&expr).is_some()
+                                    || matches!(
+                                        self.peek(),
+                                        TokenKind::DotDot
+                                            | TokenKind::DotDotEq
+                                            | TokenKind::Comma
+                                    )
+                            }
                             Err(_) => false,
                         };
                         is_range
@@ -2191,31 +2196,73 @@ impl<'a> Parser<'a> {
         Ok(Expression::InfiniteLoop(body))
     }
 
+    /// Extract a `(start, end)` range from an expression tree in which an
+    /// integer-literal-started range was swallowed as the right operand of an
+    /// arithmetic operator: `TOTAL - 4..TOTAL - 1` parses as
+    /// `Sub(TOTAL, Range(4..TOTAL - 1))` because `parse_primary` attaches
+    /// `..` directly to the literal on its left. Re-associating yields the
+    /// intended `Range(TOTAL - 4 .. TOTAL - 1)`. Ranges can only enter a
+    /// right-operand position through that literal branch, so restricting the
+    /// re-association to literal range starts never changes other shapes.
+    fn extract_range(expr: &Expression) -> Option<(Expression, Expression)> {
+        match expr {
+            Expression::Range { start, end, .. } => {
+                Some(((**start).clone(), (**end).clone()))
+            }
+            Expression::BinaryOp { op, left, right }
+                if matches!(
+                    op,
+                    BinaryOp::Add
+                        | BinaryOp::Sub
+                        | BinaryOp::Mul
+                        | BinaryOp::Div
+                        | BinaryOp::Mod
+                ) =>
+            {
+                if let Expression::Range { start, end, .. } = right.as_ref() {
+                    if matches!(start.as_ref(), Expression::IntLiteral(_)) {
+                        let new_left = Expression::BinaryOp {
+                            op: op.clone(),
+                            left: left.clone(),
+                            right: start.clone(),
+                        };
+                        return Some((new_left, (**end).clone()));
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
     /// Parse a single part of a loop range spec.
     /// This can be: 0..10, 0..=10, 0..10 step 2, or just 5 (a single value).
     /// Unlike ordinary range expressions, loop ranges include both endpoints.
     fn parse_loop_range_part(&mut self) -> Result<LoopRangePart, ParseError> {
         let first = self.parse_expression()?;
 
-        // If parse_expression already consumed a range (e.g., 0..10), extract it
-        if let Expression::Range { start, end, .. } = first {
+        // If parse_expression consumed a range — directly (`0..10`) or shelled
+        // inside arithmetic (`TOTAL - 4..TOTAL - 1`) — turn it into a range
+        // part with the intended bounds.
+        if let Some((start, end)) = Parser::extract_range(&first) {
             // Poly loop ranges include both endpoints. `..=` remains accepted
             // as an explicit spelling of the same inclusive behavior.
             let inclusive = true;
-            // Check for optional step: ..10 step 2
             let step = if self.peek() == &TokenKind::Step {
                 self.advance(); // consume 'step'
                 Some(self.parse_expression()?)
             } else {
                 None
             };
-            Ok(LoopRangePart::Range {
-                start,
-                end,
+            return Ok(LoopRangePart::Range {
+                start: Box::new(start),
+                end: Box::new(end),
                 inclusive,
                 step,
-            })
-        } else if self.peek() == &TokenKind::DotDot || self.peek() == &TokenKind::DotDotEq {
+            });
+        }
+
+        if self.peek() == &TokenKind::DotDot || self.peek() == &TokenKind::DotDotEq {
             // Loop ranges are inclusive even when written with `..`.
             let inclusive = true;
             self.advance(); // consume .. or ..=
@@ -4541,6 +4588,35 @@ end match"#
                 }
             }
             _ => panic!("Expected LoopRange"),
+        }
+    }
+
+    #[test]
+    fn test_parse_loop_range_expression_start() {
+        // A range start that is itself an expression: `TOTAL - 4..TOTAL - 1`
+        // parses with the intended bounds, not `TOTAL - (4..TOTAL - 1)`.
+        let src = "const TOTAL := 5\nfn main()\nloop i TOTAL - 4..TOTAL - 1\nput i\nend loop\nend fn";
+        let prog = parse_source(src).unwrap();
+        let fn_body = match &prog.statements.last().unwrap().node {
+            Statement::FunctionDeclaration(decl) => decl.body.as_ref().unwrap(),
+            other => panic!("Expected fn declaration, got {:?}", other),
+        };
+        let loops: Vec<_> = fn_body
+            .iter()
+            .filter_map(|s| match &s.node {
+                Statement::ExpressionStatement(Expression::LoopRange { ranges, .. }) => {
+                    Some(ranges)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(loops.len(), 1);
+        match &loops[0][0] {
+            LoopRangePart::Range { start, end, .. } => {
+                assert!(matches!(start.as_ref(), Expression::BinaryOp { op: BinaryOp::Sub, .. }));
+                assert!(matches!(end.as_ref(), Expression::BinaryOp { op: BinaryOp::Sub, .. }));
+            }
+            other => panic!("Expected range part, got {:?}", other),
         }
     }
 

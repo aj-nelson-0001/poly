@@ -254,10 +254,8 @@ end fn
 # Fill one rectangular cell with a color (alpha 0 = blended ghost).
 fn fill_cell(fb0: Vec<i32>, x0: i32, y0: i32, sz: i32, col: i32, alpha: i32): Vec<i32>
     var fb Vec<i32> := fb0
-    var yy i32 := y0
-    while yy <= y0 + sz - 1
-        var xx i32 := x0
-        while xx <= x0 + sz - 1
+    loop yy y0..y0 + sz - 1
+        loop xx x0..x0 + sz - 1
             if xx >= 0 and xx < WINW and yy >= 0 and yy < WINH,
                 var idx i32 := yy * WINW + xx
                 if alpha = 1,
@@ -276,26 +274,20 @@ fn fill_cell(fb0: Vec<i32>, x0: i32, y0: i32, sz: i32, col: i32, alpha: i32): Ve
                     fb[idx] := (nr shift left 16) bitor (ng shift left 8) bitor nb
                 end if
             end if
-            xx := xx + 1
-        end while
-        yy := yy + 1
-    end while
+        end loop
+    end loop
     return fb
 end fn
 
 fn fill_rect(fb0: Vec<i32>, x0: i32, y0: i32, w: i32, h: i32, col: i32): Vec<i32>
     var fb Vec<i32> := fb0
-    var yy i32 := y0
-    while yy <= y0 + h - 1
-        var xx i32 := x0
-        while xx <= x0 + w - 1
+    loop yy y0..y0 + h - 1
+        loop xx x0..x0 + w - 1
             if xx >= 0 and xx < WINW and yy >= 0 and yy < WINH,
                 fb[yy * WINW + xx] := col
             end if
-            xx := xx + 1
-        end while
-        yy := yy + 1
-    end while
+        end loop
+    end loop
     return fb
 end fn
 
@@ -718,21 +710,17 @@ impl GameState
     # Detect full rows, score NES-style, drop the cleared rows atomically.
     fn clear_lines(self): GameState
         var full Vec<i32> := []
-        var r i32 := BUF
-        while r <= TOTAL - 1
+        loop r BUF..TOTAL - 1
             var all bool := true
-            var c i32 := 0
-            while c <= COLS - 1
+            loop c 0..COLS - 1
                 if self.grid[r * COLS + c] = 0,
                     all := false
                 end if
-                c := c + 1
-            end while
+            end loop
             if all,
                 full.push(r)
             end if
-            r := r + 1
-        end while
+        end loop
         if full.len() = 0,
             return self
         end if
@@ -769,8 +757,7 @@ impl GameState
         self.fx_cells := fcells
         # compact surviving rows, then pad with empties on top
         var keep Vec<i32> := []
-        var r i32 := BUF
-        while r <= TOTAL - 1
+        loop r BUF..TOTAL - 1
             var is_full bool := false
             loop f in full.iter()
                 if f = r,
@@ -782,8 +769,7 @@ impl GameState
                     keep.push(self.grid[r * COLS + c])
                 end loop
             end if
-            r := r + 1
-        end while
+        end loop
         var ng Vec<i32> := []
         loop i 0..BUF * COLS - 1
             ng.push(0)
@@ -951,20 +937,16 @@ fn render_frame(s0: GameState, fb0: Vec<i32>): (GameState, Vec<i32>)
     end loop
 
     # locked cells (beveled sprites)
-    var row i32 := BUF
-    while row <= TOTAL - 1
-        var col i32 := 0
-        while col <= COLS - 1
+    loop row BUF..TOTAL - 1
+        loop col 0..COLS - 1
             var v i32 := s.grid[row * COLS + col]
             if v > 0,
                 var x i32 := BX + col * CELL
                 var y i32 := BY + (row - BUF) * CELL
                 fb := draw_cell_sprite(fb, x, y, CELL, color_of(v - 1), 8)
             end if
-            col := col + 1
-        end while
-        row := row + 1
-    end while
+        end loop
+    end loop
 
     # ghost + active piece
     if not s.game_over,
@@ -1404,11 +1386,9 @@ fn run_selftest(s0: GameState)
     var sg9 := make_game(s.seed, highscore_load())
     var g9 := sg9
     # bottom row full (will be cleared), row above has two blocks in cols 0,1
-    var c i32 := 0
-    while c <= COLS - 1
+    loop c 0..COLS - 1
         g9.grid[(TOTAL - 1) * COLS + c] := 1
-        c := c + 1
-    end while
+    end loop
     g9.grid[(TOTAL - 2) * COLS + 0] := 2
     g9.grid[(TOTAL - 2) * COLS + 1] := 2
     g9 := g9.clear_lines()
@@ -1432,15 +1412,11 @@ fn run_selftest(s0: GameState)
     # tetris scoring
     var sg3 := make_game(s.seed, highscore_load())
     var g3 := sg3
-    var r i32 := TOTAL - 4
-    while r <= TOTAL - 1
-        var c i32 := 0
-        while c <= COLS - 1
+    loop r TOTAL - 4..TOTAL - 1
+        loop c 0..COLS - 1
             g3.grid[r * COLS + c] := 3
-            c := c + 1
-        end while
-        r := r + 1
-    end while
+        end loop
+    end loop
     var b3 i32 := g3.score
     g3 := g3.clear_lines()
     if g3.score != b3 + 800,
@@ -1454,17 +1430,13 @@ fn run_selftest(s0: GameState)
     g4.started := true
     g4 := g4.hard_drop()
     var landed i32 := 0
-    var r i32 := BUF
-    while r <= TOTAL - 1
-        var c i32 := 0
-        while c <= COLS - 1
+    loop r BUF..TOTAL - 1
+        loop c 0..COLS - 1
             if g4.grid[r * COLS + c] > 0,
                 landed := landed + 1
             end if
-            c := c + 1
-        end while
-        r := r + 1
-    end while
+        end loop
+    end loop
     if landed != 4,
         fails := fails + 1
         put "FAIL harddrop-lock"

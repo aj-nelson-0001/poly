@@ -313,22 +313,16 @@ impl GameState {
     }
     fn clear_lines(mut self) -> GameState {
         let mut full: Vec<i32> = vec![];
-        let mut r: i32 = BUF;
-        while (r <= (TOTAL - 1)) {
+        for r in BUF..=(TOTAL - 1) {
             let mut all: bool = true;
-            let mut c: i32 = 0;
-            while (c <= (COLS - 1)) {
+            for c in 0..=(COLS - 1) {
                 if (self.grid[((r * COLS) + c) as usize] == 0) {
                     all = false;
                 }
-
-                c = (c + 1);
             }
             if all {
                 full.push(r)
             }
-
-            r = (r + 1);
         }
         if ((full.len() as i32) == 0) {
             return self;
@@ -372,8 +366,7 @@ impl GameState {
         }
         self.fx_cells = fcells;
         let mut keep: Vec<i32> = vec![];
-        let mut r: i32 = BUF;
-        while (r <= (TOTAL - 1)) {
+        for r in BUF..=(TOTAL - 1) {
             let mut is_full: bool = false;
             for f in full.iter().cloned() {
                 if (f == r) {
@@ -385,8 +378,6 @@ impl GameState {
                     keep.push(self.grid[((r * COLS) + c) as usize]);
                 }
             }
-
-            r = (r + 1);
         }
         let mut ng: Vec<i32> = vec![];
         for i in 0..=((BUF * COLS) - 1) {
@@ -839,10 +830,8 @@ fn pad(n: i32, w: i32) -> String {
 
 fn fill_cell(fb0: Vec<i32>, x0: i32, y0: i32, sz: i32, col: i32, alpha: i32) -> Vec<i32> {
     let mut fb: Vec<i32> = fb0;
-    let mut yy: i32 = y0;
-    while (yy <= ((y0 + sz) - 1)) {
-        let mut xx: i32 = x0;
-        while (xx <= ((x0 + sz) - 1)) {
+    for yy in y0..=((y0 + sz) - 1) {
+        for xx in x0..=((x0 + sz) - 1) {
             if ((((xx >= 0) && (xx < WINW)) && (yy >= 0)) && (yy < WINH)) {
                 let mut idx: i32 = ((yy * WINW) + xx);
                 if (alpha == 1) {
@@ -861,27 +850,19 @@ fn fill_cell(fb0: Vec<i32>, x0: i32, y0: i32, sz: i32, col: i32, alpha: i32) -> 
                     fb[(idx) as usize] = (((nr << 16) | (ng << 8)) | nb);
                 }
             }
-
-            xx = (xx + 1);
         }
-        yy = (yy + 1);
     }
     return fb;
 }
 
 fn fill_rect(fb0: Vec<i32>, x0: i32, y0: i32, w: i32, h: i32, col: i32) -> Vec<i32> {
     let mut fb: Vec<i32> = fb0;
-    let mut yy: i32 = y0;
-    while (yy <= ((y0 + h) - 1)) {
-        let mut xx: i32 = x0;
-        while (xx <= ((x0 + w) - 1)) {
+    for yy in y0..=((y0 + h) - 1) {
+        for xx in x0..=((x0 + w) - 1) {
             if ((((xx >= 0) && (xx < WINW)) && (yy >= 0)) && (yy < WINH)) {
                 fb[((yy * WINW) + xx) as usize] = col;
             }
-
-            xx = (xx + 1);
         }
-        yy = (yy + 1);
     }
     return fb;
 }
@@ -1116,20 +1097,15 @@ fn render_frame(s0: GameState, fb0: Vec<i32>) -> (GameState, Vec<i32>) {
     for gy in 1..=(ROWS - 1) {
         fb = fill_rect(fb, BX, (BY + (gy * CELL)), BW, 1, GRIDLN);
     }
-    let mut row: i32 = BUF;
-    while (row <= (TOTAL - 1)) {
-        let mut col: i32 = 0;
-        while (col <= (COLS - 1)) {
+    for row in BUF..=(TOTAL - 1) {
+        for col in 0..=(COLS - 1) {
             let mut v: i32 = s.grid[((row * COLS) + col) as usize];
             if (v > 0) {
                 let mut x: i32 = (BX + (col * CELL));
                 let mut y: i32 = (BY + ((row - BUF) * CELL));
                 fb = draw_cell_sprite(fb, x, y, CELL, color_of((v - 1)), 8);
             }
-
-            col = (col + 1);
         }
-        row = (row + 1);
     }
     if (!s.game_over) {
         let mut bits: i32 = shape_bits(((s.cur.t * 4) + s.cur.rot));
@@ -1591,10 +1567,8 @@ fn run_selftest(s0: GameState) {
 
     let mut sg9 = make_game(s.seed, highscore_load());
     let mut g9 = sg9;
-    let mut c: i32 = 0;
-    while (c <= (COLS - 1)) {
+    for c in 0..=(COLS - 1) {
         g9.grid[(((TOTAL - 1) * COLS) + c) as usize] = 1;
-        c = (c + 1);
     }
     g9.grid[(((TOTAL - 2) * COLS) + 0) as usize] = 2;
     g9.grid[(((TOTAL - 2) * COLS) + 1) as usize] = 2;
@@ -1621,14 +1595,10 @@ fn run_selftest(s0: GameState) {
 
     let mut sg3 = make_game(s.seed, highscore_load());
     let mut g3 = sg3;
-    let mut r: i32 = (TOTAL - 4);
-    while (r <= (TOTAL - 1)) {
-        let mut c: i32 = 0;
-        while (c <= (COLS - 1)) {
+    for r in (TOTAL - 4)..=(TOTAL - 1) {
+        for c in 0..=(COLS - 1) {
             g3.grid[((r * COLS) + c) as usize] = 3;
-            c = (c + 1);
         }
-        r = (r + 1);
     }
     let mut b3: i32 = g3.score;
     g3 = g3.clear_lines();
@@ -1642,17 +1612,12 @@ fn run_selftest(s0: GameState) {
     g4.started = true;
     g4 = g4.hard_drop();
     let mut landed: i32 = 0;
-    let mut r: i32 = BUF;
-    while (r <= (TOTAL - 1)) {
-        let mut c: i32 = 0;
-        while (c <= (COLS - 1)) {
+    for r in BUF..=(TOTAL - 1) {
+        for c in 0..=(COLS - 1) {
             if (g4.grid[((r * COLS) + c) as usize] > 0) {
                 landed = (landed + 1);
             }
-
-            c = (c + 1);
         }
-        r = (r + 1);
     }
     if (landed != 4) {
         fails = (fails + 1);

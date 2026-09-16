@@ -193,7 +193,7 @@ range_part    ::= expression ".." expression [ "step" expression ]
 match_expression ::= "match" expression { pattern "," expression } "end" "match"
 ~~~
 
-Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected by semantic checking.
+Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected by semantic checking. The parser recognizes a range loop only when the loop variable is followed by a range operator (`..` / `..=`), `in`, or a numeric literal, so the range's start value must begin with a numeric literal (endpoints may be arbitrary expressions); when the start bound is a constant or other identifier, use a `while` loop.
 
 ## I/O
 

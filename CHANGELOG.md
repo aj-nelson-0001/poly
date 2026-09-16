@@ -52,6 +52,29 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Fixed
+
+- **Nested `while` loops now generate a real loop.** The parser encodes
+  `while` as an if-expression without an else block; the top-level codegen
+  path handled that, but `gen_expr`'s `Expr::If` arm and `gen_statement_str`'s
+  `Statement::If` arm (used inside `if` bodies, `match` arms, and loop bodies)
+  always emitted `if`. A `while` in any nested position therefore ran exactly
+  once. Both paths now honor the while encoding, with regression tests for
+  the `if`-nested and `match`-arm shapes. Found via the Tetris example, where
+  a row-compaction loop inside an `if` silently kept only one cell per
+  surviving row.
+
+### Documented
+
+- Range-loop detection constraint: `loop i <start>..<end>` is recognized only
+  when `<start>` begins with a numeric literal (endpoints may be expressions);
+  a constant or identifier range start fails to parse. Use a `while` loop for
+  computed start bounds. Now stated in `POLY_SPEC_v2.md`, `POLY_GRAMMAR.md`,
+  `POLY_CHEATSHEET.md`, and `POLY_QUICK_REFERENCE.md`.
+- Reserved words `spawn` and `step` (previously undocumented in the maintained
+  spec) and the take-and-return `impl` method pattern (`s := s.bump()`),
+  including the `self.method(self.field, ...)` move-ordering pitfall.
+
 ### Changed
 
 - **Explicit `fn main() ... end fn` is now required.** Poly programs must

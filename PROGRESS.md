@@ -1,7 +1,78 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-14.
+Last updated: 2026-09-16.
+
+## Nested-while codegen fix; Tetris example; loop/move-semantics docs (2026-09-16)
+
+Session driven by building a full Tetris game (`tetris/`) in Poly targeting
+Rust; the game's scale surfaced one real compiler bug and two undocumented
+language constraints.
+
+### Compiler bug: nested `while` emitted as a one-shot `if`
+
+- **Symptom.** In the Tetris line-clear routine, a `while` loop nested inside
+  an `if` executed exactly once: each surviving row kept only its first cell,
+  so clearing one line wiped the whole stack. Reproduced with a minimal probe
+  (`while` inside `if` printing 3 instead of 12) and inside a `match` arm.
+- **Root cause.** The parser encodes `while` as an if-expression without an
+  else block. The top-level statement path in `poly-intermediate-representation`'s
+  codegen handled that, but `gen_expr`'s `Expr::If` arm (renders all nested
+  contexts: match arms, if/loop bodies) and `gen_statement_str`'s
+  `Statement::If` arm always emitted `if`. The C/asm/JS backends' statement
+  paths were already correct (they check `else_block.is_none()`).
+- **Fix.** Both nested paths now emit `while` when the else block is absent
+  (`gen_statement_str` also honors the unused `is_while` IR flag). Two
+  regression tests added (`while_nested_inside_if_emits_real_loop`,
+  `while_nested_inside_match_arm_emits_real_loop`). Tetris's `clear_lines`
+  restored to the natural `while` shape (it had carried a workaround comment
+  explaining the miscompilation).
+- Verified: full workspace test suite green (hundreds of tests incl. all
+  codegen snapshots); game rebuilt, self-test `ALL TESTS PASSED`, GUI
+  smoke-tested.
+
+### Language constraints found and documented
+
+- **Range-loop detection needs a literal start.** `loop i BUF..TOTAL - 1`
+  (identifier start) fails to parse — the range-loop check accepts a range op,
+  `in`, or a numeric literal after the loop variable, but any other
+  identifier falls into infinite-loop statement parsing and dies on `..`.
+  `loop i 2..TOTAL - 1` (literal start, expression end) is fine. Nine affected
+  loops in Tetris were rewritten as `while`; documented in spec/grammar/
+  cheatsheet/quick-reference.
+- **`spawn` and `step` are reserved words** (process-spawn keyword; loop step
+  clause). Renamed Tetris methods to `spawn_piece`/`stepms`; documented.
+- **Move semantics corollaries** (used throughout Tetris but not written
+  down): `self.method(self.field, ...)` moves `self` before arguments
+  evaluate — copy fields to locals first; a read-only query method cannot be
+  called repeatedly for its value — stash results in a Copy field (Tetris uses
+  `q_hit`/`q_ghost_row`/`q_queue`). Documented in the spec's struct section
+  and the cheatsheet.
+- Equality comparisons are strictly typed (mixing `i32` literals with `u64`/
+  `i64` values errors); ordering comparisons are lenient. Worth documenting
+  later if it bites again.
+- Vec parameters arrive non-`mut` in generated Rust: copy the param into a
+  local `var` and mutate that, then return it.
+
+### Tetris example (tetris/)
+
+- Full game in `tetris/tetris.poly` (~1800 lines): original tetris.js
+  rotation set/kicks, 7-bag + one-bag lookahead + 5-piece preview, hold,
+  ghost, DAS, NES scoring/gravity, high-score file, ALSA-synthesized
+  WebAudio sounds, and the page's neon-CRT visuals (beveled cell sprites
+  with the original's exact 45%/5% bevel math, radial plum gradient, grid,
+  side panels, controls list, blended CRT scanlines, cell-capture clear
+  flash). Platform layer is a hand-written `#rust` block (minifb, alsa).
+- Generated via `poly --project` to `tetris/rust_output/tetris/` (Cargo.toml
+  needs `minifb = "0.27"` + `alsa = "0.9"` added by hand — the generator does
+  not emit dependencies).
+- Verified: headless self-test (`--test`) covers collisions, bag integrity,
+  line-clear stack preservation, ghost row, hold, and scoring; GUI verified
+  via xdotool-driven key input and screenshot analysis (piece movement, hold,
+  hard drop, queue rendering, sprite colors all confirmed; scanlines fixed
+  from opaque bars to a 10% multiply blend so they stop striping pieces).
+- Committed as `94dd855` (compiler fix) and `d77299c` (tetris project);
+  `.gitignore` gained `/tetris/rust_output/tetris/target/`.
 
 ## Explicit `fn main()` entry point becomes mandatory (2026-09-14)
 
@@ -49,7 +120,7 @@ Last updated: 2026-09-14.
   `POLY_MIGRATION_GUIDE_v2.md`), and the stale "Poly always generates
   `fn main()`" claims in `README.md`, `POLY_SPEC_v2.md`, and
   `POLY_ROADMAP_v2.md` now describe the explicit entry point.
-  `dclock_poly/README.md` was converted to `~~~` fences per the markdown
+  `dclock_poly/README.md` was converted to tilde fences per the markdown
   convention, and `/dclock_poly/target/` was added to `.gitignore`.
 - **Project audit.** A full feature audit was performed: feature-complete
   (4 backends, checker/strict mode, CLI, REPL, LSP, playground, CI matrix,
@@ -1252,7 +1323,6 @@ Now:
 
 ## Files touched (summary)
 
-~~~txt
 compiler/Cargo.toml
 compiler/scripts/build_playground_wasm.sh
 compiler/crates/poly-parser/src/ast.rs
@@ -1276,7 +1346,6 @@ POLY_INTEGRATION_GUIDE.md
 CHANGELOG.md
 README.md
 PROGRESS.md                                        (this file)
-~~~
 
 ## Known limitations / future work
 

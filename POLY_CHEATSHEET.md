@@ -75,6 +75,35 @@ end loop
 
 Range endpoints are inclusive. Collection loops borrow the collection. The C backend supports one numeric range per loop and scalar array iteration; complex collection types may require a `#c` helper.
 
+A range loop is only recognized when the loop variable is followed by a range
+operator, `in`, or a numeric literal — a range starting with a constant or
+identifier (`loop i LIMIT..10`) does not parse. Start with a literal (the
+endpoints may still be expressions) or use `while` for variable bounds. Note
+that `spawn` and `step` are reserved words and cannot name variables or
+methods.
+
+## Methods and Movement
+
+Poly moves values into calls. Methods that mutate state take and return
+`self`, and callers reassign:
+
+~~~poly fragment
+s := s.bump()
+s := s.reset(10)
+~~~
+
+Inside a method, copy `self` fields to locals before passing them to another
+method of the same value — `self.shift(self.x)` moves `self` before the
+argument is evaluated:
+
+~~~poly fragment
+fn shift(self, dx: i32): Grid
+    var x i32 := self.x
+    self := self.move(x, dx)
+    return self
+end fn
+~~~
+
 ## Foreign Blocks
 
 ~~~poly

@@ -296,6 +296,26 @@ loop i 1..3, 7, 19..20
 end loop
 ~~~
 
+Range endpoints are inclusive. The parser recognizes a range loop only when the
+loop variable is followed by a range operator, `in`, or a numeric literal. A
+range whose start is a constant or other identifier is **not** recognized and
+fails to parse — bind the value to a local first or use a `while` loop:
+
+~~~poly fragment
+const TOTAL := 5
+
+# Not recognized: `loop i TOTAL - 4..TOTAL - 1` (identifier range start)
+var start i32 := TOTAL - 4
+loop i 2..TOTAL - 1        # literal start works; endpoints may be expressions
+    put i
+end loop
+
+while start <= TOTAL - 1   # while works with any bounds
+    put start
+    start := start + 1
+end while
+~~~
+
 ### Collection Iteration
 
 ~~~poly fragment
@@ -345,7 +365,43 @@ struct Point
 end struct
 ~~~
 
-**Methods and complex structs** go in `#rust` blocks.
+Poly also supports `impl` blocks with methods that take and return `self`:
+
+~~~poly fragment
+struct Counter
+    n: i32
+end struct
+
+impl Counter
+    fn bump(self): Counter
+        self.n := self.n + 1
+        return self
+    end fn
+end impl
+
+var c := Counter { n: 0 }
+c := c.bump()
+put c.n    # 1
+~~~
+
+Poly moves values: calling a method consumes the receiver, so methods follow
+the take-and-return pattern (`s := s.bump()`) and callers must reassign. Two
+corollaries worth knowing:
+
+- `self.method(self.field, ...)` moves `self` before the arguments evaluate.
+  Copy fields to locals first, then call.
+- A method that only reads state cannot be called repeatedly for its return
+  value (the receiver is consumed). Stash the answer in a Copy-typed field
+  instead and read the field.
+
+**Complex structs (methods, default values, generics)** may also go in
+`#rust` blocks when the Poly surface is not enough.
+
+### Reserved words
+
+`spawn` and `step` are reserved words and cannot be used as identifiers or
+method names (`spawn` is the process-spawn keyword; `step` introduces the
+loop-range step clause). Rename such methods (for example `spawn_piece`).
 
 ---
 
@@ -507,6 +563,7 @@ fn main() {
 | `if` / `while` / `loop` | ✅ | |
 | Simple `fn` (no generics) | ✅ | |
 | Simple `struct` (no methods) | ✅ | |
+| `impl` methods (take-and-return `self`) | ✅ | |
 | Primitives + strings | ✅ | |
 | | | `#rust`/`#c` fn (with generics, async, closures) |
 | | | `#rust`/`#c` struct (with methods, default values) |

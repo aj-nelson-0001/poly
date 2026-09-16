@@ -237,9 +237,16 @@ fn gen_statement(statement: &ast::Statement) -> Statement {
             ty: ty.as_ref().map(gen_type),
             value: gen_expr(value),
         },
-        ast::Statement::ConstDeclaration { .. } => {
-            unreachable!("constants are collected first")
-        }
+        // Only program-scope constants are lifted into `IR.constants` by
+        // `generate`; a `const` inside a function body (or a module) is a
+        // local binding, so lower it to an immutable declaration. Emitting it
+        // as `VarDecl` keeps the immutability distinction out of the IR while
+        // producing the correct initialized local in every backend.
+        ast::Statement::ConstDeclaration { name, value } => Statement::VarDecl {
+            name: name.clone(),
+            ty: None,
+            value: Some(gen_expr(value)),
+        },
         ast::Statement::Assignment { target, value } => Statement::Assignment {
             target: gen_expr(target),
             value: gen_expr(value),
@@ -644,6 +651,30 @@ mod tests {
                 ..
             } => {}
             other => panic!("expected binary add, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn function_local_constants_lower_to_local_declarations() {
+        // A `const` inside a function body is a local binding, not a
+        // program-scope constant: it must lower to a `VarDecl` instead of
+        // panicking with "constants are collected first".
+        let ast = parse(
+            "fn helper(): i32\n    const scale := 3\n    return 5 * scale\nend fn\
+             \nfn main()\n    const local := 10\n    put local\nend fn",
+        );
+        let intermediate_representation = generate(&ast);
+        assert_eq!(intermediate_representation.constants.len(), 0);
+        assert_eq!(intermediate_representation.functions.len(), 2);
+        for function in &intermediate_representation.functions {
+            assert!(
+                function
+                    .body
+                    .iter()
+                    .any(|statement| matches!(statement, Statement::VarDecl { .. })),
+                "expected `const` in `{}` to lower to VarDecl",
+                function.name
+            );
         }
     }
 }

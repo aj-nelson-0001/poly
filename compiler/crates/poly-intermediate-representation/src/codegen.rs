@@ -1480,6 +1480,23 @@ impl IntermediateRepresentationCodeGen {
                 then_block,
                 else_block,
             } => {
+                // The parser encodes `while` statements as an if-expression
+                // without an else block. While loops nested inside other
+                // blocks (match arms, if bodies, loop bodies) are rendered
+                // through this expression path, so a real loop must be
+                // emitted here too — otherwise the loop body would run once
+                // like a plain `if`.
+                if else_block.is_none() {
+                    let cond = self.gen_expr(condition);
+                    let mut result = format!("while {} {{\n", cond);
+                    self.enter_scope();
+                    for statement in then_block {
+                        result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                    }
+                    self.exit_scope();
+                    result.push_str("}\n");
+                    return result;
+                }
                 let cond = self.gen_expr(condition);
                 let mut result = format!("if {} {{\n", cond);
                 self.enter_scope();
@@ -2331,8 +2348,19 @@ impl IntermediateRepresentationCodeGen {
                 condition,
                 then_block,
                 else_block,
-                ..
+                is_while,
             } => {
+                if *is_while {
+                    let cond = self.gen_expr(condition);
+                    let mut result = format!("while {} {{\n", cond);
+                    self.enter_scope();
+                    for statement in then_block {
+                        result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                    }
+                    self.exit_scope();
+                    result.push_str("}\n");
+                    return result;
+                }
                 let cond = self.gen_expr(condition);
                 let mut result = format!("if {} {{\n", cond);
                 self.enter_scope();
@@ -3552,6 +3580,32 @@ mod tests {
     /// Transpile Poly source through the full intermediate representation pipeline.
     fn transpile(source: &str) -> String {
         crate::transpile(source).expect("transpile should succeed")
+    }
+
+    #[test]
+    fn while_nested_inside_if_emits_real_loop() {
+        // The parser encodes `while` as an if-expression without an else
+        // block. When such a loop sits inside another conditional (or any
+        // block rendered by the inline expression path), it must still be
+        // emitted as a `while` — not as a one-shot `if`.
+        let rust = transpile(
+            "fn main()\n    var n i32 := 0\n    var total i32 := 0\n    if true\n        while n < 4\n            total := total + 3\n            n := n + 1\n        end while\n    end if\n    put total\nend fn",
+        );
+        assert!(
+            rust.contains("while (n < 4) {"),
+            "nested while must emit a real loop: {rust}"
+        );
+    }
+
+    #[test]
+    fn while_nested_inside_match_arm_emits_real_loop() {
+        let rust = transpile(
+            "fn main()\n    var total i32 := 0\n    var n i32 := 0\n    var mode i32 := 1\n    match mode\n        1,\n            while n < 4\n                total := total + 3\n                n := n + 1\n            end while\n        _,\n            put 0\n    end match\n    put total\nend fn",
+        );
+        assert!(
+            rust.contains("while (n < 4) {"),
+            "while in match arm must emit a real loop: {rust}"
+        );
     }
 
     #[test]

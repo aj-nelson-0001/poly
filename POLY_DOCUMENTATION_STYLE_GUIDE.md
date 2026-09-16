@@ -7,8 +7,10 @@ This guide defines the conventions for Poly documentation, examples, and referen
 Use fenced code blocks made from three tilde characters. Add a language label when one is available:
 
 ~~~poly
-var greeting := unicode "Hello"
-put greeting
+fn main()
+    var greeting := unicode "Hello"
+    put greeting
+end fn
 ~~~
 
 Use `poly` for complete Poly examples, `poly fragment` for intentionally abbreviated or version-specific snippets, `rust` for generated Rust, and `bash` for shell commands. Keep the opening and closing fences on their own lines.
@@ -29,8 +31,11 @@ A complete Poly block must parse independently; a block labeled `poly fragment` 
 Variable declarations use `:=`. The type is optional and appears without a colon:
 
 ~~~poly
-var count i32 := 0
-var greeting := unicode "Hello"
+fn main()
+    var count i32 := 0
+    var greeting := unicode "Hello"
+    put greeting
+end fn
 ~~~
 
 Use `:=` for declarations and assignment, and `=` for equality comparisons. The legacy `==` spelling is rejected:
@@ -48,7 +53,7 @@ Prefer the current delimiter-free conditional form. A comma after the condition 
 
 Use the explicit `unicode` keyword for Unicode string and character expressions:
 
-~~~poly
+~~~poly fragment
 var message ustring := unicode "こんにちは"
 var checkmark := unicode '✓'
 put unicode "Ready"

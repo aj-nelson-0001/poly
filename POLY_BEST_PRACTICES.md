@@ -13,19 +13,25 @@ This guide covers best practices for using the new Poly I/O and error handling s
 ### Use `-n` for Progress Indicators
 
 ~~~poly
-// Good: Progress indicator
-put "Loading"
-loop i 0..10
-    put "."
-    sleep(100)
-end loop
-put " Done!"
+fn main()
+    // Good: Progress indicator
+    put "Loading"
+    loop i 0..10
+        put "."
+        sleep(100)
+    end loop
+    put " Done!"
+end fn
 
+~~~poly fragment
 // Bad: Newlines in progress
 loop i 0..10
     put "Loading..."  // Creates multiple lines
 end loop
 ~~~
+
+The "Bad" variant above is intentionally a fragment: it is the anti-pattern
+being called out, not a runnable program.
 
 ### Use Appropriate Error Levels
 
@@ -61,10 +67,13 @@ put "Email:  " + email
 ### Always Provide Prompts
 
 ~~~poly
-// Good: Clear prompts
-put "Enter your name: "
-var name ustring := get
+fn main()
+    // Good: Clear prompts
+    put "Enter your name: "
+    var name ustring := get
+end fn
 
+~~~poly fragment
 // Bad: No prompt
 var name ustring := get  // User doesn't know what to enter
 ~~~
@@ -72,10 +81,13 @@ var name ustring := get  // User doesn't know what to enter
 ### Use Default Values for Optional Fields
 
 ~~~poly
-// Good: Sensible defaults
-put "Enter color (default: blue): "
-var color ustring := get --default unicode "blue"
+fn main()
+    // Good: Sensible defaults
+    put "Enter color (default: blue): "
+    var color ustring := get --default unicode "blue"
+end fn
 
+~~~poly fragment
 // Bad: No default
 put "Enter color: "
 var color ustring := get  // Forces user to enter something
@@ -98,9 +110,13 @@ var input ustring := get  // Can hang forever
 ### Validate Input Immediately
 
 ~~~poly
-// Good: Validate early
-var age i32 := get with validate |x| x > 0 and x < 150
+fn main()
+    // Good: Validate early
+    var age i32 := get with validate |x| x > 0 and x < 150
+    put age
+end fn
 
+~~~poly fragment
 // Bad: Validate late
 var age i32 := get
 if age < 0 or age > 150,
@@ -111,10 +127,13 @@ end if
 ### Mask Sensitive Input
 
 ~~~poly
-// Good: Mask passwords
-put "Enter password: "
-var password ustring := get --mask unicode "*"
+fn main()
+    // Good: Mask passwords
+    put "Enter password: "
+    var password ustring := get --mask unicode "*"
+end fn
 
+~~~poly fragment
 // Bad: Expose passwords
 put "Enter password: "
 var password ustring := get  // Visible on screen
@@ -316,10 +335,15 @@ end loop
 ### Use Appropriate Data Types
 
 ~~~poly
-// Good: Use appropriate types
-var count i32 := get --as i32
-var price f64 := get --as f64
+fn main()
+    // Good: Use appropriate types
+    var count i32 := get --as i32
+    var price f64 := get --as f64
+    put count
+    put price
+end fn
 
+~~~poly fragment
 // Bad: Wrong types
 var count ustring := get  // Then parse later
 var price ustring := get  // Then convert later
@@ -332,10 +356,13 @@ var price ustring := get  // Then convert later
 ### Always Mask Sensitive Input
 
 ~~~poly
-// Good: Mask passwords
-put "Enter password: "
-var password ustring := get --mask unicode "*"
+fn main()
+    // Good: Mask passwords
+    put "Enter password: "
+    var password ustring := get --mask unicode "*"
+end fn
 
+~~~poly fragment
 // Bad: Expose passwords
 put "Enter password: "
 var password ustring := get
@@ -344,10 +371,14 @@ var password ustring := get
 ### Validate All Input
 
 ~~~poly
-// Good: Validate everything
-var age i32 := get with validate |x| x > 0 and x < 150
-var email ustring := get with validate |e| e.contains(unicode "@")
+fn main()
+    // Good: Validate everything
+    var age i32 := get with validate |x| x > 0 and x < 150
+    var email ustring := get with validate |e| e.contains(unicode "@")
+    put age
+end fn
 
+~~~poly fragment
 // Bad: Trust input
 var age i32 := get  // Could be negative
 var email ustring := get  // Could be invalid

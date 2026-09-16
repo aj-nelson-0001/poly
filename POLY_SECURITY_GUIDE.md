@@ -14,7 +14,7 @@ This guide covers security best practices for the new Poly I/O and error handlin
 
 ### Always Validate User Input
 
-~~~poly
+~~~poly fragment
 // Good: Validate all input
 var age i32 := get with validate |x| x > 0 and x < 150
 var email ustring := get with validate |e| e.contains(unicode "@") and e.len() < 255
@@ -61,7 +61,7 @@ var username ustring := get  // No validation
 
 ### Always Mask Password Input
 
-~~~poly
+~~~poly fragment
 // Good: Mask passwords
 put "Enter password: "
 var password ustring := get --mask unicode "*"
@@ -111,7 +111,7 @@ store_user(username, password)  // Insecure!
 
 ### Validate File Paths
 
-~~~poly
+~~~poly fragment
 // Good: Validate file paths
 fn is_valid_path(path: ustring): bool
     // Check for path traversal
@@ -242,7 +242,7 @@ var input ustring := get  // Can hang forever, allowing DoS
 
 ### Limit Input Size
 
-~~~poly
+~~~poly fragment
 // Good: Limit input size
 var input ustring := get with validate |i| i.len() <= 10000
 
@@ -363,7 +363,7 @@ end fn
 
 ### Use HTTPS
 
-~~~poly
+~~~poly fragment
 // Good: Use HTTPS
 var url ustring := "https://api.example.com/data"
 var response := get from  url --timeout 5000

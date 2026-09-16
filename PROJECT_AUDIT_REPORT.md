@@ -137,7 +137,7 @@ The C backend covers the orchestration subset but many features require `#c` hel
 ### `with validate` is not implemented (fixed 2026-09-07)
 `POLY_TUTORIAL.md` (line 117) documented `with validate` as a working feature:
 
-~~~poly
+~~~poly fragment
 var age i32 := get with validate |x| x >= 1 and x <= 150
 ~~~
 

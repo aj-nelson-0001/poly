@@ -15,10 +15,12 @@ This tutorial covers the fundamental I/O operations and error handling in Poly. 
 The `put` command outputs text to the console with a newline character:
 
 ~~~poly
-put "Hello, World!"           # Output with newline
-put 42                         # Output number
-put 3.14159                    # Output float
-put true                       # Output boolean
+fn main()
+    put "Hello, World!"           # Output with newline
+    put 42                         # Output number
+    put 3.14159                    # Output float
+    put true                       # Output boolean
+end fn
 ~~~
 
 ### Output
@@ -26,8 +28,10 @@ put true                       # Output boolean
 Use `put` to print to the console. Each `put` adds a newline:
 
 ~~~poly
-put "Hello, World!"
-put 42
+fn main()
+    put "Hello, World!"
+    put 42
+end fn
 ~~~
 
 Output:
@@ -41,8 +45,10 @@ Hello, World!
 Write to files using redirection operators:
 
 ~~~poly
-put "Line 1" to "output.txt"    # Write (truncate)
-put "Line 2" to "output.txt" -append   # Append
+fn main()
+    put "Line 1" to "output.txt"    # Write (truncate)
+    put "Line 2" to "output.txt" -append   # Append
+end fn
 ~~~
 
 ### Error/Warning Output
@@ -50,9 +56,11 @@ put "Line 2" to "output.txt" -append   # Append
 Use `error`, `warn`, and `info` for different output levels:
 
 ~~~poly
-error "Something went wrong"   # Error message (stderr)
-warn "Deprecated feature"      # Warning message (stderr)
-info "Debug information"       # Debug info (stderr)
+fn main()
+    error "Something went wrong"   # Error message (stderr)
+    warn "Deprecated feature"      # Warning message (stderr)
+    info "Debug information"       # Debug info (stderr)
+end fn
 ~~~
 
 ---
@@ -64,9 +72,11 @@ info "Debug information"       # Debug info (stderr)
 Read a line from the user:
 
 ~~~poly
-put "Enter your name: "
-var name ustring := get
-put "Hello, " + name + "!"
+fn main()
+    put "Enter your name: "
+    var name ustring := get
+    put "Hello, " + name + "!"
+end fn
 ~~~
 
 ### Typed Input
@@ -74,9 +84,11 @@ put "Hello, " + name + "!"
 Poly automatically parses input based on the variable type:
 
 ~~~poly
-put "Enter your age: "
-var age i32 := get
-put "In 10 years you will be: " + (age + 10)
+fn main()
+    put "Enter your age: "
+    var age i32 := get
+    put "In 10 years you will be: " + (age + 10)
+end fn
 ~~~
 
 ### Input with Default Values
@@ -84,9 +96,11 @@ put "In 10 years you will be: " + (age + 10)
 Use `--default` for optional input:
 
 ~~~poly
-put "Enter color (or press Enter for default): "
-var color ustring := get --default unicode "blue"
-put "Color: " + color
+fn main()
+    put "Enter color (or press Enter for default): "
+    var color ustring := get --default unicode "blue"
+    put "Color: " + color
+end fn
 ~~~
 
 ### Password Input
@@ -95,9 +109,11 @@ Use `--mask` to hide input; echo is suppressed while typing on Unix terminals,
 and the read falls back to plain input elsewhere:
 
 ~~~poly
-put "Enter password: "
-var password ustring := get --mask unicode "*"
-put "Password length: " + password.len()
+fn main()
+    put "Enter password: "
+    var password ustring := get --mask unicode "*"
+    put "Password length: " + password.len()
+end fn
 ~~~
 
 ### Input with Timeout
@@ -105,11 +121,13 @@ put "Password length: " + password.len()
 Use `--timeout` to prevent hanging:
 
 ~~~poly
-match get --timeout 3000
-    Ok(input), put "You typed: " + input
-    Timeout, warn "Too slow!"
-    Error(e), error "Error: " + e
-end match
+fn main()
+    match get --timeout 3000
+        Ok(input), put "You typed: " + input
+        Timeout, warn "Too slow!"
+        Error(e), error "Error: " + e
+    end match
+end fn
 ~~~
 
 ### Input with Validation
@@ -119,18 +137,20 @@ end match
 > at runtime (see the v2 spec). Validate input with a loop instead:
 
 ~~~poly
-put "Enter age: "
-var done bool := false
-var age i32 := 0
-while not done
-    var input i32 := get --as i32
-    if input >= 1 and input <= 150
-        age := input
-        done := true
-    else
-        put "Age must be between 1 and 150"
-    end if
-end while
+fn main()
+    put "Enter age: "
+    var done bool := false
+    var age i32 := 0
+    while not done
+        var input i32 := get --as i32
+        if input >= 1 and input <= 150
+            age := input
+            done := true
+        else
+            put "Age must be between 1 and 150"
+        end if
+    end while
+end fn
 ~~~
 
 ### Delimiter-Based Input
@@ -139,9 +159,11 @@ Use `--until` to read until a delimiter; input stops at the delimiter (which is
 excluded from the result), so `--until unicode ","` on `apple,banana` yields `apple`:
 
 ~~~poly
-put "Enter CSV line: "
-var line ustring := get --until unicode ","
-put "First field: " + line
+fn main()
+    put "Enter CSV line: "
+    var line ustring := get --until unicode ","
+    put "First field: " + line
+end fn
 ~~~
 
 ---
@@ -162,17 +184,19 @@ end enum
 ### Basic Error Handling
 
 ~~~poly
-fn divide(a: f64, b: f64): Result<f64, ustring>
-    if b = 0.0,
-        return Error(unicode "Division by zero")
-    end if
-    return Ok(a / b)
-end fn
+fn main()
+    fn divide(a: f64, b: f64): Result<f64, ustring>
+        if b = 0.0,
+            return Error(unicode "Division by zero")
+        end if
+        return Ok(a / b)
+    end fn
 
-match divide(10.0, 2.0)
-    Ok(result), put "Result: " + result.to_string()
-    Error(e), error "Error: " + e
-end match
+    match divide(10.0, 2.0)
+        Ok(result), put "Result: " + result.to_string()
+        Error(e), error "Error: " + e
+    end match
+end fn
 ~~~
 
 ### Custom Error Types
@@ -226,12 +250,14 @@ fn validate_name(name: ustring): Result<ustring, ValidationError>
     return Ok(name)
 end fn
 
+fn main()
 match validate_name(unicode "John")
     Ok(valid_name), put "Valid: " + valid_name
     Error(EmptyInput), error "Name cannot be empty"
     Error(TooShort(min)), error "Name too short, minimum " + min.to_string()
     Error(TooLong(max)), error "Name too long, maximum " + max.to_string()
 end match
+end fn
 ~~~
 
 ### Wildcard Pattern
@@ -306,10 +332,12 @@ end fn
 Poly's `loop` command supports flexible iteration inspired by Sinclair QL SuperBASIC. Loop ranges include both endpoints, so `1..3` iterates `1, 2, 3`:
 
 ~~~poly
-# Simple range
-loop i 0..10
-    put i
-end loop
+fn main()
+    # Simple range
+    loop i 0..10
+        put i
+    end loop
+end fn
 ~~~
 
 ### Multiple Ranges and Values
@@ -317,20 +345,22 @@ end loop
 The real power comes from combining multiple ranges and specific values:
 
 ~~~poly
-# Multiple ranges and specific values
-loop i 1..3, 7, 19..21
-    put i  # Iterates: 1, 2, 3, 7, 19, 20, 21
-end loop
+fn main()
+    # Multiple ranges and specific values
+    loop i 1..3, 7, 19..21
+        put i  # Iterates: 1, 2, 3, 7, 19, 20, 21
+    end loop
 
-# Specific values only
-loop i 1, 5, 10, 100
-    put i  # Iterates: 1, 5, 10, 100
-end loop
+    # Specific values only
+    loop i 1, 5, 10, 100
+        put i  # Iterates: 1, 5, 10, 100
+    end loop
 
-# Complex mix
-loop i 1..5, 10, 20..25 step 2, 100
-    put i  # Iterates: 1, 2, 3, 4, 5, 10, 20, 22, 24, 100
-end loop
+    # Complex mix
+    loop i 1..5, 10, 20..25 step 2, 100
+        put i  # Iterates: 1, 2, 3, 4, 5, 10, 20, 22, 24, 100
+    end loop
+end fn
 ~~~
 
 ### Steps
@@ -338,15 +368,17 @@ end loop
 Use `step` to control the increment:
 
 ~~~poly
-# Positive step
-loop i 0..10 step 2
-    put i  # Iterates: 0, 2, 4, 6, 8, 10
-end loop
+fn main()
+    # Positive step
+    loop i 0..10 step 2
+        put i  # Iterates: 0, 2, 4, 6, 8, 10
+    end loop
 
-# Negative step (counting down)
-loop i 10..1 step -1
-    put i  # Iterates: 10, 9, 8, ..., 1
-end loop
+    # Negative step (counting down)
+    loop i 10..1 step -1
+        put i  # Iterates: 10, 9, 8, ..., 1
+    end loop
+end fn
 ~~~
 
 ### Collection Iteration
@@ -354,30 +386,34 @@ end loop
 Iterate over collections and with indices:
 
 ~~~poly
-# Iterate over collection
-var fruits Vec<ustring> := [unicode "apple", unicode "banana", unicode "cherry"]
-loop fruit in fruits
-    put fruit
-end loop
+fn main()
+    # Iterate over collection
+    var fruits Vec<ustring> := [unicode "apple", unicode "banana", unicode "cherry"]
+    loop fruit in fruits
+        put fruit
+    end loop
 
-# Iterate with index
-loop (index, fruit) in fruits.enumerate()
-    put index.to_string() + ": " + fruit
-end loop
+    # Iterate with index
+    loop (index, fruit) in fruits.enumerate()
+        put index.to_string() + ": " + fruit
+    end loop
+end fn
 ~~~
 
 ### Practical Example
 
 ~~~poly
-# Multiplication table
-put "Multiplication Table (1..5)"
-loop i 1..5
-    var row ustring := ""
-    loop j 1..5
-        row := row + (i * j).to_string().pad_left(4)
+fn main()
+    # Multiplication table
+    put "Multiplication Table (1..5)"
+    loop i 1..5
+        var row ustring := ""
+        loop j 1..5
+            row := row + (i * j).to_string().pad_left(4)
+        end loop
+        put row
     end loop
-    put row
-end loop
+end fn
 ~~~
 
 ---

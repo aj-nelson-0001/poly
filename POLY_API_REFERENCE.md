@@ -14,6 +14,8 @@ fn main()
     if count = limit
         put unicode "done"
     end if
+    put inferred
+    put name
 end fn
 ~~~
 

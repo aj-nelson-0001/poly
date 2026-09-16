@@ -58,12 +58,14 @@ cargo run --manifest-path rust_output/hello/Cargo.toml
 ### Hello World
 
 ~~~poly
-put "Hello, World!"
+fn main()
+    put "Hello, World!"
+end fn
 ~~~
 
 ### Variables
 
-~~~poly
+~~~poly fragment
 var x i32 := 42
 var name ustring := "Alice"
 var pi := 3.14
@@ -92,7 +94,7 @@ end if
 ~~~
 
 **While Loop:**
-~~~poly
+~~~poly fragment
 var i := 0
 while i < 10
     put i
@@ -101,7 +103,7 @@ end while
 ~~~
 
 **For Loop (Range):**
-~~~poly
+~~~poly fragment
 for i in 0..10
     put i
 end for
@@ -109,7 +111,7 @@ end for
 
 ### Increment
 
-~~~poly
+~~~poly fragment
 var x := 0
 x := x + 1   # increment x by one
 ~~~
@@ -131,22 +133,28 @@ end match
 ### Read User Input
 
 ~~~poly
-var name := get unicode "What is your name? "
-put "Hello, " + name + "!"
+fn main()
+    var name := get unicode "What is your name? "
+    put "Hello, " + name + "!"
+end fn
 ~~~
 
 ### Read a File
 
 ~~~poly
-var content := get from "data.txt"
-put content
+fn main()
+    var content := get from "data.txt"
+    put content
+end fn
 ~~~
 
 ### Write to a File
 
 ~~~poly
-put "Hello" to "output.txt"
-put "World" to "output.txt" -append
+fn main()
+    put "Hello" to "output.txt"
+    put "World" to "output.txt" -append
+end fn
 ~~~
 
 ### Error Handling

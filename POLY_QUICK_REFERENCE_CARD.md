@@ -5,14 +5,16 @@ This card describes the current v2 preview. See [POLY_SPEC_v2.md](POLY_SPEC_v2.m
 ## Declarations and Assignment
 
 ~~~poly
-var count i32 := 0
-var message ustring := unicode "hello"
-let limit: i32 := 10
-const MAX := 100
-count := count + 1
-if count = MAX
-    put "done"
-end if
+fn main()
+    var count i32 := 0
+    var message ustring := unicode "hello"
+    let limit: i32 := 10
+    const MAX := 100
+    count := count + 1
+    if count = MAX
+        put "done"
+    end if
+end fn
 ~~~
 
 `:=` assigns. `=` compares. The legacy `==` spelling is rejected.
@@ -20,18 +22,20 @@ end if
 ## Output and Input
 
 ~~~poly
-put "hello"
-put "log entry" to "app.log"
-put "more" to "app.log" -append
-error "failure"
-warn "warning"
-info "details"
+fn main()
+    put "hello"
+    put "log entry" to "app.log"
+    put "more" to "app.log" -append
+    error "failure"
+    warn "warning"
+    info "details"
 
-var name ustring := get
-var age i32 := get --as i32
-var field ustring := get --until unicode ","
-var password ustring := get --mask unicode "*"
-var header bytes := get from "data.bin" --bytes 8
+    var name ustring := get
+    var age i32 := get --as i32
+    var field ustring := get --until unicode ","
+    var password ustring := get --mask unicode "*"
+    var header bytes := get from "data.bin" --bytes 8
+end fn
 ~~~
 
 `put` always adds a newline. Diagnostic commands write `[ERROR]`, `[WARN]`, or `[INFO]` to stderr. File redirects and the input flags above are implemented by the Rust target; the C target currently rejects redirects and stdin.
@@ -77,25 +81,39 @@ struct Point
     var y: i32
 end struct
 
-var result := add(2, 3)
-put result
+fn main()
+    var result := add(2, 3)
+    put result
+end fn
 ~~~
 
 The Rust target supports the broader parser/checker feature set, including enums, traits, modules, closures, generic types, async functions, matches, and collections. The C target supports scalar orchestration, simple functions, plain structs, arithmetic, conditions, loops, and stdout/stderr.
 
 ## Foreign Blocks and Targets
 
+The two blocks below show the same helper for each target; keep only the
+block matching your selected target in a real program.
+
 ~~~poly
 #rust
 fn helper(x: i32) -> i32 { x * 2 }
 #endrust
 
+fn main()
+    var result i32 := helper(21)
+    put result
+end fn
+~~~
+
+~~~poly fragment
 #c
 int helper(int x) { return x * 2; }
 #endc
 
-var result i32 := helper(21)
-put result
+fn main()
+    var result i32 := helper(21)
+    put result
+end fn
 ~~~
 
 Foreign blocks must be top-level and their contents are copied as target-language text. Only the block matching the selected target is emitted. Optional `extern rust fn ...` and `extern c fn ...` declarations are top-level checker-only interface contracts.

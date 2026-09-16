@@ -74,7 +74,7 @@ const NAME := value
 
 ### Examples
 
-~~~poly
+~~~poly fragment
 var count i32 := 0
 var status bool := true
 const MAX_BUFFER := 1024
@@ -113,7 +113,7 @@ x := y     // replace x with y; self-reference is rejected
 
 ### Bitwise Operations
 
-~~~poly
+~~~poly fragment
 var a i32 := 0b1010
 var b i32 := 0b1100
 
@@ -157,7 +157,7 @@ var byte_count i32 := greeting.byte_len()  // Byte count
 
 ### String Manipulation
 
-~~~poly
+~~~poly fragment
 var s ustring := unicode "hello"
 s := s + unicode " world"        // Append (also `s += unicode " world"`)
 s = s.to_uppercase()           // New uppercase string
@@ -218,7 +218,7 @@ var error Result<i32, Error> := Error(Error.InvalidInput)
 
 ### Basic Struct Definition
 
-~~~poly
+~~~poly fragment
 struct Point
     var x: f32
     var y: f32
@@ -227,7 +227,7 @@ end struct
 
 The field `var` prefix is optional:
 
-~~~poly
+~~~poly fragment
 struct Point
     x: f32
     y: f32
@@ -236,7 +236,7 @@ end struct
 
 ### Struct with Methods
 
-~~~poly
+~~~poly fragment
 struct Point
 var x: f32
 var y: f32
@@ -286,7 +286,7 @@ var distance Meters := Meters(42.5)
 
 ### Unit Structs
 
-~~~poly
+~~~poly fragment
 struct Marker  // No fields - used for type-level programming
 end struct
 ~~~
@@ -297,7 +297,7 @@ end struct
 
 ### Basic Enums
 
-~~~poly
+~~~poly fragment
 enum Direction
     North
     South
@@ -322,7 +322,7 @@ var rect Shape := Shape::Rectangle { width: 10.0, height: 20.0 }
 
 ### Enums with Methods
 
-~~~poly
+~~~poly fragment
 enum TrafficLight
     Red
     Yellow
@@ -549,7 +549,7 @@ enforce this at the language level; the borrow checker of the generated
 Rust does). To keep both values valid, build a fresh string with
 concatenation:
 
-~~~poly
+~~~poly fragment
 var s1 ustring := unicode "hello"
 var s2 := s1 + unicode ""   // A fresh copy, s1 remains valid
 ~~~
@@ -846,7 +846,7 @@ end match
 
 ### If/Else Expressions
 
-~~~poly
+~~~poly fragment
 fn main()
     // Basic if/else
     var condition := true
@@ -879,7 +879,7 @@ end fn
 
 ### While Loops
 
-~~~poly
+~~~poly fragment
 // Basic while loop
 var i i32 := 0
 while i < 10
@@ -1131,7 +1131,7 @@ end
 
 ### Higher-Order Functions
 
-~~~poly
+~~~poly fragment
 // Map
 var doubled := [1, 2, 3].map(|x| x * 2)
 
@@ -1168,7 +1168,7 @@ var result := [1, 2, 3, 4, 5]
 
 ### Function Pointers
 
-~~~poly
+~~~poly fragment
 // Function type
 type MathOp := fn(i32, i32) -> i32
 
@@ -1579,7 +1579,7 @@ info expression
 
 ### Basic Examples
 
-~~~poly
+~~~poly fragment
 // Simple string output
 put "Hello, World!"
 
@@ -1628,7 +1628,7 @@ var choice i32 := get
 
 ### Formatting Output
 
-~~~poly
+~~~poly fragment
 // Format string with placeholders
 var name ustring := unicode "World"
 var count i32 := 42
@@ -1880,7 +1880,7 @@ end match
 
 ### Accessibility
 
-~~~poly
+~~~poly fragment
 // Screen reader friendly output
 put "Enter your name: "  // Clear, descriptive prompt
 var name ustring := get
@@ -2201,7 +2201,7 @@ The `get` command is Poly's primary input mechanism, providing a simple syntax f
 
 ### Syntax Variants
 
-~~~poly
+~~~poly fragment
 // Read a line from stdin (returns ustring)
 var line ustring := get
 
@@ -2249,7 +2249,7 @@ var input ustring := get with complete [unicode "start", unicode "stop"]
 
 ### Basic Examples
 
-~~~poly
+~~~poly fragment
 // Simple input
 var line ustring := get
 put "You entered: " + line

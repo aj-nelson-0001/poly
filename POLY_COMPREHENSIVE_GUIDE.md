@@ -38,7 +38,7 @@ Poly is a modern, expressive programming language that transpiles to Rust. It co
 
 ### Example
 
-~~~poly
+~~~poly fragment
 // Hello World in Poly
 put "Hello, World!"
 ~~~
@@ -73,7 +73,7 @@ cargo build --release
 
 Create a file called `hello.poly`:
 
-~~~poly
+~~~poly fragment
 // Variables
 var name := "World"
 var age := 25
@@ -104,7 +104,7 @@ Run it:
 
 Poly supports mutable and immutable variables:
 
-~~~poly
+~~~poly fragment
 // Mutable variables (can be changed)
 var x := 10
 x := 20// OK
@@ -122,7 +122,7 @@ const MAX_SIZE := 1024
 
 Type annotations are optional but recommended:
 
-~~~poly
+~~~poly fragment
 // With type annotations
 var name String := "Alice"
 var age i32 := 30
@@ -181,7 +181,7 @@ var shift := 1 << 4       // 16
 
 ### Built-in Types
 
-~~~poly
+~~~poly fragment
 // Numeric types
 var i i32 := 42
 var u u64 := 100
@@ -206,7 +206,7 @@ var res Result<i32, String> := Ok(42)
 
 ### Custom Types
 
-~~~poly
+~~~poly fragment
 // Type aliases
 type UserId := i32
 type Email := String
@@ -248,7 +248,7 @@ var set Set<i32> := []
 
 ### If/Else
 
-~~~poly
+~~~poly fragment
 var age := 25
 
 if age >= 18
@@ -262,7 +262,7 @@ end if
 
 ### While Loops
 
-~~~poly
+~~~poly fragment
 var i := 0
 while i < 10
     put i
@@ -272,7 +272,7 @@ end while
 
 ### For Loops with Ranges
 
-~~~poly
+~~~poly fragment
 // Simple range (inclusive endpoints)
 loop i 0..10
     put i
@@ -326,7 +326,7 @@ end fn
 
 ### Multiple Parameters
 
-~~~poly
+~~~poly fragment
 fn greet(name: String, greeting: String): String
     return greeting + ", " + name + "!"
 end fn
@@ -356,7 +356,7 @@ put apply(square, 5)   // 25
 
 ### Closures
 
-~~~poly
+~~~poly fragment
 fn make_adder(x: i32): fn(i32) -> i32
     return |y| x + y
 end fn
@@ -371,7 +371,7 @@ put add5(10)   // 15
 
 ### Arrays
 
-~~~poly
+~~~poly fragment
 // Vectors (dynamic arrays)
 var arr Vec<i32> := [1, 2, 3, 4, 5]
 put arr[0]      // 1
@@ -431,7 +431,7 @@ put items.len()  // collection still usable (loop borrows)
 
 ### Structs
 
-~~~poly
+~~~poly fragment
 struct Point
     var x: f64
     var y: f64
@@ -453,7 +453,7 @@ put p1.distance(p2)  // 5.0
 
 ### Enums
 
-~~~poly
+~~~poly fragment
 // Unit variants
 enum Color
     Red
@@ -525,7 +525,7 @@ end match
 
 ### Nested Patterns
 
-~~~poly
+~~~poly fragment
 enum Expr
     Num(f32)
     Add(Expr, Expr)
@@ -550,7 +550,7 @@ put evaluate(expr)  // 14.0
 
 ### Error Statements
 
-~~~poly
+~~~poly fragment
 fn divide(a: f64, b: f64): f64
     if b = 0.0
         error "Division by zero"
@@ -604,7 +604,7 @@ end try
 
 ### Writing Files
 
-~~~poly
+~~~poly fragment
 // Write to file (overwrite)
 put "Hello, World!" to "output.txt"
 
@@ -614,7 +614,7 @@ put "New line" to "output.txt" -append
 
 ### Command Line Input
 
-~~~poly
+~~~poly fragment
 // Read from stdin
 var name := get
 put "Hello, " + name + "!"
@@ -723,7 +723,7 @@ end impl
 
 ### Calculator
 
-~~~poly
+~~~poly fragment
 fn calculator()
     put "Simple Calculator"
     put "------------------"
@@ -876,7 +876,7 @@ put html
 
 ### 1. Use Meaningful Variable Names
 
-~~~poly
+~~~poly fragment
 // Good
 var user_name := "Alice"
 var total_price := 99.99
@@ -995,7 +995,7 @@ x := 20  // OK
 
 ### 3. Array Bounds
 
-~~~poly
+~~~poly fragment
 var arr := [1, 2, 3]
 put arr[5]  // Panic!
 
@@ -1007,7 +1007,7 @@ end if
 
 ### 4. String Comparison
 
-~~~poly
+~~~poly fragment
 var a := "hello"
 var b := "hello"
 if a = b
@@ -1021,7 +1021,7 @@ end if  // This works!
 
 ### 1. Use Appropriate Types
 
-~~~poly
+~~~poly fragment
 // Good - use smallest type that fits
 var small_num u8 := 255 as u8
 var big_num u64 := 18446744073709551615 as u64
@@ -1059,7 +1059,7 @@ end fn
 
 ### 4. Use Iterators
 
-~~~poly
+~~~poly fragment
 // Good - iterator chain
 var numbers := [1, -2, 3, -4, 5]
 var sum := numbers.filter(|x| x > 0).reduce(0, |acc, x| acc + x)

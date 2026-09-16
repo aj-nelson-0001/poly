@@ -5,17 +5,19 @@ This is a current v2 reference. Historical syntax belongs in the migration docum
 ## Declarations and Operators
 
 ~~~poly
-var count i32 := 0
-var name ustring := unicode "Poly"
-let label: ustring := unicode "current"
-const limit := 3
-count := count + 1
+fn main()
+    var count i32 := 0
+    var name ustring := unicode "Poly"
+    let label: ustring := unicode "current"
+    const limit := 3
+    count := count + 1
 
-if count = limit
-    put name
-else
-    warn unicode "not finished"
-end if
+    if count = limit
+        put name
+    else
+        warn unicode "not finished"
+    end if
+end fn
 ~~~
 
 Use `:=` for initialization and assignment. Use `=` for equality. `==` is rejected. Logical, bitwise, and remainder operators are keyword-spelled: `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, and `shift left` / `shift right` (`<<` and `>>` remain valid). The retired symbol spellings `&&`, `||`, `!`, `^`, `%`, `&`, `|`, `~` are rejected with migration diagnostics. `var` writes an optional type without a colon; `let` type annotations use a colon.
@@ -23,12 +25,14 @@ Use `:=` for initialization and assignment. Use `=` for equality. `==` is reject
 ## Output
 
 ~~~poly
-put unicode "stdout"
-error unicode "error"
-warn unicode "warning"
-info unicode "diagnostic"
-put unicode "replace" to "output.txt"
-put unicode "append" to "output.txt" -append
+fn main()
+    put unicode "stdout"
+    error unicode "error"
+    warn unicode "warning"
+    info unicode "diagnostic"
+    put unicode "replace" to "output.txt"
+    put unicode "append" to "output.txt" -append
+end fn
 ~~~
 
 `put` always adds a newline. Rust supports file redirects. C supports stdout/stderr output and rejects file redirects with a diagnostic.
@@ -36,13 +40,15 @@ put unicode "append" to "output.txt" -append
 ## Rust Input
 
 ~~~poly
-var line ustring := get
-var prompted ustring := get unicode "Name: "
-var number i32 := get --as i32
-var fallback ustring := get --default unicode "anonymous"
-var hidden ustring := get --mask unicode "*"
-var field ustring := get --until unicode ","
-var header bytes := get from "input.bin" --bytes 8
+fn main()
+    var line ustring := get
+    var prompted ustring := get unicode "Name: "
+    var number i32 := get --as i32
+    var fallback ustring := get --default unicode "anonymous"
+    var hidden ustring := get --mask unicode "*"
+    var field ustring := get --until unicode ","
+    var header bytes := get from "input.bin" --bytes 8
+end fn
 ~~~
 
 `get` and its input flags are Rust-backend features. The C backend rejects `get`; provide input through a target-language helper in `#c`.
@@ -50,18 +56,20 @@ var header bytes := get from "input.bin" --bytes 8
 ## Control Flow
 
 ~~~poly
-loop i 0..5
-    put i
-end loop
+fn main()
+    loop i 0..5
+        put i
+    end loop
 
-loop i 10..1 step -1
-    put i
-end loop
+    loop i 10..1 step -1
+        put i
+    end loop
 
-var values := [10, 20, 30]
-loop value in values
-    put value
-end loop
+    var values := [10, 20, 30]
+    loop value in values
+        put value
+    end loop
+end fn
 ~~~
 
 Range endpoints are inclusive. `while condition ... end while`, `break`, and `continue` are also supported. The range start may be any expression (`loop i BUF..TOTAL - 1`); a var-less `loop 0..10` discards the counter. C currently supports one numeric range per loop and a limited scalar collection form.
@@ -81,8 +89,10 @@ s := s.bump()          # methods take and return self; reassign the result
 fn double_value(value: i32) -> i32 { value * 2 }
 #endrust
 
-var result i32 := double_value(21)
-put result
+fn main()
+    var result i32 := double_value(21)
+    put result
+end fn
 ~~~
 
 ~~~poly
@@ -90,8 +100,10 @@ put result
 int double_value(int value) { return value * 2; }
 #endc
 
-var result i32 := double_value(21)
-put result
+fn main()
+    var result i32 := double_value(21)
+    put result
+end fn
 ~~~
 
 Foreign blocks must be at program scope and are emitted verbatim for the selected target. Add `extern rust fn ...` or `extern c fn ...` at program scope when Poly-side argument and return checks are useful; declarations are not emitted. `#cpp` is rejected because no C++ backend exists.

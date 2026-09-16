@@ -5,21 +5,23 @@ This page describes the maintained v2 preview contract. The [documentation index
 ## Core Syntax
 
 ~~~poly
-var count i32 := 0
-let greeting: ustring := unicode "Hello"
-const limit := 3
+fn main()
+    var count i32 := 0
+    let greeting: ustring := unicode "Hello"
+    const limit := 3
 
-loop i 0..limit
-    count := count + 1
-end loop
+    loop i 0..limit
+        count := count + 1
+    end loop
 
-if count = 4
-    put greeting
-else
-    warn unicode "Unexpected count"
-end if
+    if count = 4
+        put greeting
+    else
+        warn unicode "Unexpected count"
+    end if
 
-put "count = " + count
+    put "count = " + count
+end fn
 ~~~
 
 Declarations and assignments use `:=`. Equality uses `=`. The legacy `==` spelling is rejected. `put` always writes a newline; there is no `-n` flag.
@@ -27,12 +29,14 @@ Declarations and assignments use `:=`. Equality uses `=`. The legacy `==` spelli
 ## Output
 
 ~~~poly
-put unicode "stdout"
-error unicode "error message"
-warn unicode "warning message"
-info unicode "diagnostic message"
-put unicode "replace" to "output.txt"
-put unicode "append" to "output.txt" -append
+fn main()
+    put unicode "stdout"
+    error unicode "error message"
+    warn unicode "warning message"
+    info unicode "diagnostic message"
+    put unicode "replace" to "output.txt"
+    put unicode "append" to "output.txt" -append
+end fn
 ~~~
 
 `error`, `warn`, and `info` write to stderr with `[ERROR]`, `[WARN]`, and `[INFO]` prefixes. File redirects are implemented by the Rust backend; the C backend reports an actionable unsupported-feature error.
@@ -40,13 +44,15 @@ put unicode "append" to "output.txt" -append
 ## Input: Rust Backend
 
 ~~~poly
-var line ustring := get
-var prompted ustring := get unicode "Name: "
-var number i32 := get --as i32
-var defaulted ustring := get --default unicode "anonymous"
-var password ustring := get --mask unicode "*"
-var field ustring := get --until unicode ","
-var header bytes := get from "data.bin" --bytes 8
+fn main()
+    var line ustring := get
+    var prompted ustring := get unicode "Name: "
+    var number i32 := get --as i32
+    var defaulted ustring := get --default unicode "anonymous"
+    var password ustring := get --mask unicode "*"
+    var field ustring := get --until unicode ","
+    var header bytes := get from "data.bin" --bytes 8
+end fn
 ~~~
 
 `get` is a Rust-backend feature. `--timeout`, `--default`, `--mask`, `--until`, `--bytes`, and `--as` are parsed as structured flags; the generated Rust runtime implements the supported forms. The C backend rejects `get`.
@@ -54,23 +60,25 @@ var header bytes := get from "data.bin" --bytes 8
 ## Loops
 
 ~~~poly
-loop i 0..5
-    put i
-end loop
+fn main()
+    loop i 0..5
+        put i
+    end loop
 
-loop i 10..1 step -1
-    put i
-end loop
+    loop i 10..1 step -1
+        put i
+    end loop
 
-var values := [10, 20, 30]
-loop value in values
-    put value
-end loop
+    var values := [10, 20, 30]
+    loop value in values
+        put value
+    end loop
 
-loop (index, value) in values.enumerate()
-    put index
-    put value
-end loop
+    loop (index, value) in values.enumerate()
+        put index
+        put value
+    end loop
+end fn
 ~~~
 
 Range endpoints are inclusive. Collection loops borrow the collection. The C backend supports one numeric range per loop and scalar array iteration; complex collection types may require a `#c` helper.
@@ -115,8 +123,10 @@ fn double_value(value: i32) -> i32 {
 }
 #endrust
 
-var result i32 := double_value(21)
-put result
+fn main()
+    var result i32 := double_value(21)
+    put result
+end fn
 ~~~
 
 ~~~poly
@@ -124,8 +134,10 @@ put result
 int double_value(int value) { return value * 2; }
 #endc
 
-var result i32 := double_value(21)
-put result
+fn main()
+    var result i32 := double_value(21)
+    put result
+end fn
 ~~~
 
 Foreign blocks are emitted to the selected target at file scope. The target compiler validates their contents. `#cpp` is rejected explicitly; there is no C++ backend yet.

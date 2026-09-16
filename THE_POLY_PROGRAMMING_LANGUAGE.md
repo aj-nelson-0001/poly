@@ -31,7 +31,7 @@ demonstrates it with short, complete examples.
 
 The traditional starting point:
 
-~~~poly
+~~~poly fragment
 fn main()
     put "Hello, world!"
 end fn
@@ -51,7 +51,7 @@ Blocks begin after the opening keyword and end with end <keyword>.
 
 A comment starts with # and runs to the end of the line:
 
-~~~poly
+~~~poly fragment
 # This is a comment
 ~~~
 
@@ -62,7 +62,7 @@ A comment starts with # and runs to the end of the line:
 Poly variables are declared with var, a name, an optional type, and an
 initializer using :=:
 
-~~~poly
+~~~poly fragment
 var x := 42            # inferred as i32
 var y f64 := 3.14      # explicit type
 var name := "Alice"    # inferred as String
@@ -72,7 +72,7 @@ The compiler infers types from the initializer when the type is omitted.
 Once declared, a variable is mutable. Reassign with set or with the
 = operator:
 
-~~~poly
+~~~poly fragment
 var count i32 := 0
 count := 5
 count = 10
@@ -101,7 +101,7 @@ cast.
 
 Constants are declared with const and are immutable:
 
-~~~poly
+~~~poly fragment
 const MAX_SIZE := 1024
 const PI := 3.141592653589793
 ~~~
@@ -114,7 +114,7 @@ Poly expressions are familiar arithmetic with a few additions.
 
 ### Arithmetic
 
-~~~poly
+~~~poly fragment
 var a i32 := 10
 var b i32 := 3
 
@@ -143,7 +143,7 @@ Note: equality is =, not ==. Assignment uses := (declaration) or
 
 ### Bitwise Operations
 
-~~~poly
+~~~poly fragment
 var x i32 := 0b1010
 var y i32 := 0b1100
 
@@ -160,7 +160,7 @@ put x >> 1        # right shift
 The + operator concatenates strings. Numeric values are converted to
 strings automatically:
 
-~~~poly
+~~~poly fragment
 var greeting := "Hello, " + "world!"
 var n i32 := 42
 put "The answer is " + n.to_string()
@@ -170,7 +170,7 @@ put "The answer is " + n.to_string()
 
 Embed expressions in strings with {}:
 
-~~~poly
+~~~poly fragment
 var name := "Ada"
 var age i32 := 36
 put "Hello, {name}! You are {age} years old."
@@ -184,7 +184,7 @@ put "Hello, {name}! You are {age} years old."
 
 Poly uses comma-terminated conditions:
 
-~~~poly
+~~~poly fragment
 var score i32 := 85
 
 if score >= 90,
@@ -216,7 +216,7 @@ inside while loops.
 
 ### Infinite Loops
 
-~~~poly
+~~~poly fragment
 loop
     var input := get
     if input = "quit",
@@ -232,7 +232,7 @@ The loop command iterates over ranges and collections. The loop variable
 follows the colon. Loop ranges are inclusive at both endpoints: 1..3
 visits 1, 2, 3.
 
-~~~poly
+~~~poly fragment
 loop i 0..5
     put i
 end loop
@@ -244,7 +244,7 @@ end loop
 
 Step and negative step:
 
-~~~poly
+~~~poly fragment
 loop i 0..10 step 2
     put i      # 0, 2, 4, 6, 8, 10
 end loop
@@ -258,7 +258,7 @@ end loop
 
 for iterates over collections:
 
-~~~poly
+~~~poly fragment
 var fruits := ["apple", "banana", "cherry"]
 
 for fruit in fruits
@@ -268,7 +268,7 @@ end for
 
 Destructuring with tuples:
 
-~~~poly
+~~~poly fragment
 var pairs := [(1, "one"), (2, "two"), (3, "three")]
 
 for (num, label) in pairs
@@ -298,7 +298,7 @@ end loop
 Functions are declared with fn, a name, parameters with types, and an
 optional return type:
 
-~~~poly
+~~~poly fragment
 fn add(a: i32, b: i32): i32
     return a + b
 end fn
@@ -308,7 +308,7 @@ Parameters are typed. The return type follows a colon. There is no
 return keyword for single-expression bodies — but return is always
 available and explicit:
 
-~~~poly
+~~~poly fragment
 fn abs(x: i32): i32
     if x < 0,
         return -x
@@ -319,7 +319,7 @@ end fn
 
 A function without a return type returns nothing:
 
-~~~poly
+~~~poly fragment
 fn greet(name: ustring)
     put "Hello, " + name + "!"
 end fn
@@ -327,7 +327,7 @@ end fn
 
 ### Default Parameters
 
-~~~poly
+~~~poly fragment
 fn power(base: f64, exp: i32): f64
     var result := 1.0
     loop i 0..exp - 1
@@ -341,7 +341,7 @@ end fn
 
 Functions may be declared inside other functions:
 
-~~~poly
+~~~poly fragment
 fn outer(x: i32): i32
     fn double(n: i32): i32
         return n * 2
@@ -358,21 +358,21 @@ end fn
 
 Array literals use square brackets:
 
-~~~poly
+~~~poly fragment
 var numbers := [1, 2, 3, 4, 5]
 var names := ["Alice", "Bob", "Charlie"]
 ~~~
 
 The type is inferred. To annotate:
 
-~~~poly
+~~~poly fragment
 var scores Vec<i32> := [90, 85, 78, 92, 88]
 ~~~
 
 An empty array literal is polymorphic — it can initialize any container
 type when the declaration specifies one:
 
-~~~poly
+~~~poly fragment
 var m Map<ustring, i32> := []
 var s Set<i32> := []
 var empty Vec<f64> := []
@@ -382,7 +382,7 @@ var empty Vec<f64> := []
 
 Arrays and vectors are zero-indexed:
 
-~~~poly
+~~~poly fragment
 var xs := [10, 20, 30]
 put xs[0]    # 10
 put xs[2]    # 30
@@ -393,7 +393,7 @@ put xs[2]    # 30
 xs.get(i) returns Option<T> instead of panicking on an out-of-bounds
 index:
 
-~~~poly
+~~~poly fragment
 var xs := [10, 20, 30]
 match xs.get(1)
     Some(v), put v     # 20
@@ -415,7 +415,7 @@ put xs.is_empty()      # true if len = 0
 
 ### Maps and Sets
 
-~~~poly
+~~~poly fragment
 var m Map<ustring, i32> := []
 m.insert("one", 1)
 m.insert("two", 2)
@@ -439,14 +439,14 @@ Poly distinguishes ASCII strings (string) from Unicode strings (ustring).
 In practice, ustring (which maps to Rust's String) is the default for
 text:
 
-~~~poly
+~~~poly fragment
 var s := "hello"           # String (ASCII)
 var t := unicode "hello"   # String (Unicode/UTF-8)
 ~~~
 
 ### String Operations
 
-~~~poly
+~~~poly fragment
 var s := "Hello, world!"
 
 put s.len()                  # 13
@@ -474,7 +474,7 @@ put buf    # "Hello world!"
 
 ### Repeat and Join
 
-~~~poly
+~~~poly fragment
 put "#".repeat(5)              # "#####"
 put ["a", "b", "c"].join(", ")  # "a, b, c"
 ~~~
@@ -501,7 +501,7 @@ put "hello".filter(|c| c != 'l')  # ['h', 'e', 'o']
 
 Structures group related data:
 
-~~~poly
+~~~poly fragment
 struct Point
     var x: f64
     var y: f64
@@ -521,7 +521,7 @@ put p.x    # 3.0
 Methods are defined inside impl blocks. The first parameter self
 receives the struct value:
 
-~~~poly
+~~~poly fragment
 struct Point
     var x: f64
     var y: f64
@@ -553,7 +553,7 @@ is a method call.
 
 Tuples are lightweight compound values:
 
-~~~poly
+~~~poly fragment
 var pair := (10, true)
 put pair.0    # 10
 put pair.1    # true
@@ -581,7 +581,7 @@ var (x, y) := (1, 2)
 
 Enumerations define types with a fixed set of variants:
 
-~~~poly
+~~~poly fragment
 enum Direction
     North
     South
@@ -607,7 +607,7 @@ var r := Shape::Rectangle { width: 10.0, height: 20.0 }
 
 ### Enums with Methods
 
-~~~poly
+~~~poly fragment
 enum TrafficLight
     Red
     Yellow
@@ -627,7 +627,7 @@ end enum
 
 Recursive enum types are automatically boxed:
 
-~~~poly
+~~~poly fragment
 enum Expr
     Num(f32)
     Add(Expr, Expr)
@@ -642,7 +642,7 @@ end enum
 
 match dispatches on a value's shape. Arms use comma syntax: pattern, expression.
 
-~~~poly
+~~~poly fragment
 var x i32 := 5
 match x
     0, put "zero"
@@ -667,7 +667,7 @@ end match
 
 Match arms can extract data from variants:
 
-~~~poly
+~~~poly fragment
 enum Shape
     Circle(f64)
     Rectangle(f64, f64)
@@ -685,7 +685,7 @@ end fn
 
 Add conditions with if:
 
-~~~poly
+~~~poly fragment
 var n i32 := 42
 match n
     x if x < 0, put "negative"
@@ -727,7 +727,7 @@ end match
 Closures are anonymous functions. The simplest form takes a single
 expression:
 
-~~~poly
+~~~poly fragment
 var square := |x: i32| x * x
 put square(4)    # 16
 ~~~
@@ -750,7 +750,7 @@ end fn
 
 Annotate closure types in function parameters with |params| return_type:
 
-~~~poly
+~~~poly fragment
 fn apply(f: |x: i32| i32, v: i32): i32
     return f(v)
 end fn
@@ -765,7 +765,7 @@ end fn
 Functions can return closures. The return type uses |params| return_type
 and lowers to impl Fn(...) in Rust:
 
-~~~poly
+~~~poly fragment
 fn make_adder(n: i32): |x: i32| i32
     return |x| x + n
 end fn
@@ -784,7 +784,7 @@ end fn
 Functions that take or return functions. The standard vector methods
 map, filter, reduce, and sort_by take closures:
 
-~~~poly
+~~~poly fragment
 var xs := [1, 2, 3, 4, 5]
 
 # map: transform each element
@@ -804,7 +804,7 @@ put xs.sort_by(|a, b| a > b)    # [5, 4, 3, 2, 1]
 
 Use .iter() to get an iterator, then chain operations:
 
-~~~poly
+~~~poly fragment
 var xs := [1, 2, 3, 4, 5]
 var sum i32 := xs.iter().sum()
 var evens := xs.iter().filter(|x| x mod 2 = 0).collect()
@@ -829,7 +829,7 @@ success; Error(e) signals failure.
 
 ### Defining Error Types
 
-~~~poly
+~~~poly fragment
 enum FileError
     NotFound
     PermissionDenied
@@ -888,7 +888,7 @@ put r.unwrap_or(0)  # 42
 
 ### Output with put
 
-~~~poly
+~~~poly fragment
 put "Hello"              # println!
 put "data" to "out.txt"   # write to file
 put "line" to "log.txt"  # append to file
@@ -896,7 +896,7 @@ put "line" to "log.txt"  # append to file
 
 ### Error and Warning Output
 
-~~~poly
+~~~poly fragment
 error "something went wrong"    # [ERROR] to stderr
 warn "deprecated feature"       # [WARN] to stderr
 info "debug info"               # [INFO] to stderr
@@ -904,7 +904,7 @@ info "debug info"               # [INFO] to stderr
 
 ### Input with get
 
-~~~poly
+~~~poly fragment
 var name := get                    # read a line from stdin
 var name := get unicode "Name: "   # with prompt
 var age i32 := get --as i32        # parse as integer
@@ -919,7 +919,7 @@ var bytes := get from "image.png"              # read as bytes
 
 ### Flags
 
-~~~poly
+~~~poly fragment
 var input := get --timeout 5000              # Result with timeout
 var input := get --default "fallback"        # default on EOF
 var input := get --mask "*"                  # suppress echo (passwords)
@@ -940,7 +940,7 @@ fail("unexpected value")            # prints [FAIL], exits 1
 
 Functions and structs can be parameterized by type:
 
-~~~poly
+~~~poly fragment
 fn identity<T>(x: T): T
     return x
 end fn
@@ -964,7 +964,7 @@ put first(nums)    # 1
 
 ### Generic Structs
 
-~~~poly
+~~~poly fragment
 struct Pair<A, B>
     var first: A
     var second: B
@@ -1021,7 +1021,7 @@ across calls within one program.
 
 A program that reads names, validates them, and writes results:
 
-~~~poly
+~~~poly fragment
 enum ValidationError
     EmptyInput
     TooShort(min: i32)

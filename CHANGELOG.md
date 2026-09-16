@@ -66,6 +66,9 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Fixed
 
+- A `const` declared inside a function body no longer panics the IR generator
+  (`unreachable: constants are collected first`); it lowers to an immutable
+  local declaration. Program-scope constants are unaffected.
 - Range loops whose start bound is a non-literal expression
   (`loop i BUF..TOTAL - 1`, `loop i TOTAL - 4..TOTAL - 1`, `loop i xs[0]..n`)
   now parse correctly; they were previously rejected with

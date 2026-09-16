@@ -28,7 +28,7 @@ end loop
 
 ### Use String Concatenation Efficiently
 
-~~~poly
+~~~poly fragment
 // Good: Build string efficiently
 var parts Vec<ustring> := []
 loop i 0..1000
@@ -60,7 +60,7 @@ put "{age}"  // Slower than direct to_string()
 
 ### Use Appropriate Data Types
 
-~~~poly
+~~~poly fragment
 // Good: Use appropriate types
 var count i32 := get --as i32
 var price f64 := get --as f64
@@ -72,7 +72,7 @@ var price ustring := get  // Then convert later
 
 ### Validate Early
 
-~~~poly
+~~~poly fragment
 // Good: Validate immediately
 var age i32 := get with validate |x| x > 0 and x < 150
 
@@ -122,7 +122,7 @@ end while
 
 ### Use Buffering
 
-~~~poly
+~~~poly fragment
 // Good: Buffered writes
 var buffer Vec<ustring> := []
 loop i 0..10000
@@ -138,7 +138,7 @@ end loop
 
 ### Read Files Efficiently
 
-~~~poly
+~~~poly fragment
 // Good: Read entire file
 var content ustring := get from "large_file.txt"
 var lines Vec<ustring> := content.split("\n")
@@ -153,7 +153,7 @@ end while
 
 ### Use Binary Mode When Appropriate
 
-~~~poly
+~~~poly fragment
 // Good: Binary read for binary files
 var data bytes := get from "image.png"
 
@@ -280,7 +280,7 @@ var flag Box<bool> := Box::new(true)
 
 ### Use String Interpolation
 
-~~~poly
+~~~poly fragment
 // Good: String interpolation
 var name ustring := "Alice"
 var age i32 := 30
@@ -292,7 +292,7 @@ put "Name: " + name + ", Age: " + age.to_string()
 
 ### Pre-allocate Strings
 
-~~~poly
+~~~poly fragment
 // Good: Pre-allocate
 var result ustring := "".repeat(1000)
 // Fill result...
@@ -324,7 +324,7 @@ end fn
 
 ### Use Appropriate Collection Types
 
-~~~poly
+~~~poly fragment
 // Good: Use appropriate types
 var list Vec<i32> := [1, 2, 3]  // Dynamic array
 var map Map<ustring, i32> := []  // Hash map
@@ -337,7 +337,7 @@ var map Vec<(ustring, i32)> := []  // Vector for map
 
 ### Pre-allocate Collections
 
-~~~poly
+~~~poly fragment
 // Good: Pre-allocate
 var list Vec<i32> := []
 list.reserve(1000)  // Pre-allocate space
@@ -354,7 +354,7 @@ end loop
 
 ### Use Iterators
 
-~~~poly
+~~~poly fragment
 fn main()
     var list Vec<i32> := [1, 2, 3, 4]
 

@@ -49,7 +49,7 @@ var x ustring := get until unicode ","
 ~~~
 
 ### New Syntax
-~~~poly
+~~~poly fragment
 var x := get --timeout 5000             # -> Result
 var x i32 := get with validate |x| x > 0
 var x ustring := get --default unicode "value"

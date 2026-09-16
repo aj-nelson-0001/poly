@@ -9,11 +9,13 @@ This guide covers failures that can be reproduced with the current compiler. For
 Poly v2 uses `=` for equality and `:=` for initialization and assignment:
 
 ~~~poly
-var value i32 := 1
-if value = 1
-    put unicode "equal"
-end if
-value := value + 1
+fn main()
+    var value i32 := 1
+    if value = 1
+        put unicode "equal"
+    end if
+    value := value + 1
+end fn
 ~~~
 
 The parser retains `==` only to report a migration diagnostic. Replace it rather than adding another compatibility spelling.
@@ -23,10 +25,12 @@ The parser retains `==` only to report a migration diagnostic. Replace it rather
 Use the type without a colon in `var` declarations. `let` may use a type annotation with a colon:
 
 ~~~poly
-var count i32 := 0
-var inferred := 42
-let name: ustring := unicode "Alice"
-const limit := 10
+fn main()
+    var count i32 := 0
+    var inferred := 42
+    let name: ustring := unicode "Alice"
+    const limit := 10
+end fn
 ~~~
 
 Do not write `var count: i32 = 0`, `let name = ...`, or `const limit = ...` in v2 examples.
@@ -36,15 +40,17 @@ Do not write `var count: i32 = 0`, `let name = ...`, or `const limit = ...` in v
 Every block has an explicit terminator:
 
 ~~~poly
-fn greet(name: ustring): ustring
-    return unicode "Hello, " + name
-end fn
+fn main()
+    fn greet(name: ustring): ustring
+        return unicode "Hello, " + name
+    end fn
 
-if true
-    put unicode "yes"
-else
-    put unicode "no"
-end if
+    if true
+        put unicode "yes"
+    else
+        put unicode "no"
+    end if
+end fn
 ~~~
 
 The parser can recover from several errors, but a missing `end` often causes later statements to be reported in the wrong context. Fix the first diagnostic first.
@@ -54,18 +60,22 @@ The parser can recover from several errors, but a missing `end` often causes lat
 `put` always writes one newline. The `-n` flag and output capture syntax are not part of the maintained v2 contract.
 
 ~~~poly
-put unicode "Line 1"
-put unicode "Line 2"
-error unicode "stderr error"
-warn unicode "stderr warning"
-info unicode "stderr info"
+fn main()
+    put unicode "Line 1"
+    put unicode "Line 2"
+    error unicode "stderr error"
+    warn unicode "stderr warning"
+    info unicode "stderr info"
+end fn
 ~~~
 
 For file output, use the explicit redirect form:
 
 ~~~poly
-put unicode "replace" to "output.txt"
-put unicode "append" to "output.txt" -append
+fn main()
+    put unicode "replace" to "output.txt"
+    put unicode "append" to "output.txt" -append
+end fn
 ~~~
 
 The Rust backend implements redirects. The C backend intentionally rejects them because its current contract is stdout/stderr orchestration only; move file behavior into a `#c` helper.
@@ -75,11 +85,13 @@ The Rust backend implements redirects. The C backend intentionally rejects them 
 `get` is implemented by the Rust backend. It reads stdin or a file and can apply the supported flags:
 
 ~~~poly
-var line ustring := get
-var number i32 := get --as i32
-var fallback ustring := get --default unicode "fallback"
-var field ustring := get --until unicode ","
-var bytes_value bytes := get from "data.bin" --bytes 8
+fn main()
+    var line ustring := get
+    var number i32 := get --as i32
+    var fallback ustring := get --default unicode "fallback"
+    var field ustring := get --until unicode ","
+    var bytes_value bytes := get from "data.bin" --bytes 8
+end fn
 ~~~
 
 The C backend rejects `get`. Use a foreign C function for input when targeting C.
@@ -91,18 +103,22 @@ If a Rust input program appears to hang, it is waiting for stdin. Provide input 
 A declaration type must agree with its initializer. For numeric input, make the conversion explicit:
 
 ~~~poly
-var age i32 := get --as i32
-var total i32 := age + 10
+fn main()
+    var age i32 := get --as i32
+    var total i32 := age + 10
+end fn
 ~~~
 
 Equality and ordering operators require compatible operands. String concatenation is supported for strings and scalar values in the Rust backend:
 
 ~~~poly
-var name ustring := unicode "Alice"
-if name = unicode "Alice"
-    put unicode "matched"
-end if
-put unicode "Hello, " + name
+fn main()
+    var name ustring := unicode "Alice"
+    if name = unicode "Alice"
+        put unicode "matched"
+    end if
+    put unicode "Hello, " + name
+end fn
 ~~~
 
 Unknown functions or variables are reported by the semantic checker. Functions in a selected foreign block are registered as opaque calls; their native signature is still validated by the target compiler. When earlier Poly diagnostics are useful, add a top-level explicit declaration:
@@ -122,8 +138,10 @@ Use a target-specific block at program scope:
 fn native_value() -> i32 { 42 }
 #endrust
 
-var value i32 := native_value()
-put value
+fn main()
+    var value i32 := native_value()
+    put value
+end fn
 ~~~
 
 Select C with `--target c` and use `#c` instead. A foreign block for another language is rejected. In particular, `#cpp` is not silently ignored and C++ is not currently supported. See [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the complete target boundary.

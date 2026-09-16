@@ -50,11 +50,13 @@ Poly types now map correctly to Rust types:
 File write and append operations now generate correct Rust code:
 
 ~~~poly
-# Write to file
-put "Hello, World!" to "output.txt"
+fn main()
+    # Write to file
+    put "Hello, World!" to "output.txt"
 
-# Append to file
-put "More content" to "output.txt" -append
+    # Append to file
+    put "More content" to "output.txt" -append
+end fn
 ~~~
 
 Generates:

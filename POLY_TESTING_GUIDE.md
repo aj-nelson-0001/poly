@@ -170,7 +170,7 @@ end fn
 
 ### Testing Result Type
 
-~~~poly
+~~~poly fragment
 // Test Ok value
 fn test_ok_value()
     var result Result<i32, ustring> := Ok(42)
@@ -192,7 +192,7 @@ end fn
 
 ### Testing Error Propagation
 
-~~~poly
+~~~poly fragment
 // Test try propagation
 fn risky_operation(): Result<ustring, ustring>
     return Error(unicode "Risky error")
@@ -221,7 +221,7 @@ end fn
 
 ### Testing Pattern Matching
 
-~~~poly
+~~~poly fragment
 // Test specific error patterns
 enum TestError
     NotFound
@@ -430,7 +430,7 @@ end fn
 
 ### Mock Input Functions
 
-~~~poly
+~~~poly fragment
 // Mock single input
 fn mock_input(value: ustring): ustring
     // Implementation depends on test framework
@@ -452,7 +452,7 @@ end fn
 
 `assert`, `pass`, and `fail` are built-in helpers:
 
-~~~poly
+~~~poly fragment
 assert(true)
 pass("Test passed")
 fail("Test failed")   // Prints FAIL and exits non-zero

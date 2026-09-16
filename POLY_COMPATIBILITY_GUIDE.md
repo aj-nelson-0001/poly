@@ -58,7 +58,7 @@ set_file_permissions("file.txt", 0o644)
 
 ### UTF-8
 
-~~~poly
+~~~poly fragment
 // Good: UTF-8 encoding
 var text ustring := unicode "Hello, World!"
 put text
@@ -69,7 +69,7 @@ var content ustring := get from "utf8.txt" with encoding unicode "utf-8"
 
 ### ASCII
 
-~~~poly
+~~~poly fragment
 // Good: ASCII encoding
 var text ustring := "Hello, World!"  // ASCII subset
 put text
@@ -80,7 +80,7 @@ var content ustring := get from "ascii.txt" with encoding unicode "ascii"
 
 ### Latin-1
 
-~~~poly
+~~~poly fragment
 // Good: Latin-1 encoding
 var text ustring := unicode "café"  // Latin-1 characters
 put text
@@ -95,7 +95,7 @@ var content ustring := get from "latin1.txt" with encoding unicode "latin-1"
 
 ### Unix (LF)
 
-~~~poly
+~~~poly fragment
 // Good: Unix line endings
 put "Line 1\nLine 2"  // LF
 
@@ -106,7 +106,7 @@ var lines Vec<ustring> := content.split("\n")
 
 ### Windows (CRLF)
 
-~~~poly
+~~~poly fragment
 // Good: Windows line endings
 put "Line 1\r\nLine 2"  // CRLF
 
@@ -145,7 +145,7 @@ var content ustring := get from  path
 
 ### Relative Paths
 
-~~~poly
+~~~poly fragment
 // Good: Relative paths
 var path ustring := "./data/file.txt"
 var content ustring := get from  path

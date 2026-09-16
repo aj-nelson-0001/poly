@@ -3,30 +3,43 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-16.
 
-## In flight: doc-example audit + nested-const codegen panic (2026-09-16)
+## Doc-example audit complete; nested-const codegen panic fixed (2026-09-16)
 
-`scripts/check_poly_examples.py` reported 162 unmarked failures. Triaged all
-of them (single root cause: the `fn main` entry-point requirement from
-`b881a93` was never propagated to HOW_TO_USE.md, POLY_API_REFERENCE.md,
-POLY_BEST_PRACTICES.md, BLOG_POST_v1.5.0.md). POLY_API_REFERENCE.md is fully
-migrated (8/9 blocks pass) and committed; the other three files are still
-pending.
+`scripts/check_poly_examples.py` reported 162 unmarked failures. Triaged and
+cleared all of them (573 blocks, 0 unmarked failures, 90 runnable examples
+pass `--check`).
 
-**NEW BUG FOUND (unfixed): a `const` declared inside a function body panics
-the IR generator.** `fn f() ... const scale := 3 ... end fn` dies with
-`unreachable: constants are collected first` at
-`poly-intermediate-representation/src/generator.rs:241` — the top-level loop
-lifts `ConstDeclaration` into `IR.constants`, but `gen_statement` (used for
-function bodies and nested contexts) treats it as unreachable. Fix options:
-lower function-local consts to `Statement::VarDecl` (const-fold later), or
-add a `Statement::ConstDecl` with function-scope hoisting. Workaround for
-docs: declare consts at program scope. Repro: any `fn` containing `const x :=
-v`. The POLY_API_REFERENCE.md example at line 7 currently works around this
-by not exercising it — a doc example with a function-local const is what
-surfaced the panic.
+### Compiler fix: function-local `const` panicked the IR generator
 
-Also verified while triaging: the working doc-example wrapper patterns
-(`fn main()` around top-level `put`/`var`/`get`/loops) all pass `--check`.
+- **Symptom.** `fn f() ... const scale := 3 ... end fn` died with
+  `unreachable: constants are collected first` at
+  `poly-intermediate-representation/src/generator.rs:241`. Surfaced by the
+  first migrated doc example containing a function-local const.
+- **Root cause.** `generate` lifts only program-scope `ConstDeclaration`s
+  into `IR.constants`; `gen_statement` (used for function bodies, which the
+  IR mirrors structurally) treated any remaining const as unreachable.
+- **Fix.** `gen_statement` lowers function-local consts to `Statement::VarDecl`
+  — a local immutable binding. Verified across all four backends (Rust, C,
+  JS, asm). Regression test:
+  `function_local_constants_lower_to_local_declarations`.
+
+### Documentation migration (fn main entry point, b881a93 follow-up)
+
+Current v2 documents — executable examples wrapped in `fn main() ... end fn`
+and verified with `poly --check`: POLY_API_REFERENCE.md, POLY_CHEATSHEET.md,
+POLY_QUICK_REFERENCE.md, POLY_QUICK_REFERENCE_CARD.md,
+POLY_TROUBLESHOOTING_GUIDE.md, HOW_TO_USE.md (some snippets marked fragment),
+POLY_BEST_PRACTICES.md (anti-pattern examples marked fragment).
+POLY_TUTORIAL.md (historical) also migrated, plus its Result/match example.
+Historical material (marked per POLY_DOCUMENTATION_INDEX.md policy, which
+allows fragments for version-specific examples): THE_POLY_PROGRAMMING_LANGUAGE.md,
+POLY_LANGUAGE_SPECIFICATION_EXPANDED.md, POLY_COMPREHENSIVE_GUIDE.md,
+POLY_COMPATIBILITY_GUIDE.md, POLY_PERFORMANCE_GUIDE.md, POLY_SECURITY_GUIDE.md,
+POLY_TESTING_GUIDE.md, POLY_MIGRATION_GUIDE(_v1.8).md, BLOG_POST_v1.5.0.md,
+PROJECT_AUDIT_REPORT.md (historical audit note).
+
+Verification: `check_poly_examples.py` 573 blocks / 0 unmarked failures;
+`check_markdown.py` 52 files pass; compiler workspace 451 tests green.
 
 ## Range-loop parser fix: expression start bounds (2026-09-16)
 

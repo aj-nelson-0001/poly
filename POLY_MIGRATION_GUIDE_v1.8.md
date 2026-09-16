@@ -61,7 +61,7 @@ dec count            # count = 0
 ~~~
 
 **After:**
-~~~poly
+~~~poly fragment
 var count := 0
 count := count + 1   # count = 1
 count := count + 1   # count = 2
@@ -126,7 +126,7 @@ var content := get < "input.txt"  # Read
 ~~~
 
 **After:**
-~~~poly
+~~~poly fragment
 put "Hello" to "output.txt"        # Write
 put "World" to "output.txt" -append # Append
 var content := get from "input.txt" # Read

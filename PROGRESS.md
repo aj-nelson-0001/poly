@@ -3,6 +3,34 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-16.
 
+## Range-loop parser fix: expression start bounds (2026-09-16)
+
+Followup to the session below, which had documented the range-loop limitation
+as a language constraint; it was really a parser detection limitation and is
+now fixed.
+
+- **`loop i BUF..TOTAL - 1` now parses.** The range-loop detector only peeked
+  one token after the loop variable; a non-literal start (const, index, call)
+  fell into infinite-loop statement parsing and died on `..`. The detector now
+  probes with a backtracking expression parse: an expression that consumes a
+  range (`..`/`..=`) or stops before one/comma marks a range loop, while a
+  body statement starting with the same identifier (`acc := acc + 1`,
+  `tick()`) keeps the loop infinite.
+- **`loop 0..10` is a real var-less counted loop now.** The old parser
+  silently parsed it as an *infinite loop* whose body began with a bare range
+  expression — a latent footgun the pre-existing test passed vacuously (it
+  only asserted `is_ok`). The counter is now discarded by binding `_`
+  (`for 0 in ...` is not valid Rust, so the literal cannot double as the
+  variable). Detector requires a literal *followed by* `..`/`..=`, so a body
+  starting with a literal stays infinite.
+- Tests: 3 added/expanded in `poly-parser`
+  (`test_parse_loop_range_requires_explicit_variable` now asserts the
+  `LoopRange`/`_` shape, plus `test_parse_loop_range_identifier_start` and
+  `test_parse_infinite_loop_body_starting_with_identifier`); full workspace
+  suite green (449 tests). Docs (spec/grammar/cheatsheet/quick-reference)
+  rewritten from "use a while workaround" to the now-correct grammar; the
+  Tetris `while` rewrites remain valid but are no longer required.
+
 ## Nested-while codegen fix; Tetris example; loop/move-semantics docs (2026-09-16)
 
 Session driven by building a full Tetris game (`tetris/`) in Poly targeting
@@ -33,13 +61,9 @@ language constraints.
 
 ### Language constraints found and documented
 
-- **Range-loop detection needs a literal start.** `loop i BUF..TOTAL - 1`
-  (identifier start) fails to parse — the range-loop check accepts a range op,
-  `in`, or a numeric literal after the loop variable, but any other
-  identifier falls into infinite-loop statement parsing and dies on `..`.
-  `loop i 2..TOTAL - 1` (literal start, expression end) is fine. Nine affected
-  loops in Tetris were rewritten as `while`; documented in spec/grammar/
-  cheatsheet/quick-reference.
+- **Range-loop detection needed a literal start** (fixed later this session —
+  see the newer entry above). `loop i BUF..TOTAL - 1` (identifier start)
+  failed to parse; nine affected loops in Tetris were rewritten as `while`.
 - **`spawn` and `step` are reserved words** (process-spawn keyword; loop step
   clause). Renamed Tetris methods to `spawn_piece`/`stepms`; documented.
 - **Move semantics corollaries** (used throughout Tetris but not written

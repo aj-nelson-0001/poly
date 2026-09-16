@@ -183,6 +183,7 @@ while_statement ::= "while" expression { statement } "end" "while"
 
 loop_statement ::= "loop" "end" "loop"
                  | "loop" identifier loop_source { statement } "end" "loop"
+                 | "loop" number loop_source { statement } "end" "loop"
                  | "loop" "(" identifiers ")" "in" expression { statement } "end" "loop"
 
 loop_source   ::= "in" expression | range_list
@@ -193,7 +194,7 @@ range_part    ::= expression ".." expression [ "step" expression ]
 match_expression ::= "match" expression { pattern "," expression } "end" "match"
 ~~~
 
-Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected by semantic checking. The parser recognizes a range loop only when the loop variable is followed by a range operator (`..` / `..=`), `in`, or a numeric literal, so the range's start value must begin with a numeric literal (endpoints may be arbitrary expressions); when the start bound is a constant or other identifier, use a `while` loop.
+Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected by semantic checking. The range start may be any expression (a constant, index, or call as well as a literal); a literal in the loop-variable position names a var-less counted loop whose counter is discarded (`loop 0..10`). An infinite loop whose first statement begins with an identifier (an assignment or a call) is still parsed as infinite, not as a range loop.
 
 ## I/O
 

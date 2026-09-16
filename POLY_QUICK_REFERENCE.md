@@ -64,7 +64,7 @@ loop value in values
 end loop
 ~~~
 
-Range endpoints are inclusive. `while condition ... end while`, `break`, and `continue` are also supported. A range loop must start with a numeric literal (`loop i 0..n`), not a constant or identifier — use `while` when the start bound is computed. C currently supports one numeric range per loop and a limited scalar collection form.
+Range endpoints are inclusive. `while condition ... end while`, `break`, and `continue` are also supported. The range start may be any expression (`loop i BUF..TOTAL - 1`); a var-less `loop 0..10` discards the counter. C currently supports one numeric range per loop and a limited scalar collection form.
 
 ## State and Methods
 

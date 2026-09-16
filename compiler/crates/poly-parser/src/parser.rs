@@ -2057,20 +2057,52 @@ impl<'a> Parser<'a> {
         // with a statement.
         let is_range_loop = match self.peek() {
             TokenKind::LParen => true, // tuple destructuring: `loop (a, b) in ...`
-            TokenKind::Identifier(_) => {
-                // Look ahead: identifier followed by `..`, `..=`, `in`, or a
-                // number (then comma) → range loop.  If followed by `:=`, it
-                // is a `var`-less declaration inside an infinite loop body.
+            TokenKind::IntLiteral(_) | TokenKind::FloatLiteral(_) => {
+                // Var-less counted loop: `loop 0..10` (the counter is
+                // discarded, bound to `_`). Only a literal directly followed
+                // by a range operator counts; `loop 5` stays an infinite loop
+                // whose body begins with the literal.
                 let saved = self.pos;
-                self.advance(); // peek at identifier
-                let next_is_range = matches!(
-                    self.peek(),
+                self.advance();
+                let next_is_range =
+                    matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq);
+                self.pos = saved;
+                next_is_range
+            }
+            TokenKind::Identifier(_) => {
+                // The identifier is the loop variable of a range loop
+                // (`loop i 0..10`, `loop i BUF..TOTAL - 1`,
+                // `loop i xs[0]..n`, `loop item in xs`, `loop i 1, 2, 3`)
+                // unless the infinite-loop body's first statement begins with
+                // that same identifier (`loop\n  acc := 0\n ...`). Probe past
+                // the identifier to tell the two apart.
+                let saved = self.pos;
+                self.advance(); // the candidate loop variable
+                let next_is_range = match self.peek() {
+                    // var-less declaration inside an infinite loop body
+                    TokenKind::ColonEq => false,
+                    // `..10`, `in xs`, or a bare value part (`loop i 5`)
                     TokenKind::DotDot
-                        | TokenKind::DotDotEq
-                        | TokenKind::In
-                        | TokenKind::IntLiteral(_)
-                        | TokenKind::FloatLiteral(_)
-                );
+                    | TokenKind::DotDotEq
+                    | TokenKind::In
+                    | TokenKind::IntLiteral(_)
+                    | TokenKind::FloatLiteral(_) => true,
+                    // Expression start (`BUF..`, `xs[0]..`, `f(1)..`) or a
+                    // body statement (`obj.tick()`): decide by parsing the
+                    // expression with backtracking.
+                    _ => {
+                        let is_range = match self.parse_expression() {
+                            // A full range was consumed (`i BUF..TOTAL - 1`).
+                            Ok(Expression::Range { .. }) => true,
+                            Ok(_) => matches!(
+                                self.peek(),
+                                TokenKind::DotDot | TokenKind::DotDotEq | TokenKind::Comma
+                            ),
+                            Err(_) => false,
+                        };
+                        is_range
+                    }
+                };
                 self.pos = saved;
                 next_is_range
             }
@@ -2109,8 +2141,12 @@ impl<'a> Parser<'a> {
                 });
             }
 
-            // The loop variable is explicit: `loop i 1..3, 7, 19..21`.
-            let variable = self.expect_identifier()?;
+            // The loop variable is explicit: `loop i 1..3, 7, 19..21` —
+            // or absent: `loop 0..10` discards the counter by binding `_`.
+            let variable = match self.peek() {
+                TokenKind::IntLiteral(_) | TokenKind::FloatLiteral(_) => "_".to_string(),
+                _ => self.expect_identifier()?,
+            };
 
             // `loop item in collection` is the collection form.
             if self.match_token(&TokenKind::In) {
@@ -4510,10 +4546,60 @@ end match"#
 
     #[test]
     fn test_parse_loop_range_requires_explicit_variable() {
-        // `loop 0..10` is valid: 0 is the loop variable, 0..10 is the range
-        assert!(parse_source("loop 0..10\n    put 0\nend loop").is_ok());
+        // `loop 0..10` is valid: the counter is discarded (bound to `_`).
+        let prog = parse_source("loop 0..10\n    put 0\nend loop").unwrap();
+        match &prog.statements[0].node {
+            Statement::ExpressionStatement(Expression::LoopRange { variable, .. }) => {
+                assert_eq!(variable, "_");
+            }
+            other => panic!("Expected LoopRange, got {:?}", other),
+        }
         // A bare `loop` followed by a block without a variable is an infinite loop
         assert!(parse_source("loop\n    put 1\nend loop").is_ok());
+    }
+
+    #[test]
+    fn test_parse_loop_range_identifier_start() {
+        // The range start may be any expression: a const (`BUF..TOTAL - 1`),
+        // an index (`xs[0]..n`), or a call (`first()..last()`).
+        for src in [
+            "const TOTAL := 5\nconst BUF := 2\nfn main()\nloop i BUF..TOTAL - 1\nput i\nend loop\nend fn",
+            "fn main()\nvar xs := [1, 2, 3]\nloop i xs[0]..2\nput i\nend loop\nend fn",
+        ] {
+            let prog = parse_source(src).unwrap();
+            let fn_body = match &prog.statements.last().unwrap().node {
+                Statement::FunctionDeclaration(decl) => decl.body.as_ref().unwrap(),
+                other => panic!("Expected fn declaration, got {:?}", other),
+            };
+            assert!(fn_body.iter().any(|s| {
+                matches!(
+                    &s.node,
+                    Statement::ExpressionStatement(Expression::LoopRange { .. })
+                )
+            }));
+        }
+    }
+
+    #[test]
+    fn test_parse_infinite_loop_body_starting_with_identifier() {
+        // `loop` whose body's first statement begins with an identifier is an
+        // infinite loop, not a range loop — assignment and call forms.
+        for src in [
+            "fn main()\nvar acc i32 := 0\nloop\nacc := acc + 1\nbreak\nend loop\nend fn",
+            "fn main()\nloop\ntick()\nbreak\nend loop\nend fn",
+        ] {
+            let prog = parse_source(src).unwrap();
+            let fn_body = match &prog.statements.last().unwrap().node {
+                Statement::FunctionDeclaration(decl) => decl.body.as_ref().unwrap(),
+                other => panic!("Expected fn declaration, got {:?}", other),
+            };
+            assert!(fn_body.iter().any(|s| {
+                matches!(
+                    &s.node,
+                    Statement::ExpressionStatement(Expression::InfiniteLoop(_))
+                )
+            }));
+        }
     }
 
     #[test]

@@ -296,24 +296,23 @@ loop i 1..3, 7, 19..20
 end loop
 ~~~
 
-Range endpoints are inclusive. The parser recognizes a range loop only when the
-loop variable is followed by a range operator, `in`, or a numeric literal. A
-range whose start is a constant or other identifier is **not** recognized and
-fails to parse — bind the value to a local first or use a `while` loop:
+Range endpoints are inclusive. The range start may be any expression — a
+literal, a constant, an index, or a call (`loop i BUF..TOTAL - 1`). The parser
+distinguishes a range loop from an infinite loop whose first statement begins
+with an identifier: a body statement like `acc := acc + 1` or `tick()` keeps
+the loop infinite.
 
 ~~~poly fragment
 const TOTAL := 5
+const BUF := 2
 
-# Not recognized: `loop i TOTAL - 4..TOTAL - 1` (identifier range start)
-var start i32 := TOTAL - 4
-loop i 2..TOTAL - 1        # literal start works; endpoints may be expressions
+loop i BUF..TOTAL - 1      # start bound may be any expression
     put i
 end loop
 
-while start <= TOTAL - 1   # while works with any bounds
-    put start
-    start := start + 1
-end while
+loop 0..TOTAL - 1          # var-less form: the counter is discarded
+    put "x"
+end loop
 ~~~
 
 ### Collection Iteration
@@ -462,6 +461,20 @@ multiplication in a loop.
 
 ### Comparison
 `=` `!=` `<` `>` `<=` `>=`
+
+Equality (`=` / `!=`) and ordering comparisons are strictly same-type: the
+checker rejects mixed integer or numeric comparisons (`u64 = i64`, `f64 =
+i64`) with `equality comparison: expected <T>, got <U>`. Convert explicitly
+with `as`:
+
+~~~poly fragment
+const FONT_A := 240            # untyped consts infer i32
+var bits u64 := FONT_A as u64  # assignment is also strictly typed
+var row i64 := 0
+if bits as i64 = row      # explicit cast required for mixed types
+    put "hit"
+end if
+~~~
 
 ### Logical
 `and` `or` `not`

@@ -75,12 +75,9 @@ end loop
 
 Range endpoints are inclusive. Collection loops borrow the collection. The C backend supports one numeric range per loop and scalar array iteration; complex collection types may require a `#c` helper.
 
-A range loop is only recognized when the loop variable is followed by a range
-operator, `in`, or a numeric literal — a range starting with a constant or
-identifier (`loop i LIMIT..10`) does not parse. Start with a literal (the
-endpoints may still be expressions) or use `while` for variable bounds. Note
-that `spawn` and `step` are reserved words and cannot name variables or
-methods.
+The range start may be any expression — `loop i BUF..TOTAL - 1` works. A
+var-less counted loop (`loop 0..10`) discards the counter. Note that `spawn`
+and `step` are reserved words and cannot name variables or methods.
 
 ## Methods and Movement
 
@@ -103,6 +100,11 @@ fn shift(self, dx: i32): Grid
     return self
 end fn
 ~~~
+
+Comparisons are strictly same-type: `u64 = i64` or `f64 = i64` is a type
+error. Cast explicitly with `as` (`bits as i64 = row`), and remember untyped
+consts infer `i32` — annotate or cast when assigning into a differently typed
+variable (`var bits u64 := FONT_A as u64`).
 
 ## Foreign Blocks
 

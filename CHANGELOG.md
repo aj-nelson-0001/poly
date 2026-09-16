@@ -64,16 +64,28 @@ All notable changes to the Poly language compiler will be documented in this fil
   a row-compaction loop inside an `if` silently kept only one cell per
   surviving row.
 
+### Fixed
+
+- Range loops whose start bound is a non-literal expression
+  (`loop i BUF..TOTAL - 1`, `loop i xs[0]..n`) now parse correctly; they were
+  previously rejected with `Unexpected token: DotDot`. A leading literal in
+  the loop-variable position (`loop 0..10`) is a var-less counted loop whose
+  counter is discarded — previously it was silently mis-parsed as an infinite
+  loop containing a bare range-expression statement.
+
 ### Documented
 
-- Range-loop detection constraint: `loop i <start>..<end>` is recognized only
-  when `<start>` begins with a numeric literal (endpoints may be expressions);
-  a constant or identifier range start fails to parse. Use a `while` loop for
-  computed start bounds. Now stated in `POLY_SPEC_v2.md`, `POLY_GRAMMAR.md`,
-  `POLY_CHEATSHEET.md`, and `POLY_QUICK_REFERENCE.md`.
+- Range-loop grammar: the start bound may be any expression, and the var-less
+  `loop 0..10` form binds the counter to `_`. Stated in `POLY_SPEC_v2.md`,
+  `POLY_GRAMMAR.md`, `POLY_CHEATSHEET.md`, and `POLY_QUICK_REFERENCE.md`.
 - Reserved words `spawn` and `step` (previously undocumented in the maintained
   spec) and the take-and-return `impl` method pattern (`s := s.bump()`),
   including the `self.method(self.field, ...)` move-ordering pitfall.
+- Strict same-type comparison rule: `=`/`!=` and ordering operators reject
+  mixed numeric types (`u64 = i64`, `f64 = i64`); cast with `as`, and note
+  untyped consts infer `i32` so assignment into other-width variables also
+  needs an explicit cast. Stated in `POLY_SPEC_v2.md` and
+  `POLY_CHEATSHEET.md`.
 
 ### Changed
 

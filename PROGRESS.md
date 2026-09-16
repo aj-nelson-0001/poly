@@ -3,6 +3,31 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-16.
 
+## In flight: doc-example audit + nested-const codegen panic (2026-09-16)
+
+`scripts/check_poly_examples.py` reported 162 unmarked failures. Triaged all
+of them (single root cause: the `fn main` entry-point requirement from
+`b881a93` was never propagated to HOW_TO_USE.md, POLY_API_REFERENCE.md,
+POLY_BEST_PRACTICES.md, BLOG_POST_v1.5.0.md). POLY_API_REFERENCE.md is fully
+migrated (8/9 blocks pass) and committed; the other three files are still
+pending.
+
+**NEW BUG FOUND (unfixed): a `const` declared inside a function body panics
+the IR generator.** `fn f() ... const scale := 3 ... end fn` dies with
+`unreachable: constants are collected first` at
+`poly-intermediate-representation/src/generator.rs:241` — the top-level loop
+lifts `ConstDeclaration` into `IR.constants`, but `gen_statement` (used for
+function bodies and nested contexts) treats it as unreachable. Fix options:
+lower function-local consts to `Statement::VarDecl` (const-fold later), or
+add a `Statement::ConstDecl` with function-scope hoisting. Workaround for
+docs: declare consts at program scope. Repro: any `fn` containing `const x :=
+v`. The POLY_API_REFERENCE.md example at line 7 currently works around this
+by not exercising it — a doc example with a function-local const is what
+surfaced the panic.
+
+Also verified while triaging: the working doc-example wrapper patterns
+(`fn main()` around top-level `put`/`var`/`get`/loops) all pass `--check`.
+
 ## Range-loop parser fix: expression start bounds (2026-09-16)
 
 Followup to the session below, which had documented the range-loop limitation

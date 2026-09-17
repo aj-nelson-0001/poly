@@ -441,7 +441,14 @@ fn main() -> Result<()> {
                                 Target::Rust => verify_rust_compiles_with_dependencies(
                                     &code,
                                     &dependencies,
-                                    &format!("{}-{}", label.len(), label.replace('/', "_")),
+                                    &format!(
+                                        "{}-{}",
+                                        process::id(),
+                                        std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_nanos()
+                                    ),
                                 ),
                                 Target::C => verify_c_compiles(&code),
                                 Target::Asm => verify_asm_compiles(&code),

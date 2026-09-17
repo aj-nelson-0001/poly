@@ -98,6 +98,24 @@ dep alsa = "0.9"
 - Dependency declarations carry no runtime semantics; the C, asm, and JS
   backends ignore them.
 
+### Generated-project marker
+
+`--project` writes a `.poly-generated` marker file into the output
+directory. Its single record names the owning source:
+
+~~~text
+source=../../tetris.poly
+~~~
+
+The path is recorded **relative to the generated project** whenever a
+stable relative path exists, so committed output is byte-identical across
+machines and checkouts; a machine-absolute path is only used as a fallback
+when the source and output cannot be relativized (e.g. different filesystem
+prefixes). A default Rust build refreshes only directories whose marker
+resolves to the source being built — other directories are left untouched —
+so the marker is what lets `poly game.poly` safely regenerate its own
+project without clobbering unrelated ones.
+
 ### Target selection
 
 ~~~text
@@ -142,6 +160,17 @@ Rules:
 ~~~poly fragment
 var name Type := value     # mutable, with type
 var name := value          # mutable, type inferred
+~~~
+
+The initializer may be any expression, including a `match` expression,
+which is a concise way to derive an initial value from a scrutinee:
+
+~~~poly fragment
+var frames i32 := match level
+    0, 48
+    1, 43
+    _, 2
+end match
 ~~~
 
 ### Constant Declaration

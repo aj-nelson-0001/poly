@@ -154,6 +154,11 @@ foreign blocks use. `--project` emits them into `Cargo.toml`; `--check`
 resolves them through Cargo so the program validates standalone. They are
 ignored by the C, asm, and JS backends.
 
+`--project` also writes a `.poly-generated` marker recording the owning
+source path relative to the generated project (e.g. `source=../../tetris.poly`);
+a default build only refreshes directories whose marker resolves to the
+source being built.
+
 ## Targets
 
 ~~~bash

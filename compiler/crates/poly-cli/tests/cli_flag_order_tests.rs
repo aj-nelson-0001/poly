@@ -148,3 +148,72 @@ fn retired_statements_report_migration_suggestions() {
 
     fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn function_local_consts_work_across_backends() {
+    // Regression: a `const` declared inside a function body used to panic the
+    // IR generator ("unreachable: constants are collected first"). It must
+    // now compile through every backend and run correctly.
+    let dir = unique_temp_dir("fnconst");
+    fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("fnconst.poly");
+    fs::write(
+        &source,
+        "fn main()\n    const base := 10\n    const scale := 2\n    put base * scale + 5\nend fn\n",
+    )
+    .unwrap();
+
+    // JS: emitted and executed via Node, so the printed value is checked.
+    let output = poly()
+        .arg("--target")
+        .arg("js")
+        .arg(&source)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "js build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("25"),
+        "expected the computed constant value 25 on stdout, got: {stdout}"
+    );
+
+    // Rust: generated code must compile, with the const lowered to a local.
+    let output = poly().arg(&source).arg("--emit-rust").output().unwrap();
+    assert!(
+        output.status.success(),
+        "rust emit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rust = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        rust.contains("let mut base = 10;"),
+        "expected fn-local const lowered to a Rust local, got: {rust}"
+    );
+
+    // C: same lowering.
+    let output = poly().arg(&source).arg("--emit-c").output().unwrap();
+    assert!(
+        output.status.success(),
+        "c emit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let c = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        c.contains("const int32_t base = 10;"),
+        "expected fn-local const emitted as a C local, got: {c}"
+    );
+
+    // Parser-level check must stay green for all of the above to be reached.
+    let output = poly().arg(&source).arg("--check").output().unwrap();
+    assert!(
+        output.status.success(),
+        "--check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    fs::remove_dir_all(&dir).unwrap();
+}

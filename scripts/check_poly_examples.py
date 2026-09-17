@@ -10,6 +10,7 @@ examples, including fragments, still undergo the canonical syntax policy check.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -20,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPILER = ROOT / "compiler"
-BINARY = COMPILER / "target" / "debug" / "poly"
+DEFAULT_BINARY = COMPILER / "target" / "debug" / "poly"
 
 LEGACY_UNICODE = re.compile(r'(?<![A-Za-z])u["\']|-u\s+["\']')
 LEGACY_TYPED_VAR = re.compile(
@@ -109,8 +110,9 @@ def ensure_binary() -> None:
         raise RuntimeError("unable to build the Poly CLI for documentation parsing")
 
 
-def parse_examples(examples: list[PolyExample]) -> list[tuple[PolyExample, str]]:
-    ensure_binary()
+def parse_examples(examples: list[PolyExample], binary: Path) -> list[tuple[PolyExample, str]]:
+    if binary == DEFAULT_BINARY:
+        ensure_binary()
     failures: list[tuple[PolyExample, str]] = []
     with tempfile.TemporaryDirectory(prefix="poly-doc-examples-") as directory:
         directory_path = Path(directory)
@@ -121,7 +123,7 @@ def parse_examples(examples: list[PolyExample]) -> list[tuple[PolyExample, str]]
             # Rust must compile. Fragments are exempt from this step.
             target = "c" if re.search(r"^\s*#c\s*$", example.source, re.MULTILINE) else "rust"
             result = subprocess.run(
-                [str(BINARY), "--target", target, "--check", str(source_path)],
+                [str(binary), "--target", target, "--check", str(source_path)],
                 capture_output=True,
                 text=True,
             )
@@ -139,7 +141,17 @@ def main() -> int:
         type=Path,
         help="optional Markdown files to audit; defaults to the whole repository",
     )
+    argument_parser.add_argument(
+        "--poly-bin",
+        type=Path,
+        default=Path(os.environ.get("POLY_BIN", str(DEFAULT_BINARY))),
+        help="path to the poly binary (default: $POLY_BIN or compiler/target/debug/poly)",
+    )
     arguments = argument_parser.parse_args()
+    if not arguments.poly_bin.is_file():
+        print(f"Poly documentation audit failed: binary not found at {arguments.poly_bin}")
+        print("Build it first or pass --poly-bin / set $POLY_BIN.")
+        return 1
     examples = extract_examples(arguments.paths or None)
     policy_errors = [error for example in examples for error in validate_policy(example)]
     if policy_errors:
@@ -148,7 +160,7 @@ def main() -> int:
         return 1
 
     complete_examples = [example for example in examples if not example.fragment]
-    failures = parse_examples(complete_examples)
+    failures = parse_examples(complete_examples, arguments.poly_bin)
 
     print(
         f"Poly documentation audit: {len(examples)} blocks, "

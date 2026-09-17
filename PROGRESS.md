@@ -1,7 +1,31 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-16.
+Last updated: 2026-09-17.
+
+## Followups: tetris re-verified, cross-backend const test, CI coverage (2026-09-17)
+
+- **Tetris rebuilt with the current compiler** (range-loop parser fixes +
+  fn-local const lowering). `poly --project rust_output/tetris tetris.poly`,
+  deps restored (`minifb = "0.27"`, `alsa = "0.9"`), release build green,
+  `--test` self-test passes, GUI smoke-run OK. Note: the stale `release`
+  binary (pre-parser-fix) rejected the regenerated source — always rebuild
+  both profiles before verifying.
+- **New CLI e2e test** `function_local_consts_work_across_backends`
+  (`poly-cli/tests/cli_flag_order_tests.rs`): runs a fn-local-const program
+  through JS (Node execution asserts `25`), asserts the Rust lowering
+  (`let mut base = 10;`) and the C lowering (`const int32_t base = 10;`),
+  then `--check`.
+- **`scripts/check_poly_examples.py` gains `--poly-bin` / `$POLY_BIN`** so the
+  audit can run against a prebuilt binary (CI builds release once; the script
+  no longer silently rebuilds debug there). Missing-binary is now a clear
+  error instead of a cargo rebuild.
+- **CI `.github/workflows/ci.yml`**: `v2.0-dev` added to push/PR triggers (it
+  was silently not running CI); lint job now builds the release CLI and audits
+  **all** 52 markdown files (573 blocks, 0 unmarked failures) instead of 10
+  curated files.
+- Verification: full workspace suite green (452 tests incl. the new one),
+  markdown check 52 files, full-repo doc audit 573 blocks / 0 failures.
 
 ## Doc-example audit complete; nested-const codegen panic fixed (2026-09-16)
 

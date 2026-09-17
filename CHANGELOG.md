@@ -52,6 +52,17 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- **CI now runs on `v2.0-dev`** (push and pull requests) and the lint job
+  audits **all** repository Poly documentation examples via
+  `scripts/check_poly_examples.py --poly-bin` (previously only 10 curated
+  files were checked). The audit script accepts `--poly-bin` / `$POLY_BIN` to
+  use a prebuilt binary instead of always rebuilding the debug CLI.
+- End-to-end CLI regression test `function_local_consts_work_across_backends`:
+  a function-local `const` is compiled through JS (executed via Node, output
+  asserted), Rust and C (emitted code asserted), plus `--check`.
+
 ### Fixed
 
 - **Nested `while` loops now generate a real loop.** The parser encodes

@@ -3,6 +3,27 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-17.
 
+## CI tetris job; v2.0.0-preview.4 tagged (2026-09-17)
+
+- **New CI `tetris` job (Linux):** installs `libasound2-dev`, builds the
+  release compiler, regenerates `rust_output/tetris` from `tetris.poly`,
+  guards the tracked `src/main.rs` against regeneration drift with an
+  `--emit-rust` diff (`--emit-rust` output has one trailing newline more
+  than the `--project` file; the CI diff drops the last line), then builds
+  and runs the headless `--test` self-test. Depends on the `test` job.
+- **`act` not installed locally** (docker is); the lint-job steps (fmt,
+  clippy, markdown, full doc audit) were verified locally instead. Note:
+  `cargo fmt` caught the committed range-loop fix landing unformatted —
+  reflowed in `c0286ad`.
+- **Tagged `v2.0.0-preview.4`** (commit `6d17aa1`): workspace version bump
+  (`compiler/Cargo.toml`, lockfile, regenerated tetris project), CHANGELOG
+  section dated, release notes gained a preview.4 highlights section, README
+  got a "What's New" entry, documentation index baseline bumped. Release
+  workflow triggers on the tag and publishes the release binary.
+- Release verification: 452 workspace tests green, fmt/clippy clean,
+  markdown check 52 files, doc audit 573 blocks / 0 unmarked failures,
+  tetris regenerated + self-tested with the release binary.
+
 ## Followups: tetris re-verified, cross-backend const test, CI coverage (2026-09-17)
 
 - **Tetris rebuilt with the current compiler** (range-loop parser fixes +

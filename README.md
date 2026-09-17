@@ -299,11 +299,11 @@ top-level `dep` statement. Only the Rust target has a dependency mechanism:
 C, asm, and JS targets reject `dep` declarations with an explanatory warning.
 
 ~~~poly
-dep minifb = "0.27"
-dep alsa = "0.9"
+dep rand = "0.8"
+dep libc = "0.2"
 
 fn main()
-    put "tetris-like demo"
+    put "using declared crates in #rust blocks"
 end fn
 ~~~
 

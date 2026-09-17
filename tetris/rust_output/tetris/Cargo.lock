@@ -512,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "tetris"
-version = "2.0.0-preview.6"
+version = "2.0.0-preview.7"
 dependencies = [
  "alsa",
  "minifb",
@@ -520,9 +520,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.25"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab72a15cf68d77cb0987d3684aa8a45c5ef827e8cb49ee2f30bfd7ba2feb519f"
+checksum = "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954"
 
 [[package]]
 name = "version-compare"

@@ -2,7 +2,16 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.6 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.7 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.7
+
+The asm backend now supports program-scope structs and enums end to end:
+definitions resolve inside any function body, struct parameters pass by
+reference, struct-returning functions copy through caller-allocated space,
+and inferred declarations from struct literals or call results get
+struct-sized storage. `dep` declarations on non-Rust targets now produce an
+explicit explanatory warning instead of being silently dropped.
 
 ## What's New in 2.0.0-preview.6
 

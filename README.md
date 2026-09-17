@@ -78,6 +78,14 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.7
+
+**Program-scope structs and enums now work on the asm target end to end:**
+definitions resolve inside functions, struct parameters pass by reference,
+struct-returning functions copy through caller-allocated space, and inferred
+declarations get struct-sized storage. `dep` declarations on non-Rust
+targets now warn explicitly instead of being silently ignored.
+
 ### What's New in 2.0.0-preview.6
 
 **`dep name = "version"` declarations** let a Poly program name the external

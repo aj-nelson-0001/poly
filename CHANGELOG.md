@@ -52,6 +52,33 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.7] - 2026-09-17
+
+### Fixed
+
+- **asm backend resolves program-scope structs and enums.** Layout and enum-
+  tag registration happened during `_start` emission, after every function
+  body had been emitted, so any struct/enum use inside `fn main` failed with
+  "Unknown struct/enum". Registration now precedes codegen, and the struct
+  ABI is coherent: struct arguments pass the struct's address, field access
+  dereferences it, struct-returning functions copy all fields through
+  caller-allocated space, and inferred declarations from struct literals or
+  call results get struct-sized slots. `tests/asm_target_tests.poly` now
+  emits working assembly (the snapshot had recorded the error).
+
+### Changed
+
+- **`dep` declarations warn on non-Rust targets** (`--check`, default build,
+  and `--project` for C/asm/JS) instead of being silently dropped: `Warning:
+  ignoring N 'dep' declaration(s): the <lang> target has no dependency
+  support; 'dep' only applies to the Rust target`.
+
+### Added
+
+- External dependencies row in the support matrix; External Dependencies
+  section in the README; commit-separation checklist item closed with
+  recorded evidence.
+
 ## [2.0.0-preview.6] - 2026-09-17
 
 ### Added

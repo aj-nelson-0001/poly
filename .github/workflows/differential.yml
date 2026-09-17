@@ -1,0 +1,29 @@
+name: Differential Backends (nightly)
+
+on:
+  schedule:
+    # 03:07 UTC daily — off the hour to avoid the runner rush.
+    - cron: "7 3 * * *"
+  workflow_dispatch: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: 2
+
+jobs:
+  differential:
+    name: Differential backend suite (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.98.0
+
+      - name: Build compiler
+        run: cargo build --release -p poly-cli
+        working-directory: compiler
+
+      - name: Run differential backend suite
+        run: python3 scripts/check_backends.py --poly-bin compiler/target/release/poly

@@ -1417,6 +1417,18 @@ impl AsmGenerator {
                             .get(var_name)
                             .cloned()
                             .filter(|type_name| self.structs.contains_key(type_name)),
+                        // A struct-returning call evaluates to the caller-
+                        // allocated __ret slot: a whole struct block, so pass
+                        // it by reference like any other struct value.
+                        // Regression: this arm was missing, so `sum(make(..))`
+                        // passed the first field's VALUE where the callee
+                        // expected the struct's ADDRESS (segfault).
+                        Expression::Call { func, .. } => match func.as_ref() {
+                            Expression::Identifier(callee) => {
+                                self.return_structs.get(callee).cloned()
+                            }
+                            _ => None,
+                        },
                         _ => None,
                     };
                     let loc = self.emit_expr(arg, frame)?;

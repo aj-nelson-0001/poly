@@ -1,0 +1,73 @@
+#!/usr/bin/env poly
+# Differential backend suite #1: core language features.
+# The nightly CI job runs this program through all four targets and fails if
+# the outputs diverge. The expected output is asserted below each runner.
+# EXPECTED:
+# 12 / -3 / -2 / 1 / 10 / 21 / diff /  ok / 0 / 1 / 2 / 10 / 99
+
+fn classify(v: i32): i32
+    if v < 10
+        return 0
+    else if v < 20,
+        return 1
+    else,
+        return 2
+    end if
+end fn
+
+fn main()
+    # arithmetic incl. precedence and negatives
+    var a i32 := 2 + 3 * 4 - 6 / 3
+    put a
+    put 7 - 10
+    put -5 + 3
+
+    # bools
+    var flag bool := (3 < 5) and (2 > 1)
+    if flag
+        put 1
+    else
+        put 0
+    end if
+
+    # while loop
+    var i i32 := 0
+    var sum i32 := 0
+    while i < 5
+        sum := sum + i
+        i := i + 1
+    end while
+    put sum
+
+    # range loop
+    var total i32 := 0
+    loop j 0..6
+        total := total + j
+    end loop
+    put total
+
+    # strings
+    put "diff"
+    var msg string := " ok"
+    put msg
+
+    # nested else-if chain
+    put classify(5)
+    put classify(15)
+    put classify(25)
+
+    # match expression with wildcard (integer-literal arms)
+    var m i32 := match 2 + 3
+        5, 10
+        6, 20
+        _, 0
+    end match
+    put m
+
+    # match expression in a function initializer (tetris-style)
+    var g i32 := match a
+        10, 7
+        _, 99
+    end match
+    put g
+end fn

@@ -37,6 +37,10 @@ struct CGenerator {
     /// Definitions discovered while rendering main (closure functions); these
     /// are emitted after the eagerly-rendered declarations, right before main.
     late_definitions: Vec<String>,
+    /// Declared function name -> declared C return type. Collected from both
+    /// program-scope and struct/impl methods so `var q := make(3, 4)` can
+    /// infer a struct type from a call instead of defaulting to `int32_t`.
+    fn_return_types: std::collections::HashMap<String, String>,
 }
 
 impl CGenerator {
@@ -53,6 +57,7 @@ impl CGenerator {
             uses_get: std::cell::Cell::new(false),
             closure_counter: std::cell::Cell::new(0),
             late_definitions: Vec::new(),
+            fn_return_types: std::collections::HashMap::new(),
         }
     }
 
@@ -61,6 +66,37 @@ impl CGenerator {
         // executable statements are intentionally retained in source order.
         // First partition declarations from orchestration statements so C items
         // are emitted at file scope and the generated entry point stays valid.
+
+        // Pre-collect declared return types so call-result initializers infer
+        // the callee's struct type (`var q := make(3, 4)` -> `Point q`). This
+        // runs before rendering because function bodies reference it.
+        for statement in &program.statements {
+            match &statement.node {
+                Statement::FunctionDeclaration(function) => {
+                    if let Some(return_type) = &function.return_type {
+                        let rendered = self.ty(return_type)?;
+                        self.fn_return_types.insert(function.name.clone(), rendered);
+                    }
+                }
+                Statement::StructDeclaration(decl) => {
+                    for method in &decl.methods {
+                        if let Some(return_type) = &method.return_type {
+                            let rendered = self.ty(return_type)?;
+                            self.fn_return_types.insert(method.name.clone(), rendered);
+                        }
+                    }
+                }
+                Statement::ImplDeclaration(decl) => {
+                    for method in &decl.methods {
+                        if let Some(return_type) = &method.return_type {
+                            let rendered = self.ty(return_type)?;
+                            self.fn_return_types.insert(method.name.clone(), rendered);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         for statement in &program.statements {
             match &statement.node {
                 Statement::ForeignBlock { language, content } if language == "c" => {
@@ -1123,6 +1159,16 @@ impl CGenerator {
             Some(Expression::TupleLiteral(_)) => self.tuple_inferred_type(value.unwrap()),
             // Struct literals infer their own type: `var p := Point { ... }`.
             Some(Expression::StructLiteral { name, .. }) => name.clone(),
+            // A call infers the callee's declared return type so struct-returning
+            // functions declare struct-typed variables instead of `int32_t`.
+            Some(Expression::Call { func, .. }) => match func.as_ref() {
+                Expression::Identifier(name) => self
+                    .fn_return_types
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| "int32_t".to_string()),
+                _ => "int32_t".to_string(),
+            },
             _ => "int32_t".to_string(),
         }
     }

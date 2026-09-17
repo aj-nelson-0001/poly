@@ -575,3 +575,159 @@ fn asm_prints_negative_integers_correctly() {
 
     fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+// The asm target emits Linux x86-64 syscall assembly; as/ld exist only where
+// that output can assemble.
+fn asm_passes_struct_returning_call_as_struct_argument() {
+    // Regression: `sum(make(10, 5))` passed the first field's VALUE where the
+    // callee expected the struct's ADDRESS (the struct-arg detection only
+    // recognized literals and variables, not struct-returning calls), so the
+    // callee's by-ref field dereference segfaulted.
+    let dir = unique_temp_dir("asmcallstruct");
+    fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("asm_call_struct.poly");
+    fs::write(
+        &source,
+        concat!(
+            "struct Point\n",
+            "    x: i32\n",
+            "    y: i32\n",
+            "end struct\n",
+            "\n",
+            "fn sum(p: Point): i32\n",
+            "    return p.x + p.y\n",
+            "end fn\n",
+            "\n",
+            "fn make(a: i32, b: i32): Point\n",
+            "    return Point { x: a, y: b }\n",
+            "end fn\n",
+            "\n",
+            "fn main()\n",
+            "    put sum(make(10, 5))\n",
+            "    var q := make(3, 4)\n",
+            "    put sum(q)\n",
+            "end fn\n",
+        ),
+    )
+    .unwrap();
+
+    let asm_path = dir.join("out.S");
+    let output = poly()
+        .arg(&source)
+        .arg("--target")
+        .arg("asm")
+        .arg("-o")
+        .arg(&asm_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "asm emission failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let obj_path = dir.join("out.o");
+    let bin_path = dir.join("out");
+    for (tool, args) in [
+        (
+            "as",
+            vec!["-o", obj_path.to_str().unwrap(), asm_path.to_str().unwrap()],
+        ),
+        (
+            "ld",
+            vec!["-o", bin_path.to_str().unwrap(), obj_path.to_str().unwrap()],
+        ),
+    ] {
+        let output = Command::new(tool).args(&args).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{tool} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let output = Command::new(&bin_path).output().unwrap();
+    assert!(
+        output.status.success(),
+        "asm binary failed (segfault?) with status {:?}",
+        output.status.code()
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["15", "7"],
+        "unexpected struct-call-arg output"
+    );
+
+    fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn c_infers_struct_type_from_call_result_initializer() {
+    // Regression: `var q := make(3, 4)` (struct-returning call) was declared
+    // `int32_t q` because the C backend's inferred_type defaulted unknown
+    // expression types to int32_t. Generated C failed to compile with
+    // "incompatible types when initializing type 'int32_t' using type
+    // 'Point'". The backend now consults the callee's declared return type.
+    let dir = unique_temp_dir("cinferstruct");
+    fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("c_infer_struct.poly");
+    fs::write(
+        &source,
+        concat!(
+            "struct Point\n",
+            "    x: i32\n",
+            "    y: i32\n",
+            "end struct\n",
+            "\n",
+            "fn make(a: i32, b: i32): Point\n",
+            "    return Point { x: a, y: b }\n",
+            "end fn\n",
+            "\n",
+            "fn main()\n",
+            "    var q := make(3, 4)\n",
+            "    put q.x\n",
+            "    put q.y\n",
+            "end fn\n",
+        ),
+    )
+    .unwrap();
+
+    let output = poly().arg(&source).arg("--emit-c").output().unwrap();
+    assert!(
+        output.status.success(),
+        "c emit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let c = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        c.contains("Point q = make(3, 4);"),
+        "expected struct-typed declaration from call-result initializer, got: {c}"
+    );
+
+    // And the emitted C must compile and run correctly.
+    let c_path = dir.join("out.c");
+    fs::write(&c_path, c.as_ref()).unwrap();
+    let bin_path = dir.join("out");
+    let output = Command::new("cc")
+        .arg("-o")
+        .arg(&bin_path)
+        .arg(&c_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "cc failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = Command::new(&bin_path).output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["3", "4"],
+        "unexpected c struct-inference output"
+    );
+
+    fs::remove_dir_all(&dir).unwrap();
+}

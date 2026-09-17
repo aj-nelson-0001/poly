@@ -1,0 +1,34 @@
+#!/usr/bin/env poly
+# Differential backend suite #2: structs (common subset of all 4 targets).
+# EXPECTED:
+# 30 / 7 / 15 / 10 / 20
+
+struct Point
+    var x: i32
+    var y: i32
+end struct
+
+fn sum(p: Point): i32
+    return p.x + p.y
+end fn
+
+fn make(a: i32, b: i32): Point
+    return Point { x: a, y: b }
+end fn
+
+fn main()
+    # struct literal, field access, arithmetic
+    var p := Point { x: 10, y: 20 }
+    put p.x + p.y
+
+    # struct round-trip: return + param (by-value semantics)
+    var q := make(3, 4)
+    put sum(q)
+
+    # nested call: struct return feeding a struct param
+    put sum(make(10, 5))
+
+    # plain field reads
+    put p.x
+    put p.y
+end fn

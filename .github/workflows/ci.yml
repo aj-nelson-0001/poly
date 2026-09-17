@@ -305,3 +305,6 @@ jobs:
           files: |
             compiler/target/release/poly
           generate_release_notes: true
+          # 2.0 preview tags publish as prereleases; stable tags (no
+          # "preview" segment) publish as full releases.
+          prerelease: ${{ contains(github.ref_name, 'preview') }}

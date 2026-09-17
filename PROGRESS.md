@@ -3,6 +3,24 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-17.
 
+## Release automation; preview.4 deprecation notice (2026-09-17)
+
+- **`release.yml` now auto-marks preview tags as prereleases**:
+  `prerelease: ${{ contains(github.ref_name, 'preview') }}`. Stable tags
+  (no "preview" segment) publish as full releases. Preview.5 had to be
+  flipped to prerelease manually after the auto-created release defaulted
+  to full — this prevents that recurring.
+- **preview.4 release page deprecated**: marked prerelease and prepended a
+  supersession notice pointing at preview.5 (no source delta between them).
+- **`scripts/prepare_release.py`** encodes the manual release-prep flow:
+  workspace version bump + `cargo update -w --offline`, tetris project
+  regeneration with dep restore, **online** lockfile refresh (offline
+  resolution downgrades transitive deps — see 2026-09-17 preview.5 entry),
+  `--emit-rust` drift guard, then the full verification battery
+  (tests/fmt/clippy/markdown/doc-audit; `--skip-tests` available). It never
+  commits, tags, or pushes. Verified idempotent: a run at the current
+  version produces zero repo changes.
+
 ## Hygiene, badge, and v2.0.0-preview.5 re-cut (2026-09-17)
 
 - **Repo hygiene:** removed the stray root `rust_output/` probe directories

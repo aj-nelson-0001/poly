@@ -32,7 +32,14 @@ This checklist describes release readiness for the current preview. It does not 
 - [x] Maintained v2 Poly documentation audit
 - [x] Rust examples checked and native Rust fixtures compiled.
 - [x] C fixture checked, built, and executed.
-- [ ] Cross-platform Rust and C matrix passes on Linux, macOS, and Windows.
+- [x] Cross-platform Rust and C matrix passes on Linux, macOS, and Windows.
+  Recorded 2026-09-17, CI run
+  [35168429374](https://github.com/aj-nelson-0001/poly/actions/runs/35168429374)
+  (`v2.0-dev`, commit `b7658f0`): Test matrix green on ubuntu-latest,
+  macos-latest, and windows-latest; lint (full documentation audit),
+  dependency audit, Tetris build + self-test, and WASM artifact jobs also
+  green. Note: the tagged `v2.0.0-preview.4` run predated this fix and the
+  Tetris CI job; its release build succeeded independently.
 - [x] Playground WASM artifact is reproducible locally under the pinned Rust toolchain.
 - [x] Hosted CI rebuilds and validates a non-empty WASM artifact in the canonical Linux environment; byte identity is not required across machines.
 

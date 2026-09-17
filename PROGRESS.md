@@ -3,6 +3,28 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-17.
 
+## CI green on v2.0-dev; act dry-run; checklist evidence recorded (2026-09-17)
+
+- **Every v2.0-dev CI run had been failing** since CI started triggering on
+  the branch: first lint's `cargo fmt --check` (the range-loop parser fix
+  landed unformatted), then the tetris job's regenerate step — `--project`
+  refuses to touch an existing directory, and a fresh checkout contains the
+  tracked generated files, so `rm -f src/main.rs` was never enough.
+  Fix (`b7658f0`): `rm -rf rust_output/tetris` and restore the minifb/alsa
+  deps with `sed` inside CI.
+- **First green v2.0-dev run: 35168429374** — Test matrix (ubuntu/macos/
+  windows), lint (full doc audit), dependency audit, **Tetris build +
+  self-test (1m8s)**, and WASM artifact all pass. Evidence recorded in
+  `POLY_PREVIEW_RELEASE_CHECKLIST.md`; the cross-platform matrix item is now
+  ticked. The tagged `v2.0.0-preview.4` release build itself succeeded
+  (run 35166914152) before/without these CI fixes.
+- **`act` installed** (`go install github.com/nektos/act@latest`) and the
+  workflow validated via `act -l` + full `act -n push` dry-run with
+  `-P ubuntu-latest=catthehacker/ubuntu:act-latest`: every job expands, the
+  tetris job succeeds, no real errors (log matches on "error" are the step
+  named "Work around spurious network errors in curl 8.0"). Dry-run is
+  expansion-only for run/shell steps; hosted CI remains the authority.
+
 ## CI tetris job; v2.0.0-preview.4 tagged (2026-09-17)
 
 - **New CI `tetris` job (Linux):** installs `libasound2-dev`, builds the

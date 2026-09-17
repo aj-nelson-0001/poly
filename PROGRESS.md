@@ -130,6 +130,23 @@ Last updated: 2026-09-17.
   named "Work around spurious network errors in curl 8.0"). Dry-run is
   expansion-only for run/shell steps; hosted CI remains the authority.
 
+## v2.0.0-preview.7 released (2026-09-17)
+
+- Cut via the documented procedure: hand-edited CHANGELOG, doc index,
+  release notes, and README first, then `prepare_release.py 2.0.0-preview.7`
+  did the workspace bump, tetris regeneration (deps now come from source;
+  dep-pin check passed), `--emit-rust` drift guard, and the full
+  verification battery.
+- Release workflow succeeded; **prerelease=true automatically** and the
+  version guard passed (the chmod fix from preview.6 holds). Tagged CI run
+  `35206454738` fully green: 3 OS test jobs, lint, audit, tetris, wasm.
+- Two CI iterations were needed first: the new asm e2e test needed Linux
+  gating (`as`/`ld` cannot consume Linux ELF output on Windows), and the
+  README dep example needed pure-Rust crates (audit runs `--check`; alsa-sys
+  needs system headers CI lacks).
+- Commits: `f8ffd25` (asm fix) → `3833d0f`, `662cb56`, `f4e4fc2` (test/docs
+  CI fixes) → `fcd16ab` (release prep); tag `v2.0.0-preview.7`.
+
 ## Backend audit; asm struct/enum ABI fix (2026-09-17)
 
 - **Audit outcome:** C/asm/JS correctly *reject* most unsupported constructs

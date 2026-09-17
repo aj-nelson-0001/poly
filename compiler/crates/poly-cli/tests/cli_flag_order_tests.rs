@@ -265,3 +265,43 @@ fn dep_declarations_drive_project_manifest_and_check() {
 
     fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn dep_declarations_warn_on_non_rust_targets() {
+    // Only the Rust target has a dependency mechanism (Cargo). Checking or
+    // building for C/asm/JS must warn that `dep` declarations are ignored
+    // instead of dropping them silently.
+    let dir = unique_temp_dir("depwarn");
+    fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("deps.poly");
+    fs::write(
+        &source,
+        "dep rand = \"0.8\"\n\nfn main()\n    put \"ok\"\nend fn\n",
+    )
+    .unwrap();
+
+    for target in ["c", "asm", "js"] {
+        let output = poly()
+            .arg(&source)
+            .arg("--check")
+            .arg("--target")
+            .arg(target)
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(&format!("the {target} target has no dependency support")),
+            "expected ignored-dep warning for target {target}, got: {stderr}"
+        );
+    }
+
+    // The Rust target must not emit the warning.
+    let output = poly().arg(&source).arg("--check").output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("no dependency support"),
+        "unexpected ignored-dep warning for rust target: {stderr}"
+    );
+
+    fs::remove_dir_all(&dir).unwrap();
+}

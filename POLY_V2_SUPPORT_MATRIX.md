@@ -12,6 +12,7 @@ This matrix is the implementation contract for the current Rust, C, assembly, an
 | Native validation | `rustc` or temporary Cargo project | C11 compiler | GNU assembler + linker | `node --check` + execution | `POLY_CC` selects the C compiler for CLI checks/builds. The asm target emits and assembles x86-64 `.S` sources on Linux. The JS target emits ES2020 with no runtime dependencies. |
 | Foreign block | `#rust` | `#c` | `#asm` | `#js` | Blocks are top-level, opaque, and emitted verbatim. |
 | Explicit foreign signature | `extern rust fn ...` | `extern c fn ...` | `extern asm fn ...` | `extern js fn ...` | Signature is checked by Poly and never emitted. |
+| External dependencies | `dep name = "version"` | Rejected with a warning | Rejected with a warning | Rejected with a warning | `dep` declarations are Rust-target only: `--project` emits them into `Cargo.toml` and `--check` resolves them via a temporary Cargo project. The C, asm, and JS backends warn that `dep` statements are ignored. |
 | C++ | Rejected | Rejected | Rejected | Rejected | `#cpp` remains reserved; no C++ backend exists. |
 
 ## Language Surface

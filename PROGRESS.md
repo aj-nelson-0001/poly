@@ -130,6 +130,28 @@ Last updated: 2026-09-17.
   named "Work around spurious network errors in curl 8.0"). Dry-run is
   expansion-only for run/shell steps; hosted CI remains the authority.
 
+## Followups: dep-awareness, doc sync, checklist closure (2026-09-17)
+
+- **Non-Rust targets now warn on `dep` declarations** instead of silently
+  dropping them. `select_target` retains `dep` statements for every target
+  and all four backends emit nothing for them, so `poly --check --target
+  js/c/asm` (and the default build / `--project` generators for those
+  targets) prints: `Warning: ignoring N `dep` declaration(s): the <lang>
+  target has no dependency support; `dep` only applies to the Rust target`.
+  Implemented via a `warn_dependencies_ignored` helper in the CLI (the
+  checker is target-agnostic; the CLI owns target knowledge) reusing
+  `source_dependencies`. E2E test `dep_declarations_warn_on_non_rust_targets`
+  covers all three targets plus the rust-target no-warning assertion.
+- **`POLY_V2_SUPPORT_MATRIX.md` gained an External dependencies row**
+  (Rust: `dep name = "version"` with Cargo-backed checking; C/asm/JS:
+  rejected with a warning). `POLY_BEST_PRACTICES.md` left alone: it is an
+  explicitly-marked historical v1 guide.
+- **Checklist commit-separation item closed** with evidence: the series is
+  type-prefixed and release metadata is isolated in `chore(release):`
+  commits; further splitting would require rewriting pushed history.
+- Verification: 457 workspace tests green (one new), fmt/clippy clean,
+  markdown 52 files, doc audit 575 blocks / 0 unmarked failures.
+
 ## CI tetris job; v2.0.0-preview.4 tagged (2026-09-17)
 
 - **New CI `tetris` job (Linux):** installs `libasound2-dev`, builds the

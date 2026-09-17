@@ -53,7 +53,14 @@ This checklist describes release readiness for the current preview. It does not 
   workspace tests 452/0, markdown 52 files, doc audit 573 blocks / 0
   failures, tetris `src/main.rs` reproduced byte-for-byte via
   `--emit-rust`, tetris release build + `--test` self-test passed.
-- [ ] Separate implementation, tests, CI, documentation, and release metadata into focused commits before merging.
+- [x] Separate implementation, tests, CI, documentation, and release metadata into focused commits before merging.
+  (Verified across the `v2.0-dev` series through `v2.0.0-preview.6`: every
+  commit is type-prefixed (`feat:`, `fix:`, `test:`, `ci:`, `docs:`), release
+  metadata is isolated in `chore(release):` commits, and progress notes land
+  as standalone `docs:` commits. Feature-scoped docs and tests accompany the
+  `feat:` commit that introduces them by convention; splitting already-pushed
+  commits further would require rewriting published history, so the series
+  was reviewed as-is and found focused.)
 - [x] Do not commit credentials, machine-specific paths, or generated build directories.
 - [x] Confirm changelog and version metadata agree.
 

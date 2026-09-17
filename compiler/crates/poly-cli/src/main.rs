@@ -431,6 +431,10 @@ fn main() -> Result<()> {
                     }
                 }
 
+                if target != Target::Rust {
+                    warn_dependencies_ignored(&source, &target);
+                }
+
                 // Run transpiler to check for transpilation errors
                 if !has_errors {
                     let transpiler = poly_transpiler::Transpiler::new();
@@ -668,6 +672,7 @@ fn main() -> Result<()> {
                     let binary_path = c_binary_path(&output_path);
                     let source = std::fs::read_to_string(&path)
                         .with_context(|| format!("Failed to read file: {}", path.display()))?;
+                    warn_dependencies_ignored(&source, &target);
                     let code = poly_transpiler::Transpiler::new()
                         .transpile_c_checked(&source)
                         .map_err(|e| anyhow::anyhow!(e))?;
@@ -686,6 +691,7 @@ fn main() -> Result<()> {
                         .unwrap_or_else(|| default_asm_output_path(&path));
                     let source = std::fs::read_to_string(&path)
                         .with_context(|| format!("Failed to read file: {}", path.display()))?;
+                    warn_dependencies_ignored(&source, &target);
                     let code = poly_transpiler::Transpiler::new()
                         .transpile_asm_checked(&source)
                         .map_err(|e| anyhow::anyhow!(e))?;
@@ -704,6 +710,7 @@ fn main() -> Result<()> {
                         .unwrap_or_else(|| path.with_extension("js"));
                     let source = std::fs::read_to_string(&path)
                         .with_context(|| format!("Failed to read file: {}", path.display()))?;
+                    warn_dependencies_ignored(&source, &target);
                     let code = poly_transpiler::Transpiler::new()
                         .transpile_js_checked(&source)
                         .map_err(|e| anyhow::anyhow!(e))?;
@@ -750,6 +757,7 @@ fn generate_c_project(source_path: &Path, output_dir: &Path) -> Result<()> {
     let code = poly_transpiler::Transpiler::new()
         .transpile_c_checked(&source)
         .map_err(|error| anyhow::anyhow!(error))?;
+    warn_dependencies_ignored(&source, &Target::C);
     if output_dir.exists() && output_dir.read_dir()?.next().is_some() {
         bail!(
             "Refusing to overwrite existing files in {}",
@@ -1002,6 +1010,20 @@ fn cargo_manifest(
     )
 }
 
+/// Warn when a non-Rust target carries `dep` declarations. Only the Rust
+/// target has a dependency mechanism (Cargo), so the C, asm, and JS backends
+/// drop `dep` statements; surface that instead of silently ignoring them.
+fn warn_dependencies_ignored(source: &str, target: &Target) {
+    let dependencies = source_dependencies(source);
+    if !dependencies.is_empty() {
+        eprintln!(
+            "Warning: ignoring {} `dep` declaration(s): the {} target has no dependency support; `dep` only applies to the Rust target",
+            dependencies.len(),
+            target.language_name()
+        );
+    }
+}
+
 /// Extract `dep name = "version"` declarations from Poly source.
 fn source_dependencies(source: &str) -> Vec<(String, String)> {
     let (tokens, lexer_errors) = poly_lexer::Lexer::lex(source);
@@ -1203,6 +1225,7 @@ fn generate_asm_project(source_path: &Path, output_dir: &Path) -> Result<()> {
     let code = poly_transpiler::Transpiler::new()
         .transpile_asm_checked(&source)
         .map_err(|error| anyhow::anyhow!(error))?;
+    warn_dependencies_ignored(&source, &Target::Asm);
     if output_dir.exists() && output_dir.read_dir()?.next().is_some() {
         bail!(
             "Refusing to overwrite existing files in {}",
@@ -1289,6 +1312,7 @@ fn generate_js_project(source_path: &Path, output_dir: &Path) -> Result<()> {
     let code = poly_transpiler::Transpiler::new()
         .transpile_js_checked(&source)
         .map_err(|error| anyhow::anyhow!(error))?;
+    warn_dependencies_ignored(&source, &Target::Js);
     if output_dir.exists() && output_dir.read_dir()?.next().is_some() {
         bail!(
             "Refusing to overwrite existing files in {}",

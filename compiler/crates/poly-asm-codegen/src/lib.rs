@@ -217,6 +217,9 @@ impl AsmGenerator {
                 }
                 Statement::ForeignBlock { .. } => {}
                 Statement::ExternFunctionDeclaration(_) => {}
+                // External crates are a Cargo concern; `dep` declarations are
+                // consumed by project generation, not assembly emission.
+                Statement::DependencyDeclaration(_) => {}
                 Statement::FunctionDeclaration(func) => {
                     functions.push(func.clone());
                 }
@@ -1041,6 +1044,7 @@ impl AsmGenerator {
             | Statement::ImplDeclaration(_)
             | Statement::ModuleDeclaration(_)
             | Statement::UseDeclaration(_)
+            | Statement::DependencyDeclaration(_)
             | Statement::TypeDeclaration(_) => {
                 return Err(
                     "This Poly declaration is not supported in an assembly function".to_string(),

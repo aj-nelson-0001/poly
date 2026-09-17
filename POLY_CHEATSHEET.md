@@ -142,6 +142,18 @@ end fn
 
 Foreign blocks are emitted to the selected target at file scope. The target compiler validates their contents. `#cpp` is rejected explicitly; there is no C++ backend yet.
 
+## External Crates
+
+~~~poly fragment
+dep minifb = "0.27"
+dep alsa = "0.9"
+~~~
+
+Program-scope `dep name = "version"` declarations name the Cargo crates the
+foreign blocks use. `--project` emits them into `Cargo.toml`; `--check`
+resolves them through Cargo so the program validates standalone. They are
+ignored by the C, asm, and JS backends.
+
 ## Targets
 
 ~~~bash

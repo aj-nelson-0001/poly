@@ -74,6 +74,11 @@ pub fn generate(program: &ast::Program) -> Program {
                 }
                 intermediate_representation.uses.push(path);
             }
+            ast::Statement::DependencyDeclaration(decl) => {
+                intermediate_representation
+                    .dependencies
+                    .push((decl.name.clone(), decl.version.clone()));
+            }
             // Rust blocks are hoisted because Rust items cannot appear inside
             // the generated `main`; target selection has already removed C/C++.
             ast::Statement::ForeignBlock { language, content } if language == "rust" => {
@@ -260,6 +265,9 @@ fn gen_statement(statement: &ast::Statement) -> Statement {
         ast::Statement::ImplDeclaration(_) => unreachable!("impls are collected first"),
         ast::Statement::ModuleDeclaration(_) => unreachable!("modules are collected first"),
         ast::Statement::UseDeclaration(_) => unreachable!("use declarations are collected first"),
+        ast::Statement::DependencyDeclaration(_) => {
+            unreachable!("dependency declarations are collected first")
+        }
         ast::Statement::TypeDeclaration(_) => unreachable!("type aliases are collected first"),
         ast::Statement::ExpressionStatement(expr) => Statement::Expression(gen_expr(expr)),
         ast::Statement::ReturnStatement(value) => Statement::Return(value.as_ref().map(gen_expr)),

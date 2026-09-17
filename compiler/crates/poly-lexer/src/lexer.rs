@@ -727,6 +727,9 @@ impl<'a> Lexer<'a> {
             "module" => TokenKind::Module,
             "use" => TokenKind::Use,
             "extern" => TokenKind::Extern,
+            // `dep name = "version"` declares an external crate dependency;
+            // consumed by `--project` and dependency-aware checking.
+            "dep" => TokenKind::Dep,
             "pub" => TokenKind::Pub,
             "as" => TokenKind::As,
             "where" => TokenKind::Where,

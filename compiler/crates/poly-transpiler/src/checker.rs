@@ -590,6 +590,9 @@ impl TypeChecker {
             | Statement::TraitDeclaration(_)
             | Statement::ImplDeclaration(_)
             | Statement::UseDeclaration(_)
+            // Dependency declarations carry no Poly types; project generation
+            // and the CLI consume them.
+            | Statement::DependencyDeclaration(_)
             | Statement::TypeDeclaration(_)
             | Statement::ForeignBlock { .. }
             | Statement::ExternFunctionDeclaration(_) => {}

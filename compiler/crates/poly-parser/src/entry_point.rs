@@ -54,6 +54,7 @@ fn is_executable_statement(statement: &Statement) -> bool {
         | Statement::ImplDeclaration(_)
         | Statement::ModuleDeclaration(_)
         | Statement::UseDeclaration(_)
+        | Statement::DependencyDeclaration(_)
         | Statement::TypeDeclaration(_)
         | Statement::ConstDeclaration { .. }
         | Statement::ForeignBlock { .. }

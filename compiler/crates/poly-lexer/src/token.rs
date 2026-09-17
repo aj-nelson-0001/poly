@@ -90,6 +90,7 @@ pub enum TokenKind {
     Module,
     Use,
     Extern,
+    Dep,
     Pub,
     As,
     Where,
@@ -284,6 +285,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Module => write!(f, "module"),
             TokenKind::Use => write!(f, "use"),
             TokenKind::Extern => write!(f, "extern"),
+            TokenKind::Dep => write!(f, "dep"),
             TokenKind::Pub => write!(f, "pub"),
             TokenKind::As => write!(f, "as"),
             TokenKind::Where => write!(f, "where"),
@@ -435,6 +437,7 @@ impl TokenKind {
                 | TokenKind::Module
                 | TokenKind::Use
                 | TokenKind::Extern
+                | TokenKind::Dep
                 | TokenKind::Pub
                 | TokenKind::As
                 | TokenKind::Where

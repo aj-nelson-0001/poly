@@ -52,6 +52,19 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- **`dep name = "version"` declarations** for external crate dependencies
+  (program scope). `--project` emits them into the generated `Cargo.toml`,
+  and `--check` plus a default Rust build resolve them through Cargo in a
+  temporary project — programs using external crates now validate
+  standalone. C, asm, and JS backends ignore the declarations. The Tetris
+  example declares its `minifb`/`alsa` dependencies in source, replacing the
+  manual Cargo.toml editing previously documented in its README and CI.
+- Regression tests: parser acceptance/rejection of `dep` forms, manifest
+  emission, and a CLI e2e test covering check + project generation with
+  dependencies.
+
 ## [2.0.0-preview.5] - 2026-09-17
 
 Re-cut of `2.0.0-preview.4` from a commit whose CI run is fully green (the

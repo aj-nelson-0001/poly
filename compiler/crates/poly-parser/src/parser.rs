@@ -380,6 +380,9 @@ impl<'a> Parser<'a> {
             TokenKind::Extern => self
                 .parse_extern_function_declaration()
                 .map(Statement::ExternFunctionDeclaration),
+            TokenKind::Dep => self
+                .parse_dependency_declaration()
+                .map(Statement::DependencyDeclaration),
             TokenKind::Use => self.parse_use_declaration().map(Statement::UseDeclaration),
             TokenKind::Type => self
                 .parse_type_declaration()
@@ -1277,6 +1280,27 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(UseDecl { path, alias })
+    }
+
+    /// `dep name = "version"` declares an external crate dependency. Program
+    /// scope only: dependencies are project-level metadata, not statements.
+    fn parse_dependency_declaration(&mut self) -> Result<DependencyDecl, ParseError> {
+        self.advance(); // consume 'dep'
+        let name = self.expect_identifier()?;
+        self.expect(&TokenKind::Eq)?;
+        let version = match self.peek().clone() {
+            TokenKind::StringLiteral(version) => {
+                self.advance();
+                version
+            }
+            other => {
+                return Err(ParseError::new(
+                    format!("Expected version string after dep name, got {:?}", other),
+                    self.current().span,
+                ))
+            }
+        };
+        Ok(DependencyDecl { name, version })
     }
 
     fn parse_type_declaration(&mut self) -> Result<TypeDecl, ParseError> {
@@ -3609,6 +3633,9 @@ fn substitute_statement(
                 .collect(),
         }),
         Statement::UseDeclaration(declaration) => Statement::UseDeclaration(declaration.clone()),
+        Statement::DependencyDeclaration(declaration) => {
+            Statement::DependencyDeclaration(declaration.clone())
+        }
         Statement::TypeDeclaration(declaration) => Statement::TypeDeclaration(declaration.clone()),
         Statement::ExternFunctionDeclaration(declaration) => {
             Statement::ExternFunctionDeclaration(declaration.clone())
@@ -3978,6 +4005,45 @@ fn substitute_expression(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn parse_dependency_declarations() {
+        let source = concat!(
+            "dep minifb = \"0.27\"\n",
+            "dep alsa = \"0.9\"\n",
+            "fn main()\n    put \"ok\"\nend fn\n",
+        );
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        let mut parser = Parser::new(&tokens);
+        let program = parser.parse().unwrap();
+        let deps: Vec<(String, String)> = program
+            .statements
+            .iter()
+            .filter_map(|statement| match &statement.node {
+                Statement::DependencyDeclaration(declaration) => {
+                    Some((declaration.name.clone(), declaration.version.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            deps,
+            vec![
+                ("minifb".to_string(), "0.27".to_string()),
+                ("alsa".to_string(), "0.9".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn dependency_declaration_requires_version_string() {
+        let source = "dep minifb = 0.27\n";
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        let mut parser = Parser::new(&tokens);
+        assert!(parser.parse().is_err());
+    }
+
     use super::*;
     use poly_lexer::Lexer;
 

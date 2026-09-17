@@ -44,8 +44,8 @@ TETRIS_POLY_BIN = ROOT / "compiler" / "target" / "release" / "poly"
 TETRIS_MAIN = TETRIS_PROJECT / "src" / "main.rs"
 TETRIS_README = TETRIS_DIR / "README.md"
 VERSION_RE = re.compile(r'^(version = ")([^"]+)(")$', re.MULTILINE)
-# The tetris README documents the dependency pins; the generated project
-# must agree with it.
+# The tetris README documents the dependency pins; the `dep` declarations in
+# tetris.poly and the generated project's manifest must agree with it.
 TETRIS_README_DEPS = {"minifb": "0.27", "alsa": "0.9"}
 # Docs whose first stated version must equal the release version; the value
 # describes what to look for when the check fails.
@@ -127,20 +127,8 @@ def regenerate_tetris_project() -> None:
     run(["cargo", "build", "--release", "-p", "poly-cli"], cwd=ROOT / "compiler")
     # --project refuses to touch an existing directory; regenerate from scratch.
     run(["rm", "-rf", str(TETRIS_PROJECT)])
+    # The source's `dep` declarations flow into the generated Cargo.toml.
     run([str(TETRIS_POLY_BIN), "--project", str(TETRIS_PROJECT), str(TETRIS_SOURCE)])
-    # --project does not emit the Cargo dependencies the source relies on.
-    toml_path = TETRIS_PROJECT / "Cargo.toml"
-    toml = toml_path.read_text(encoding="utf-8")
-    if "minifb" not in toml:
-        toml = toml.replace(
-            "[dependencies]",
-            "[dependencies]\n" + "\n".join(
-                f'{name} = "{ver}"' for name, ver in TETRIS_README_DEPS.items()
-            ),
-            1,
-        )
-        toml_path.write_text(toml, encoding="utf-8")
-        print("  restored tetris Cargo dependencies")
     # Online resolution: an --offline run downgrades transitive deps relative
     # to the committed lockfile (observed with web-sys et al on 2026-09-17).
     lock_path = TETRIS_PROJECT / "Cargo.lock"

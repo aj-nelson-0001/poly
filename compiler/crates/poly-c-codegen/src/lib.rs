@@ -98,6 +98,9 @@ impl CGenerator {
                     self.main_statements.push(statement.clone());
                     let _ = (name, value);
                 }
+                // Cargo owns external crates; `dep` declarations are consumed
+                // by project generation, not C emission.
+                Statement::DependencyDeclaration(_) => {}
                 _ => self.main_statements.push(statement.clone()),
             }
         }
@@ -752,6 +755,7 @@ impl CGenerator {
             | Statement::ImplDeclaration(_)
             | Statement::ModuleDeclaration(_)
             | Statement::UseDeclaration(_)
+            | Statement::DependencyDeclaration(_)
             | Statement::TypeDeclaration(_) => {
                 return Err("this Poly declaration is not supported in a C function".to_string());
             }

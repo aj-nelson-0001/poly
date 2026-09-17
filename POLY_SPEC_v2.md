@@ -80,6 +80,24 @@ struct Config {
 - `#cpp` is reserved for a future backend; any source containing a `#cpp` block is rejected with an explicit unsupported-backend diagnostic.
 - `extern rust fn ...` and `extern c fn ...` declarations are optional top-level interface contracts for foreign calls. They are checked by Poly and are not emitted.
 
+### External crate dependencies
+
+`dep name = "version"` declares a Cargo crate the program's foreign blocks
+rely on. Declarations are program-scope, never emitted into generated source:
+
+~~~poly fragment
+dep minifb = "0.27"
+dep alsa = "0.9"
+~~~
+
+- `poly --project <dir> <file.poly>` writes the declared dependencies into
+  the generated `Cargo.toml`.
+- `--check` (and a default Rust build) resolves `dep` crates through Cargo
+  in a temporary project, so programs with external crates validate
+  standalone.
+- Dependency declarations carry no runtime semantics; the C, asm, and JS
+  backends ignore them.
+
 ### Target selection
 
 ~~~text

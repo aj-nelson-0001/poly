@@ -4,6 +4,14 @@
 # A faithful port of the original JS Tetris (ghost piece, hold, 5-piece
 # next queue, NES-style gravity/scoring, synthesized audio, high score).
 #
+# External crates: `dep name = "version"` declares Cargo dependencies that
+# `--project` emits into Cargo.toml and `--check` resolves.
+#
+
+dep minifb = "0.27"
+dep alsa = "0.9"
+
+#
 # Architecture notes (Poly semantics):
 #   - Vec/struct values MOVE. Methods take `self` by value and must
 #     `return self`; callers rebind: `s := s.method(..)`.

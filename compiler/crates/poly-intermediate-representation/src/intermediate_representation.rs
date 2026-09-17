@@ -31,6 +31,10 @@ pub struct Program {
     pub constants: Vec<Constant>,
     pub type_aliases: Vec<TypeAlias>,
     pub uses: Vec<String>,
+    /// External crate dependencies from `dep name = "version"` declarations.
+    /// Consumed by project generation and dependency-aware checking; never
+    /// emitted into generated source (Cargo owns crates on the Rust target).
+    pub dependencies: Vec<(String, String)>,
     /// Statements that become the generated entry point body.
     pub main_body: Vec<Statement>,
     /// Raw Rust blocks from `#rust ... #endrust`, emitted verbatim at

@@ -83,6 +83,10 @@ impl JsGenerator {
                     )
                 }
                 Statement::ConstDeclaration { .. } => self.main_statements.push(statement.clone()),
+                // Package managers own external dependencies; `dep`
+                // declarations are consumed by project generation, not JS
+                // emission.
+                Statement::DependencyDeclaration(_) => {}
                 _ => self.main_statements.push(statement.clone()),
             }
         }
@@ -448,6 +452,7 @@ impl JsGenerator {
             | Statement::ImplDeclaration(_)
             | Statement::ModuleDeclaration(_)
             | Statement::UseDeclaration(_)
+            | Statement::DependencyDeclaration(_)
             | Statement::TypeDeclaration(_) => {
                 return Err(
                     "this Poly declaration is not supported inside a JS function".to_string(),

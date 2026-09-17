@@ -77,6 +77,8 @@ pub enum Statement {
     ModuleDeclaration(ModuleDecl),
     /// Use declaration
     UseDeclaration(UseDecl),
+    /// External crate dependency declaration (program scope only)
+    DependencyDeclaration(DependencyDecl),
     /// Type alias
     TypeDeclaration(TypeDecl),
     /// Expression statement
@@ -492,6 +494,15 @@ pub struct ModuleDecl {
 pub struct UseDecl {
     pub path: Vec<String>,
     pub alias: Option<String>,
+}
+
+/// External crate dependency: `dep minifb = "0.27"` (program scope only).
+/// Consumed by project generation and dependency-aware checking; never
+/// emitted into generated Rust source, which relies on Cargo for crates.
+#[derive(Debug, Clone)]
+pub struct DependencyDecl {
+    pub name: String,
+    pub version: String,
 }
 
 /// Type declaration.

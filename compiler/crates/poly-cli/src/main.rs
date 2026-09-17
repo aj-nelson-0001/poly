@@ -434,10 +434,15 @@ fn main() -> Result<()> {
                 // Run transpiler to check for transpilation errors
                 if !has_errors {
                     let transpiler = poly_transpiler::Transpiler::new();
+                    let dependencies = source_dependencies(&source);
                     match transpiler.transpile_target(&source, target.language_name()) {
                         Ok(code) => {
                             let compile_result = match target {
-                                Target::Rust => verify_rust_compiles(&code),
+                                Target::Rust => verify_rust_compiles_with_dependencies(
+                                    &code,
+                                    &dependencies,
+                                    &format!("{}-{}", label.len(), label.replace('/', "_")),
+                                ),
                                 Target::C => verify_c_compiles(&code),
                                 Target::Asm => verify_asm_compiles(&code),
                                 Target::Js => verify_js_compiles(&code),
@@ -832,10 +837,14 @@ fn generate_cargo_project_inner(
         .with_context(|| format!("Failed to create project directory: {}", src_dir.display()))?;
 
     let package_name = cargo_package_name(output_dir, source_path);
+    // `dep` declarations in the source are the source of truth for external
+    // crates; the generated manifest carries them so the project builds.
+    let declared_dependencies = source_dependencies(&source);
     let manifest = cargo_manifest(
         &package_name,
         rust_code.contains("#[tokio::main]") || rust_code.contains("tokio::"),
         rust_code.contains("rusqlite::"),
+        &declared_dependencies,
     );
 
     std::fs::write(&manifest_path, manifest)
@@ -956,7 +965,12 @@ fn cargo_package_name(output_dir: &Path, source_path: &Path) -> String {
 }
 
 /// Build the manifest for a generated Cargo project.
-fn cargo_manifest(package_name: &str, needs_tokio: bool, needs_rusqlite: bool) -> String {
+fn cargo_manifest(
+    package_name: &str,
+    needs_tokio: bool,
+    needs_rusqlite: bool,
+    declared_dependencies: &[(String, String)],
+) -> String {
     let mut dependencies = String::new();
     if needs_tokio {
         // "time" enables `tokio::time::sleep` (used by `delay`); "net" and
@@ -969,6 +983,9 @@ fn cargo_manifest(package_name: &str, needs_tokio: bool, needs_rusqlite: bool) -
         // "bundled" compiles SQLite from source so no system library is needed.
         dependencies.push_str("rusqlite = { version = \"0.31\", features = [\"bundled\"] }\n");
     }
+    for (name, version) in declared_dependencies {
+        dependencies.push_str(&format!("{name} = \"{version}\"\n"));
+    }
 
     format!(
         "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"2021\"\n\n[dependencies]\n{}\n[workspace]\n",
@@ -976,6 +993,28 @@ fn cargo_manifest(package_name: &str, needs_tokio: bool, needs_rusqlite: bool) -
         env!("CARGO_PKG_VERSION"),
         dependencies
     )
+}
+
+/// Extract `dep name = "version"` declarations from Poly source.
+fn source_dependencies(source: &str) -> Vec<(String, String)> {
+    let (tokens, lexer_errors) = poly_lexer::Lexer::lex(source);
+    if !lexer_errors.is_empty() {
+        return Vec::new();
+    }
+    let mut parser = poly_parser::Parser::new(&tokens);
+    match parser.parse() {
+        Ok(program) => program
+            .statements
+            .iter()
+            .filter_map(|statement| match &statement.node {
+                poly_parser::Statement::DependencyDeclaration(declaration) => {
+                    Some((declaration.name.clone(), declaration.version.clone()))
+                }
+                _ => None,
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    }
 }
 
 /// Run the interactive REPL with syntax highlighting
@@ -1505,6 +1544,49 @@ fn verify_rust_compiles(code: &str) -> Result<()> {
 
 /// Verify async generated Rust by running `cargo check` in a temporary Cargo
 /// project that provides the tokio dependency `#[tokio::main]` requires.
+fn verify_rust_compiles_with_dependencies(
+    code: &str,
+    dependencies: &[(String, String)],
+    unique_id: &str,
+) -> Result<()> {
+    use std::process::Command;
+
+    if dependencies.is_empty() {
+        return verify_rust_compiles(code);
+    }
+    // External crates only resolve through Cargo, so compile the generated
+    // Rust inside a temporary project whose manifest declares them.
+    let temp_dir = std::env::temp_dir();
+    let project_dir = temp_dir.join(format!("poly_check_deps_{unique_id}"));
+    let src_dir = project_dir.join("src");
+    std::fs::create_dir_all(&src_dir).context("Failed to create temp Cargo project")?;
+    let manifest = cargo_manifest("poly_check_deps", false, false, dependencies);
+    std::fs::write(project_dir.join("Cargo.toml"), manifest)
+        .context("Failed to write temp Cargo.toml")?;
+    std::fs::write(src_dir.join("main.rs"), code).context("Failed to write temp main.rs")?;
+
+    let output = Command::new("cargo")
+        .arg("check")
+        .arg("--quiet")
+        .current_dir(&project_dir)
+        .output()
+        .context("Failed to run cargo. Is Cargo installed?");
+
+    let _ = std::fs::remove_dir_all(&project_dir);
+    let output = output?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let message = if output.stderr.is_empty() {
+            String::from_utf8_lossy(&output.stdout).to_string()
+        } else {
+            String::from_utf8_lossy(&output.stderr).to_string()
+        };
+        Err(anyhow::anyhow!(message))
+    }
+}
+
 fn verify_async_rust_compiles(code: &str, unique_id: &str) -> Result<()> {
     use std::process::Command;
 
@@ -1739,19 +1821,34 @@ mod tests {
 
     #[test]
     fn cargo_manifest_adds_tokio_only_for_async_programs() {
-        let synchronous = cargo_manifest("demo", false, false);
+        let synchronous = cargo_manifest("demo", false, false, &[]);
         assert!(synchronous.contains("name = \"demo\""));
         assert!(!synchronous.contains("tokio"));
         assert!(!synchronous.contains("rusqlite"));
         assert!(synchronous.contains("[workspace]"));
 
-        let asynchronous = cargo_manifest("demo", true, false);
+        let asynchronous = cargo_manifest("demo", true, false, &[]);
         assert!(asynchronous.contains("tokio = { version = \"1\""));
         assert!(asynchronous.contains("\"time\""));
         assert!(!asynchronous.contains("rusqlite"));
 
-        let with_db = cargo_manifest("demo", false, true);
+        let with_db = cargo_manifest("demo", false, true, &[]);
         assert!(with_db.contains("rusqlite = { version = \"0.31\""));
+    }
+
+    #[test]
+    fn cargo_manifest_includes_declared_dependencies() {
+        let manifest = cargo_manifest(
+            "demo",
+            false,
+            false,
+            &[
+                ("minifb".to_string(), "0.27".to_string()),
+                ("alsa".to_string(), "0.9".to_string()),
+            ],
+        );
+        assert!(manifest.contains("minifb = \"0.27\""));
+        assert!(manifest.contains("alsa = \"0.9\""));
     }
 
     #[test]

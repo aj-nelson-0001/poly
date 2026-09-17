@@ -19,12 +19,12 @@ Requires the Poly compiler (`compiler/target/release/poly`) and ALSA headers
 (`libasound2-dev`) for sound.
 
 ~~~sh
+# validate (dep declarations resolve minifb/alsa through Cargo)
+poly tetris.poly --check
+
 # regenerate the Rust project from tetris.poly
 poly --project rust_output/tetris tetris.poly
 
-# dependencies are not emitted by poly; ensure Cargo.toml contains:
-#   minifb = "0.27"
-#   alsa   = "0.9"
 cargo build --release --manifest-path rust_output/tetris/Cargo.toml
 
 # play
@@ -35,8 +35,9 @@ cargo build --release --manifest-path rust_output/tetris/Cargo.toml
 ~~~
 
 Note: `poly --project` will not overwrite an existing directory — remove
-`rust_output/tetris` (or just its `src/` and `Cargo.toml`) first. Cargo.toml must
-then be re-created with the two dependencies above.
+`rust_output/tetris` first. The `dep minifb = "0.27"` and `dep alsa = "0.9"`
+declarations at the top of tetris.poly are emitted into Cargo.toml
+automatically.
 
 ## Controls
 

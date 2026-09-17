@@ -217,3 +217,49 @@ fn function_local_consts_work_across_backends() {
 
     fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn dep_declarations_drive_project_manifest_and_check() {
+    // `dep name = "version"` declares an external crate: --project must emit
+    // it into Cargo.toml, and --check must resolve it via a cargo-based
+    // verification instead of bare rustc.
+    let dir = unique_temp_dir("depdecl");
+    fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("deps.poly");
+    fs::write(
+        &source,
+        "dep minifb = \"0.27\"\ndep alsa = \"0.9\"\n\nfn main()\n    put \"ok\"\nend fn\n",
+    )
+    .unwrap();
+
+    let output = poly().arg(&source).arg("--check").output().unwrap();
+    assert!(
+        output.status.success(),
+        "--check with deps failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let project = dir.join("proj");
+    let output = poly()
+        .arg("--project")
+        .arg(&project)
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "--project failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let manifest = fs::read_to_string(project.join("Cargo.toml")).unwrap();
+    assert!(
+        manifest.contains("minifb = \"0.27\""),
+        "expected minifb dependency in manifest: {manifest}"
+    );
+    assert!(
+        manifest.contains("alsa = \"0.9\""),
+        "expected alsa dependency in manifest: {manifest}"
+    );
+
+    fs::remove_dir_all(&dir).unwrap();
+}

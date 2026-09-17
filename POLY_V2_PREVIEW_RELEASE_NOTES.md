@@ -2,7 +2,18 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.5 (a re-cut of preview.4 from a fully green CI run — no source changes) continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.6 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.6
+
+- **`dep name = "version"` declarations** for external crate dependencies:
+  program-scope declarations that `--project` emits into the generated
+  `Cargo.toml` and that `--check` resolves through Cargo, so programs using
+  external crates validate standalone. The Tetris example now declares its
+  `minifb`/`alsa` dependencies in source.
+- The release workflow refuses to publish when the built binary's version
+  does not match the tag name, and CI no longer duplicates release
+  publishing (`release.yml` is the single publisher).
 
 ## What's New in 2.0.0-preview.5
 

@@ -52,6 +52,8 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.6] - 2026-09-17
+
 ### Added
 
 - **`dep name = "version"` declarations** for external crate dependencies

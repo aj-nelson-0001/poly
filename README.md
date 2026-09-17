@@ -78,6 +78,14 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.6
+
+**`dep name = "version"` declarations** let a Poly program name the external
+Cargo crates its foreign blocks use: `poly --project` emits them into the
+generated `Cargo.toml`, and `--check` resolves them through Cargo so the
+program validates standalone. The Tetris example now declares its own
+dependencies in source.
+
 ### What's New in 2.0.0-preview.5
 
 Re-cut of `2.0.0-preview.4` from a fully green CI run (no source changes).

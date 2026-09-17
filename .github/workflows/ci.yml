@@ -248,6 +248,14 @@ jobs:
           cargo build --release --manifest-path tetris/rust_output/tetris/Cargo.toml
           tetris/rust_output/tetris/target/release/tetris --test
 
+      - name: Differential backend suite
+        # Every tests/diff_*.poly program must produce identical output on
+        # all four targets (rust/c/js/asm; asm requires Linux). This is the
+        # guard that caught the asm negative-integer bug, the asm shared
+        # temp-slot corruption, the C/JS missing match expressions, and two
+        # struct-ABI defects. Also runs nightly via differential.yml.
+        run: python3 scripts/check_backends.py --poly-bin compiler/target/release/poly
+
   audit:
     name: Dependency Audit
     runs-on: ubuntu-latest

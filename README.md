@@ -78,6 +78,15 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.10
+
+**Backend robustness:** a differential sweep of one program through all four
+targets (rust/c/js/asm) found and fixed five backend defects — C and JS
+match expressions in value position, asm negative-integer printing, asm
+shared expression temporaries, asm struct-call arguments, and C struct
+type inference from call results. The differential suite now runs in CI on
+every push and nightly (`scripts/check_backends.py`).
+
 ### What's New in 2.0.0-preview.9
 
 **Documentation release:** the spec now defines the `.poly-generated`

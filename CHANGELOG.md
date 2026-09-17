@@ -52,6 +52,29 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.10] - 2026-09-17
+
+### Fixed
+
+- **All four backends now agree on the differential suite.** A sweep of one
+  program through rust/c/js/asm exposed and fixed five defects: C and JS
+  rejected match expressions in value position; the asm runtime negated the
+  syscall return value instead of the number when printing negative integers
+  (every negative printed as `-1`); asm expression temporaries shared one
+  stack slot per expression kind, corrupting nested arithmetic; asm passed a
+  struct-returning call's first field value where a struct address was
+  expected (segfault); and C declared struct-returning call results as
+  `int32_t`, generating C that did not compile.
+
+### Added
+
+- **Differential backend suite as a permanent guard.** `tests/diff_*.poly`
+  programs carry expected output headers; `scripts/check_backends.py` runs
+  each through every target and fails on divergence. Wired into the Linux CI
+  job on every push/PR, with a nightly schedule in
+  `.github/workflows/differential.yml`. Support matrix and spec document
+  value-position match semantics.
+
 ## [2.0.0-preview.9] - 2026-09-17
 
 ### Added

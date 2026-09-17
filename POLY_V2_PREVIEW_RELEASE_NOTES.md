@@ -2,7 +2,18 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.9 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.10 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.10
+
+Backend-robustness release: a differential sweep of the same program through
+all four targets found and fixed five backend defects — C and JS now support
+match expressions in value position, the asm runtime prints negative
+integers correctly, asm expression temporaries no longer share stack slots,
+asm passes struct-returning call results as struct arguments correctly, and
+C infers struct types from call-result initializers. A new differential
+backend suite (`scripts/check_backends.py` + `tests/diff_*.poly`) runs in
+every CI push/PR and nightly, failing when any target's output diverges.
 
 ## What's New in 2.0.0-preview.9
 

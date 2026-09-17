@@ -222,10 +222,14 @@ jobs:
       - name: Regenerate tetris Rust project
         working-directory: tetris
         run: |
-          rm -f rust_output/tetris/src/main.rs
+          # --project refuses to touch an existing directory, and a fresh
+          # checkout contains the tracked generated files, so start clean.
+          rm -rf rust_output/tetris
           ../compiler/target/release/poly --project rust_output/tetris tetris.poly
-          # --project skips an existing directory; --emit-rust must reproduce
-          # the tracked src/main.rs byte-for-byte (modulo one trailing newline).
+          # --project does not emit the Cargo dependencies; restore them.
+          grep -q minifb rust_output/tetris/Cargo.toml || sed -i 's/^\[dependencies\]$/[dependencies]\nminifb = "0.27"\nalsa = "0.9"/' rust_output/tetris/Cargo.toml
+          # --emit-rust must reproduce the tracked src/main.rs byte-for-byte
+          # (modulo one trailing newline that only --emit-rust adds).
           diff <(../compiler/target/release/poly tetris.poly --emit-rust | sed -e '$d') rust_output/tetris/src/main.rs
 
       - name: Build and self-test tetris

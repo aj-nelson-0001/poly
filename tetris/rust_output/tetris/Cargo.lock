@@ -512,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "tetris"
-version = "2.0.0-preview.8"
+version = "2.0.0-preview.9"
 dependencies = [
  "alsa",
  "minifb",

@@ -78,6 +78,12 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.9
+
+**Documentation release:** the spec now defines the `.poly-generated`
+marker (record format, relative-path portability, refresh-safety rule) and
+documents match expressions as variable initializers.
+
 ### What's New in 2.0.0-preview.8
 
 **Generated projects are now portable and CI-guarded:** the `.poly-generated`

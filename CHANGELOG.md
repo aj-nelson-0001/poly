@@ -52,6 +52,16 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.9] - 2026-09-17
+
+### Added
+
+- **Generated-project marker and match-expression initializers are now
+  documented.** `POLY_SPEC_v2.md` specifies the `.poly-generated` record
+  format, its relative-path portability guarantee, and the refresh-safety
+  rule it enables; the variable-declaration section documents match
+  expressions as initializers. The cheat sheet summarizes the marker.
+
 ## [2.0.0-preview.8] - 2026-09-17
 
 ### Fixed

@@ -2,7 +2,15 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.8 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.9 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.9
+
+Documentation release: the spec now defines the `.poly-generated`
+generated-project marker (record format, relative-path portability
+guarantee, and the refresh-safety rule it enables) and documents match
+expressions as variable initializers; the cheat sheet summarizes the
+marker.
 
 ## What's New in 2.0.0-preview.8
 

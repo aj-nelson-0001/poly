@@ -222,13 +222,15 @@ fn function_local_consts_work_across_backends() {
 fn dep_declarations_drive_project_manifest_and_check() {
     // `dep name = "version"` declares an external crate: --project must emit
     // it into Cargo.toml, and --check must resolve it via a cargo-based
-    // verification instead of bare rustc.
+    // verification instead of bare rustc. Pure-Rust crates are used so the
+    // test has no system-library requirements (alsa-sys, for example, needs
+    // ALSA headers that plain CI runners lack).
     let dir = unique_temp_dir("depdecl");
     fs::create_dir_all(&dir).unwrap();
     let source = dir.join("deps.poly");
     fs::write(
         &source,
-        "dep minifb = \"0.27\"\ndep alsa = \"0.9\"\n\nfn main()\n    put \"ok\"\nend fn\n",
+        "dep rand = \"0.8\"\ndep libc = \"0.2\"\n\nfn main()\n    put \"ok\"\nend fn\n",
     )
     .unwrap();
 
@@ -253,12 +255,12 @@ fn dep_declarations_drive_project_manifest_and_check() {
     );
     let manifest = fs::read_to_string(project.join("Cargo.toml")).unwrap();
     assert!(
-        manifest.contains("minifb = \"0.27\""),
-        "expected minifb dependency in manifest: {manifest}"
+        manifest.contains("rand = \"0.8\""),
+        "expected rand dependency in manifest: {manifest}"
     );
     assert!(
-        manifest.contains("alsa = \"0.9\""),
-        "expected alsa dependency in manifest: {manifest}"
+        manifest.contains("libc = \"0.2\""),
+        "expected libc dependency in manifest: {manifest}"
     );
 
     fs::remove_dir_all(&dir).unwrap();

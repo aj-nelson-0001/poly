@@ -108,6 +108,18 @@ def check_version_consistency(version: str) -> None:
         raise SystemExit(
             f"tetris generated project version is {found}, expected {version}"
         )
+    # The playground footer states the version it was built against; the
+    # preview.2 release PR made "workspace version == --version == REPL ==
+    # playground footer" the documented consistency bar.
+    playground_text = (ROOT / "playground" / "index.html").read_text(encoding="utf-8")
+    if f"Poly Language v{version}" not in playground_text:
+        found = DOC_BASELINE_RE.search(playground_text)
+        raise SystemExit(
+            "playground/index.html footer states "
+            f"{found.group(1) if found else 'no version'}, expected {version}; "
+            "update the footer and the dialect comment by hand"
+        )
+    print("  playground footer states", version)
     problems: list[str] = []
     for name, pattern in DOC_BASELINE_FILES.items():
         text = (ROOT / name).read_text(encoding="utf-8")

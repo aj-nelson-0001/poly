@@ -190,6 +190,9 @@ jobs:
           python3 scripts/check_poly_examples.py
           --poly-bin compiler/target/release/poly
 
+      - name: Check generated files for machine-specific paths
+        run: python3 scripts/check_generated_paths.py
+
   tetris:
     name: Tetris example (Linux)
     runs-on: ubuntu-latest

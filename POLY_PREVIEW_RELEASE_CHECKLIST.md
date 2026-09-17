@@ -95,6 +95,10 @@ commits, tags, or pushes.
 #    lockfiles, tests, fmt, clippy, markdown, doc audit):
 python3 scripts/prepare_release.py 2.0.0-preview.N
 
+# 2b. Lint tracked generated files for machine-specific paths (home
+#     directories, runner paths) that would break byte-reproducibility:
+python3 scripts/check_generated_paths.py
+
 # 3. Review the diff, then commit and tag:
 git add -A
 git commit -m "chore(release): prepare 2.0.0-preview.N"

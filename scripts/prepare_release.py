@@ -42,8 +42,18 @@ TETRIS_PROJECT = TETRIS_DIR / "rust_output" / "tetris"
 TETRIS_SOURCE = TETRIS_DIR / "tetris.poly"
 TETRIS_POLY_BIN = ROOT / "compiler" / "target" / "release" / "poly"
 TETRIS_MAIN = TETRIS_PROJECT / "src" / "main.rs"
-TETRIS_DEPS = ["minifb = \"0.27\"", "alsa = \"0.9\""]
+TETRIS_README = TETRIS_DIR / "README.md"
 VERSION_RE = re.compile(r'^(version = ")([^"]+)(")$', re.MULTILINE)
+# The tetris README documents the dependency pins; the generated project
+# must agree with it.
+TETRIS_README_DEPS = {"minifb": "0.27", "alsa": "0.9"}
+# Docs whose first stated version must equal the release version; the value
+# describes what to look for when the check fails.
+DOC_BASELINE_FILES = {
+    "POLY_DOCUMENTATION_INDEX.md": "baseline statement",
+    "POLY_V2_PREVIEW_RELEASE_NOTES.md": "intro line",
+}
+DOC_BASELINE_RE = re.compile(r"(2\.0\.0-preview\.\d+)")
 
 
 def run(cmd: list[str], cwd: Path | None = None, allow_failure: bool = False) -> str:
@@ -73,6 +83,46 @@ def bump_workspace_version(new_version: str) -> None:
     run(["cargo", "update", "-w", "--offline"], cwd=ROOT / "compiler")
 
 
+def tetris_dep_pins() -> dict[str, str]:
+    """Dependency pins from the generated project's Cargo.toml."""
+    pins: dict[str, str] = {}
+    for line in (TETRIS_PROJECT / "Cargo.toml").read_text(encoding="utf-8").splitlines():
+        dep = re.match(r'^(\w+)\s*=\s*"([^"]+)"', line.strip())
+        if dep and dep.group(1) in TETRIS_README_DEPS:
+            pins[dep.group(1)] = dep.group(2)
+    return pins
+
+
+def check_version_consistency(version: str) -> None:
+    """Fail when the tetris project or doc baselines lag the new version.
+
+    The docs must be edited by hand before running this script (release
+    highlights and changelog entries cannot be generated mechanically), so a
+    stale baseline means the human edit step was skipped.
+    """
+    project_version = VERSION_RE.search(
+        (TETRIS_PROJECT / "Cargo.toml").read_text(encoding="utf-8")
+    )
+    if not project_version or project_version.group(2) != version:
+        found = project_version.group(2) if project_version else "none"
+        raise SystemExit(
+            f"tetris generated project version is {found}, expected {version}"
+        )
+    problems: list[str] = []
+    for name, pattern in DOC_BASELINE_FILES.items():
+        text = (ROOT / name).read_text(encoding="utf-8")
+        match = DOC_BASELINE_RE.search(text)
+        if not match or match.group(1) != version:
+            found = match.group(1) if match else "no version statement"
+            problems.append(f"- {name}: {pattern} ({found} found, expected {version})")
+    if problems:
+        raise SystemExit(
+            "stale release metadata; edit these by hand, then re-run:\n"
+            + "\n".join(problems)
+        )
+    print(f"  doc baselines state {version}")
+
+
 def regenerate_tetris_project() -> None:
     run(["cargo", "build", "--release", "-p", "poly-cli"], cwd=ROOT / "compiler")
     # --project refuses to touch an existing directory; regenerate from scratch.
@@ -84,7 +134,9 @@ def regenerate_tetris_project() -> None:
     if "minifb" not in toml:
         toml = toml.replace(
             "[dependencies]",
-            "[dependencies]\n" + "\n".join(TETRIS_DEPS),
+            "[dependencies]\n" + "\n".join(
+                f'{name} = "{ver}"' for name, ver in TETRIS_README_DEPS.items()
+            ),
             1,
         )
         toml_path.write_text(toml, encoding="utf-8")
@@ -106,6 +158,15 @@ def regenerate_tetris_project() -> None:
     if emitted_lines[:-1] != tracked:
         raise SystemExit("regeneration drift: src/main.rs != --emit-rust output")
     print("  tetris regeneration verified (src/main.rs matches --emit-rust)")
+    # Dependency pins must agree with the tetris README's documented pins.
+    pins = tetris_dep_pins()
+    if pins != TETRIS_README_DEPS:
+        raise SystemExit(
+            f"tetris dependency pins {pins} disagree with README pins "
+            f"{TETRIS_README_DEPS}; update TETRIS_README_DEPS in this script "
+            "or the README"
+        )
+    print(f"  dependency pins match README: {pins}")
 
 
 def verify(skip_tests: bool) -> None:
@@ -168,6 +229,7 @@ def main() -> int:
     regenerate_tetris_project()
 
     print("3/3 Verification")
+    check_version_consistency(arguments.version)
     verify(skip_tests=arguments.skip_tests)
 
     print(f"\nReady. Review the diff, then commit and tag {arguments.version}.")

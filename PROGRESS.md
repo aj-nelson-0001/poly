@@ -3,6 +3,30 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-17.
 
+## Auto-prerelease verified with a real tag; release flow documented (2026-09-17)
+
+- **Caught my own mistake:** the previous session added the `prerelease:`
+  expression to `ci.yml`'s release job, but the workflow that actually
+  publishes tags is `release.yml`'s `create-release` job — which had no
+  prerelease input at all (the true reason preview.5 published as a full
+  release). Fixed in `release.yml` (`71cd23a`); both workflows now carry the
+  expression. Note: on tag pushes both `release.yml` and `ci.yml`'s `release`
+  job run and touch the same release (pre-existing duplication).
+- **Verified end to end with a throwaway tag** `v2.0.0-preview.6-test`:
+  release.yml published the `poly` asset with `prerelease: true`
+  automatically; tag and release then deleted (releases list back to
+  preview.4/.5, both prereleases).
+- **Release procedure documented** in `POLY_PREVIEW_RELEASE_CHECKLIST.md`
+  (Release Procedure section): hand-edit the version-describing docs, run
+  `scripts/prepare_release.py`, commit/tag/push, confirm the release.
+- **`prepare_release.py` extended:** tetris dependency pins are checked
+  against the pins the tetris README documents (`TETRIS_README_DEPS` in the
+  script is the single place to update), and a version-consistency check
+  hard-fails when `POLY_DOCUMENTATION_INDEX.md` / the release-notes intro
+  still state the old version (those must be hand-edited first). Verified:
+  passes at the current version (idempotent, zero tree changes), fails with
+  actionable output on a stale version.
+
 ## Release automation; preview.4 deprecation notice (2026-09-17)
 
 - **`release.yml` now auto-marks preview tags as prereleases**:

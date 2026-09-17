@@ -307,6 +307,9 @@ fn dep_declarations_warn_on_non_rust_targets() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
+// The asm target emits Linux x86-64 syscall assembly; as/ld exist only where
+// that output can assemble.
 fn asm_backend_resolves_program_scope_structs_and_enums() {
     // The asm backend must pre-register program-scope struct/enum metadata
     // before emitting function bodies, and must infer struct types for

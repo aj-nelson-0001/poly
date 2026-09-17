@@ -45,11 +45,14 @@ jobs:
         run: |
           # The tag must name the version it releases; a mismatch means the
           # tag was cut from a tree whose version was never bumped.
+          # download-artifact does not preserve the executable bit.
+          chmod +x ./bin/poly
           tag="${GITHUB_REF_NAME#v}"
-          ./bin/poly --version | grep -qx "poly ${tag}" || {
-            echo "version mismatch: binary reports '$(./bin/poly --version)', tag says '${tag}'"
+          reported="$(./bin/poly --version)"
+          if [ "$reported" != "poly ${tag}" ]; then
+            echo "version mismatch: binary reports '$reported', tag says '${tag}'"
             exit 1
-          }
+          fi
           echo "binary version matches tag ${GITHUB_REF_NAME}"
 
       - name: Create GitHub Release

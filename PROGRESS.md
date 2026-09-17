@@ -3,6 +3,24 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-17.
 
+## Hygiene, badge, and v2.0.0-preview.5 re-cut (2026-09-17)
+
+- **Repo hygiene:** removed the stray root `rust_output/` probe directories
+  left by earlier debugging sessions (untracked, already gitignored).
+- **README CI badge** added, tracking the `v2.0-dev` branch workflow.
+- **Tagged `v2.0.0-preview.5`** (`739d79c`): a re-cut of preview.4 with no
+  source changes, made from a commit whose own CI run is fully green (run
+  35169863066 — the entire point of the re-cut, since the preview.4 tag
+  predated the tetris CI job and the CI fixes). Release workflow succeeded
+  and the `poly` asset is published; release marked prerelease to match
+  preview.3/preview.4.
+- Tetris generated project: version bump + `Cargo.lock` regenerated **with
+  network** (`cargo generate-lockfile --offline` downgraded transitive deps
+  vs. the original resolution — regenerate online when refreshing it).
+  `src/main.rs` remains byte-identical to `--emit-rust` output.
+- Release verification: 452 tests green, fmt/clippy clean, markdown 52
+  files, doc audit 573 blocks / 0 failures.
+
 ## CI green on v2.0-dev; act dry-run; checklist evidence recorded (2026-09-17)
 
 - **Every v2.0-dev CI run had been failing** since CI started triggering on

@@ -78,6 +78,14 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.8
+
+**Generated projects are now portable and CI-guarded:** the `.poly-generated`
+marker records the source relative to the generated project instead of the
+generating machine's absolute path, and the tetris CI job diffs the
+regenerated project against the committed one, failing on drift. Tetris now
+builds warning-free with the non-deprecated `set_target_fps`.
+
 ### What's New in 2.0.0-preview.7
 
 **Program-scope structs and enums now work on the asm target end to end:**

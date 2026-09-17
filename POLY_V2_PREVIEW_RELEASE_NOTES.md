@@ -2,9 +2,18 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.7 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.8 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
 
-## What's New in 2.0.0-preview.7
+## What's New in 2.0.0-preview.8
+
+Generated projects now record their source portably: the `.poly-generated`
+marker stores the source path relative to the generated project instead of the
+generating machine's absolute path, so committed output is byte-identical
+across machines. Refresh-mode identity checks resolve the record against the
+output directory and remain compatible with older absolute markers. The tetris
+example builds warning-free (match-expression gravity table,
+non-deprecated `set_target_fps`), and its CI job now diffs the regenerated
+project against the committed one, failing on any drift from `tetris.poly`.
 
 The asm backend now supports program-scope structs and enums end to end:
 definitions resolve inside any function body, struct parameters pass by

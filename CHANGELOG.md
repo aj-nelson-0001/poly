@@ -52,6 +52,29 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.8] - 2026-09-17
+
+### Fixed
+
+- **Generated projects record their source portably.** The `.poly-generated`
+  marker embedded the generating machine's absolute source path, making
+  committed output irreproducible across machines; the marker now records the
+  source relative to the generated project, with refresh-mode identity checks
+  resolving records against the output directory.
+
+### Changed
+
+- **tetris builds warning-free and its output is CI-guarded.** `gravity_ms`
+  initializes from a match expression instead of a dead literal, and `win_open`
+  uses the non-deprecated `set_target_fps(60)`. The tetris CI job now diffs the
+  regenerated `Cargo.toml`, `.poly-generated`, `src/main.rs`, and a freshly
+  resolved `Cargo.lock` against the committed files, so drift between
+  `tetris.poly` and the committed project fails CI.
+
+- **Grammar documentation includes `dep` declarations.**
+  `POLY_GRAMMAR.md` gained the `dependency_declaration` production and its
+  status reflects the current preview.
+
 ## [2.0.0-preview.7] - 2026-09-17
 
 ### Fixed

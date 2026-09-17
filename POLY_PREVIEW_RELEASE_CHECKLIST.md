@@ -47,7 +47,12 @@ This checklist describes release readiness for the current preview. It does not 
 
 - [x] Remove generated binaries, generated C files, temporary Cargo projects, and local output logs.
 - [x] Review `git diff` and `git status --short` for this change; generated test outputs are removed.
-- [ ] Repeat the review from a clean checkout before tagging the preview.
+- [x] Repeat the review from a clean checkout before tagging the preview.
+  Recorded 2026-09-17 for `v2.0.0-preview.5` (commit `739d79c`): fresh clone
+  of the tag, release build from scratch (`poly 2.0.0-preview.5`),
+  workspace tests 452/0, markdown 52 files, doc audit 573 blocks / 0
+  failures, tetris `src/main.rs` reproduced byte-for-byte via
+  `--emit-rust`, tetris release build + `--test` self-test passed.
 - [ ] Separate implementation, tests, CI, documentation, and release metadata into focused commits before merging.
 - [x] Do not commit credentials, machine-specific paths, or generated build directories.
 - [x] Confirm changelog and version metadata agree.
@@ -64,6 +69,9 @@ Record the following in the release PR:
 - links to the support matrix and audit report
 
 A preview tag should be created only after all mandatory checks pass from a clean checkout. This agent does not create or push tags.
+
+The release tag must name the version it releases: `release.yml` refuses to
+publish when `poly --version` does not equal the tag name (minus the `v`).
 
 ## Release Procedure
 

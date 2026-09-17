@@ -3,6 +3,27 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-17.
 
+## Release ownership fixed; clean-checkout review done (2026-09-17)
+
+- **`ci.yml` no longer publishes releases.** Its `release` job duplicated
+  `release.yml`'s `create-release` on tag pushes — two jobs uploading assets
+  to the same release raced, making the published result order-dependent.
+  `release.yml` now solely owns publishing; a comment marks the boundary.
+- **Tag↔version guard in `release.yml`:** before creating a release, the
+  freshly built binary's `--version` output must equal the tag name minus
+  `v`, otherwise the job fails. Guards against tags cut from unbumped
+  trees. Validated: YAML parses, `act -l` sees only the intended jobs, and
+  the grep matched `poly 2.0.0-preview.5` locally.
+- **Clean-checkout review of `v2.0.0-preview.5`** (tag commit `739d79c`,
+  fresh clone in /tmp, since deleted): release build from scratch reports
+  `poly 2.0.0-preview.5`; workspace tests 452/0; markdown 52 files; doc
+  audit 573 blocks / 0 unmarked failures; tetris `src/main.rs` reproduces
+  byte-for-byte from `--emit-rust`; tetris release build + `--test`
+  self-test passed. Checklist's clean-checkout item now ticked with this
+  evidence. (Known pre-existing gap, unchanged: `poly --check` cannot
+  validate tetris.poly standalone because external `minifb`/`alsa` crates
+  are only resolvable inside the generated Cargo project.)
+
 ## Auto-prerelease verified with a real tag; release flow documented (2026-09-17)
 
 - **Caught my own mistake:** the previous session added the `prerelease:`

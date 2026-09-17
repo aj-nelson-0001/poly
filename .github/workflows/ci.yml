@@ -284,27 +284,9 @@ jobs:
       - name: Run playground wasm smoke test
         run: node scripts/playground_wasm_smoke.mjs
 
-  release:
-    name: Release
-    runs-on: ubuntu-latest
-    needs: [test, lint, audit, wasm]
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.98.0
-
-      - name: Build release binary
-        run: cargo build --manifest-path compiler/Cargo.toml --release
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            compiler/target/release/poly
-          generate_release_notes: true
-          # 2.0 preview tags publish as prereleases; stable tags (no
-          # "preview" segment) publish as full releases.
-          prerelease: ${{ contains(github.ref_name, 'preview') }}
+# Release publishing is owned by .github/workflows/release.yml (build job +
+# create-release job, triggered on v* tags). CI no longer duplicates it: two
+# jobs uploading assets to the same release raced and made results order-
+# dependent. The CI workflow still runs on tag pushes via its branch and PR
+# gates so the tag commit's test/lint/audit/tetris/wasm results are visible
+# next to the release.

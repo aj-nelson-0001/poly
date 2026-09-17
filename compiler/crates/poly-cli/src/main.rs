@@ -826,7 +826,20 @@ fn generate_cargo_project_inner(
     let source_identity = source_path
         .canonicalize()
         .unwrap_or_else(|_| source_path.to_path_buf());
-    let marker_contents = format!("source={}\n", source_identity.display());
+    // Record the source location relative to the generated project when
+    // possible so committed output is byte-identical across checkouts and
+    // machines (an absolute path would embed the generating machine's
+    // layout). Fall back to the absolute path for cross-filesystem or
+    // non-canonical geometries where no stable relative path exists.
+    std::fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "Failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
+    let recorded_source =
+        relative_path(output_dir, &source_identity).unwrap_or_else(|| source_identity.clone());
+    let marker_contents = format!("source={}\n", recorded_source.display());
     if !refuse_overwrite && (manifest_path.exists() || main_rs_path.exists()) {
         if !generated_marker.is_file() {
             bail!(
@@ -841,10 +854,18 @@ fn generate_cargo_project_inner(
             )
         })?;
         if existing_marker != marker_contents {
-            bail!(
-                "Generated output directory {} belongs to a different source file",
-                output_dir.display()
-            );
+            // Compare by resolved location, not raw text, so refreshes from a
+            // different working directory still recognize their own project
+            // (and markers written by older versions with absolute paths).
+            let existing_matches = resolve_marker_source(output_dir, &existing_marker)
+                .map(|resolved| resolved == source_identity)
+                .unwrap_or(false);
+            if !existing_matches {
+                bail!(
+                    "Generated output directory {} belongs to a different source file",
+                    output_dir.display()
+                );
+            }
         }
     }
 
@@ -873,6 +894,57 @@ fn generate_cargo_project_inner(
 }
 
 /// Return the Cargo project directory used by the default compiler command.
+/// Compute `path` relative to `base` using std APIs only.
+///
+/// Returns `None` when the paths cannot be stripped into a clean relative
+/// form (different prefixes, e.g. Windows drives, or `path == base`); the
+/// caller falls back to the absolute path in that case.
+fn relative_path(base: &Path, path: &Path) -> Option<PathBuf> {
+    let base = base.canonicalize().ok()?;
+    let path = path.canonicalize().ok()?;
+    let base_components: Vec<_> = base.components().collect();
+    let path_components: Vec<_> = path.components().collect();
+    let shared = base_components
+        .iter()
+        .zip(path_components.iter())
+        .take_while(|(base_component, path_component)| base_component == path_component)
+        .count();
+    let mut relative = PathBuf::new();
+    for _ in shared..base_components.len() {
+        relative.push("..");
+    }
+    for component in &path_components[shared..] {
+        relative.push(component);
+    }
+    if relative.as_os_str().is_empty() {
+        None
+    } else {
+        Some(relative)
+    }
+}
+
+/// Resolve the `source=...` record of a generated-project marker back to an
+/// absolute path, interpreting relative records against `output_dir`.
+fn resolve_marker_source(output_dir: &Path, marker_contents: &str) -> Option<PathBuf> {
+    let recorded = marker_contents.strip_prefix("source=")?;
+    let recorded_path = PathBuf::from(recorded.trim());
+    if recorded_path.is_absolute() {
+        return recorded_path.canonicalize().ok();
+    }
+    let mut absolute = output_dir.canonicalize().ok()?;
+    for component in recorded_path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                absolute.pop();
+            }
+            std::path::Component::Normal(component) => absolute.push(component),
+            std::path::Component::CurDir => {}
+            _ => return None,
+        }
+    }
+    absolute.canonicalize().ok()
+}
+
 fn default_cargo_output_dir(source_path: &Path) -> PathBuf {
     let stem = source_path
         .file_stem()
@@ -1925,6 +1997,81 @@ mod tests {
         assert!(manifest.contains("[package]"));
         assert!(manifest.contains("name = \"generated\""));
         assert!(rust_code.contains("println!"));
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn relative_path_strips_shared_prefix() {
+        let root = test_directory();
+        std::fs::create_dir_all(root.join("a/b")).unwrap();
+        std::fs::create_dir_all(root.join("a/c")).unwrap();
+        std::fs::write(root.join("a/b/source.poly"), "x").unwrap();
+
+        let base = root.join("a/c/generated");
+        std::fs::create_dir_all(&base).unwrap();
+        let relative = relative_path(&base, &root.join("a/b/source.poly")).unwrap();
+        assert_eq!(relative, PathBuf::from("../../b/source.poly"));
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn relative_path_returns_none_for_disjoint_prefixes() {
+        // Windows drive prefixes cannot be relativized; simulate with a
+        // base whose canonical form cannot share a prefix by using a
+        // nonexistent path (canonicalize fails).
+        let missing = Path::new("/definitely/not/a/real/path/poly-base");
+        assert_eq!(relative_path(missing, Path::new("/tmp")), None);
+    }
+
+    #[test]
+    fn marker_source_round_trips_through_relative_form() {
+        let root = test_directory();
+        let output_dir = root.join("project");
+        let source = root.join("src/game.poly");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+        std::fs::write(&source, "x").unwrap();
+
+        let absolute = source.canonicalize().unwrap();
+        let recorded = relative_path(&output_dir, &absolute).unwrap();
+        let marker = format!("source={}\n", recorded.display());
+        assert_eq!(
+            resolve_marker_source(&output_dir, &marker).unwrap(),
+            absolute
+        );
+
+        // Absolute records from older compiler versions still resolve.
+        let legacy_marker = format!("source={}\n", absolute.display());
+        assert_eq!(
+            resolve_marker_source(&output_dir, &legacy_marker).unwrap(),
+            absolute
+        );
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn generated_marker_records_source_relative_to_project() {
+        let root = test_directory();
+        let source_path = root.join("hello.poly");
+        let output_dir = root.join("generated");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(&source_path, "fn main()\n    put \"Hello\"\nend fn").unwrap();
+
+        generate_cargo_project(&source_path, &output_dir).unwrap();
+
+        let marker = std::fs::read_to_string(output_dir.join(".poly-generated")).unwrap();
+        let recorded = marker.strip_prefix("source=").unwrap().trim_end();
+        assert!(
+            !recorded.contains(&root.canonicalize().unwrap().display().to_string()),
+            "marker must not embed the machine-absolute source path: {recorded}"
+        );
+        assert_eq!(
+            resolve_marker_source(&output_dir, &marker).unwrap(),
+            source_path.canonicalize().unwrap()
+        );
 
         std::fs::remove_dir_all(root).unwrap();
     }

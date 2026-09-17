@@ -1,6 +1,6 @@
 # Poly Language Grammar v2 Preview
 
-**Status:** Current preview grammar for Poly 2.0.0-preview.2
+**Status:** Current preview grammar for Poly 2.0.0-preview.7
 
 This document describes the syntax accepted by the current lexer and parser. It is intentionally a compact grammar, not a promise that every parsed construct is supported by every target backend.
 
@@ -19,6 +19,9 @@ This document describes the syntax accepted by the current lexer and parser. It 
 program       ::= { top_level_item } EOF
 
 top_level_item ::= statement | foreign_block | extern_function_declaration
+                 | dependency_declaration
+
+dependency_declaration ::= "dep" identifier "=" string
 
 foreign_block ::= "#rust" foreign_text "#endrust"
                 | "#c" foreign_text "#endc"

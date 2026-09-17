@@ -2,7 +2,16 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.2 extends the target-aware compiler model established by 2.0.0-preview.1. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.4 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.4
+
+- **Compiler correctness fixes found by real code:** nested `while` loops now generate a real loop in every position (they previously ran exactly once inside `if` bodies, `match` arms, and loop bodies); range loops with expression start bounds (`loop i BUF..TOTAL - 1`, `loop i TOTAL - 4..TOTAL - 1`) parse correctly; the var-less `loop 0..10` form is a real counted loop instead of a silently infinite one; and a `const` declared inside a function no longer panics the IR generator — it lowers to an immutable local across the Rust, C, JS, and asm backends.
+- **Documentation complete and CI-verified:** every current-guide example is an explicit `fn main` program that passes `poly --check` — 573 blocks audited, 0 unmarked failures, verified in CI over all 52 markdown files via `check_poly_examples.py --poly-bin`.
+- **CI runs on `v2.0-dev`** and now also builds and self-tests the Tetris example on Linux, including a regeneration-drift guard over the tracked generated project.
+- Documented language rules: range-loop grammar, reserved words `spawn`/`step`, take-and-return `impl` method move semantics, and the strict same-type comparison rule (cast with `as`).
+
+For the 2.0.0-preview.3 and earlier highlights, see [CHANGELOG.md](CHANGELOG.md).
 
 ## What's New in 2.0.0-preview.2
 
@@ -46,8 +55,12 @@ cargo check --workspace --all-targets
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 python3 scripts/check_markdown.py
-python3 scripts/check_poly_examples.py README.md POLY_SPEC_v2.md POLY_ROADMAP_v2.md POLY_C_BLOCKS.md POLY_V2_AUDIT.md POLY_MIGRATION_GUIDE_v2.md POLY_V2_SUPPORT_MATRIX.md POLY_PREVIEW_RELEASE_CHECKLIST.md
+python3 scripts/check_poly_examples.py --poly-bin compiler/target/release/poly
 ~~~
+
+The full-repository documentation audit covers 573 example blocks with 0
+unmarked failures; the Tetris example regenerates, builds, and passes its
+headless self-test with the release compiler.
 
 Additional target checks passed for all 22 Rust examples, the mixed-target fixture, the C fixture, native C execution, explicit C foreign signatures, and unsupported C diagnostics. The C check was also run with `POLY_CC=cc`.
 

@@ -77,6 +77,17 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.4
+
+Correctness release: **nested `while` loops generate a real loop** in every
+position (previously they ran exactly once inside `if` bodies, `match` arms,
+and loop bodies), **range loops accept expression start bounds**
+(`loop i BUF..TOTAL - 1`) and the var-less `loop 0..10` is a real counted
+loop, and **function-local `const`** declarations no longer panic the IR
+generator (they lower to immutable locals on every backend). CI now runs on
+`v2.0-dev`, audits every documentation example, and builds/self-tests the
+Tetris example on Linux.
+
 ### What's New in 2.0.0-preview.3
 
 Audit hardening release: **CLI flags are accepted in any position** (file-first

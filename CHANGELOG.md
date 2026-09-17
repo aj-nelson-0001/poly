@@ -52,6 +52,8 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.4] - 2026-09-17
+
 ### Added
 
 - **CI now runs on `v2.0-dev`** (push and pull requests) and the lint job
@@ -59,11 +61,26 @@ All notable changes to the Poly language compiler will be documented in this fil
   `scripts/check_poly_examples.py --poly-bin` (previously only 10 curated
   files were checked). The audit script accepts `--poly-bin` / `$POLY_BIN` to
   use a prebuilt binary instead of always rebuilding the debug CLI.
+- **CI builds and self-tests the Tetris example on Linux**: ALSA headers are
+  installed, `rust_output/tetris` is regenerated from `tetris.poly` with the
+  release compiler, the tracked `src/main.rs` is guarded against
+  regeneration drift via an `--emit-rust` diff, and the headless `--test`
+  self-test must pass.
 - End-to-end CLI regression test `function_local_consts_work_across_backends`:
   a function-local `const` is compiled through JS (executed via Node, output
   asserted), Rust and C (emitted code asserted), plus `--check`.
 
 ### Fixed
+
+- **Nested `while` loops now generate a real loop.** The parser encodes
+  `while` as an if-expression without an else block; the top-level codegen
+  path handled that, but `gen_expr`'s `Expr::If` arm and `gen_statement_str`'s
+  `Statement::If` arm (used inside `if` bodies, `match` arms, and loop bodies)
+  always emitted `if`. A `while` in any nested position therefore ran exactly
+  once. Both paths now honor the while encoding, with regression tests for
+  the `if`-nested and `match`-arm shapes. Found via the Tetris example, where
+  a row-compaction loop inside an `if` silently kept only one cell per
+  surviving row.
 
 - **Nested `while` loops now generate a real loop.** The parser encodes
   `while` as an if-expression without an else block; the top-level codegen

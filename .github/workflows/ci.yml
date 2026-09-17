@@ -222,13 +222,23 @@ jobs:
       - name: Regenerate tetris Rust project
         working-directory: tetris
         run: |
-          # --project refuses to touch an existing directory, and a fresh
-          # checkout contains the tracked generated files, so start clean.
+          # --project refuses to touch an existing directory, so stash the
+          # tracked generated files first: they are the baseline we guard.
+          mkdir -p /tmp/tetris-tracked
+          cp rust_output/tetris/Cargo.toml rust_output/tetris/Cargo.lock rust_output/tetris/.poly-generated /tmp/tetris-tracked/
           rm -rf rust_output/tetris
           ../compiler/target/release/poly --project rust_output/tetris tetris.poly
-          # --emit-rust must reproduce the tracked src/main.rs byte-for-byte
-          # (modulo one trailing newline that only --emit-rust adds).
+          # The regenerated project must match the committed files byte-for-byte.
+          for f in Cargo.toml .poly-generated; do
+            diff "/tmp/tetris-tracked/$f" "rust_output/tetris/$f"
+          done
+          # src/main.rs must reproduce byte-for-byte too (modulo one trailing
+          # newline that only --emit-rust adds).
           diff <(../compiler/target/release/poly tetris.poly --emit-rust | sed -e '$d') rust_output/tetris/src/main.rs
+          # --project does not emit a lockfile (cargo resolves it on first
+          # build), so regenerate it and compare against the committed one.
+          cargo generate-lockfile --manifest-path rust_output/tetris/Cargo.toml
+          diff /tmp/tetris-tracked/Cargo.lock rust_output/tetris/Cargo.lock
 
       - name: Build and self-test tetris
         run: |

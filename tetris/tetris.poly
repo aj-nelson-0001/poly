@@ -169,29 +169,28 @@ fn gravity_ms(level: i32): i64
     if lv > 29,
         lv := 29
     end if
-    var f i32 := 1
-    match lv
-        0, f := 48
-        1, f := 43
-        2, f := 38
-        3, f := 33
-        4, f := 28
-        5, f := 23
-        6, f := 18
-        7, f := 13
-        8, f := 8
-        9, f := 6
-        10, f := 5
-        11, f := 5
-        12, f := 5
-        13, f := 4
-        14, f := 4
-        15, f := 4
-        16, f := 3
-        17, f := 3
-        18, f := 3
-        29, f := 1
-        _, f := 2
+    var f i32 := match lv
+        0, 48
+        1, 43
+        2, 38
+        3, 33
+        4, 28
+        5, 23
+        6, 18
+        7, 13
+        8, 8
+        9, 6
+        10, 5
+        11, 5
+        12, 5
+        13, 4
+        14, 4
+        15, 4
+        16, 3
+        17, 3
+        18, 3
+        29, 1
+        _, 2
     end match
     return (f as i64 * 1000) / 60
 end fn
@@ -1563,7 +1562,7 @@ fn win_open(width: i32, height: i32, title: String) -> bool {
     opts.scale = minifb::Scale::X1;
     match Window::new(&title, width as usize, height as usize, opts) {
         Ok(mut win) => {
-            win.limit_update_rate(Some(std::time::Duration::from_micros(16666)));
+            win.set_target_fps(60);
             WINDOW.with(|c| *c.borrow_mut() = Some(win));
             true
         }

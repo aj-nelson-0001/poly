@@ -3,6 +3,30 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-17.
 
+## `dep` declarations; preview.6 released (2026-09-17)
+
+- **`dep name = "version"` shipped** (`823b5db`): program-scope declarations
+  for external crates. Flow: lexer keyword → `DependencyDeclaration` AST →
+  checker passthrough → IR `dependencies` → `--project` emits them into
+  `Cargo.toml`; `--check`/default Rust build verify through a temporary
+  Cargo project so external crates resolve standalone. C/asm/JS ignore them.
+  Tetris declares `minifb`/`alsa` in source — `tetris.poly --check` passes
+  for the first time, and the manual dep-restoration hacks in CI,
+  `prepare_release.py`, and the README are gone.
+- **Release `v2.0.0-preview.6`** cut via the documented procedure
+  (`prepare_release.py` did the bump/regen/verify; docs hand-edited first).
+  Release run green with the version guard passing and `prerelease: true`
+  applied automatically; CI green at run 35177038925.
+- Two CI-caught fixes during the release: (1) the release guard needed
+  `chmod +x` on the downloaded binary (`download-artifact` drops the
+  executable bit); (2) the dep e2e test's temp Cargo project needed a truly
+  unique name (pid+nanos) — a label-derived name collided with a lingering
+  prior run and `create_dir_all` failed on Windows; also the test now uses
+  pure-Rust crates (`rand`/`libc`) since `alsa-sys` needs system headers
+  plain runners lack. Each was reproduced locally after CI flagged it.
+- Verification: 456 tests (4 new), fmt/clippy clean, doc audit 575 blocks /
+  0 unmarked failures, release run 35176293795 green.
+
 ## Release ownership fixed; clean-checkout review done (2026-09-17)
 
 - **`ci.yml` no longer publishes releases.** Its `release` job duplicated

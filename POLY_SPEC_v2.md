@@ -173,6 +173,12 @@ var frames i32 := match level
 end match
 ~~~
 
+Every target supports `match` in value position (C via a ternary chain,
+JS via an IIFE `switch`, asm via jump chains). Literal and wildcard arms
+work everywhere; a wildcard arm is required so an unmatched scrutinee has
+a defined fallback (C aborts and JS throws otherwise, mirroring the Rust
+target's panic). Guarded and block arms remain statement-form features.
+
 ### Constant Declaration
 
 ~~~poly fragment

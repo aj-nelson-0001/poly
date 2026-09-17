@@ -416,3 +416,162 @@ fn asm_backend_resolves_program_scope_structs_and_enums() {
 
     fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn match_expressions_work_on_c_and_js_targets() {
+    // Match expressions as variable initializers (e.g. tetris's gravity
+    // table) were rejected by the C and JS backends while Rust and asm
+    // accepted them. C now lowers to a ternary chain, JS to an IIFE switch,
+    // both mirroring their statement-form pattern support. The no-wildcard
+    // case must also agree with the Rust target's panic-on-unmatched
+    // semantics (C: exit(1); JS: thrown Error).
+    let dir = unique_temp_dir("matchexpr");
+    fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("matchexpr.poly");
+    fs::write(
+        &source,
+        concat!(
+            "fn gravity(level: i32): i32\n",
+            "    var ms i32 := match level\n",
+            "        0, 48\n",
+            "        1, 43\n",
+            "        _, 38\n",
+            "    end match\n",
+            "    return ms\n",
+            "end fn\n",
+            "\n",
+            "fn main()\n",
+            "    put gravity(0)\n",
+            "    put gravity(1)\n",
+            "    put gravity(9)\n",
+            "    var m i32 := match 2 + 3\n",
+            "        5, 10\n",
+            "        6, 20\n",
+            "        _, 0\n",
+            "    end match\n",
+            "    put m\n",
+            "end fn\n",
+        ),
+    )
+    .unwrap();
+
+    // JS: emitted and executed via Node.
+    let output = poly()
+        .arg(&source)
+        .arg("--target")
+        .arg("js")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "js build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // The CLI prints a "Generated ... -> ...js" status line on stdout before
+    // executing; compare only the program's own output lines.
+    let program_lines: Vec<&str> = stdout
+        .lines()
+        .filter(|line| !line.starts_with("Generated"))
+        .collect();
+    assert_eq!(
+        program_lines,
+        vec!["48", "43", "38", "10"],
+        "unexpected js match-expression output"
+    );
+
+    // C: emitted, compiled with cc, and executed.
+    let c_path = dir.join("out.c");
+    let output = poly()
+        .arg(&source)
+        .arg("--target")
+        .arg("c")
+        .arg("-o")
+        .arg(&c_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "c emission failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let bin_path = dir.join("out");
+    let output = Command::new("cc")
+        .arg("-o")
+        .arg(&bin_path)
+        .arg(&c_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "cc failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = Command::new(&bin_path).output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["48", "43", "38", "10"],
+        "unexpected c match-expression output"
+    );
+
+    fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+// The asm runtime's itoa path only exists for the Linux syscall target.
+fn asm_prints_negative_integers_correctly() {
+    // Regression: _print_int negated the wrong register after the minus-sign
+    // syscall (negating the syscall return value instead of the number), so
+    // every negative integer printed as -1. It now reduces to the absolute
+    // value before the syscall and stashes it in the reserved local slot.
+    let dir = unique_temp_dir("asmneg");
+    fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("asm_neg.poly");
+    fs::write(&source, "fn main()\n    put 7 - 10\n    put -5\nend fn\n").unwrap();
+
+    let asm_path = dir.join("out.S");
+    let output = poly()
+        .arg(&source)
+        .arg("--target")
+        .arg("asm")
+        .arg("-o")
+        .arg(&asm_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "asm emission failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let obj_path = dir.join("out.o");
+    let bin_path = dir.join("out");
+    for (tool, args) in [
+        (
+            "as",
+            vec!["-o", obj_path.to_str().unwrap(), asm_path.to_str().unwrap()],
+        ),
+        (
+            "ld",
+            vec!["-o", bin_path.to_str().unwrap(), obj_path.to_str().unwrap()],
+        ),
+    ] {
+        let output = Command::new(tool).args(&args).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{tool} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let output = Command::new(&bin_path).output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["-3", "-5"],
+        "unexpected negative-integer output"
+    );
+
+    fs::remove_dir_all(&dir).unwrap();
+}

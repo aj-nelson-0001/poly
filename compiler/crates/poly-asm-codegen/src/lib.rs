@@ -37,6 +37,10 @@ struct StackFrame {
     /// Struct parameters passed by reference: the slot holds the struct's
     /// address, so field access dereferences through it.
     byref_structs: std::collections::HashSet<String>,
+    /// Monotonic counter for unnamed expression temporaries. Each temp gets a
+    /// fresh slot: sharing one slot per expression kind made nested trees
+    /// (e.g. `a + b * c`, `vec1.len() + vec2.len()`) clobber each other.
+    temp_counter: u64,
 }
 
 impl StackFrame {
@@ -46,6 +50,7 @@ impl StackFrame {
             locals: std::collections::HashMap::new(),
             var_types: std::collections::HashMap::new(),
             byref_structs: std::collections::HashSet::new(),
+            temp_counter: 0,
         }
     }
 
@@ -55,6 +60,16 @@ impl StackFrame {
         }
         let loc = Location::Stack(self.next_offset);
         self.locals.insert(name.to_string(), loc);
+        self.next_offset += 8;
+        loc
+    }
+
+    /// Allocate a fresh unnamed temporary slot. Expression results must not
+    /// be cached by name: a nested expression tree evaluates its subtrees
+    /// before reading them, so shared slots alias and corrupt values.
+    fn allocate_temp(&mut self) -> Location {
+        self.temp_counter += 1;
+        let loc = Location::Stack(self.next_offset);
         self.next_offset += 8;
         loc
     }
@@ -343,13 +358,17 @@ impl AsmGenerator {
         self.output.push_str("    testq %rax, %rax\n");
         let digits_label = self.fresh_label("digits");
         let _ = writeln!(self.output, "    jge {digits_label}");
-        // Print minus sign
+        // Negative: reduce to the absolute value FIRST (the sys_write setup
+        // below clobbers %rdi, and the syscall clobbers %rax), stash it in
+        // the reserved local slot across the syscall, then print the sign.
+        self.output.push_str("    negq %rax\n");
+        self.output.push_str("    movq %rax, (%rsp)\n");
         self.output.push_str("    movq $1, %rax\n");
         self.output.push_str("    movq $1, %rdi\n");
         self.output.push_str("    leaq _minus(%rip), %rsi\n");
         self.output.push_str("    movq $1, %rdx\n");
         self.output.push_str("    syscall\n");
-        self.output.push_str("    negq %rax\n");
+        self.output.push_str("    movq (%rsp), %rax\n");
         let _ = writeln!(self.output, "{digits_label}:");
         // Convert digits: rax = absolute value, fill buffer from end
         self.output.push_str("    leaq _itoa_buf+31(%rip), %rcx\n");
@@ -1257,7 +1276,7 @@ impl AsmGenerator {
             }
             Expression::StringLiteral(value) | Expression::UnicodeStringLiteral(value) => {
                 let label = self.intern_string(value);
-                let loc = frame.allocate("__str");
+                let loc = frame.allocate_temp();
                 self.emit_string_addr(&label, loc);
                 Ok(loc)
             }
@@ -1270,7 +1289,7 @@ impl AsmGenerator {
                 if matches!(op, BinaryOp::Add)
                     && (self.is_string_expr(left) || self.is_string_expr(right))
                 {
-                    let loc = frame.allocate("__concat");
+                    let loc = frame.allocate_temp();
                     self.emit_store_const(loc, 0);
                     return Ok(loc);
                 }
@@ -1345,7 +1364,7 @@ impl AsmGenerator {
                     BinaryOp::Shl => self.output.push_str("    salq %cl, %rax\n"),
                     BinaryOp::Shr => self.output.push_str("    sarq %cl, %rax\n"),
                 }
-                let loc = frame.allocate("__binop");
+                let loc = frame.allocate_temp();
                 self.move_to_loc(Location::Reg("%rax"), loc, frame)?;
                 Ok(loc)
             }
@@ -1366,7 +1385,7 @@ impl AsmGenerator {
                         self.output.push_str("    movq (%rax), %rax\n");
                     }
                 }
-                let loc = frame.allocate("__unary");
+                let loc = frame.allocate_temp();
                 self.move_to_loc(Location::Reg("%rax"), loc, frame)?;
                 Ok(loc)
             }
@@ -1509,20 +1528,20 @@ impl AsmGenerator {
                                 self.load_to_reg(vec_loc, "%rdi", frame)?;
                                 self.load_to_reg(value_loc, "%rsi", frame)?;
                                 self.output.push_str("    callq _vec_push\n");
-                                let result_loc = frame.allocate("__vecpush");
+                                let result_loc = frame.allocate_temp();
                                 self.emit_store_const(result_loc, 0);
                                 return Ok(result_loc);
                             }
                             "pop" if args.is_empty() => {
                                 self.load_to_reg(vec_loc, "%rdi", frame)?;
                                 self.output.push_str("    callq _vec_pop\n");
-                                let result_loc = frame.allocate("__vecpop");
+                                let result_loc = frame.allocate_temp();
                                 self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
                                 return Ok(result_loc);
                             }
                             "len" if args.is_empty() => {
                                 // Length is the descriptor's second qword.
-                                let result_loc = frame.allocate("__veclen");
+                                let result_loc = frame.allocate_temp();
                                 self.load_to_reg(vec_loc, "%rax", frame)?;
                                 self.output.push_str("    movq 8(%rax), %rax\n");
                                 self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
@@ -1749,7 +1768,7 @@ impl AsmGenerator {
                 }
 
                 // Emit arm bodies.
-                let result_loc = frame.allocate("__match_result");
+                let result_loc = frame.allocate_temp();
                 for (i, arm) in arms.iter().enumerate() {
                     let _ = writeln!(self.output, "{}:", arm_labels[i]);
                     // Bind pattern variables before executing the body.
@@ -1799,7 +1818,7 @@ impl AsmGenerator {
                     }
                 }
                 let label = self.intern_vector(&values);
-                let loc = frame.allocate("__vec");
+                let loc = frame.allocate_temp();
                 self.emit_string_addr(&label, loc);
                 Ok(loc)
             }
@@ -1809,8 +1828,8 @@ impl AsmGenerator {
                 // checker validates only that object/index type-check).
                 let obj_loc = self.emit_expr(object, frame)?;
                 let idx_loc = self.emit_expr(index, frame)?;
-                let ptr_slot = frame.allocate("__vecptr");
-                let result_loc = frame.allocate("__vecelem_result");
+                let ptr_slot = frame.allocate_temp();
+                let result_loc = frame.allocate_temp();
                 // ptr = descriptor.ptr (first qword of the descriptor)
                 self.load_to_reg(obj_loc, "%rax", frame)?;
                 self.output.push_str("    movq (%rax), %rax\n");

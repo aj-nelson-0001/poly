@@ -907,8 +907,18 @@ impl CGenerator {
                 Ok(self.enum_variant_c_name(enum_name, variant))
             }
             Expression::GetExpression(get) => self.get_expression(get),
-            Expression::MatchExpression { .. }
-            | Expression::Closure { .. }
+            Expression::MatchExpression { scrutinee, arms } => {
+                // Match in value position lowers to a ternary chain over the
+                // same patterns the statement form accepts (literal, range,
+                // wildcard, unit enum variants). The scrutinee is emitted
+                // once per comparison — keep it a simple expression (a
+                // literal, identifier, or field access); side-effecting
+                // scrutinees need a statement-local binding first. A wildcard
+                // arm is required so the chain always yields a value.
+                let chain = self.match_expr_chain(scrutinee, arms)?;
+                Ok(chain)
+            }
+            Expression::Closure { .. }
             | Expression::TryExpression(_)
             | Expression::UnsafeBlock(_)
             | Expression::MethodCall { .. }
@@ -916,6 +926,104 @@ impl CGenerator {
                 "this expression is not supported by the C backend; use a #c helper".to_string(),
             ),
         }
+    }
+
+    /// Build a ternary chain for a match expression: arm patterns become
+    /// comparisons against the scrutinee text and arm bodies become the
+    /// selected values. Supports exactly the pattern set of the statement
+    /// form: literal, range, wildcard, and unit enum variants.
+    fn match_expr_chain(
+        &self,
+        scrutinee: &Expression,
+        arms: &[ast::MatchArm],
+    ) -> Result<String, String> {
+        let scrutinee_str = self.expr(scrutinee)?;
+        let mut parts: Vec<String> = Vec::new();
+        let mut saw_wildcard = false;
+        for (index, arm) in arms.iter().enumerate() {
+            if arm.guard.is_some() {
+                return Err(
+                    "C backend match guards are not supported yet; use a #c helper".to_string(),
+                );
+            }
+            let condition = if matches!(arm.pattern, ast::Pattern::Wildcard) {
+                // A wildcard always matches, so it can only close the chain.
+                saw_wildcard = true;
+                if index != arms.len() - 1 {
+                    return Err(
+                        "C backend match expressions require the wildcard arm to be last in value position"
+                            .to_string(),
+                    );
+                }
+                String::new()
+            } else {
+                match &arm.pattern {
+                    ast::Pattern::Literal(literal) => {
+                        format!("({} == {}) ? ", scrutinee_str, self.expr(literal)?)
+                    }
+                    ast::Pattern::Range {
+                        start,
+                        end,
+                        inclusive,
+                    } => {
+                        let lower = if *inclusive { ">=" } else { ">" };
+                        let upper = if *inclusive { "<=" } else { "<" };
+                        format!(
+                            "({scrutinee_str} {lower} {} && {scrutinee_str} {upper} {}) ? ",
+                            self.expr(start)?,
+                            self.expr(end)?
+                        )
+                    }
+                    ast::Pattern::Enum {
+                        enum_name,
+                        variant,
+                        inner,
+                    } => {
+                        if inner.is_some() {
+                            return Err(
+                                "C backend match supports unit enum variants only; use a #c helper for patterns carrying data"
+                                    .to_string(),
+                            );
+                        }
+                        format!(
+                            "({} == {}) ? ",
+                            scrutinee_str,
+                            self.enum_variant_c_name(enum_name, variant)
+                        )
+                    }
+                    other => {
+                        let _ = other;
+                        return Err(
+                            "C backend match expressions support literal, range, wildcard, and unit-enum patterns in value position; use a #c helper for others"
+                                .to_string(),
+                        );
+                    }
+                }
+            };
+            let value = match &arm.body {
+                ast::MatchArmBody::Expression(body) => self.expr(body)?,
+                ast::MatchArmBody::Block(_) => {
+                    return Err(
+                        "C backend match expressions support expression arms only in value position; use a match statement or a #c helper for block arms"
+                            .to_string(),
+                    );
+                }
+            };
+            parts.push(format!("{condition}{value}"));
+        }
+        if parts.is_empty() {
+            return Err("match expression has no arms".to_string());
+        }
+        let mut out = String::from("(");
+        out.push_str(&parts.join(" : "));
+        if !saw_wildcard {
+            // Without a wildcard the chain has no value for an unmatched
+            // scrutinee; mirror the Rust target's panic-on-unmatched
+            // semantics with a runtime abort.
+            out.push_str(" : (exit(1), 0)");
+        }
+        out.push(')');
+        Ok(out)
     }
 
     /// Split a `put` expression into a C format string and argument list.

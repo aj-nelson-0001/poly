@@ -623,8 +623,86 @@ impl JsGenerator {
                         .to_string(),
                 )
             }
-            Expression::MatchExpression { .. }
-            | Expression::Closure { .. }
+            Expression::MatchExpression { scrutinee, arms } => {
+                // Match in value position lowers to an IIFE wrapping the same
+                // `switch` the statement form emits, so literal, wildcard,
+                // and unit-enum patterns work identically. The scrutinee is
+                // evaluated once; without a wildcard the switch falls into a
+                // runtime throw mirroring the Rust target's panic on an
+                // unmatched value.
+                let scrutinee_str = self.expr(scrutinee)?;
+                let mut cases = String::new();
+                let mut saw_wildcard = false;
+                for (index, arm) in arms.iter().enumerate() {
+                    if arm.guard.is_some() {
+                        return Err(
+                            "JS backend match guards are not supported yet; use a #js helper"
+                                .to_string(),
+                        );
+                    }
+                    let label = if matches!(arm.pattern, ast::Pattern::Wildcard) {
+                        saw_wildcard = true;
+                        if index != arms.len() - 1 {
+                            return Err(
+                                "JS backend match expressions require the wildcard arm to be last in value position"
+                                    .to_string(),
+                            );
+                        }
+                        "default:".to_string()
+                    } else {
+                        match &arm.pattern {
+                            ast::Pattern::Literal(literal) => {
+                                format!("case {}:", self.expr(literal)?)
+                            }
+                            ast::Pattern::Enum {
+                                enum_name,
+                                variant,
+                                inner,
+                            } => {
+                                if inner.is_some() {
+                                    return Err(
+                                        "JS backend match supports unit enum variants only; use a #js helper for patterns carrying data"
+                                            .to_string(),
+                                    );
+                                }
+                                format!("case {enum_name}.{variant}:")
+                            }
+                            other => {
+                                let _ = other;
+                                return Err(
+                                    "JS backend match expressions support literal, wildcard, and unit-enum patterns in value position; use a #js helper for others"
+                                        .to_string(),
+                                );
+                            }
+                        }
+                    };
+                    let value = match &arm.body {
+                        ast::MatchArmBody::Expression(body) => self.expr(body)?,
+                        ast::MatchArmBody::Block(_) => {
+                            return Err(
+                                "JS backend match expressions support expression arms only in value position; use a match statement or a #js helper for block arms"
+                                    .to_string(),
+                            );
+                        }
+                    };
+                    cases.push_str(&label);
+                    cases.push_str(" return ");
+                    cases.push_str(&value);
+                    cases.push_str("; ");
+                }
+                if cases.is_empty() {
+                    return Err("match expression has no arms".to_string());
+                }
+                if !saw_wildcard {
+                    cases.push_str(
+                        "default: throw new Error(\"match expression: no arm matched\"); ",
+                    );
+                }
+                Ok(format!(
+                    "(() => {{ switch ({scrutinee_str}) {{ {cases}}} }})()"
+                ))
+            }
+            Expression::Closure { .. }
             | Expression::TryExpression(_)
             | Expression::UnsafeBlock(_) => Err(
                 "this expression is not supported by the JS backend; use a #js helper".to_string(),

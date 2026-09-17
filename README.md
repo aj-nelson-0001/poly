@@ -290,6 +290,23 @@ end fn
 | File input | `var x := get from "file"` | Read from file |
 | Binary input | `var x bytes := get from "file"` | Read as bytes |
 
+### External Dependencies (Rust target)
+
+A program can declare the Cargo crates its `#rust` foreign blocks use with a
+top-level `dep` statement. Only the Rust target has a dependency mechanism:
+`--project` emits the declarations into the generated `Cargo.toml`, and
+`--check` resolves them through Cargo so the program validates standalone. The
+C, asm, and JS targets reject `dep` declarations with an explanatory warning.
+
+~~~poly
+dep minifb = "0.27"
+dep alsa = "0.9"
+
+fn main()
+    put "tetris-like demo"
+end fn
+~~~
+
 ### Types
 
 | Poly Type | Size | Rust Mapping |

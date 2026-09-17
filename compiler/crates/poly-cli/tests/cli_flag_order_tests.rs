@@ -305,3 +305,111 @@ fn dep_declarations_warn_on_non_rust_targets() {
 
     fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn asm_backend_resolves_program_scope_structs_and_enums() {
+    // The asm backend must pre-register program-scope struct/enum metadata
+    // before emitting function bodies, and must infer struct types for
+    // annotated vars, struct-literal vars, call-return vars, and parameters.
+    // Regression: layouts were registered during _start emission (after all
+    // functions), so every use inside `fn main` failed with "Unknown struct".
+    let dir = unique_temp_dir("asmstruct");
+    fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("asm_structs.poly");
+    fs::write(
+        &source,
+        concat!(
+            "struct Point\n",
+            "    x: i32\n",
+            "    y: i32\n",
+            "end struct\n",
+            "\n",
+            "enum Color\n",
+            "    Red\n",
+            "    Green\n",
+            "end enum\n",
+            "\n",
+            "fn make(): Point\n",
+            "    return Point { x: 7, y: 8 }\n",
+            "end fn\n",
+            "\n",
+            "fn sum(p: Point): i32\n",
+            "    return p.x + p.y\n",
+            "end fn\n",
+            "\n",
+            "fn main()\n",
+            "    var a := make()\n",
+            "    var q Point := Point { x: 3, y: 4 }\n",
+            "    var lit := Point { x: 1, y: 2 }\n",
+            "    put sum(a)\n",
+            "    put sum(q)\n",
+            "    put lit.x\n",
+            "    var c Color := Color::Green\n",
+            "    match c\n",
+            "        Color::Red, put 100\n",
+            "        Color::Green, put 200\n",
+            "        _, put 0\n",
+            "    end match\n",
+            "end fn\n",
+        ),
+    )
+    .unwrap();
+
+    let output = poly()
+        .arg(&source)
+        .arg("--check")
+        .arg("--target")
+        .arg("asm")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "--check asm with structs/enums failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // The emitted assembly must assemble and run with correct results.
+    let asm_path = dir.join("out.S");
+    let output = poly()
+        .arg(&source)
+        .arg("--target")
+        .arg("asm")
+        .arg("-o")
+        .arg(&asm_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "asm emission failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let obj_path = dir.join("out.o");
+    let bin_path = dir.join("out");
+    for (tool, args) in [
+        (
+            "as",
+            vec!["-o", obj_path.to_str().unwrap(), asm_path.to_str().unwrap()],
+        ),
+        (
+            "ld",
+            vec!["-o", bin_path.to_str().unwrap(), obj_path.to_str().unwrap()],
+        ),
+    ] {
+        let output = Command::new(tool).args(&args).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{tool} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let output = Command::new(&bin_path).output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["15", "7", "1", "200"],
+        "unexpected program output"
+    );
+
+    fs::remove_dir_all(&dir).unwrap();
+}

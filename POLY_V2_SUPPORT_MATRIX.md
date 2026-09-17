@@ -35,8 +35,8 @@ This matrix is the implementation contract for the current Rust, C, assembly, an
 | Collection loops | Yes | Limited | Limited | Yes | C only supports a shallow C-array form. Asm supports `for x in <vector>` and `for x in <string>`. JS lowers both `for x in` and `loop x in` to `for...of`. |
 | `break`/`continue` | Yes | Yes | Limited | Yes | |
 | Simple Poly functions | Yes | Yes | Limited | Yes | C functions cannot be async or generic. |
-| Structs | Yes | Plain only | No | No | C rejects methods and generics; struct literals lower to C99 compound literals. |
-| Enum declarations and variant values | Yes | Limited | No | No | C emits `typedef enum` with qualified enumerators; simple variants work in expressions and `match` patterns, payload-carrying variants are rejected. |
+| Structs | Yes | Plain only | Yes | No | C rejects methods and generics; struct literals lower to C99 compound literals. Asm supports program-scope structs: field access, struct-literal variables, struct parameters (passed by reference), and struct-returning functions. |
+| Enum declarations and variant values | Yes | Limited | Limited | No | C emits `typedef enum` with qualified enumerators; simple variants work in expressions and `match` patterns, payload-carrying variants are rejected. Asm supports unit variants in expressions and `match`; payload-carrying variants are rejected. |
 | Traits, impls, modules, aliases | Yes | No | No | No | Use a foreign helper or the Rust target. |
 | Generics | Yes | No | No | No | C rejects generic Poly declarations. |
 | Closures and higher-order operations | Yes | Limited | No | No | C compiles non-capturing closures (static function + typed pointer); capturing closures are rejected with guidance. |

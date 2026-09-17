@@ -34,6 +34,9 @@ struct StackFrame {
     locals: std::collections::HashMap<String, Location>,
     /// Variable name -> declared struct type name (if any).
     var_types: std::collections::HashMap<String, String>,
+    /// Struct parameters passed by reference: the slot holds the struct's
+    /// address, so field access dereferences through it.
+    byref_structs: std::collections::HashSet<String>,
 }
 
 impl StackFrame {
@@ -42,6 +45,7 @@ impl StackFrame {
             next_offset: 8,
             locals: std::collections::HashMap::new(),
             var_types: std::collections::HashMap::new(),
+            byref_structs: std::collections::HashSet::new(),
         }
     }
 
@@ -113,6 +117,13 @@ struct AsmGenerator {
     structs: std::collections::HashMap<String, std::collections::HashMap<String, FieldInfo>>,
     /// Enum name -> EnumInfo
     enums: std::collections::HashMap<String, EnumInfo>,
+    /// Function name -> struct type name for functions returning a struct;
+    /// used to infer the type of `var x := make()` declarations.
+    return_structs: std::collections::HashMap<String, String>,
+    /// Return type of the function currently being emitted, when it is a
+    /// struct: struct-returning functions copy the whole struct through
+    /// caller-allocated stack space addressed by %rdi, not through %rax.
+    current_return_struct: Option<String>,
 }
 
 impl AsmGenerator {
@@ -126,6 +137,8 @@ impl AsmGenerator {
             loop_stack: Vec::new(),
             structs: std::collections::HashMap::new(),
             enums: std::collections::HashMap::new(),
+            return_structs: std::collections::HashMap::new(),
+            current_return_struct: None,
         }
     }
 
@@ -224,6 +237,44 @@ impl AsmGenerator {
                     functions.push(func.clone());
                 }
                 _ => top_level.push(statement.clone()),
+            }
+        }
+
+        // Pass 0: pre-register program-scope struct and enum metadata so
+        // function bodies (emitted next) can use these types. Without this,
+        // registration would only happen when the declaration statement is
+        // reached during _start emission - which runs after every function
+        // has already been emitted, making program-scope types unusable.
+        // Function signatures are collected too, so inferred variables bound
+        // to a call result (`var a := make()`) can resolve struct types.
+        self.return_structs.clear();
+        for statement in &program.statements {
+            match &statement.node {
+                Statement::StructDeclaration(decl) => {
+                    let layout = self.compute_struct_layout(&decl.fields);
+                    self.structs.insert(decl.name.clone(), layout);
+                }
+                Statement::EnumDeclaration(decl) => {
+                    let mut tags = std::collections::HashMap::new();
+                    for (i, variant) in decl.variants.iter().enumerate() {
+                        let name = match variant {
+                            ast::EnumVariant::Unit(name) => name.clone(),
+                            ast::EnumVariant::Tuple(name, _) => name.clone(),
+                            ast::EnumVariant::Struct(name, _) => name.clone(),
+                        };
+                        tags.insert(name, i as i64);
+                    }
+                    self.enums.insert(decl.name.clone(), EnumInfo { tags });
+                }
+                Statement::FunctionDeclaration(func) => {
+                    if let Some(TypeAnnotation::Named(type_name)) = &func.return_type {
+                        if self.structs.contains_key(type_name) {
+                            self.return_structs
+                                .insert(func.name.clone(), type_name.clone());
+                        }
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -509,13 +560,44 @@ impl AsmGenerator {
         }
 
         let mut frame = StackFrame::new();
-        let param_regs: &[&str] = &["%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"];
+        // A struct-returning function receives a hidden first parameter in
+        // %rdi: the address of caller-allocated space for the whole struct.
+        // Shift the visible parameters' registers accordingly and remember
+        // the convention for the return statement.
+        let previous_return_struct = self.current_return_struct.take();
+        let return_struct = match &func.return_type {
+            Some(TypeAnnotation::Named(type_name)) if self.structs.contains_key(type_name) => {
+                self.current_return_struct = Some(type_name.clone());
+                Some(type_name.clone())
+            }
+            _ => {
+                self.current_return_struct = None;
+                None
+            }
+        };
+        let param_regs: &[&str] = if return_struct.is_some() {
+            &["%rsi", "%rdx", "%rcx", "%r8", "%r9"]
+        } else {
+            &["%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"]
+        };
         let mut param_moves = String::new();
         for (i, param) in func.params.iter().enumerate() {
             let loc = frame.allocate(&param.name);
             if let Location::Stack(offset) = loc {
                 let reg = param_regs.get(i).copied().unwrap_or("%rdi");
                 let _ = writeln!(param_moves, "    movq {reg}, -{offset}(%rbp)");
+            }
+            // Record struct-typed parameters so field access inside the body
+            // can resolve layout offsets (mirrors the var-declaration path).
+            // Structs are passed by reference; mark them so field access
+            // dereferences through the slot.
+            if let TypeAnnotation::Named(type_name) = &param.ty {
+                if self.structs.contains_key(type_name) {
+                    frame
+                        .var_types
+                        .insert(param.name.clone(), type_name.clone());
+                    frame.byref_structs.insert(param.name.clone());
+                }
             }
         }
         // Emit the body into a scratch buffer first so that every local and
@@ -550,6 +632,7 @@ impl AsmGenerator {
         self.output.push_str("    popq %rbp\n");
         self.output.push_str("    retq\n\n");
 
+        self.current_return_struct = previous_return_struct;
         Ok(())
     }
 
@@ -560,6 +643,32 @@ impl AsmGenerator {
     fn emit_statement(&mut self, stmt: &Statement, frame: &mut StackFrame) -> Result<(), String> {
         match stmt {
             Statement::VarDeclaration { name, ty, value } => {
+                // Inferred declaration of a struct value (`var p := Point
+                // { .. }` or `var a := make()`): record the value's struct
+                // type so later field access can resolve offsets. Only known
+                // structs are recorded; the checker has already rejected
+                // unknown types.
+                let inferred_struct = if ty.is_none() {
+                    match value.as_ref() {
+                        Some(Expression::StructLiteral {
+                            name: literal_name, ..
+                        }) => Some(literal_name.clone()),
+                        Some(Expression::Call { func, .. }) => match func.as_ref() {
+                            Expression::Identifier(callee) => {
+                                self.return_structs.get(callee).cloned()
+                            }
+                            _ => None,
+                        },
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                if let Some(struct_name) = &inferred_struct {
+                    if self.structs.contains_key(struct_name) {
+                        frame.var_types.insert(name.clone(), struct_name.clone());
+                    }
+                }
                 // Allocate with proper size for struct/enum types.
                 let loc = if let Some(TypeAnnotation::Named(type_name)) = ty {
                     if let Some(layout) = self.structs.get(type_name) {
@@ -573,6 +682,21 @@ impl AsmGenerator {
                         frame.allocate_struct(name, total)
                     } else if self.enums.contains_key(type_name) {
                         frame.allocate_struct(name, 40) // enum tag (8) + up to 4 payload slots (32)
+                    } else {
+                        frame.allocate(name)
+                    }
+                } else if let Some(struct_name) = &inferred_struct {
+                    // Struct-sized storage so field access and whole-struct
+                    // copies address the right slots (allocate_struct returns
+                    // the existing slot on repeat calls, so the size must be
+                    // correct at first allocation).
+                    if self.structs.contains_key(struct_name) {
+                        let layout = self
+                            .structs
+                            .get(struct_name)
+                            .expect("checked contains_key above");
+                        let total: u32 = layout.values().map(|f| f.size.div_ceil(8) * 8).sum();
+                        frame.allocate_struct(name, total)
                     } else {
                         frame.allocate(name)
                     }
@@ -665,6 +789,33 @@ impl AsmGenerator {
                         } else {
                             self.move_to_loc(expr_loc, loc, frame)?;
                         }
+                    } else if let Some(struct_name) = &inferred_struct {
+                        // Inferred struct-typed declaration: copy one slot
+                        // per field (both sides use the slot layout).
+                        if let (Location::Stack(dest_off), Location::Stack(src_off)) =
+                            (loc, expr_loc)
+                        {
+                            if let Some(layout) = self.structs.get(struct_name) {
+                                let total: u32 =
+                                    layout.values().map(|f| f.size.div_ceil(8) * 8).sum();
+                                for slot in 0..total / 8 {
+                                    let _ = writeln!(
+                                        self.output,
+                                        "    movq -{}(%rbp), %rax",
+                                        src_off + slot * 8
+                                    );
+                                    let _ = writeln!(
+                                        self.output,
+                                        "    movq %rax, -{}(%rbp)",
+                                        dest_off + slot * 8
+                                    );
+                                }
+                            } else {
+                                self.move_to_loc(expr_loc, loc, frame)?;
+                            }
+                        } else {
+                            self.move_to_loc(expr_loc, loc, frame)?;
+                        }
                     } else {
                         self.move_to_loc(expr_loc, loc, frame)?;
                     }
@@ -742,7 +893,37 @@ impl AsmGenerator {
                 self.emit_put_with_prefix("[INFO] ", expr, frame)?;
             }
             Statement::ReturnStatement(value) => {
-                if let Some(val) = value {
+                if let Some(return_struct) = self.current_return_struct.clone() {
+                    // Struct return: copy every field to caller-allocated
+                    // space addressed by %rdi, then return the address.
+                    let val = value
+                        .as_ref()
+                        .ok_or("struct-returning function must return a value")?;
+                    let loc = self.emit_expr(val, frame)?;
+                    if let (Location::Stack(src_base), Some(layout)) =
+                        (loc, self.structs.get(&return_struct))
+                    {
+                        let mut fields: Vec<&FieldInfo> = layout.values().collect();
+                        fields.sort_by_key(|f| f.offset);
+                        let total: u32 = layout.values().map(|f| f.size.div_ceil(8) * 8).sum();
+                        for field_info in fields {
+                            // Mirror the slot convention at the address: field
+                            // k lives at rdi + (total - 8 - offset).
+                            let delta = total - 8 - field_info.offset;
+                            let _ = writeln!(
+                                self.output,
+                                "    movq -{}(%rbp), %rax",
+                                src_base + field_info.offset
+                            );
+                            let _ = writeln!(self.output, "    movq %rax, {delta}(%rdi)");
+                        }
+                        let _ = writeln!(self.output, "    movq %rdi, %rax");
+                    } else {
+                        return Err(format!(
+                            "Cannot return struct `{return_struct}`: layout unknown"
+                        ));
+                    }
+                } else if let Some(val) = value {
                     let loc = self.emit_expr(val, frame)?;
                     self.move_to_loc(loc, Location::Reg("%rax"), frame)?;
                 } else {
@@ -1200,22 +1381,110 @@ impl AsmGenerator {
                 };
                 let param_regs: &[&str] = &["%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"];
                 let mut arg_locs = Vec::new();
+                let mut arg_struct_types: Vec<Option<String>> = Vec::new();
                 for arg in args {
-                    arg_locs.push(self.emit_expr(arg, frame)?);
+                    // Aggregate arguments (struct literals or struct-typed
+                    // variables) are passed by reference: the callee's frame
+                    // slot receives the struct's address, and field access
+                    // inside the callee dereferences it through that slot.
+                    let arg_struct = match arg {
+                        Expression::StructLiteral { name, .. }
+                            if self.structs.contains_key(name) =>
+                        {
+                            Some(name.clone())
+                        }
+                        Expression::Identifier(var_name) => frame
+                            .var_types
+                            .get(var_name)
+                            .cloned()
+                            .filter(|type_name| self.structs.contains_key(type_name)),
+                        _ => None,
+                    };
+                    let loc = self.emit_expr(arg, frame)?;
+                    arg_locs.push(loc);
+                    arg_struct_types.push(arg_struct);
                 }
                 // Save callee-saved registers and align stack
                 self.output.push_str("    pushq %rbx\n");
                 self.output.push_str("    subq $8, %rsp\n"); // maintain 16-byte alignment
+                                                             // Struct-returning call: %rdi points to caller-allocated
+                                                             // space for the returned struct; visible arguments shift to
+                                                             // %rsi onwards (mirrors the callee prologue convention).
+                let struct_return = self.return_structs.contains_key(&func_name);
+                let ret_slot = format!("__ret_{func_name}");
+                if struct_return {
+                    // Reserve struct-sized space in this frame and pass its
+                    // base address in %rdi; the callee copies fields there.
+                    let total_size = {
+                        let struct_name = self
+                            .return_structs
+                            .get(&func_name)
+                            .expect("checked above")
+                            .clone();
+                        let layout = self.structs.get(&struct_name).expect("checked above");
+                        layout.values().map(|f| f.size.div_ceil(8) * 8).sum::<u32>()
+                    };
+                    frame.allocate_struct(&ret_slot, total_size);
+                    let ret_base = frame
+                        .get(&ret_slot)
+                        .ok_or("internal: return slot missing")?;
+                    if let Location::Stack(base_offset) = ret_base {
+                        // Address the struct's lowest slot so address-relative
+                        // field offsets (ascending) mirror the slot layout
+                        // (descending): base address = rbp-(base+total-8).
+                        let _ = writeln!(
+                            self.output,
+                            "    leaq -{}(%rbp), %rdi",
+                            base_offset + total_size - 8
+                        );
+                    }
+                }
+                let visible_regs: &[&str] = if struct_return {
+                    &param_regs[1..]
+                } else {
+                    param_regs
+                };
                 for (i, loc) in arg_locs.iter().enumerate() {
-                    let reg = param_regs.get(i).copied().unwrap_or("%rdi");
-                    self.load_to_reg(*loc, reg, frame)?;
+                    let reg = visible_regs.get(i).copied().unwrap_or("%rdi");
+                    if let Some(Some(struct_name)) = arg_struct_types.get(i) {
+                        // Pass the struct's lowest-slot address; the callee
+                        // stores it in its frame slot and field reads go
+                        // through it with ascending (total-8-offset) deltas.
+                        let total: u32 = self
+                            .structs
+                            .get(struct_name)
+                            .expect("checked above")
+                            .values()
+                            .map(|f| f.size.div_ceil(8) * 8)
+                            .sum();
+                        let base = match loc {
+                            Location::Stack(offset) => *offset,
+                            Location::Reg(_) => {
+                                return Err("internal: struct arg not in memory".to_string())
+                            }
+                        };
+                        let _ =
+                            writeln!(self.output, "    leaq -{}(%rbp), {reg}", base + total - 8);
+                    } else {
+                        self.load_to_reg(*loc, reg, frame)?;
+                    }
                 }
                 let _ = writeln!(self.output, "    callq {func_name}");
                 self.output.push_str("    addq $8, %rsp\n");
                 self.output.push_str("    popq %rbx\n");
-                let loc = frame.allocate(&format!("__call_{func_name}"));
-                self.move_to_loc(Location::Reg("%rax"), loc, frame)?;
-                Ok(loc)
+                if struct_return {
+                    // The whole struct now lives in the caller-allocated
+                    // slot; the call expression evaluates to that slot so
+                    // field access and copies read from it relative to %rbp.
+                    let loc = frame
+                        .get(&ret_slot)
+                        .ok_or("internal: return slot missing")?;
+                    Ok(loc)
+                } else {
+                    let loc = frame.allocate(&format!("__call_{func_name}"));
+                    self.move_to_loc(Location::Reg("%rax"), loc, frame)?;
+                    Ok(loc)
+                }
             }
             Expression::MethodCall {
                 object,
@@ -1326,6 +1595,30 @@ impl AsmGenerator {
                     _ => None,
                 };
                 if let (Location::Stack(base_offset), Some(sname)) = (obj_loc, &struct_name) {
+                    // By-reference struct parameter: the slot holds the
+                    // struct's address; fields read at address + offset.
+                    if let Expression::Identifier(var_name) = object.as_ref() {
+                        if frame.byref_structs.contains(var_name) {
+                            let layout = self
+                                .structs
+                                .get(sname)
+                                .ok_or_else(|| format!("Unknown struct `{sname}"))?
+                                .clone();
+                            let field_info = layout
+                                .get(field)
+                                .ok_or_else(|| format!("Unknown field `{field}` on `{sname}"))?;
+                            // Frame slots store fields at rbp-(base+offset),
+                            // so the struct's address (its lowest slot) sees
+                            // field k at address + (total - 8 - offset).
+                            let total: u32 = layout.values().map(|f| f.size.div_ceil(8) * 8).sum();
+                            let delta = total - 8 - field_info.offset;
+                            let loc = frame.allocate(&format!("__field_{field}"));
+                            let _ = writeln!(self.output, "    movq -{base_offset}(%rbp), %rax");
+                            let _ = writeln!(self.output, "    movq {delta}(%rax), %rcx");
+                            self.move_to_loc(Location::Reg("%rcx"), loc, frame)?;
+                            return Ok(loc);
+                        }
+                    }
                     let layout = self
                         .structs
                         .get(sname)

@@ -2,6 +2,7 @@
 
 **A minimal, assembly-inspired meta-language for any systems language.**
 
+[![CI](https://github.com/aj-nelson-0001/poly/actions/workflows/ci.yml/badge.svg?branch=v2.0-dev)](https://github.com/aj-nelson-0001/poly/actions/workflows/ci.yml?query=branch%3Av2.0-dev)
 ![Version](https://img.shields.io/badge/version-2.0--preview-green)
 ![Status](https://img.shields.io/badge/status-Active%20Development-blue)
 ![Backend](https://img.shields.io/badge/backends-Rust%20%7C%20C%20%7C%20Asm%20%7C%20JS-black)
@@ -76,6 +77,13 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 `extern <target> fn ...` declaration — opaque calls are allowed by default
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
+
+### What's New in 2.0.0-preview.5
+
+Re-cut of `2.0.0-preview.4` from a fully green CI run (no source changes).
+The original `preview.4` tag predated the tetris CI job and two CI fixes, so
+its own CI run was red while the release build succeeded. Adds the README CI
+badge.
 
 ### What's New in 2.0.0-preview.4
 

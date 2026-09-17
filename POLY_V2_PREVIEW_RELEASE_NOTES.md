@@ -2,7 +2,15 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.4 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.5 (a re-cut of preview.4 from a fully green CI run — no source changes) continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.5
+
+- Re-cut of `2.0.0-preview.4` from a commit whose CI run is fully green on
+  Linux, macOS, and Windows (run 35168429374): the compiler code is
+  unchanged. The original `preview.4` tag predated the tetris CI job and two
+  CI fixes, so its own CI run was red while the release build succeeded.
+- Adds the README CI badge for the `v2.0-dev` branch.
 
 ## What's New in 2.0.0-preview.4
 

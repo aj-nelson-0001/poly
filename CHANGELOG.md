@@ -52,6 +52,23 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.5] - 2026-09-17
+
+Re-cut of `2.0.0-preview.4` from a commit whose CI run is fully green (the
+compiler code is unchanged; no source diff against `preview.4`). The original
+`preview.4` tag predated the tetris CI job and two CI fixes, so its own CI run
+was red while the release build itself succeeded.
+
+### Added
+
+- CI badge on the README tracking the `v2.0-dev` branch.
+
+### Fixed
+
+- The tetris CI job's regenerate step now removes the whole generated
+  directory (`--project` refuses to touch an existing one) and restores the
+  `minifb`/`alsa` dependencies that `--project` does not emit.
+
 ## [2.0.0-preview.4] - 2026-09-17
 
 ### Added

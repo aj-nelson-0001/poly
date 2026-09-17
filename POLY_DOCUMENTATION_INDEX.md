@@ -18,6 +18,7 @@ Poly 2.0.0-preview.9 is the current implementation baseline. The files below are
 | [POLY_V2_AUDIT.md](POLY_V2_AUDIT.md) | Verified v2 status and remaining risks |
 | [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) | Frozen Rust/C feature and foreign-interface contract |
 | [POLY_PREVIEW_RELEASE_CHECKLIST.md](POLY_PREVIEW_RELEASE_CHECKLIST.md) | Preview release readiness and hygiene checklist |
+| [POLY_VERSION_FILES_MAP.md](POLY_VERSION_FILES_MAP.md) | Maintainer map of version-bearing files to their regeneration mechanism |
 | [POLY_V2_PREVIEW_RELEASE_NOTES.md](POLY_V2_PREVIEW_RELEASE_NOTES.md) | Preview highlights, compatibility notes, and verification evidence |
 | [POLY_ROADMAP_v2.md](POLY_ROADMAP_v2.md) | Planned v2 work and design decisions |
 | [CHANGELOG.md](CHANGELOG.md) | Versioned implementation history |

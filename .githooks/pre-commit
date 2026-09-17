@@ -1,0 +1,39 @@
+#!/bin/sh
+# Fast pre-commit checks for the Poly repository.
+#
+# Activate with:
+#   git config core.hooksPath .githooks
+#
+# These are intentionally quick (<1s): they catch the two drift classes
+# that have actually bitten this repository. Heavier verification (tests,
+# clippy, doc audit, release metadata) stays in CI and prepare_release.py.
+
+fail=0
+
+# 1. Machine-specific paths in tracked generated files. The
+#    .poly-generated marker once embedded /home/andy/..., which made the
+#    committed tetris project irreproducible on other machines.
+if [ -f scripts/check_generated_paths.py ]; then
+    if ! python3 scripts/check_generated_paths.py >/dev/null 2>&1; then
+        echo "pre-commit: machine-specific paths found in generated files"
+        echo "  (run: python3 scripts/check_generated_paths.py)"
+        fail=1
+    fi
+fi
+
+# 2. Trailing whitespace and missing trailing newline in changed source
+#    files — the repo's rustfmt/markdown checks reject these, so catching
+#    them before the commit saves a round trip.
+for file in $(git diff --cached --name-only --diff-filter=ACM \
+        | grep -E '\.(rs|py|sh|md|poly)$'); do
+    if grep -qE ' +$' "$file" 2>/dev/null; then
+        echo "pre-commit: trailing whitespace in $file"
+        fail=1
+    fi
+    if [ -s "$file" ] && [ "$(tail -c 1 "$file" | od -An -c | tr -d ' \n')" != "\\n" ]; then
+        echo "pre-commit: $file does not end with a newline"
+        fail=1
+    fi
+done
+
+exit $fail

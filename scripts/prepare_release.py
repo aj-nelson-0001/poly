@@ -93,6 +93,36 @@ def tetris_dep_pins() -> dict[str, str]:
     return pins
 
 
+def sync_playground_version(version: str) -> None:
+    """Rewrite the playground footer and dialect comment to `version`.
+
+    Unlike the hand-edited docs, these two strings are pure version stamps
+    with no prose to write, so the script updates them mechanically. The
+    expected patterns must exist (exactly once each); a missing pattern
+    means the file's structure changed and needs human attention rather
+    than a silent no-op rewrite.
+    """
+    path = ROOT / "playground" / "index.html"
+    text = path.read_text(encoding="utf-8")
+    patterns = [
+        (re.compile(r"Poly Language v2\.0\.0-preview\.\d+"), f"Poly Language v{version}"),
+        (
+            re.compile(r"current Poly dialect \(v2\.0\.0-preview\.\d+\)"),
+            f"current Poly dialect (v{version})",
+        ),
+    ]
+    for pattern, replacement in patterns:
+        matches = pattern.findall(text)
+        if len(matches) != 1:
+            raise SystemExit(
+                f"playground/index.html: expected exactly one `{pattern.pattern}` "
+                f"occurrence, found {len(matches)}; update it by hand"
+            )
+        text = pattern.sub(replacement, text)
+    path.write_text(text, encoding="utf-8")
+    print(f"  playground/index.html: footer and dialect comment -> {version}")
+
+
 def check_version_consistency(version: str) -> None:
     """Fail when the tetris project or doc baselines lag the new version.
 
@@ -108,16 +138,14 @@ def check_version_consistency(version: str) -> None:
         raise SystemExit(
             f"tetris generated project version is {found}, expected {version}"
         )
-    # The playground footer states the version it was built against; the
-    # preview.2 release PR made "workspace version == --version == REPL ==
-    # playground footer" the documented consistency bar.
+    # The playground version stamps are rewritten mechanically by
+    # sync_playground_version; verify rather than assume.
     playground_text = (ROOT / "playground" / "index.html").read_text(encoding="utf-8")
     if f"Poly Language v{version}" not in playground_text:
         found = DOC_BASELINE_RE.search(playground_text)
         raise SystemExit(
             "playground/index.html footer states "
-            f"{found.group(1) if found else 'no version'}, expected {version}; "
-            "update the footer and the dialect comment by hand"
+            f"{found.group(1) if found else 'no version'}, expected {version}"
         )
     print("  playground footer states", version)
     problems: list[str] = []
@@ -224,6 +252,7 @@ def main() -> int:
 
     print("1/3 Workspace version bump")
     bump_workspace_version(arguments.version)
+    sync_playground_version(arguments.version)
 
     print("2/3 Tetris generated project")
     regenerate_tetris_project()

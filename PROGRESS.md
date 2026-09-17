@@ -177,6 +177,59 @@ Last updated: 2026-09-17.
 - Verification: 458 tests green, fmt/clippy clean, doc audit 576 blocks /
   0 failures. Commit `f8ffd25`.
 
+## Differential backend sweep; five backend bugs; preview.10 (2026-09-17)
+
+- **Method: run the same program through all four targets and diff the
+  outputs.** The sweep program covered arithmetic (precedence, negatives),
+  bools, while/range loops, strings, else-if chains, match expressions, and
+  a struct program (literals, field access, params, returns, nested calls).
+  Five real defects surfaced, all fixed:
+  1. C and JS **rejected match expressions in value position** (Rust/asm
+     accepted them) — the construct tetris's `gravity_ms` uses. C lowers to a
+     ternary chain (abort fallback mirrors rustc's E0004 panic), JS to an
+     IIFE `switch` (throws on unmatched). Pattern support mirrors each
+     backend's statement form; guards/block arms rejected with guidance
+     (`9e855b1`).
+  2. asm **printed every negative integer as `-1`**: `_print_int` negated
+     the *syscall return value* instead of the number after the minus-sign
+     write. Absolute value is now taken before the syscall and stashed in
+     the reserved local slot across it (`9e855b1`).
+  3. asm **nested arithmetic corrupted** (`2 + 3 * 4 - 6 / 3` → `0`): every
+     expression kind stored results in one shared named slot (`__binop`,
+     `__unary`, …), so nested trees clobbered each other. New
+     `StackFrame::allocate_temp()` gives each temporary a fresh slot
+     (`9e855b1`).
+  4. asm **segfaulted on `sum(make(10, 5))`**: struct-argument detection
+     missed struct-returning calls, passing the first field's VALUE where
+     the callee expects the struct's ADDRESS. Call results now join the
+     by-reference convention (`039a128`).
+  5. C **declared struct-returning call results as `int32_t`**
+     (`var q := make(3, 4)` failed to compile). `inferred_type` now
+     consults a pre-collected fn-return-type table (incl. struct/impl
+     methods) (`039a128`).
+- **The suite is now a permanent guard:** `tests/diff_*.poly` carry
+  `EXPECTED:` headers; `scripts/check_backends.py` runs each program
+  through rust/c/js/asm (asm Linux-gated) and fails on divergence. It runs
+  in every push/PR CI (step of the Linux tetris job) and nightly via
+  `.github/workflows/differential.yml` (scheduled workflows register only
+  from the default branch, so the nightly activates on merge to master;
+  workflow_dispatch works now). Verified live in CI: 8/8 program×target
+  combos `ok`.
+- **Docs:** support matrix gained a "match expressions (value position)"
+  row; spec documents cross-target match-expression semantics; asm
+  snapshots regenerated; e2e tests added for each fix (match-expr C/JS,
+  asm negatives, asm struct-call args, C struct inference).
+- **Tetris parity audit vs `~/Projects/tetris/js/tetris.js`:** gravity
+  table (all 30 NES frame values), NES scoring (40/100/300/800 × level+1,
+  +2/cell hard drop), 7-bag randomizer, hold, wall kicks, soft-drop floor
+  (`max(20, base/12)`), DAS 170/35ms, and all key bindings verified equal.
+  No changes needed — the port is faithful.
+- **v2.0.0-preview.10 released** via the documented procedure; tag CI and
+  Release runs fully green, prerelease flag set, `poly` asset attached.
+- Verification: 466 workspace tests, fmt/clippy clean, doc audit 577/0,
+  generated-path lint green. Commits `9e855b1` → `039a128` → `4597f3c` →
+  `5508fd5` (release), tag `v2.0.0-preview.10`.
+
 ## Followups: dep-awareness, doc sync, checklist closure (2026-09-17)
 
 - **Non-Rust targets now warn on `dep` declarations** instead of silently
@@ -1255,7 +1308,7 @@ Full documentation syntax audit plus the language features the docs surfaced.
   and type errors in the guides fail CI.
 - **Genuine doc bugs fixed**: `.length`→`.len()`, `print`→`put`,
   `to_lower`→`to_lowercase`, `255u8`→`as` casts, `.iter().sum()` chains→
-  `reduce`, `get --timeout`/`--default`/`--as` Result/type handling, `get from 
+  `reduce`, `get --timeout`/`--default`/`--as` Result/type handling, `get from
   file --timeout N` argument order, `get --as Person`→real types, and the
   if/else syntax template in the spec made into a compiling example.
 - **Compiler fixes the docs surfaced**:

@@ -114,3 +114,23 @@ Other constraints encoded here that future edits should respect:
   instead of mixing i32/i64/u64.
 - The framebuffer is a fresh `Vec<i32>` per frame (`make_fb`), converted to
   `Vec<u32>` only inside `win_present`.
+
+## Status (2026-09-17, compiler v2.0.0-preview.10)
+
+- `tetris.poly --check` green against preview.10 (68 statements; deps resolve
+  through Cargo).
+- Regenerated `rust_output/tetris` from source with `--project` and confirmed
+  it is byte-identical to the committed project (including a freshly resolved
+  `Cargo.lock`); the `.poly-generated` marker records the source relative to
+  the output dir, so the guard reproduces on any machine.
+- Release build is warning-free (match-expression initializer for the gravity
+  table, non-deprecated `set_target_fps(60)`).
+- A line-by-line parity audit against the original JS
+  (`~/Projects/tetris/js/tetris.js`) verified: the full 30-entry NES gravity
+  table, NES scoring (40/100/300/800 × level+1, +2/cell hard drop, soft-drop
+  floor `max(20, base/12)`), 7-bag randomizer, hold, wall kicks
+  `[0, -1, 1, -2, 2]`, DAS (170 ms delay / 35 ms rate), and every key binding.
+  No divergences found.
+- CI (the `Tetris example (Linux)` job) regenerates the project and fails on
+  any drift; the differential backend suite in the same job keeps all four
+  compiler targets agreeing on shared-language programs.

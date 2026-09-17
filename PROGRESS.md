@@ -130,6 +130,36 @@ Last updated: 2026-09-17.
   named "Work around spurious network errors in curl 8.0"). Dry-run is
   expansion-only for run/shell steps; hosted CI remains the authority.
 
+## Backend audit; asm struct/enum ABI fix (2026-09-17)
+
+- **Audit outcome:** C/asm/JS correctly *reject* most unsupported constructs
+  (`trait`/`impl`/`module`/`use`/`type` aliases, file redirects, function-local
+  declarations) with explicit errors. The only silent ignore beyond `dep` was
+  already fixed. But the audit exposed a real bug: **program-scope structs and
+  enums were unusable on the asm target**.
+- **Root cause:** `self.structs`/`self.enums` registered in `emit_statement`,
+  reached only during `_start` emission — after every function is emitted.
+  Top-level executable statements are banned, so registration could never
+  precede use. `tests/asm_target_tests.poly` exercises exactly this; its
+  snapshot had recorded the *error* output as expected behavior.
+- **Fix (pass-0 pre-registration):** layouts, enum tags, and struct-returning
+  signatures are collected from program scope before any codegen.
+- **Struct ABI made coherent:** struct args pass the struct's lowest-slot
+  address; callees mark byref params and field access dereferences with the
+  `total-8-offset` delta (bridging descending slot layout to ascending
+  address offsets); struct-returning functions copy every field through
+  caller-allocated space addressed by %rdi; inferred declarations from struct
+  literals or call results get struct-sized slots and field-by-field copies.
+  Before: params/returns silently passed one garbage qword.
+- **Evidence:** `asm_backend_resolves_program_scope_structs_and_enums` e2e
+  test builds and runs a struct/enum program through `as`/`ld` (expected
+  output asserted); `asm_target_tests.poly` now emits working assembly and
+  the snapshot was regenerated; support matrix asm columns updated to
+  "Yes/Limited" with verified caveats; README gained an External
+  Dependencies section (audited doc count 576 blocks).
+- Verification: 458 tests green, fmt/clippy clean, doc audit 576 blocks /
+  0 failures. Commit `f8ffd25`.
+
 ## Followups: dep-awareness, doc sync, checklist closure (2026-09-17)
 
 - **Non-Rust targets now warn on `dep` declarations** instead of silently

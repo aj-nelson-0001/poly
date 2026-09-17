@@ -2064,8 +2064,7 @@ impl<'a> Parser<'a> {
                 // whose body begins with the literal.
                 let saved = self.pos;
                 self.advance();
-                let next_is_range =
-                    matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq);
+                let next_is_range = matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq);
                 self.pos = saved;
                 next_is_range
             }
@@ -2098,9 +2097,7 @@ impl<'a> Parser<'a> {
                                 Parser::extract_range(&expr).is_some()
                                     || matches!(
                                         self.peek(),
-                                        TokenKind::DotDot
-                                            | TokenKind::DotDotEq
-                                            | TokenKind::Comma
+                                        TokenKind::DotDot | TokenKind::DotDotEq | TokenKind::Comma
                                     )
                             }
                             Err(_) => false,
@@ -2206,17 +2203,11 @@ impl<'a> Parser<'a> {
     /// re-association to literal range starts never changes other shapes.
     fn extract_range(expr: &Expression) -> Option<(Expression, Expression)> {
         match expr {
-            Expression::Range { start, end, .. } => {
-                Some(((**start).clone(), (**end).clone()))
-            }
+            Expression::Range { start, end, .. } => Some(((**start).clone(), (**end).clone())),
             Expression::BinaryOp { op, left, right }
                 if matches!(
                     op,
-                    BinaryOp::Add
-                        | BinaryOp::Sub
-                        | BinaryOp::Mul
-                        | BinaryOp::Div
-                        | BinaryOp::Mod
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
                 ) =>
             {
                 if let Expression::Range { start, end, .. } = right.as_ref() {
@@ -4595,7 +4586,8 @@ end match"#
     fn test_parse_loop_range_expression_start() {
         // A range start that is itself an expression: `TOTAL - 4..TOTAL - 1`
         // parses with the intended bounds, not `TOTAL - (4..TOTAL - 1)`.
-        let src = "const TOTAL := 5\nfn main()\nloop i TOTAL - 4..TOTAL - 1\nput i\nend loop\nend fn";
+        let src =
+            "const TOTAL := 5\nfn main()\nloop i TOTAL - 4..TOTAL - 1\nput i\nend loop\nend fn";
         let prog = parse_source(src).unwrap();
         let fn_body = match &prog.statements.last().unwrap().node {
             Statement::FunctionDeclaration(decl) => decl.body.as_ref().unwrap(),
@@ -4613,8 +4605,20 @@ end match"#
         assert_eq!(loops.len(), 1);
         match &loops[0][0] {
             LoopRangePart::Range { start, end, .. } => {
-                assert!(matches!(start.as_ref(), Expression::BinaryOp { op: BinaryOp::Sub, .. }));
-                assert!(matches!(end.as_ref(), Expression::BinaryOp { op: BinaryOp::Sub, .. }));
+                assert!(matches!(
+                    start.as_ref(),
+                    Expression::BinaryOp {
+                        op: BinaryOp::Sub,
+                        ..
+                    }
+                ));
+                assert!(matches!(
+                    end.as_ref(),
+                    Expression::BinaryOp {
+                        op: BinaryOp::Sub,
+                        ..
+                    }
+                ));
             }
             other => panic!("Expected range part, got {:?}", other),
         }

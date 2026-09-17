@@ -190,6 +190,49 @@ jobs:
           python3 scripts/check_poly_examples.py
           --poly-bin compiler/target/release/poly
 
+  tetris:
+    name: Tetris example (Linux)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.98.0
+
+      - name: Install ALSA development headers
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            compiler/target
+            tetris/rust_output/tetris/target
+          key: tetris-cargo-${{ hashFiles('compiler/**/Cargo.lock', 'tetris/rust_output/tetris/Cargo.lock') }}
+          restore-keys: |
+            tetris-cargo-
+
+      - name: Build poly compiler
+        run: cargo build --manifest-path compiler/Cargo.toml --release -p poly-cli
+
+      - name: Regenerate tetris Rust project
+        working-directory: tetris
+        run: |
+          rm -f rust_output/tetris/src/main.rs
+          ../compiler/target/release/poly --project rust_output/tetris tetris.poly
+          # --project skips an existing directory; --emit-rust must reproduce
+          # the tracked src/main.rs byte-for-byte (modulo one trailing newline).
+          diff <(../compiler/target/release/poly tetris.poly --emit-rust | sed -e '$d') rust_output/tetris/src/main.rs
+
+      - name: Build and self-test tetris
+        run: |
+          cargo build --release --manifest-path tetris/rust_output/tetris/Cargo.toml
+          tetris/rust_output/tetris/target/release/tetris --test
+
   audit:
     name: Dependency Audit
     runs-on: ubuntu-latest

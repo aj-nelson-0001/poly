@@ -156,18 +156,31 @@ fn fold_expr(expr: &mut Expr) -> bool {
             changed |= fold_expr(left);
             changed |= fold_expr(right);
             if let (Some(left_value), Some(right_value)) = (as_i64(left), as_i64(right)) {
+                // Arithmetic uses `checked_*` so Poly programs that would
+                // overflow an i64 keep their target-language behavior (Rust
+                // panics, C wraps) instead of the optimizer silently changing
+                // the constant or crashing the compiler.
                 let folded = match *op {
-                    BinaryOp::Add => Some(left_value + right_value),
-                    BinaryOp::Sub => Some(left_value - right_value),
-                    BinaryOp::Mul => Some(left_value * right_value),
-                    BinaryOp::Div if right_value != 0 => Some(left_value / right_value),
-                    BinaryOp::Mod if right_value != 0 => Some(left_value % right_value),
+                    BinaryOp::Add => left_value.checked_add(right_value),
+                    BinaryOp::Sub => left_value.checked_sub(right_value),
+                    BinaryOp::Mul => left_value.checked_mul(right_value),
+                    BinaryOp::Div if right_value != 0 => left_value.checked_div(right_value),
+                    BinaryOp::Mod if right_value != 0 => left_value.checked_rem(right_value),
                     BinaryOp::Div | BinaryOp::Mod => None, // division by zero
                     BinaryOp::BitAnd => Some(left_value & right_value),
                     BinaryOp::BitOr => Some(left_value | right_value),
                     BinaryOp::BitXor => Some(left_value ^ right_value),
-                    BinaryOp::Shl => Some(left_value << right_value),
-                    BinaryOp::Shr => Some(left_value >> right_value),
+                    // Rust's release-mode `<<`/`>>` are arithmetic shifts that
+                    // mask the shift amount, so `1 << 100` compiles to `0`/
+                    // garbage per-target. Shifts >= 64 are target-dependent,
+                    // so they are never folded.
+                    BinaryOp::Shl if (0..64).contains(&right_value) => {
+                        left_value.checked_shl(right_value as u32)
+                    }
+                    BinaryOp::Shr if (0..64).contains(&right_value) => {
+                        left_value.checked_shr(right_value as u32)
+                    }
+                    BinaryOp::Shl | BinaryOp::Shr => None,
                     // Comparisons on integers yield booleans, so fold them to
                     // `Bool` literals.  Folding to an integer here produced
                     // `let flag: bool = 1;` for `var flag bool := 1 < 2`, which
@@ -200,20 +213,25 @@ fn fold_expr(expr: &mut Expr) -> bool {
                     return true;
                 }
             }
-            // Identity simplifications: x + 0, x * 1, x - 0
-            if matches!(op, BinaryOp::Add) && is_zero(left) {
+            // Identity simplifications, guarded by type so a Poly `int`
+            // literal is never rewritten into a float or string context:
+            // `x + 0.0` and `x + ""` keep their original semantics. `0 + x`,
+            // `1 * x`, and `0 * x` are handled on the `x`-side only for
+            // integer-literal `x` (the zero/one literal must stay an int for
+            // the rewrite to be value- and type-preserving for all targets).
+            if matches!(op, BinaryOp::Add) && is_int_zero(left) {
                 *expr = (**right).clone();
                 return true;
             }
-            if matches!(op, BinaryOp::Add) && is_zero(right) {
+            if matches!(op, BinaryOp::Add) && is_int_zero(right) {
                 *expr = (**left).clone();
                 return true;
             }
-            if matches!(op, BinaryOp::Mul) && is_one(left) {
+            if matches!(op, BinaryOp::Mul) && is_int_one(left) {
                 *expr = (**right).clone();
                 return true;
             }
-            if matches!(op, BinaryOp::Mul) && is_one(right) {
+            if matches!(op, BinaryOp::Mul) && is_int_one(right) {
                 *expr = (**left).clone();
                 return true;
             }
@@ -378,11 +396,15 @@ fn as_bool(expr: &Expr) -> Option<bool> {
     }
 }
 
-fn is_zero(expr: &Expr) -> bool {
+/// True for the Poly integer literal `0` (not floats, not strings).
+/// Used by the identity simplifications so `x + 0.0` and `x + ""` are
+/// never rewritten away.
+fn is_int_zero(expr: &Expr) -> bool {
     matches!(expr, Expr::Literal(Literal::Int(value)) if value == "0")
 }
 
-fn is_one(expr: &Expr) -> bool {
+/// True for the Poly integer literal `1`.
+fn is_int_one(expr: &Expr) -> bool {
     matches!(expr, Expr::Literal(Literal::Int(value)) if value == "1")
 }
 
@@ -898,7 +920,92 @@ fn inline_body(target: &Function, args: &[Expr]) -> Option<Expr> {
         }
         bindings.insert(parameter.name.clone(), argument.clone());
     }
+    // The substitution walker below only descends into arithmetic and
+    // parenthesized expressions. If the body reads a parameter anywhere else
+    // (an index, a call argument receiver, a field access chain, ...), an
+    // unrewritten identifier would dangle at the call site
+    // (`return xs[0]` once emitted `xs` at the caller). Refuse to inline such
+    // bodies instead of producing invalid code.
+    if body_has_unrewritten_identifier(&body, &bindings) {
+        return None;
+    }
     Some(substitute(&body, &bindings))
+}
+
+/// True when `expr` references a name that substitution would leave unbound:
+/// a callee parameter that does not appear in a position the substituter
+/// rewrites, or any other free identifier (a callee-scope local would be
+/// invalid at the call site, and a same-named caller local would be captured
+/// wrongly).
+fn body_has_unrewritten_identifier(expr: &Expr, bindings: &HashMap<String, Expr>) -> bool {
+    match expr {
+        Expr::Identifier(name) => !bindings.contains_key(name),
+        Expr::BinaryOp { left, right, .. } => {
+            body_has_unrewritten_identifier(left, bindings)
+                || body_has_unrewritten_identifier(right, bindings)
+        }
+        Expr::UnaryOp { expr: inner, .. } => body_has_unrewritten_identifier(inner, bindings),
+        Expr::Parenthesized(inner) => body_has_unrewritten_identifier(inner, bindings),
+        // Every other expression shape (index, call, field access, closure,
+        // string literal arguments, ...) is outside the substituter's reach.
+        Expr::Literal(Literal::String(_)) | Expr::Literal(Literal::UnicodeString(_)) => false,
+        _ => !free_identifiers(expr).is_empty(),
+    }
+}
+
+/// Collect identifiers read by `expr`. Conservative and shallow: it stops at
+/// closures (their bodies capture their own scope) and literals.
+fn free_identifiers(expr: &Expr) -> Vec<String> {
+    let mut found = Vec::new();
+    collect_identifiers(expr, &mut found);
+    found
+}
+
+fn collect_identifiers(expr: &Expr, out: &mut Vec<String>) {
+    match expr {
+        Expr::Identifier(name) => out.push(name.clone()),
+        Expr::BinaryOp { left, right, .. } | Expr::Index { object: left, index: right } => {
+            collect_identifiers(left, out);
+            collect_identifiers(right, out);
+        }
+        Expr::UnaryOp { expr: inner, .. }
+        | Expr::Parenthesized(inner)
+        | Expr::Try(inner)
+        | Expr::FieldAccess { object: inner, .. }
+        | Expr::TupleIndex { object: inner, .. } => collect_identifiers(inner, out),
+        Expr::Call { func, args } => {
+            collect_identifiers(func, out);
+            for arg in args {
+                collect_identifiers(arg, out);
+            }
+        }
+        Expr::MethodCall {
+            object, args, ..
+        } => {
+            collect_identifiers(object, out);
+            for arg in args {
+                collect_identifiers(arg, out);
+            }
+        }
+        Expr::Array(elements) | Expr::Tuple(elements) => {
+            for element in elements {
+                collect_identifiers(element, out);
+            }
+        }
+        Expr::Struct { fields, .. } => {
+            for (_, value) in fields {
+                collect_identifiers(value, out);
+            }
+        }
+        Expr::Enum { data, .. } => {
+            if let Some(data) = data {
+                for value in data {
+                    collect_identifiers(value, out);
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 fn is_simple_expr(expr: &Expr) -> bool {
@@ -927,6 +1034,9 @@ fn substitute(expr: &Expr, bindings: &HashMap<String, Expr>) -> Expr {
             expr: Box::new(substitute(expr, bindings)),
         },
         Expr::Parenthesized(inner) => Expr::Parenthesized(Box::new(substitute(inner, bindings))),
+        // String literals need no substitution; any other shape must have
+        // been rejected by `body_has_unrewritten_identifier` before this
+        // walker runs, so cloning is safe here.
         other => other.clone(),
     }
 }
@@ -1153,6 +1263,103 @@ mod tests {
                 ..
             } => {}
             other => panic!("expected the call to be left intact, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn function_with_index_body_is_not_inlined() {
+        // `return xs[0]` reads the parameter outside the substituter's
+        // arithmetic-only reach. Inlining used to emit `xs[0]` at the call
+        // site with no `xs` binding — invalid Rust. The call must be left
+        // intact instead.
+        let mut program = parse_to_ir(
+            "fn first(xs: Vec<i32>): i32\n    return xs[0]\nend fn\nfn main()\n    var v Vec<i32> := [10, 20, 30]\n    put first(v)\nend fn",
+        );
+        Inlining.run(&mut program);
+
+        // `fn main` is a declared function, so its `put first(v)` lives in
+        // the second function's body, not in `main_body`.
+        let main_fn = program
+            .functions
+            .iter()
+            .find(|f| f.name == "main")
+            .expect("main should be a function");
+        match main_fn
+            .body
+            .iter()
+            .find(|statement| matches!(statement, Statement::Put { .. }))
+            .expect("main should put the call result")
+        {
+            Statement::Put { expr, .. } => {
+                assert!(
+                    matches!(expr, Expr::Call { .. }),
+                    "expected the call to be left intact, got {expr:?}"
+                );
+            }
+            other => panic!("expected a put statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn shift_overflow_is_not_folded() {
+        // `1 << 100` used to panic the optimizer with "attempt to shift left
+        // with overflow". Shifts of >= 64 are target-dependent, so the
+        // expression must be preserved verbatim.
+        let mut program = parse_to_ir("var a := 1 << 100");
+        ConstantFolding.run(&mut program);
+
+        match &program.main_body[0] {
+            Statement::VarDecl {
+                value:
+                    Some(Expr::BinaryOp {
+                        op: BinaryOp::Shl,
+                        ..
+                    }),
+                ..
+            } => {}
+            other => panic!("expected the shift to survive unfused, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mul_overflow_is_not_folded() {
+        // `i64::MAX * 2` overflows. The checked fold refuses to wrap (or
+        // panic), so the expression survives as an unfused Mul and the
+        // target language keeps its own overflow semantics.
+        let mut program = parse_to_ir("var z := 9223372036854775807 * 2");
+        ConstantFolding.run(&mut program);
+
+        let mul_survived = match &program.main_body[0] {
+            Statement::VarDecl {
+                value: Some(value), ..
+            } => matches!(value, Expr::BinaryOp { op: BinaryOp::Mul, .. }),
+            other => panic!("expected a var decl, got {other:?}"),
+        };
+        assert!(
+            mul_survived,
+            "expected the overflowing multiplication to survive, got {:?}",
+            program.main_body[0]
+        );
+    }
+
+    #[test]
+    fn string_identity_is_not_folded() {
+        // `x + 0` folds, but `s + ""` must not: the zero/one rewrites are
+        // guarded to integer literals so string/float identities keep their
+        // target semantics.
+        let mut program = parse_to_ir("var s := \"hi\"\nvar t := s + \"\"");
+        ConstantFolding.run(&mut program);
+
+        match &program.main_body[1] {
+            Statement::VarDecl {
+                value:
+                    Some(Expr::BinaryOp {
+                        op: BinaryOp::Add,
+                        ..
+                    }),
+                ..
+            } => {}
+            other => panic!("expected the string concatenation to survive, got {other:?}"),
         }
     }
 }

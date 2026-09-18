@@ -1,0 +1,61 @@
+#!/usr/bin/env poly
+# Differential backend suite #3: optimizer edge cases.
+#
+# Feeds the IR optimizer's regression cases through all four targets and
+# asserts identical output. Each check pins a transformation the optimizer
+# is allowed to make (or must refuse to make):
+#
+#   - Identity folds: `x*1 + 0`, `x*1`, `x bitor 0` must all equal `x`.
+#     (Folding used to be unguarded; the targets now prove it stays sound.)
+#   - Inlined call bodies with non-arithmetic shapes: a bare-parameter
+#     body (`return n`) and nested arithmetic (`n * n + 1`). The inliner's
+#     parameter substitution used to rewrite identifiers only at the top
+#     level of arithmetic expressions, leaving other parameter references
+#     unresolved in the emitted code. If substitution regresses, the
+#     targets emit references to names that do not exist and fail to
+#     build — which this suite turns into a loud failure.
+#   - Range-safe shifts: `1 << 10` and `256 >> 4` fold at compile time
+#     and must agree with runtime semantics on every target. Over-wide
+#     shifts (`x << 64` on i32) are deliberately NOT tested here: their
+#     behavior is target-defined (Rust panics in debug, C is undefined,
+#     JS smears), so folding must refuse them rather than normalize them.
+#
+# Note: everything here stays inside the common subset of all four
+# backends (scalars only — the C backend has no Vec/map support).
+#
+# EXPECTED:
+# 10 / 10 / 10 / 1024 / 16 / 7 / 26 / 10
+fn ident(n: i32): i32
+    return n
+end fn
+
+fn twice(n: i32): i32
+    return n + n
+end fn
+
+fn square_plus_one(n: i32): i32
+    return n * n + 1
+end fn
+
+fn main()
+    # Identity folds on a variable the optimizer cannot constant-fold.
+    var x i32 := 10
+    put x * 1 + 0
+    put x * 1
+    put x bitor 0
+
+    # Shifts within range: foldable, but must match runtime semantics.
+    put 1 << 10
+    put 256 >> 4
+
+    # Inlined bare-identifier body: the argument value flows through
+    # substitution into a non-arithmetic expression.
+    put ident(7)
+
+    # Inlined nested-arithmetic body with a runtime argument.
+    var y i32 := 5
+    put square_plus_one(y)
+
+    # Inlined call feeding arithmetic that the folder should collapse.
+    put twice(3) + 4
+end fn

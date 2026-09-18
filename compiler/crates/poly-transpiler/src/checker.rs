@@ -234,7 +234,12 @@ impl TypeChecker {
     }
 
     fn check_program_statements(&mut self, statements: &[&Statement]) {
-        self.collect_declarations(statements);
+        // Module bodies are reached through two paths: once directly from
+        // `check_program` and again from `collect_declarations`, which recurses
+        // into `Statement::ModuleDeclaration`. Collecting declarations here as
+        // well would register every module function twice and report a bogus
+        // "duplicate function declaration" for valid programs. The caller has
+        // already collected this statement list, so only bodies are checked.
         for statement in statements {
             match statement {
                 Statement::FunctionDeclaration(function) => self.check_function(function, None),
@@ -3009,6 +3014,35 @@ mod tests {
         let source =
             "fn sum(a: i32, b: i32): i32\n    return a + b\nend fn\nvar result i32 := sum(2, 3)";
         assert!(check(source).is_ok());
+    }
+
+    #[test]
+    fn module_functions_are_collected_once() {
+        // Module bodies were reachable through two collection paths, so a
+        // function declared inside a `module` was registered twice and valid
+        // programs failed with a bogus "duplicate function declaration".
+        let source = "module math\n    fn helper(x: i32): i32\n        return x * 3\n    end fn\nend module\nfn main()\n    put 42\nend fn";
+        let errors = check(source).err().unwrap_or_default();
+        assert!(
+            !errors
+                .iter()
+                .any(|e| e.message.contains("duplicate function declaration")),
+            "module functions must not be reported as duplicates: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn duplicate_functions_still_across_and_inside_modules() {
+        // The regression above must not lose the real duplicate diagnostic:
+        // two same-named functions inside one module are still an error.
+        let source = "module math\n    fn helper(): i32\n        return 1\n    end fn\n    fn helper(): i32\n        return 2\n    end fn\nend module\nfn main()\n    put 1\nend fn";
+        let errors = check(source).expect_err("real duplicates must still error");
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.message.contains("duplicate function declaration")),
+            "expected a duplicate-function error, got {errors:?}"
+        );
     }
 
     #[test]

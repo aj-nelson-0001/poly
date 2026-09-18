@@ -1,7 +1,19 @@
 # Poly Example: First 20 Prime Numbers
-# This program calculates and displays the first 20 prime numbers.
+#
+# Classic trial-division primality test, showing off:
+#   - Early `return false` guard clauses for the trivial cases.
+#   - The `while i * i <= n` bound: we only need to test factors up to
+#     sqrt(n), because any composite n has a factor pair (a, b) with
+#     a <= sqrt(n) <= b. This drops the work from O(n) to O(sqrt(n)).
+#   - `n mod i = 0` — `mod` is Poly's remainder operator (`=` is
+#     equality, not assignment).
+#   - A counted `loop i 2..200` with an early `break` once we have
+#     collected 20 primes (the range is just a generous upper bound).
+#
+# Expected output: the primes 2 3 5 7 11 13 17 19 23 29 31 37 41 43 47
+# 53 59 61 67 71, followed by "Done!".
 
-# Function to check if a number is prime
+# Returns true when n has no divisor in 2..sqrt(n).
 fn is_prime(n: i32): bool
     if n <= 1,
         return false
@@ -16,7 +28,6 @@ fn is_prime(n: i32): bool
     return true
 end fn
 
-# Main program
 fn main()
     put unicode "First 20 prime numbers:"
 

@@ -1,6 +1,19 @@
-# Complex if-else-if chain examples
+# Poly Example: if-else-if Chains
+#
+# Four small graders/classifiers built the same way: an `if cond,` arm,
+# any number of `else if cond,` arms (checked top to bottom, first match
+# wins), and a final `else` catch-all. Each function `return`s the label
+# from inside the arms, so no result variable is needed.
+#
+# Syntax notes:
+#   - Conditions are separated from the body by a comma: `if x >= 90,`.
+#   - `>=`/`>`/`<` are the usual comparisons; string results concatenate
+#     with `+` and automatically convert the other side via `.to_string()`
+#     in `put` expressions.
+#   - Nested chains (see `categorize_number`) test sign first, then parity
+#     with `n mod 2 = 0` (`mod` = remainder, `=` = equality).
 
-# Grade calculator
+# Grade calculator: first matching threshold wins.
 fn calculate_grade(score: i32): string
     if score >= 90,
         return "A+"
@@ -56,7 +69,7 @@ end fn
 # BMI calculator with nested categories
 fn calculate_bmi(weight_kg: f64, height_m: f64): string
     var bmi := weight_kg / (height_m * height_m)
-    
+
     if bmi < 18.5,
         return "Underweight"
     else if bmi < 25.0,
@@ -72,25 +85,25 @@ end fn
 fn main()
     put "=== If-Else-If Chain Examples ==="
     put ""
-    
+
     # Test grade calculator
     put "Grade for score 85: " + calculate_grade(85)
     put "Grade for score 92: " + calculate_grade(92)
     put "Grade for score 45: " + calculate_grade(45)
     put ""
-    
+
     # Test temperature classifier
     put "Temperature 35.0: " + classify_temperature(35.0)
     put "Temperature 15.0: " + classify_temperature(15.0)
     put "Temperature -5.0: " + classify_temperature(-5.0)
     put ""
-    
+
     # Test nested conditions
     put "Number 4: " + categorize_number(4)
     put "Number -3: " + categorize_number(-3)
     put "Number 0: " + categorize_number(0)
     put ""
-    
+
     # Test BMI calculator
     put "BMI (70kg, 1.75m): " + calculate_bmi(70.0, 1.75)
     put "BMI (90kg, 1.80m): " + calculate_bmi(90.0, 1.80)

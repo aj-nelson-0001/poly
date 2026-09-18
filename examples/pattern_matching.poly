@@ -1,11 +1,35 @@
 # Poly Example: Pattern Matching
+#
+# Poly's `match` has two usable shapes:
+#   - statement form: each arm runs a statement (this example)
+#   - value form:     each arm yields a value, so `match` can sit on the
+#                     right-hand side of a `var` declaration (shown at the
+#                     bottom). Every target backend supports literal and
+#                     wildcard arms in value position.
+#
+# Arm order matters: the first matching arm wins, and the `_` wildcard
+# (which matches everything) must be the last arm so an unmatched scrutinee
+# still has a defined fallback.
 
 fn main()
     put "Pattern Matching Demo"
+
+    # --- Statement form: arms run statements for their side effects. ---
     var x := 5
     match x
         1, put "One"
         2, put "Two"
         _, put "Other"
     end match
+
+    # --- Value form: arms produce the initializer's value. ---
+    # Here the match picks a human-readable size name for a frame count.
+    var frames := 43
+    var speed := match frames
+        48, "slow"
+        43, "normal"
+        _, "fast"
+    end match
+    put "gravity tier:"
+    put speed
 end fn

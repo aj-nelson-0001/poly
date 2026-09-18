@@ -68,13 +68,20 @@ poly/
 ├── compiler/
 │   ├── crates/
 │   │   ├── poly-lexer/      # Tokenizer
-│   │   ├── poly-parser/     # AST builder
-│   │   ├── poly-transpiler/ # Rust code generator
+│   │   ├── poly-parser/     # AST builder with source spans
+│   │   ├── poly-types/      # Reusable type-system core
+│   │   ├── poly-intermediate-representation/  # IR + optimization passes
+│   │   ├── poly-transpiler/ # Shared pipeline, checker, target dispatch
+│   │   ├── poly-c-codegen/  # C11 backend
+│   │   ├── poly-asm-codegen/# x86-64 assembly backend (Linux)
+│   │   ├── poly-js-codegen/ # JavaScript backend (ES2020)
+│   │   ├── poly-wasm/       # Playground WASM bindings
+│   │   ├── poly-lsp/        # Language server
 │   │   └── poly-cli/        # Command-line interface
 │   └── Cargo.toml
 ├── examples/                # Example Poly programs
-├── tests/                   # Integration tests
-└── docs/                    # Documentation
+├── tests/                   # Integration tests and backend fixtures
+└── *.md                     # Documentation (see POLY_DOCUMENTATION_INDEX.md)
 ~~~
 
 ## Making Changes
@@ -214,7 +221,10 @@ Brief description of changes
 
 ### Poly Code
 
-- Use the new if syntax: `if condition, ... end if`
+- Close every block with its matching form: `end if`, `end loop`, `end while`, `end fn`
+- Declare an explicit `fn main() ... end fn` entry point; top-level executable statements are rejected
+- Use `:=` to initialize and assign, `=` to compare (`==` is rejected legacy syntax)
+- Keyword-spelled operators: `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, `shift left`/`shift right`
 - Add comments for complex logic
 - Use meaningful function names
 - Keep functions focused

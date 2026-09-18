@@ -1,4 +1,15 @@
 # Poly Example: Structs and Enums
+#
+# Structs group named fields into one value; enums define a type with a
+# fixed set of variants. Both are declared at program scope.
+#
+#   - A struct literal `Point { x: 3.0, y: 4.0 }` builds a value with every
+#     field named explicitly.
+#   - Fields are read with dot syntax: `p.x`.
+#   - Struct values MOVE in Poly: assigning `p` to another variable hands
+#     over ownership, and methods that take `self` consume the receiver
+#     (see the spec's struct section for the take-and-return pattern).
+#   - Enum variants are qualified with the enum name: `Color::Red`.
 
 struct Point
     var x: f64
@@ -13,8 +24,16 @@ end enum
 
 fn main()
     put "Structs and Enums Demo"
+
+    # Build a struct with a literal (all fields must be named).
     var p := Point { x: 3.0, y: 4.0 }
     put "Point created"
+
+    # Fields are read with dot syntax. `as i32` truncates toward zero.
+    put "p.x as i32:"
+    put p.x as i32
+
+    # Enum variants are namespaced by their enum with `::`.
     var color := Color::Red
     put "Color created"
 end fn

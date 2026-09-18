@@ -1,10 +1,27 @@
 # Poly Example: Interactive Menu
-# Demonstrates the new I/O syntax with flags
+#
+# Demonstrates Poly's I/O syntax with flags:
+#   - `get` reads one line from stdin and parses it to the variable's type.
+#   - `get --default unicode "..."` supplies a fallback string when the
+#     user presses Enter on an empty line (`unicode` selects the string
+#     mode of `get`; plain `get` on a numeric type parses a number).
+#   - `get --mask unicode "*"` reads a password, echoing `*` per character.
+#   - `warn` prints a message to stderr without stopping the program
+#     (`error` would print and exit).
+#
+# Control flow shown here:
+#   - `match` with comma-separated arms (`1, greet_user()`) and a wildcard
+#     `_` arm for fall-through.
+#   - `match` on a string uses `unicode "..."` literal patterns.
+#   - A `match` used as an *expression*: `var result f64 := match op ...`.
+#   - An `if` expression nested in an arm to guard division by zero.
+#
+# Run it with:  poly examples/interactive_menu.poly
 
 fn main()
     put "=== Interactive Menu Demo ==="
     put ""
-    
+
     var running bool := true
     while running
         put "Menu:"
@@ -14,9 +31,9 @@ fn main()
         put "4. Exit"
         put ""
         put "Choose an option (1-4): "
-        
+
         var choice i32 := get
-        
+
         match choice
             1, greet_user()
             2, calculator()
@@ -26,27 +43,30 @@ fn main()
                 running := false
             _, warn "Invalid choice. Please try again."
         end match
-        
+
         put ""
     end while
 end fn
 
+# Greets the user by name, defaulting to "World" on empty input.
 fn greet_user()
     put "Enter your name: "
     var name ustring := get --default unicode "World"
     put "Hello, " + name + "!"
 end fn
 
+# Tiny four-operation calculator. Note the match-as-expression form and
+# the zero-division guard inside the "/" arm.
 fn calculator()
     put "Enter first number: "
     var a f64 := get
-    
+
     put "Enter second number: "
     var b f64 := get
-    
+
     put "Choose operation (+, -, *, /): "
     var op ustring := get --default unicode "+"
-    
+
     var result f64 := match op
         unicode "+", a + b
         unicode "-", a - b
@@ -62,16 +82,17 @@ fn calculator()
             warn "Unknown operation, using +"
             a + b
     end match
-    
+
     put "Result: " + result.to_string()
 end fn
 
+# Reads a password with masked input and checks a minimum length.
 fn password_test()
     put "Enter password (masked): "
     var password ustring := get --mask unicode "*"
-    
+
     put "Password length: " + password.len().to_string()
-    
+
     if password.len() < 8,
         warn "Password too short (minimum 8 characters)"
     else

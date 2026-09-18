@@ -1,4 +1,15 @@
-# State machine example using if-else-if chains
+# Poly Example: State Machines via if-else-if Chains
+#
+# Four small classifiers that map integer state codes to human-readable
+# strings. The point of the example is the *shape* of the code: an outer
+# `if state = N, ... else if ... else ... end if` chain selects the state,
+# and inner chains refine the answer using secondary data (score, days,
+# resource level). Every chain ends in an `else` arm so invalid states get
+# an explicit verdict instead of falling off the end.
+#
+# A `match` expression would also work for the flat dispatches here; the
+# if-chain form shines when the arms need range checks (score < 100 vs
+# < 500) rather than exact matches.
 
 # Traffic light state machine
 fn get_traffic_light_action(state: i32): string
@@ -18,7 +29,7 @@ end fn
 # Game state machine
 fn get_game_status(state: i32, score: i32): string
     if state = 0,
-        return "Menunicode "
+        return "Menu"
     else if state = 1,
         if score < 100,
             return "Playing - Low Score"
@@ -94,22 +105,22 @@ end fn
 fn main()
     put "=== State Machine Examples ==="
     put ""
-    
+
     # Test traffic light
     put "Traffic Light State 0: " + get_traffic_light_action(0)
     put "Traffic Light State 2: " + get_traffic_light_action(2)
     put ""
-    
+
     # Test game status
     put "Game State 1, Score 750: " + get_game_status(1, 750)
     put "Game State 3, Score 1500: " + get_game_status(3, 1500)
     put ""
-    
+
     # Test order status
     put "Order Status 2, Days 5: " + get_order_status(2, 5)
     put "Order Status 2, Days 10: " + get_order_status(2, 10)
     put ""
-    
+
     # Test permissions
     put "Role 2, Resource 1: " + check_permission(2, 1)
     put "Role 1, Resource 1: " + check_permission(1, 1)

@@ -1,7 +1,35 @@
 # Poly Example: Closures
+#
+# A closure is an anonymous function value written `|params| body`. It can
+# be stored in a variable, passed to functions, and called like any other
+# function. Unlike a named `fn`, a closure can also capture (read) variables
+# from the surrounding scope.
+#
+# This example shows the two common forms:
+#   1. `|x: i32| x * x`  — an expression-body closure with a typed parameter.
+#   2. `|n| n + factor`  — an untyped parameter that inherits its type, and a
+#                          body that captures `factor` from the enclosing scope.
 
 fn main()
     put "Closures Demo"
+
+    # Form 1: a closure with an explicitly typed parameter stored in a
+    # variable. The variable can then be called like a function.
     var square := |x: i32| x * x
-    put "Closure created"
+    put "square(6):"
+    put square(6)
+
+    # Form 2: a closure that CAPTURES `factor` from the surrounding scope.
+    # When `add_factor` is called later it still reads this `factor`, which
+    # is what makes closures more flexible than plain function pointers.
+    var factor := 10
+    var add_factor := |n| n + factor
+    put "add_factor(5):"
+    put add_factor(5)
+
+    # Closures can also be written inline at the call site of a function
+    # that accepts a function-typed parameter (see the higher-order
+    # functions example for the full pattern).
+    put "inline closure:"
+    put (|a: i32, b: i32| a * b)(3, 4)
 end fn

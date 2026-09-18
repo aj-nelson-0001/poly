@@ -259,16 +259,20 @@ fn gen_statement(statement: &ast::Statement) -> Statement {
         ast::Statement::FunctionDeclaration(function) => {
             Statement::NestedFunction(gen_function(function))
         }
-        ast::Statement::StructDeclaration(_) => unreachable!("structs are collected first"),
-        ast::Statement::EnumDeclaration(_) => unreachable!("enums are collected first"),
-        ast::Statement::TraitDeclaration(_) => unreachable!("traits are collected first"),
-        ast::Statement::ImplDeclaration(_) => unreachable!("impls are collected first"),
-        ast::Statement::ModuleDeclaration(_) => unreachable!("modules are collected first"),
-        ast::Statement::UseDeclaration(_) => unreachable!("use declarations are collected first"),
-        ast::Statement::DependencyDeclaration(_) => {
-            unreachable!("dependency declarations are collected first")
-        }
-        ast::Statement::TypeDeclaration(_) => unreachable!("type aliases are collected first"),
+        // Program-scope declarations are collected by `generate` before any
+        // `gen_statement` call, but the parser also accepts declarations
+        // nested inside function bodies. Those never reach the collection
+        // pass, so treat them as inert here rather than panicking the
+        // compiler — the checker reports them as invalid or unused, and
+        // codegen emits nothing for them.
+        ast::Statement::StructDeclaration(_)
+        | ast::Statement::EnumDeclaration(_)
+        | ast::Statement::TraitDeclaration(_)
+        | ast::Statement::ImplDeclaration(_)
+        | ast::Statement::ModuleDeclaration(_)
+        | ast::Statement::UseDeclaration(_)
+        | ast::Statement::DependencyDeclaration(_)
+        | ast::Statement::TypeDeclaration(_) => Statement::Block(Vec::new()),
         ast::Statement::ExpressionStatement(expr) => Statement::Expression(gen_expr(expr)),
         ast::Statement::ReturnStatement(value) => Statement::Return(value.as_ref().map(gen_expr)),
         ast::Statement::BreakStatement => Statement::Break,

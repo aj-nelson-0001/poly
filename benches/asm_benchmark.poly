@@ -1,4 +1,19 @@
-# Benchmark: sum 1..1_000_000
+# Benchmark: integer loop and accumulation throughput (Rust/asm target).
+#
+# WHAT IT MEASURES
+# Sums the integers 0..1_000_000 in a plain counted loop. This is the
+# smallest program that still exercises the optimizer's hot path: the
+# loop-counter induction variable, the `total := total + i` accumulation,
+# and the i32 arithmetic folding rules. If the compiler's optimizer
+# regresses (e.g. stops keeping the counter in a register), the numbers
+# here will show it.
+#
+# HOW TO RUN
+#   poly benches/asm_benchmark.poly            # build + run
+#   poly --ir benches/asm_benchmark.poly       # inspect the optimized IR
+#
+# The generated Rust should keep `i` and `total` in registers; with
+# `--release` LLVM may fold the whole sum into a closed-form expression.
 fn main()
     var total i32 := 0
     loop i 0..1000000

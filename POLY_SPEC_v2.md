@@ -224,8 +224,8 @@ and suggests the explicit `name := name + value` form.
 | `f32` | `f32` | 32-bit float |
 | `f64` | `f64` | 64-bit float |
 | `isize` / `usize` | `isize` / `usize` | Platform integer |
-| `char` | `u8` | Single ASCII byte |
-| `string` | `String` / `Vec<u8>` | ASCII string |
+| `char` / `uchar` | `char` | Unicode scalar value (4 bytes) |
+| `string` | `String` | Byte-oriented string (grows by appending) |
 | `ustring` | `String` | UTF-8 Unicode string |
 | `byte` | `u8` | Raw byte |
 | `bytes` | `Vec<u8>` | Byte buffer |
@@ -452,8 +452,9 @@ corollaries worth knowing:
 ### Reserved words
 
 `spawn` and `step` are reserved words and cannot be used as identifiers or
-method names (`spawn` is the process-spawn keyword; `step` introduces the
-loop-range step clause). Rename such methods (for example `spawn_piece`).
+method names (`spawn expr` launches `expr` as an async task — a Tokio task on
+the Rust target — and `step` introduces the loop-range step clause). Rename
+such methods (for example `spawn_piece`).
 
 ---
 
@@ -643,6 +644,11 @@ fn main() {
 ---
 
 ## 16. Example: Full Program
+
+The final REPL-style example below is a historical teaching fragment (it shows
+top-level statements from before the explicit `fn main()` rule); current
+programs declare `fn main() ... end fn` and put executable statements inside
+it.
 
 ~~~poly fragment
 # Foreign block: provide the data structures and functions

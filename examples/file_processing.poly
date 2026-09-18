@@ -1,10 +1,21 @@
 # Poly Example: File Processing
-# Demonstrates file I/O with the new syntax
+#
+# Demonstrates Poly's file I/O operators:
+#   - `put <expr> to "path"` writes a line to a file (overwrites it first
+#     time); add `-append` to add lines without truncating.
+#   - `get from "path"` reads the whole file into a string.
+#   - `open("path")` returns a file handle with `.eof()` and `.get_line()`
+#     for line-by-line reading.
+#   - `bytes` is a vector of raw byte values (0x48 is 'H'), written and
+#     read back verbatim — no text encoding applied.
+#
+# The CSV section shows `split("\n")` / `split(",")` plus manual indexing
+# (`fields[0]`) on the parsed rows.
 
 fn main()
     put "=== File Processing Demo ==="
     put ""
-    
+
     # Create a sample file
     put "Creating sample file..."
     put "Line 1: Hello, World!" to "sample.txt"
@@ -12,13 +23,13 @@ fn main()
     put "Line 3: File I/O is easy" to "sample.txt" -append
     put "Sample file created."
     put ""
-    
+
     # Read entire file
     put "Reading entire file:"
     var content ustring := get from "sample.txt"
     put content
     put ""
-    
+
     # Read file line by line
     put "Reading line by line:"
     var file := open("sample.txt")
@@ -29,7 +40,7 @@ fn main()
         line_num := line_num + 1
     end while
     put ""
-    
+
     # Write formatted data
     put "Writing CSV data..."
     var records Vec<ustring> := [
@@ -38,18 +49,18 @@ fn main()
         unicode "Bob,25,bob@example.com",
         unicode "Charlie,35,charlie@example.com"
     ]
-    
+
     loop record in records
         put record to "contacts.csv" -append
     end loop
     put "CSV file created."
     put ""
-    
+
     # Read and process CSV
     put "Processing CSV file:"
     var csv_content ustring := get from "contacts.csv"
     var lines Vec<ustring> := csv_content.split(unicode "\n")
-    
+
     var i i32 := 0
     loop line in lines
         if i > 0, # Skip header
@@ -61,19 +72,19 @@ fn main()
         i := i + 1
     end loop
     put ""
-    
+
     # Binary file example
     put "Writing binary file..."
     var data bytes := [0x48, 0x65, 0x6C, 0x6C, 0x6F]  # "Hello" in bytes
     put data to "binary.bin"
     put "Binary file created."
     put ""
-    
+
     # Read binary file
     put "Reading binary file:"
     var binary_data bytes := get from "binary.bin"
     put "Binary size: " + binary_data.len().to_string() + " bytes"
     put ""
-    
+
     put "File processing complete!"
 end fn

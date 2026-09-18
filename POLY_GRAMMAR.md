@@ -30,7 +30,7 @@ foreign_block ::= "#rust" foreign_text "#endrust"
 
 extern_function_declaration ::= "extern" foreign_target "fn" identifier
                                 "(" [ parameters ] ")" [ ":" type ]
-foreign_target ::= "rust" | "c" | "asm"
+foreign_target ::= "rust" | "c" | "asm" | "js"
 
 // Foreign markers are line-oriented. Leading whitespace is allowed, but the
 // marker must occupy the line; foreign_text is opaque to the Poly lexer.
@@ -100,7 +100,7 @@ use_declaration      ::= "use" use_path
 type_declaration     ::= "type" identifier "=" type
 
 return_statement     ::= "return" [ expression ]
-break_statement      ::= "break" [ expression ]
+break_statement      ::= "break"
 continue_statement   ::= "continue"
 ~~~
 
@@ -165,6 +165,10 @@ binary_operator ::= "+" | "-" | "*" | "/" | "mod"
                  | "and" | "or" | "xor" | "bitand" | "bitor"
                  | "shift" ("left" | "right")
                  | "<<" | ">>"
+
+// `xor`, `bitand`, `bitor`, `bitnot`, and `shift left`/`shift right` are
+// integer operations; the checker rejects them on `bool` operands (use
+// `and`/`or`/`not` for logic).
 unary_operator ::= "-" | "not" | "bitnot" | "*"
 ~~~
 

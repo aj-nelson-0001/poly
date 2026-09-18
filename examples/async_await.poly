@@ -1,8 +1,16 @@
 # =============================================================================
 # Async/Await Example
 # =============================================================================
+#
+# `async fn` marks a function as suspendable; calling it returns a future
+# that does nothing until you attach `.await`, which suspends the caller
+# until the future completes. Only async functions can use `.await`.
+#
+# Under the Rust target this lowers to tokio's async runtime; the `main`
+# future is polled to completion before the process exits. The pipeline
+# here is fetch -> process -> print, with each stage awaiting the previous.
 
-# Async function to simulate fetching data
+# Simulates an HTTP fetch: logs the URL, returns a fake payload.
 async fn fetch_data(url: ustring): ustring
     put unicode "Fetching data from: " + url
     return unicode "response data"
@@ -25,7 +33,7 @@ end fn
 # Main function
 async fn main()
     put unicode "=== Async/Await Demo ==="
-    
+
     # Call async function
     var result := get_user_info().await
     put result

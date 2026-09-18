@@ -1075,7 +1075,11 @@ fn cargo_manifest(
     }
 
     format!(
-        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"2021\"\n\n[dependencies]\n{}\n[workspace]\n",
+        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"2021\"\n\n# Generated projects default to optimized builds: Poly programs are
+# typically run through `cargo run --release`-shaped workflows and the
+# generated code has no debug-specific requirements. An explicit profile
+# keeps `cargo run` fast without depending on the caller to pass --release.
+[profile.release]\nopt-level = 3\n\n[dependencies]\n{}\n[workspace]\n",
         package_name,
         env!("CARGO_PKG_VERSION"),
         dependencies
@@ -1556,6 +1560,10 @@ fn compile_c_binary(source_path: &Path, output_path: &Path) -> Result<()> {
     let mut compiler = c_compiler_command()?;
     let output = compiler
         .arg("-std=c11")
+        // Generated C is machine-written and stable, so -O2 is safe and makes
+        // `poly --target c file.poly` executables competitive with the Rust
+        // target's own optimized builds.
+        .arg("-O2")
         .arg(source_path)
         .arg("-o")
         .arg(output_path)

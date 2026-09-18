@@ -1,12 +1,24 @@
 # Poly Example: Match Expressions
+#
+# `match` compares a scrutinee (the value after `match`) against a list of
+# `pattern, body` arms and runs the body of the FIRST arm whose pattern
+# matches. The `_` arm is the wildcard: it matches anything and must come
+# last so the match has a defined fallback.
+#
+# Arms are separated by commas. A match can appear as a statement (as here)
+# or in value position, e.g. `var label := match x ... end match` (see the
+# pattern_matching example and the spec's variable-declaration section).
 
 fn main()
     put "Match Demo"
+
+    # The scrutinee: each arm's literal pattern is compared against `x`.
     var x := 5
+
     match x
-        1, put "One"
-        2, put "Two"
-        3, put "Three"
-        _, put "Other"
+        1, put "One"      # matches only when x = 1
+        2, put "Two"      # matches only when x = 2
+        3, put "Three"    # matches only when x = 3
+        _, put "Other"    # wildcard: always matches, so it must be last
     end match
 end fn

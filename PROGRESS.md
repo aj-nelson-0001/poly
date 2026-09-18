@@ -1,7 +1,58 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-17.
+Last updated: 2026-09-18.
+
+## Correctness audit: optimizer, checker, generator, codegen speed (2026-09-18)
+
+- **Optimizer bug fixes** (`poly-intermediate-representation/src/optimizer.rs`):
+  - Shift folding no longer panics on over-wide shifts (`1 << 64`, shift
+    counts outside the operand width now leave the expression for the
+    target, which raises a proper diagnostic).
+  - Division/modulo by a nonzero-foldable-zero constant is no longer
+    folded to `0`; it stays symbolic so the backend's runtime check fires.
+  - `as i64` folding no longer assumes `bool` operands are i64-shaped.
+  - The function inliner's `substitute` now rewrites parameter references
+    recursively through *all* expression kinds (previously only top-level
+    arithmetic — an inlined `return xs[0]` left the parameter unresolved,
+    emitting invalid Rust), and refuses to inline when a free identifier
+    that is neither a parameter nor a global would remain.
+  - Identity folds (`x*1`, `x+0`, `x-x`, `x|0`, ...) are guarded by type
+    checks so they can no longer misfold on unexpected operand types.
+  - Regression tests added for the shift-overflow and inliner cases.
+- **Checker fix** (`poly-transpiler/src/checker.rs`): module declarations
+  were collected twice — once through the flattened module and once in the
+  main statement list — producing bogus `duplicate function declaration`
+  errors for any program using `module`. Deduped by AST node identity.
+- **Generator hardening** (`generator.rs`): `fn`/`struct`/`enum`/`extern`
+  declarations nested inside a function body (which the parser accepts)
+  no longer hit `unreachable!()`; they lower to no-ops with a comment
+  instead of crashing the compiler.
+- **Generated-code speed**:
+  - The C backend now compiles with `-O2` (was the compiler default `-O0`).
+  - String concatenation: nested `a + b + c` string chains flatten into a
+    single `format!` call, and the string-builder pattern `s := s + x`
+    (typical in append loops) lowers to in-place `push_str` instead of
+    allocating a fresh `String` per iteration. Measured ~430× on a
+    100k-iteration append loop vs the old per-iteration `format!`.
+  - Two codegen tests updated to assert the new `push_str` lowering.
+- **Docs**: `char`/`string` type-mapping contradictions resolved across the
+  spec and README (actual mappings: `char`→`char` 4-byte, `string`→`String`);
+  grammar's `break [expression]` corrected to value-less `break` (the
+  parser discards any value); `--project`/`--ir` CLI rows completed;
+  `xor`-on-bool claim fixed (integer-only, matching the checker).
+- **Examples/tests**: 27/27 example programs compile and run. Heavily
+  under-commented examples rewritten with purpose-and-technique headers
+  (closures, match_demo, pattern_matching, structs_enums, interactive_menu,
+  prime_numbers, higher_order_functions, file_processing, if_else_chains,
+  sorting_algorithms, state_machine, async_await, testing_and_interpolation,
+  benches/asm_benchmark, tests/c_target_tests). Two latent example bugs
+  fixed along the way: a corrupted string literal in `state_machine.poly`
+  (`"Menunicode "` → `"Menu"`) and a duplicated `find_min_index` definition
+  in `sorting_algorithms.poly`.
+- Verification: 472 compiler tests pass (up from 466), doc audit 577
+  blocks / 0 unmarked failures, markdown check 53 files, backend
+  differential sweep green, generated-path check green.
 
 ## `dep` declarations; preview.6 released (2026-09-17)
 

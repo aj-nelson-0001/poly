@@ -1,5 +1,19 @@
-# Poly C target smoke test
-# Strict mode requires an explicit declaration for the foreign call below.
+# Poly C-target smoke test. Run with:
+#   poly --target c tests/c_target_tests.poly
+# (The Rust target has no implementation for the extern C function, so a
+# default-target build intentionally fails with `unknown function`.)
+#
+# Exercises the C backend end-to-end:
+#   - `extern c fn ...` declares a foreign function implemented in C.
+#     Strict mode requires the declaration so the typechecker can verify
+#     every call site.
+#   - The `#c ... #endc` block is raw C, pasted verbatim into the
+#     generated translation unit.
+#
+# On success the program prints `30` (the loop total) and `3` (the while
+# counter). Any mismatch takes the `error` path and exits nonzero.
+
+# Foreign declaration: implemented in the #c block below.
 extern c fn double_value(x: i32): i32
 #c
 int double_value(int x) {
@@ -13,6 +27,7 @@ fn main()
         total := total + double_value(i)
     end loop
 
+    # 2*(1+2+3+4+5) = 30 — verifies argument passing and return values.
     if total = 30
         put total
     else

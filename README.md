@@ -350,9 +350,8 @@ end fn
 | `i128` / `u128` | 16 bytes | `i128` / `u128` |
 | `f32` | 4 bytes | `f32` |
 | `f64` | 8 bytes | `f64` |
-| `char` | 4 bytes | `char` |
-| `string` | byte-oriented | `Vec<u8>` / `&[u8]` |
-| `uchar` | 4 bytes | `char` |
+| `char` / `uchar` | 4 bytes | `char` |
+| `string` | byte-oriented | `String` |
 | `ustring` | 1-4 bytes/char | `String` / `&str` |
 | `byte` | 1 byte | `u8` |
 | `bytes` | Variable | `Vec<u8>` |

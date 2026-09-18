@@ -1,15 +1,17 @@
-# Sorting algorithms using if-else-if chains
+# Poly Example: Sorting and Classification via if-else-if Chains
+#
+# Despite the name, the sorting here is a single helper (`find_min_index`),
+# which is the inner loop of selection sort: scan arr[start..] and return
+# the index of the smallest element. Called once per position, it sorts a
+# vector in O(n^2) comparisons. The rest of the file demonstrates long
+# if-else-if dispatch chains with range checks and nested refinement.
+#
+# Note the comparisons: `=` is equality (not assignment), `mod` is
+# remainder, and `arr.len()` returns the vector length. The `while`
+# loop uses a manual index because Poly's counted `loop i a..b` is
+# exclusive of `b`.
 
-# Bubble sort comparison function
-fn should_swap(a: i32, b: i32, ascending: bool): bool
-    if ascending,
-        return a > b
-    else,
-        return a < b
-    end if
-end fn
-
-# Simple selection sort
+# Selection-sort helper: index of the smallest element in arr[start..].
 fn find_min_index(arr: Vec<i32>, start: i32): i32
     var min_idx := start
     var i := start + 1
@@ -22,7 +24,16 @@ fn find_min_index(arr: Vec<i32>, start: i32): i32
     return min_idx
 end fn
 
-# Classification based on multiple conditions
+# Comparator: whether the pair (a, b) is out of order for the chosen direction.
+fn should_swap(a: i32, b: i32, ascending: bool): bool
+    if ascending,
+        return a > b
+    else,
+        return a < b
+    end if
+end fn
+
+# Positive/negative crossed with even/odd via nested chains.
 fn classify_number(n: i32): string
     if n > 0,
         if n mod 2 = 0,
@@ -41,7 +52,7 @@ fn classify_number(n: i32): string
     end if
 end fn
 
-# Temperature range classifier
+# Ten-degree buckets from extremely cold to extremely hot.
 fn get_temperature_range(temp: f64): string
     if temp < -20.0,
         return "extremely cold"
@@ -60,7 +71,7 @@ fn get_temperature_range(temp: f64): string
     end if
 end fn
 
-# Day of week classifier
+# 0..6 map to weekday names; anything else reports invalid input.
 fn get_day_type(day: i32): string
     if day = 0,
         return "Sunday"
@@ -85,20 +96,20 @@ end fn
 fn main()
     put "=== Sorting and Classification Examples ==="
     put ""
-    
-    # Test number classification
+
+    # Exercise the sign/parity classifier at both boundaries and a negative.
     put "Number -4: " + classify_number(-4)
     put "Number 0: " + classify_number(0)
     put "Number 7: " + classify_number(7)
     put ""
-    
-    # Test temperature range
+
+    # Exercise the temperature buckets in cold, mild, and hot ranges.
     put "Temp -25: " + get_temperature_range(-25.0)
     put "Temp 15: " + get_temperature_range(15.0)
     put "Temp 35: " + get_temperature_range(35.0)
     put ""
-    
-    # Test day of week
+
+    # Exercise the day map including the invalid fallback (7).
     put "Day 0: " + get_day_type(0)
     put "Day 5: " + get_day_type(5)
     put "Day 7: " + get_day_type(7)

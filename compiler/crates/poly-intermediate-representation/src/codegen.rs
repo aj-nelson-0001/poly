@@ -664,6 +664,25 @@ impl IntermediateRepresentationCodeGen {
                         return;
                     }
                 }
+                // String-builder pattern: `s := s + <string>` assigns the
+                // variable its own value plus a suffix. Lowering to
+                // `s = format!(...)` (the generic path) allocates a fresh
+                // String and copies the whole prefix every iteration —
+                // quadratic over loops. In-place `push_str` amortizes to
+                // amortized-O(1) appends. Only the shape `target :=
+                // target + suffix` qualifies; anything else falls through.
+                if let Expr::Identifier(name) = target {
+                    if let Some(suffixes) = self.string_concat_suffix(value, name) {
+                        for suffix in suffixes {
+                            let suffix_str = self.gen_expr(suffix);
+                            self.writeln_fmt(format_args!(
+                                "{}.push_str(&({}));",
+                                name, suffix_str
+                            ));
+                        }
+                        return;
+                    }
+                }
                 let target_str = self.gen_expr(target);
                 let value_str = self.gen_expr(value);
                 self.writeln_fmt(format_args!("{} = {};", target_str, value_str));
@@ -892,6 +911,54 @@ impl IntermediateRepresentationCodeGen {
         }
     }
 
+    /// Collect the operands of a string-concatenation `+` chain into a
+    /// flat list so codegen can emit one `format!` per chain instead of a
+    /// nested `format!` per `+` (which is quadratic in chain length).
+    /// Non-string leaves (numbers, chars) are kept as-is; `format!` renders
+    /// them with `Display`, matching the old nested behavior.
+    fn collect_string_concat_operands(&self, expr: &Expr, out: &mut Vec<String>) {
+        if let Expr::BinaryOp {
+            op: BinaryOp::Add,
+            left,
+            right,
+        } = expr
+        {
+            if self.is_string_expr(left) || self.is_string_expr(right) {
+                self.collect_string_concat_operands(left, out);
+                self.collect_string_concat_operands(right, out);
+                return;
+            }
+        }
+        out.push(self.gen_expr(expr));
+    }
+
+    /// For `s := s + ...` on a string variable, return every appended
+    /// operand in source order (`[x]` for `s + x`; `[a, b]` for
+    /// `s + a + b`, which parses as `(s + a) + b` — the head `s` sits at
+    /// the left spine). Returns `None` for any other shape so the generic
+    /// assignment path is used. Non-string leaves (numbers, chars) are
+    /// accepted too — `push_str(&42.to_string())` matches the old
+    /// `format!` semantics exactly.
+    fn string_concat_suffix<'a>(&self, value: &'a Expr, name: &str) -> Option<Vec<&'a Expr>> {
+        let (left, right) = match value {
+            Expr::BinaryOp {
+                op: BinaryOp::Add,
+                left,
+                right,
+            } if self.is_string_expr(left) || self.is_string_expr(right) => (left, right),
+            _ => return None,
+        };
+        if matches!(left.as_ref(), Expr::Identifier(id) if id == name) {
+            Some(vec![right.as_ref()])
+        } else {
+            // `(s + a) + b`: recurse to find `s` at the head, then append
+            // every operand after it in source order.
+            let mut suffixes = self.string_concat_suffix(left, name)?;
+            suffixes.push(right.as_ref());
+            Some(suffixes)
+        }
+    }
+
     /// The `println!`/`format!` spec used for a put value: `{:?}` for vectors
     /// (which do not implement `Display`), `{}` otherwise.
     fn put_format_spec(&self, expr: &Expr) -> &'static str {
@@ -1081,7 +1148,15 @@ impl IntermediateRepresentationCodeGen {
                 if matches!(op, BinaryOp::Add)
                     && (self.is_string_expr(left) || self.is_string_expr(right))
                 {
-                    format!("format!(\"{{}}{{}}\", {}, {})", l, r)
+                    // Flatten the whole `a + b + c` chain into ONE `format!`
+                    // call. Naive per-node `format!("{}{}", l, r)` nesting
+                    // re-copies the accumulated prefix at every level, which
+                    // makes long concatenations quadratic; a single flattened
+                    // call copies each operand exactly once.
+                    let mut operands = Vec::new();
+                    self.collect_string_concat_operands(expr, &mut operands);
+                    let specs = "{}".repeat(operands.len());
+                    format!("format!(\"{}\", {})", specs, operands.join(", "))
                 } else {
                     let op_str = self.gen_binary_op(op);
                     format!("({} {} {})", l, op_str, r)
@@ -2321,6 +2396,20 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Statement::Assignment { target, value } => {
+                // Mirror `gen_statement`'s string-builder lowering: inside
+                // loop bodies (rendered through this string path) the
+                // `s := s + suffix` pattern is the hot case, and the generic
+                // `format!` assignment makes it quadratic.
+                if let Expr::Identifier(name) = target {
+                    if let Some(suffixes) = self.string_concat_suffix(value, name) {
+                        let mut out = String::new();
+                        for suffix in suffixes {
+                            let suffix_str = self.gen_expr(suffix);
+                            out.push_str(&format!("{}.push_str(&({}));", name, suffix_str));
+                        }
+                        return out;
+                    }
+                }
                 format!("{} = {};", self.gen_expr(target), self.gen_expr(value))
             }
             Statement::Mutation { target, op, value } => {
@@ -3623,12 +3712,39 @@ mod tests {
     }
 
     #[test]
-    fn string_append_emits_borrowed_amount() {
+    fn string_append_emits_in_place_push_str() {
+        // `s := s + <string>` on a string variable lowers to in-place
+        // `push_str` so repeated appends stay amortized-O(1) instead of
+        // allocating a fresh `format!` String per assignment.
         let rust = transpile(
             "fn main()\n    var output ustring := \"\"\n    output := output + \"abc\"\n    output := output + \"def\"\nend fn",
         );
-        assert!(rust.contains("output = format!(\"{}{}\", output, String::from(\"abc\"));"));
-        assert!(rust.contains("output = format!(\"{}{}\", output, String::from(\"def\"));"));
+        assert!(
+            rust.contains("output.push_str(&(String::from(\"abc\")));"),
+            "expected push_str lowering: {rust}"
+        );
+        assert!(
+            rust.contains("output.push_str(&(String::from(\"def\")));"),
+            "expected push_str lowering: {rust}"
+        );
+    }
+
+    #[test]
+    fn string_append_chain_keeps_every_operand() {
+        // Regression: `s := s + "b" + "c"` parses as `(s + "b") + "c"`; the
+        // suffix collector used to return only the outermost operand,
+        // silently dropping `"b"` and printing `ac` instead of `abc`.
+        let rust = transpile(
+            "fn main()\n    var s ustring := \"a\"\n    s := s + \"b\" + \"c\"\nend fn",
+        );
+        assert!(
+            rust.contains("s.push_str(&(String::from(\"b\")));"),
+            "inner operand lost: {rust}"
+        );
+        assert!(
+            rust.contains("s.push_str(&(String::from(\"c\")));"),
+            "outer operand lost: {rust}"
+        );
     }
 
     #[test]
@@ -3666,16 +3782,16 @@ mod tests {
     }
 
     #[test]
-    fn string_append_inside_loop_body_borrows_amount() {
-        // `add row, ...` on a string declared inside a loop body (rendered by
-        // `gen_statement_str`) must lower to `row += &(...)` so the generated
-        // Rust compiles (`String` has no `AddAssign<String>`).
+    fn string_append_inside_loop_body_pushes_in_place() {
+        // `row := row + ...` on a string declared inside a loop body (rendered
+        // by `gen_statement_str`) lowers to in-place `push_str`, keeping the
+        // append amortized-O(1) inside loops.
         let rust = transpile(
             "fn main()\n    loop i 1..2\n        var row ustring := \"\"\n        row := row + i.to_string()\n        put row\n    end loop\nend fn",
         );
         assert!(
-            rust.contains("row = format!(\"{}{}\", row, format!(\"{:?}\", i));"),
-            "string append in loop body must borrow the amount: {rust}"
+            rust.contains("row.push_str(&(format!(\"{:?}\", i)));"),
+            "string append in loop body must push in place: {rust}"
         );
     }
 

@@ -159,6 +159,35 @@ source path relative to the generated project (e.g. `source=../../tetris.poly`);
 a default build only refreshes directories whose marker resolves to the
 source being built.
 
+## Strings: Concatenation, Length, Interpolation
+
+~~~poly
+fn main()
+    var name ustring := "Ada"
+    var n i32 := 42
+
+    # Concatenation works in put position and value position on every target.
+    put "Hello, " + name + "!"
+    var greeting ustring := "Hi " + name
+
+    # Scalar to strings: to_string() on integers, floats, and bools.
+    var labelled ustring := "n=" + n.to_string()
+    put labelled
+
+    # .len() is the byte length of the string.
+    put name.len()
+
+    # Interpolation: {expr} splices values directly into a string.
+    put "n is {n}, name is {name}"
+end fn
+~~~
+
+Rust lowers `s := s + x` in loops to in-place `push_str` (amortized O(1)).
+C materializes concat with an emitted `poly_concat` helper and `.len()` via
+`strlen`; asm uses a static bump arena (`_str_arena`) for concat results.
+The JS target maps everything to native string operations. Interpolation is
+Rust-target; other backends reject it with guidance.
+
 ## Targets
 
 ~~~bash

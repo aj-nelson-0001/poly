@@ -22,7 +22,7 @@ This matrix is the implementation contract for the current Rust, C, assembly, an
 | Scalar declarations and assignment | Yes | Yes | Limited | Yes | Primitive values and inferred scalar declarations. |
 | Constants and `let` | Yes | Yes | Limited | Yes | C uses native `const`/local declarations. |
 | Arithmetic, comparison, logical, bitwise operators | Yes | Yes | Limited | Yes | C uses C11-compatible scalar expressions; integer `/` truncates via `Math.trunc` in JS. |
-| Strings and string concatenation | Yes | Limited | No | Yes | C output can flatten simple string output; value-position concatenation needs a `#c` helper. Asm handles char vectors and `for x in <string>`; general string values are rejected with guidance. |
+| Strings and string concatenation | Yes | Yes | Yes | Yes | All targets support `+` concat in value and `put` position plus `.len()`. C materializes concat with an emitted `poly_concat` helper and `to_string()` on scalars with `poly_int_to_string`/`poly_float_to_string`; asm carves results from a static bump arena (`_str_arena`). Asm string method calls beyond `.len()` are rejected with guidance. |
 | `put`, `error`, `warn`, `info` | Yes | Yes | Limited | Yes | C supports scalar output and diagnostics; JS maps the diagnostics to `console` streams. |
 | File output redirects | Yes | No | No | No | C must call a `#c` helper. |
 | `get`, stdin, file input | Yes | Limited | No | No | C supports plain `get` (with optional prompt) via an emitted runtime helper; file input and input flags need a `#c` helper. |

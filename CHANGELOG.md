@@ -52,6 +52,61 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.11] - 2026-09-18
+
+### Fixed
+
+- **Compiler audit (optimizer/checker/generator):** constant folding no
+  longer panics on over-wide shifts (`1 << 64`), no longer folds division
+  or remainder by a foldable-zero constant to `0` (the target's runtime
+  check now fires), and guards identity folds (`x*1`, `x+0`, `x-x`,
+  `x bitor 0`) by operand type. The function inliner substitutes
+  parameters recursively through all expression kinds — an inlined
+  `return xs[0]` used to leave the parameter unresolved and emit invalid
+  Rust — and refuses to inline when a free identifier would remain.
+  Module functions are no longer collected twice by the checker (bogus
+  "duplicate function declaration" for any `module` user), and
+  declarations nested inside function bodies lower to no-ops instead of
+  `unreachable!()`.
+- **C backend string printing:** `put` of compound string leaves
+  (`.len()`, parenthesized concat) printed through `%s` with an `int`
+  argument (printf segfault). The format default is `%d`; `%s` requires
+  proven string-valuedness, which now also unwraps parentheses.
+- **asm backend:** value-position string concatenation no longer silently
+  stores 0 (later segfaulting when printed as a string pointer).
+- Examples: fixed a corrupted string literal in `state_machine.poly`
+  (`"Menunicode "` → `"Menu"`) and a duplicated `find_min_index`
+  definition in `sorting_algorithms.poly`.
+
+### Added
+
+- **String support across all four targets:** C materializes value-
+  position concat via an emitted `poly_concat` helper (exact-size malloc,
+  no realloc) and scalar `to_string()` via typed `poly_int_to_string` /
+  `poly_float_to_string` helpers; concat chains containing `to_string()`
+  infer as `const char *` and print with `%s`. The asm target materializes
+  concat through a 1 MiB `_str_arena` bump allocator
+  (`_str_alloc`/`_strlen`/`_poly_concat`), records inferred string
+  variables at declaration, and supports `.len()` via `_strlen`. C lowers
+  `.len()` on strings to `strlen`.
+- `tests/diff_strings.poly` joins the differential backend suite: value-
+  and put-position concat chains must agree on rust/c/js/asm.
+- Extensive example commentary: 15 example programs and the asm benchmark
+  gained purpose-and-technique header documentation; all 27 examples
+  verified to compile and run.
+
+### Changed
+
+- **Generated-code speed:** the C backend compiles with `-O2` (was
+  `-O0`); generated Cargo projects pin `[profile.release] opt-level = 3`;
+  Rust `s := s + x` appends lower to in-place `push_str` instead of a
+  fresh `format!` per iteration (~500x on a 100k-append loop), and nested
+  string chains flatten into a single `format!` call.
+- Documentation: char/string type-mapping contradictions resolved across
+  the spec and README; grammar's `break` corrected to value-less;
+  `xor`-on-bool claim fixed; CLI option rows completed; support matrix
+  and cheat sheet now describe string operations per target.
+
 ## [2.0.0-preview.10] - 2026-09-17
 
 ### Fixed

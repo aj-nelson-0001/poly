@@ -2,7 +2,25 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.10 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.11 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.11
+
+Strings work on every target: C materializes value-position concatenation
+and scalar `to_string()` through emitted runtime helpers (with correct
+`const char *` inference for chains containing `to_string()`), the asm
+target materializes concat through a static bump arena with
+`_str_alloc`/`_strlen`/`_poly_concat` runtime helpers, and `.len()` lowers
+to `strlen` on C and asm. A compiler audit fixed optimizer edge cases
+(over-wide shifts, division by zero, unguarded identity folds, an inliner
+that mis-substituted non-arithmetic bodies), a checker bug that
+double-collected module functions, and a generator crash on declarations
+nested in function bodies. Generated code is faster: the C backend builds
+with `-O2`, generated Cargo projects pin `opt-level = 3` in release, and
+Rust string-appends in loops lower to in-place `push_str` (~500x on a
+100k-append loop). The differential suite grew to four programs,
+including `tests/diff_strings.poly`, which pins concat semantics across
+all four targets.
 
 ## What's New in 2.0.0-preview.10
 

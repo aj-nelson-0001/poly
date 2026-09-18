@@ -1,6 +1,6 @@
 # Poly Documentation Index
 
-Poly 2.0.0-preview.10 is the current implementation baseline. The files below are the maintained sources of truth for syntax, targets, tooling, and migration.
+Poly 2.0.0-preview.11 is the current implementation baseline. The files below are the maintained sources of truth for syntax, targets, tooling, and migration.
 
 ## Current Documentation
 

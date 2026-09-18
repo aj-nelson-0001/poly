@@ -2,6 +2,27 @@
 //!
 //! The C backend intentionally targets the small orchestration subset of Poly.
 //! Complex declarations stay in `#c` blocks and are emitted verbatim.
+//!
+//! ## String support
+//!
+//! Strings are `const char *` values (NUL-terminated). Two runtime helpers
+//! are emitted into the output on demand (definitions double as prototypes,
+//! inserted after the include block):
+//!
+//! - `poly_concat(a, b)` — value-position `+` on strings; exact-size
+//!   `malloc` + `memcpy`. `put` never calls it: printf parts flatten concat
+//!   chains into format pieces (see `printf_parts`), so printing allocates
+//!   nothing.
+//! - `poly_int_to_string(long long)` / `poly_float_to_string(double)` —
+//!   back `n.to_string()` / `f.to_string()`. Typed by design: an earlier
+//!   `void *` + `snprintf` sketch printed the pointer, not the pointee.
+//!
+//! `.len()` on strings is `strlen` with an `int32_t` cast. Results print
+//! through `%d` — `printf_parts` defaults unknown compound leaves to `%d`
+//! because passing an `int` to `%s` segfaults printf. `%s` requires
+//! `is_string_valued`, which recognizes literals, string variables, concat
+//! chains, `to_string()` calls, and parentheses around any of them.
+//! Helpers and concat results are never freed (leak-until-exit model).
 
 use std::cell::{Cell, RefCell};
 use std::fmt::Write;

@@ -353,6 +353,12 @@ end fn
 | `char` / `uchar` | 4 bytes | `char` |
 | `string` | byte-oriented | `String` |
 | `ustring` | 1-4 bytes/char | `String` / `&str` |
+
+String operations across targets: `+` concat (value and `put` position) and
+`.len()` are supported on Rust, C (emitted `poly_concat`/`strlen` helpers),
+asm (`_str_arena` bump allocator), and JS. `.to_string()` on scalars is
+supported on Rust and C. See `POLY_V2_SUPPORT_MATRIX.md` for the full
+per-target contract.
 | `byte` | 1 byte | `u8` |
 | `bytes` | Variable | `Vec<u8>` |
 | `ptr T` | Pointer size | `*const T` |
@@ -382,6 +388,9 @@ end fn
 - **Generic containers**: `Vec<T>`, `Map<K, V>`, `Set<T>`, `Box<T>`, `Rc<T>`, `Arc<T>`
 - **Unsafe**: `unsafe ... end unsafe`
 - **Mutation**: `count := count + 1`, `total := total - amount`
+- **Strings**: concatenation with `+` in value and `put` position on every
+  target; `n.to_string()` for scalars; `s.len()` for byte length; string
+  interpolation `"n is {n}"` (Rust target)
 
 ---
 

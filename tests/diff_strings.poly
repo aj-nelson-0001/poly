@@ -1,0 +1,36 @@
+#!/usr/bin/env poly
+# Differential backend suite #4: string concatenation.
+#
+# All four targets now support string concatenation in both positions:
+#   - value position: `var t := s + "cd"` materializes the joined string
+#     (Rust allocates via format!/push_str, C via the emitted poly_concat
+#     helper, asm via the _str_arena bump allocator, JS via native +).
+#   - put position: flattened streaming / printf pieces / sys_write chunks.
+#
+# The cases pin:
+#   - literal + variable + literal chains (all parse left-associative, so
+#     every backend must fold the operands in source order),
+#   - pure-literal concat (exercising compile-time vs runtime paths),
+#   - a chained result used as the base of another concat.
+#
+# `.len()` is deliberately NOT used here: the C backend emits strlen but
+# the asm target has no string method support yet, so it would narrow the
+# common subset back to zero.
+#
+# EXPECTED:
+# abcd / xab! / abcdab / ab
+fn main()
+    var s ustring := "ab"
+    var t ustring := s + "cd"
+    put t
+    put "x" + s + "!"
+
+    # Concat in value position feeding another concat: the first result
+    # must survive as a real string (the asm backend once stored 0 here).
+    var u := t + s
+    put u
+
+    # Pure-literal concat value position.
+    var lit := "a" + "b"
+    put lit
+end fn

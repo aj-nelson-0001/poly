@@ -977,11 +977,28 @@ impl CGenerator {
                 let chain = self.match_expr_chain(scrutinee, arms)?;
                 Ok(chain)
             }
-            Expression::MethodCall { object, method, args } => {
+            Expression::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 // The C backend supports the small method set the generated
                 // code needs; everything else stays a hard error so callers
                 // know to use a #c helper instead of silently miscompiling.
                 match method.as_str() {
+                    "len" if args.is_empty() => {
+                        // String length: bytes before the NUL terminator,
+                        // matching how this backend stores strings (and how
+                        // the Rust target counts `String::len()`). Cast
+                        // through the target's int type used by printf.
+                        if self.is_string_valued(object) {
+                            let obj = self.expr(object)?;
+                            return Ok(format!("((int32_t)strlen({obj}))"));
+                        }
+                        Err(
+                            "only string `.len()` is supported by the C backend; vectors need a #c helper".to_string(),
+                        )
+                    }
                     "to_string" if args.is_empty() => {
                         // Typed scalar helpers: the value is passed by copy so
                         // no address-of games (a void* + snprintf("%lld")
@@ -1000,7 +1017,7 @@ impl CGenerator {
                         if self.format_for_expression(object) == "%f" {
                             return Ok(format!("poly_float_to_string((double)({obj}))"));
                         }
-                        return Ok(format!("poly_int_to_string((long long)({obj}))"));
+                        Ok(format!("poly_int_to_string((long long)({obj}))"))
                     }
                     _ => Err(
                         "this expression is not supported by the C backend; use a #c helper"
@@ -1157,7 +1174,28 @@ impl CGenerator {
                 };
                 Ok((format, format!(", {}", self.expr(expression)?)))
             }
-            _ => Ok(("%s".to_string(), format!(", {}", self.expr(expression)?))),
+            // Compound string-valued leaves (`n.to_string()`, concat
+            // chains) print with %s; everything else unknown (method calls
+            // like `.len()`, `get` reads) falls through to the int format —
+            // NOT %s, which would pass an int to a pointer conversion and
+            // segfault.
+            Expression::MethodCall { .. } => {
+                let format = if self.is_string_valued(expression) {
+                    "%s".to_string()
+                } else {
+                    "%d".to_string()
+                };
+                Ok((format, format!(", {}", self.expr(expression)?)))
+            }
+            Expression::GetExpression(_) | Expression::Parenthesized(_) => {
+                let format = if self.is_string_valued(expression) {
+                    "%s".to_string()
+                } else {
+                    "%d".to_string()
+                };
+                Ok((format, format!(", {}", self.expr(expression)?)))
+            }
+            _ => Ok(("%d".to_string(), format!(", {}", self.expr(expression)?))),
         }
     }
 
@@ -1232,6 +1270,9 @@ impl CGenerator {
     /// compound expressions as strings.
     fn is_string_valued(&self, expression: &Expression) -> bool {
         match expression {
+            // Parentheses never change a value's type (`(s + "!").len()`
+            // reaches here with a Parenthesized object).
+            Expression::Parenthesized(inner) => self.is_string_valued(inner),
             Expression::BinaryOp {
                 op: BinaryOp::Add,
                 left,
@@ -1608,6 +1649,24 @@ mod tests {
         assert!(
             def_pos < call_pos,
             "helper definition must precede call sites"
+        );
+    }
+
+    #[test]
+    fn string_len_uses_strlen() {
+        // `.len()` on strings lowers to strlen with an int32_t cast; the
+        // result must print through %d, never %s (an int passed to %s is
+        // a printf segfault).
+        let output =
+            generate("var s ustring := \"hello\"\nput s.len()\nvar t := (s + \"!!\").len()\nput t");
+        assert!(output.contains("((int32_t)strlen(s))"), "{output}");
+        assert!(
+            output.contains("strlen((poly_concat(s, \"!!\")))"),
+            "{output}"
+        );
+        assert!(
+            !output.contains("printf(\"%s\\n\", ((int32_t)strlen"),
+            "strlen results must print as integers: {output}"
         );
     }
 

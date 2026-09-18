@@ -3,6 +3,13 @@ name = "tetris"
 version = "2.0.0-preview.10"
 edition = "2021"
 
+# Generated projects default to optimized builds: Poly programs are
+# typically run through `cargo run --release`-shaped workflows and the
+# generated code has no debug-specific requirements. An explicit profile
+# keeps `cargo run` fast without depending on the caller to pass --release.
+[profile.release]
+opt-level = 3
+
 [dependencies]
 minifb = "0.27"
 alsa = "0.9"

@@ -127,6 +127,7 @@ struct AsmGenerator {
     /// Whether any `push`/`pop` method call was emitted; gates the growable
     /// vector runtime (writable descriptors + bump arena helpers).
     uses_vector_methods: bool,
+    uses_string_concat: bool,
     loop_stack: Vec<LoopContext>,
     /// Struct name -> (field name -> FieldInfo)
     structs: std::collections::HashMap<String, std::collections::HashMap<String, FieldInfo>>,
@@ -149,6 +150,7 @@ impl AsmGenerator {
             string_data: Vec::new(),
             vector_data: Vec::new(),
             uses_vector_methods: false,
+            uses_string_concat: false,
             loop_stack: Vec::new(),
             structs: std::collections::HashMap::new(),
             enums: std::collections::HashMap::new(),
@@ -315,6 +317,16 @@ impl AsmGenerator {
         self.output.push_str("    movq %rsp, %rbp\n");
         self.output.push_str("    subq $4088, %rsp\n");
         self.emit_vector_runtime_init();
+        if self.uses_string_concat {
+            // Arena cursor starts at the arena base (.bss is zero at load; a
+            // static .quad of the address would need a PIE-hostile absolute
+            // relocation, same as the vector arena cursor).
+            self.output
+                .push_str("    # Initialize string arena cursor\n");
+            self.output.push_str("    leaq _str_arena(%rip), %rax\n");
+            self.output
+                .push_str("    movq %rax, _str_arena_cursor(%rip)\n");
+        }
         let mut frame = StackFrame::new();
         for stmt in &top_level {
             self.emit_statement(&stmt.node, &mut frame)?;
@@ -401,6 +413,7 @@ impl AsmGenerator {
         self.output.push_str("    retq\n\n");
 
         self.emit_vector_runtime();
+        self.emit_string_concat_runtime();
 
         Ok(std::mem::take(&mut self.output))
     }
@@ -662,6 +675,20 @@ impl AsmGenerator {
     fn emit_statement(&mut self, stmt: &Statement, frame: &mut StackFrame) -> Result<(), String> {
         match stmt {
             Statement::VarDeclaration { name, ty, value } => {
+                // Inferred declaration of a string value (`var t := a + "b"`
+                // or a string-literal init): record string-ness so `put t`
+                // uses the strlen writer and value-position concat treats the
+                // variable as a string. Runs before the emit so concat sees
+                // the type while rendering its operands, and so a chain whose
+                // base is an earlier string variable (`var u := t + s`)
+                // classifies correctly via is_string_valued's var lookup.
+                if ty.is_none()
+                    && value
+                        .as_ref()
+                        .is_some_and(|value_expr| self.is_string_valued(value_expr, frame))
+                {
+                    frame.var_types.insert(name.clone(), "ustring".to_string());
+                }
                 // Inferred declaration of a struct value (`var p := Point
                 // { .. }` or `var a := make()`): record the value's struct
                 // type so later field access can resolve offsets. Only known
@@ -1288,20 +1315,14 @@ impl AsmGenerator {
                 //   - put position: emit_put/emit_string_typed_put stream the
                 //     pieces directly via sys_write (no allocation), so this
                 //     arm never sees those.
-                //   - value position: would require a runtime allocator and
-                //     heap ownership rules the asm target does not model.
-                //     That used to silently store 0 (then segfault when the
-                //     variable was printed as a pointer); now it is a clear
-                //     compile-time error. The guard uses is_string_expr
-                //     (literals only): is_string_typed_expr recurses through
-                //     this very arm, so using it here would never terminate.
+                //   - value position: materialize the concatenated string in
+                //     the string arena via _poly_concat (NUL-terminated, so
+                //     strlen-based `put` of the variable works afterwards).
                 if matches!(op, BinaryOp::Add)
-                    && (self.is_string_expr(left) || self.is_string_expr(right))
+                    && (self.is_string_valued(left, frame) || self.is_string_valued(right, frame))
                 {
-                    return Err(
-                        "string concatenation in value position is not supported by the assembly backend; it only works directly inside `put` (the asm target has no runtime allocator)"
-                            .to_string(),
-                    );
+                    self.uses_string_concat = true;
+                    return self.emit_value_concat(expr, frame);
                 }
 
                 let left_loc = self.emit_expr(left, frame)?;
@@ -1577,8 +1598,30 @@ impl AsmGenerator {
                         }
                     }
                 }
+                // String `.len()`: the variable holds a pointer to
+                // NUL-terminated bytes, so the arena runtime's `_strlen`
+                // (used by concat) answers directly.
+                if let Expression::Identifier(var_name) = object.as_ref() {
+                    if method == "len"
+                        && args.is_empty()
+                        && matches!(
+                            frame.var_types.get(var_name).map(String::as_str),
+                            Some("string") | Some("ustring")
+                        )
+                    {
+                        self.uses_string_concat = true;
+                        let var_loc = frame
+                            .get(var_name)
+                            .ok_or_else(|| format!("Undefined variable `{var_name}`"))?;
+                        self.load_to_reg(var_loc, "%rdi", frame)?;
+                        self.output.push_str("    callq _strlen\n");
+                        let result_loc = frame.allocate_temp();
+                        self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
+                        return Ok(result_loc);
+                    }
+                }
                 Err(
-                    "Assembly backend only supports direct function calls; method calls are limited to vector push/pop/len"
+                    "Assembly backend only supports direct function calls; method calls are limited to vector push/pop/len and string len"
                         .to_string(),
                 )
             }
@@ -2004,6 +2047,140 @@ impl AsmGenerator {
         Ok(())
     }
 
+    /// Runtime helpers for value-position string concatenation.
+    ///
+    /// Strings are pointers to NUL-terminated bytes; results are carved out
+    /// of a static bump arena (`_str_arena`, 1 MiB) that is never freed —
+    /// programs are run-once, mirroring the vector arena's model.
+    ///
+    /// - `_str_alloc(%rdi=size) -> %rax = ptr`: bump-allocate `size` bytes
+    ///   (16-byte aligned), aborts with a diagnostic on exhaustion.
+    /// - `_strlen(%rdi=ptr) -> %rax = length` (bytes before NUL).
+    /// - `_poly_concat(%rdi=a, %rsi=b) -> %rax = NUL-terminated a ++ b`.
+    fn emit_string_concat_runtime(&mut self) {
+        if !self.uses_string_concat {
+            return;
+        }
+        self.output.push_str("\n# String concat runtime\n");
+        self.output.push_str("\n.section .bss\n");
+        self.output.push_str("_str_arena_cursor: .zero 8\n");
+        self.output.push_str("_str_arena:");
+        self.output
+            .push_str("    .zero 1048576\n_str_arena_end:\n\n");
+        self.output.push_str(".section .text\n\n");
+
+        // _str_alloc: rdi = byte size, returns pointer in rax.
+        self.output.push_str("_str_alloc:\n");
+        self.output.push_str("    pushq %rbp\n");
+        self.output.push_str("    movq %rsp, %rbp\n");
+        self.output.push_str("    pushq %rbx\n");
+        // Round the request up to 16 for predictable alignment.
+        self.output.push_str("    addq $15, %rdi\n");
+        self.output.push_str("    andq $-16, %rdi\n");
+        self.output
+            .push_str("    movq _str_arena_cursor(%rip), %rax\n");
+        self.output.push_str("    leaq (%rax,%rdi), %rbx\n");
+        // Exhaustion check against the arena end.
+        self.output
+            .push_str("    leaq _str_arena_end(%rip), %rcx\n");
+        self.output.push_str("    cmpq %rcx, %rbx\n");
+        let ok_label = self.fresh_label("str_alloc_ok");
+        let _ = writeln!(self.output, "    jbe {ok_label}");
+        // Out of memory: write the diagnostic and exit(1).
+        self.output.push_str("    movq $1, %rax\n");
+        self.output.push_str("    movq $1, %rdi\n");
+        self.output
+            .push_str("    leaq _str_arena_full(%rip), %rsi\n");
+        self.output.push_str("    movq $36, %rdx\n");
+        self.output.push_str("    syscall\n");
+        self.output.push_str("    movq $60, %rax\n");
+        self.output.push_str("    movq $1, %rdi\n");
+        self.output.push_str("    syscall\n");
+        let _ = writeln!(self.output, "{ok_label}:");
+        self.output
+            .push_str("    movq %rbx, _str_arena_cursor(%rip)\n");
+        self.output.push_str("    popq %rbx\n");
+        self.output.push_str("    movq %rbp, %rsp\n");
+        self.output.push_str("    popq %rbp\n");
+        self.output.push_str("    retq\n\n");
+
+        // _strlen: rdi = string ptr, returns byte count (excluding NUL).
+        self.output.push_str("_strlen:\n");
+        self.output.push_str("    xorq %rax, %rax\n");
+        let len_loop = self.fresh_label("strlen");
+        let len_done = self.fresh_label("strlen_done");
+        let _ = writeln!(self.output, "{len_loop}:");
+        self.output.push_str("    cmpb $0, (%rdi,%rax)\n");
+        let _ = writeln!(self.output, "    je {len_done}");
+        self.output.push_str("    incq %rax\n");
+        let _ = writeln!(self.output, "    jmp {len_loop}");
+        let _ = writeln!(self.output, "{len_done}:");
+        self.output.push_str("    retq\n\n");
+
+        // _poly_concat: rdi = a, rsi = b, returns pointer in rax.
+        self.output.push_str("_poly_concat:\n");
+        self.output.push_str("    pushq %rbp\n");
+        self.output.push_str("    movq %rsp, %rbp\n");
+        self.output.push_str("    pushq %rbx\n");
+        self.output.push_str("    pushq %r12\n");
+        self.output.push_str("    pushq %r13\n");
+        self.output.push_str("    pushq %r14\n");
+        self.output.push_str("    pushq %r15\n");
+        self.output.push_str("    movq %rdi, %r12\n");
+        self.output.push_str("    movq %rsi, %r13\n");
+        self.output.push_str("    movq %r12, %rdi\n");
+        self.output.push_str("    callq _strlen\n");
+        self.output.push_str("    movq %rax, %r14\n"); // len_a
+        self.output.push_str("    movq %r13, %rdi\n");
+        self.output.push_str("    callq _strlen\n");
+        self.output.push_str("    movq %rax, %r15\n"); // len_b (rax is about to be clobbered)
+                                                       // allocate len_a + len_b + 1
+        self.output.push_str("    leaq 1(%r14,%r15), %rdi\n");
+        self.output.push_str("    callq _str_alloc\n");
+        self.output.push_str("    movq %rax, %rbx\n"); // out ptr
+                                                       // memcpy(out, a, len_a) — byte loop (buffers are tiny).
+        self.output.push_str("    xorq %rcx, %rcx\n");
+        let copy_a = self.fresh_label("concat_a");
+        let copy_a_done = self.fresh_label("concat_a_done");
+        let _ = writeln!(self.output, "{copy_a}:");
+        self.output.push_str("    cmpq %r14, %rcx\n");
+        let _ = writeln!(self.output, "    jge {copy_a_done}");
+        self.output.push_str("    movb (%r12,%rcx), %al\n");
+        self.output.push_str("    movb %al, (%rbx,%rcx)\n");
+        self.output.push_str("    incq %rcx\n");
+        let _ = writeln!(self.output, "    jmp {copy_a}");
+        let _ = writeln!(self.output, "{copy_a_done}:");
+        // memcpy(out + len_a, b, len_b + 1) — includes the NUL. The store
+        // index is len_a + i: rcx walks b, rdx = r14 + rcx indexes out.
+        self.output.push_str("    xorq %rcx, %rcx\n");
+        let copy_b = self.fresh_label("concat_b");
+        let copy_b_done = self.fresh_label("concat_b_done");
+        let _ = writeln!(self.output, "{copy_b}:");
+        self.output.push_str("    cmpq %r15, %rcx\n");
+        let _ = writeln!(self.output, "    jg {copy_b_done}");
+        self.output.push_str("    movb (%r13,%rcx), %al\n");
+        self.output.push_str("    leaq (%r14,%rcx), %rdx\n");
+        self.output.push_str("    movb %al, (%rbx,%rdx)\n");
+        self.output.push_str("    incq %rcx\n");
+        let _ = writeln!(self.output, "    jmp {copy_b}");
+        let _ = writeln!(self.output, "{copy_b_done}:");
+        self.output.push_str("    movq %rbx, %rax\n");
+        self.output.push_str("    popq %r15\n");
+        self.output.push_str("    popq %r14\n");
+        self.output.push_str("    popq %r13\n");
+        self.output.push_str("    popq %r12\n");
+        self.output.push_str("    popq %rbx\n");
+        self.output.push_str("    movq %rbp, %rsp\n");
+        self.output.push_str("    popq %rbp\n");
+        self.output.push_str("    retq\n\n");
+
+        // Diagnostic for arena exhaustion (36 bytes including NUL).
+        self.output.push_str("\n.section .data\n");
+        self.output
+            .push_str("_str_arena_full: .ascii \"poly: string arena exhausted\\n\\0\"\n");
+        self.output.push_str(".section .text\n");
+    }
+
     fn emit_newline(&mut self) {
         self.output.push_str("    movq $1, %rax\n");
         self.output.push_str("    movq $1, %rdi\n");
@@ -2132,13 +2309,6 @@ impl AsmGenerator {
         }
     }
 
-    fn is_string_expr(&self, expr: &Expression) -> bool {
-        matches!(
-            expr,
-            Expression::StringLiteral(_) | Expression::UnicodeStringLiteral(_)
-        )
-    }
-
     /// Check whether an expression evaluates to a string-typed value.
     fn is_string_typed_expr(&self, expr: &Expression) -> bool {
         match expr {
@@ -2149,6 +2319,99 @@ impl AsmGenerator {
                 right,
             } => self.is_string_typed_expr(left) || self.is_string_typed_expr(right),
             _ => false,
+        }
+    }
+
+    /// Whether an expression evaluates to a string at runtime: literals,
+    /// concat chains, or variables recorded as string-typed in `frame`.
+    /// Parens are transparent. This is the value-position oracle — distinct
+    /// from `is_string_typed_expr` (literals and chains, used by the put
+    /// path).
+    fn is_string_valued(&self, expr: &Expression, frame: &StackFrame) -> bool {
+        match expr {
+            Expression::Parenthesized(inner) => self.is_string_valued(inner, frame),
+            Expression::BinaryOp {
+                op: BinaryOp::Add,
+                left,
+                right,
+            } => self.is_string_valued(left, frame) || self.is_string_valued(right, frame),
+            Expression::Identifier(name) => {
+                matches!(
+                    frame.var_types.get(name).map(String::as_str),
+                    Some("string") | Some("ustring")
+                )
+            }
+            _ => matches!(
+                expr,
+                Expression::StringLiteral(_) | Expression::UnicodeStringLiteral(_)
+            ),
+        }
+    }
+
+    /// Materialize a value-position string concatenation: build each operand
+    /// (pointers to NUL-terminated bytes, per the string-variable convention)
+    /// then call `_poly_concat(a, b)` left-associatively. The result pointer
+    /// lands in a fresh temp slot. Chains allocate one intermediate buffer
+    /// per `+` — fine for the demo scale of the asm subset.
+    fn emit_value_concat(
+        &mut self,
+        expr: &Expression,
+        frame: &mut StackFrame,
+    ) -> Result<Location, String> {
+        let (left, right) = match expr {
+            Expression::BinaryOp {
+                op: BinaryOp::Add,
+                left,
+                right,
+            } => (left.as_ref(), right.as_ref()),
+            _ => unreachable!("emit_value_concat called on non-concat expression"),
+        };
+        let left_loc = self.emit_string_ptr(left, frame)?;
+        let right_loc = self.emit_string_ptr(right, frame)?;
+        self.load_to_reg(left_loc, "%rdi", frame)?;
+        self.load_to_reg(right_loc, "%rsi", frame)?;
+        self.output.push_str("    callq _poly_concat\n");
+        let out = frame.allocate_temp();
+        match out {
+            Location::Stack(offset) => {
+                let _ = writeln!(self.output, "    movq %rax, -{offset}(%rbp)");
+            }
+            Location::Reg(reg) => {
+                let _ = writeln!(self.output, "    movq %rax, {reg}");
+            }
+        }
+        Ok(out)
+    }
+
+    /// Emit code leaving the address of a NUL-terminated byte string for
+    /// `expr` in a fresh temp slot. Literals intern to .data; identifiers
+    /// load the stored pointer; concat chains recurse through
+    /// `emit_value_concat`.
+    fn emit_string_ptr(
+        &mut self,
+        expr: &Expression,
+        frame: &mut StackFrame,
+    ) -> Result<Location, String> {
+        match expr {
+            Expression::StringLiteral(value) | Expression::UnicodeStringLiteral(value) => {
+                let label = self.intern_string(value);
+                let loc = frame.allocate_temp();
+                self.emit_string_addr(&label, loc);
+                Ok(loc)
+            }
+            Expression::Identifier(name) => frame
+                .get(name)
+                .ok_or_else(|| format!("Undefined variable `{name}`")),
+            Expression::Parenthesized(inner) => self.emit_string_ptr(inner, frame),
+            Expression::BinaryOp {
+                op: BinaryOp::Add, ..
+            } if self.is_string_valued(expr, frame) => {
+                self.uses_string_concat = true;
+                self.emit_value_concat(expr, frame)
+            }
+            other => Err(format!(
+                "assembly backend cannot use this expression as a string value: {other:?}"
+            )),
         }
     }
 
@@ -2379,23 +2642,30 @@ mod tests {
     }
 
     #[test]
-    fn value_position_string_concat_is_rejected() {
+    fn value_position_string_concat_uses_arena() {
         // Regression: value-position concat used to silently store 0 in the
         // target slot, segfaulting later when the variable was printed as a
-        // string pointer. It must now fail at compile time with a clear
-        // message; put-position streaming stays supported.
-        let source = "var s ustring := \"ab\"\nvar t ustring := s + \"cd\"\nput t";
-        let (tokens, errors) = Lexer::lex(source);
-        assert!(errors.is_empty(), "{errors:?}");
-        let mut parser = Parser::new(&tokens);
-        let program = parser.parse().unwrap();
-        let error = transpile(&program)
-            .err()
-            .expect("value-position concat must fail on the asm target");
-        assert!(
-            error.contains("value position is not supported by the assembly backend"),
-            "expected clear value-position error, got {error:?}"
+        // string pointer. It now materializes through the _str_arena bump
+        // allocator (_poly_concat) and inferred string vars are recorded so
+        // `put` uses the strlen writer.
+        let output = transpile_source(
+            "var s ustring := \"ab\"\nvar t ustring := s + \"cd\"\nvar u := t + s\nput t\nput u",
         );
+        assert!(output.contains("callq _poly_concat"), "{output}");
+        assert!(output.contains("_str_arena"), "{output}");
+        // Both puts must take the strlen-writer path (string-typed
+        // variable): two inline strlen loops, no _print_int of pointers.
+        assert!(
+            output.matches("jz strlen_end_").count() >= 2,
+            "expected strlen-based puts for t and u: {output}"
+        );
+        assert!(!output.contains("callq _print_int"), "{output}");
+    }
+
+    #[test]
+    fn string_len_calls_strlen_helper() {
+        let output = transpile_source("var s ustring := \"hello\"\nvar n := s.len()\nput n");
+        assert!(output.contains("callq _strlen"), "{output}");
     }
 
     #[test]

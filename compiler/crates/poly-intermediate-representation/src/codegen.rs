@@ -675,10 +675,7 @@ impl IntermediateRepresentationCodeGen {
                     if let Some(suffixes) = self.string_concat_suffix(value, name) {
                         for suffix in suffixes {
                             let suffix_str = self.gen_expr(suffix);
-                            self.writeln_fmt(format_args!(
-                                "{}.push_str(&({}));",
-                                name, suffix_str
-                            ));
+                            self.writeln_fmt(format_args!("{}.push_str(&({}));", name, suffix_str));
                         }
                         return;
                     }
@@ -3734,9 +3731,8 @@ mod tests {
         // Regression: `s := s + "b" + "c"` parses as `(s + "b") + "c"`; the
         // suffix collector used to return only the outermost operand,
         // silently dropping `"b"` and printing `ac` instead of `abc`.
-        let rust = transpile(
-            "fn main()\n    var s ustring := \"a\"\n    s := s + \"b\" + \"c\"\nend fn",
-        );
+        let rust =
+            transpile("fn main()\n    var s ustring := \"a\"\n    s := s + \"b\" + \"c\"\nend fn");
         assert!(
             rust.contains("s.push_str(&(String::from(\"b\")));"),
             "inner operand lost: {rust}"

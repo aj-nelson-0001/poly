@@ -964,7 +964,11 @@ fn free_identifiers(expr: &Expr) -> Vec<String> {
 fn collect_identifiers(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Identifier(name) => out.push(name.clone()),
-        Expr::BinaryOp { left, right, .. } | Expr::Index { object: left, index: right } => {
+        Expr::BinaryOp { left, right, .. }
+        | Expr::Index {
+            object: left,
+            index: right,
+        } => {
             collect_identifiers(left, out);
             collect_identifiers(right, out);
         }
@@ -979,9 +983,7 @@ fn collect_identifiers(expr: &Expr, out: &mut Vec<String>) {
                 collect_identifiers(arg, out);
             }
         }
-        Expr::MethodCall {
-            object, args, ..
-        } => {
+        Expr::MethodCall { object, args, .. } => {
             collect_identifiers(object, out);
             for arg in args {
                 collect_identifiers(arg, out);
@@ -997,11 +999,11 @@ fn collect_identifiers(expr: &Expr, out: &mut Vec<String>) {
                 collect_identifiers(value, out);
             }
         }
-        Expr::Enum { data, .. } => {
-            if let Some(data) = data {
-                for value in data {
-                    collect_identifiers(value, out);
-                }
+        Expr::Enum {
+            data: Some(data), ..
+        } => {
+            for value in data {
+                collect_identifiers(value, out);
             }
         }
         _ => {}
@@ -1312,8 +1314,7 @@ mod tests {
             Statement::VarDecl {
                 value:
                     Some(Expr::BinaryOp {
-                        op: BinaryOp::Shl,
-                        ..
+                        op: BinaryOp::Shl, ..
                     }),
                 ..
             } => {}
@@ -1332,7 +1333,13 @@ mod tests {
         let mul_survived = match &program.main_body[0] {
             Statement::VarDecl {
                 value: Some(value), ..
-            } => matches!(value, Expr::BinaryOp { op: BinaryOp::Mul, .. }),
+            } => matches!(
+                value,
+                Expr::BinaryOp {
+                    op: BinaryOp::Mul,
+                    ..
+                }
+            ),
             other => panic!("expected a var decl, got {other:?}"),
         };
         assert!(
@@ -1354,8 +1361,7 @@ mod tests {
             Statement::VarDecl {
                 value:
                     Some(Expr::BinaryOp {
-                        op: BinaryOp::Add,
-                        ..
+                        op: BinaryOp::Add, ..
                     }),
                 ..
             } => {}

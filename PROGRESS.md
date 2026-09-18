@@ -3,6 +3,38 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-18.
 
+## String concat across all four targets; asm bump allocator; local CI sweep (2026-09-18)
+
+- **asm target gained value-position string concatenation**: a 1 MiB
+  `_str_arena` bump allocator (`_str_alloc`, 16-byte aligned, aborts with a
+  diagnostic on exhaustion), `_strlen`, and `_poly_concat` runtime helpers.
+  Chains materialize left-associatively; inferred string variables are
+  recorded at declaration time so `put u` takes the strlen-writer path (a
+  pointer printed through `_print_int` was the failure mode before).
+  Two bugs caught by my own tests before commit: a `movb` with a register
+  as displacement (invalid for as), and `%rax` (len_b) clobbered by the
+  `_str_alloc` return before the copy loop — saved in `%r15` instead.
+- **C target gained `.len()` on strings** (`((int32_t)strlen(...))`), and
+  the asm target too (its `_strlen` helper already existed for concat).
+  Found via the new diff test: `printf_parts` classified compound leaves
+  (`.len()`, parenthesized concat) as `%s` by default — an int passed to
+  `%s` segfaults printf. The default is now `%d`; `%s` requires
+  `is_string_valued` (which now also unwraps parens).
+- **`tests/diff_strings.poly`**: fourth differential program; all four
+  targets agree on value-position + put-position concat chains (the asm
+  backend's silent-0 regression from the last session would now be caught
+  by CI instead of a manual probe). The suite's common subset grew: strings
+  work everywhere.
+- **asm method-call error message** updated (vector push/pop/len + string
+  len are the supported set).
+- **Local CI-equivalent sweep, all green**: cargo fmt --check, clippy
+  `-D warnings` (fixed 6 new warnings), workspace tests single-threaded
+  (CI's mode), markdown/generated-path/doc-example audits, backend
+  differential suite, tetris `--emit-rust` parity + regenerated tracked
+  `Cargo.toml` (picks up `[profile.release]`; Cargo.lock refreshed via
+  generate-lockfile, only transitive `cc` drift), tetris release build +
+  self-test, playground wasm rebuild + smoke test (11 cases).
+
 ## C backend strings; asm concat safety; wasm audit (2026-09-18)
 
 - **C backend gained value-position string support** (`poly-c-codegen`):

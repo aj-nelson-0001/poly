@@ -532,11 +532,14 @@ impl JsGenerator {
                 method,
                 args,
             } => {
-                // The one supported method: `.to_string()` mirrors the other
-                // targets' string conversion.
+                // Supported methods mirror the other targets' string model:
+                // `to_string` converts via JS String(), and `len` on string
+                // values uses .length (JS strings are UTF-16, so byte-length
+                // parity with rust/C/asm holds for the ASCII common subset).
                 let _ = args;
                 match method.as_str() {
                     "to_string" => Ok(format!("String({})", self.expr(object)?)),
+                    "len" if args.is_empty() => Ok(format!("({}).length", self.expr(object)?)),
                     _ => Err(format!(
                         "JS backend does not support method calls (`.{method}`); use a #js helper"
                     )),
@@ -855,6 +858,23 @@ mod tests {
         // A bare unicode string variable prints directly (no String() wrap).
         assert!(output.contains("console.log(name);"));
         assert!(output.contains("console.log(((\"v: \") + (x)));"));
+    }
+
+    #[test]
+    fn string_len_and_to_string_lower_to_js_equivalents() {
+        // Parity with the other backends: `.len()` on string values is
+        // .length, `n.to_string()` is String(n). Chains mixing both must
+        // keep operand order (parity pinned end-to-end by
+        // tests/diff_string_edges.poly).
+        let output = generate(
+            "var s ustring := \"hello\"\nput s.len()\nvar n i32 := 42\nput n.to_string()\nput (\"a\" + \"b\").len()",
+        );
+        assert!(output.contains("(s).length"), "{output}");
+        assert!(output.contains("String(n)"), "{output}");
+        assert!(
+            output.contains(".length") && output.contains("(\"a\") + (\"b\")"),
+            "len of parenthesized concat must wrap the concat: {output}"
+        );
     }
 
     #[test]

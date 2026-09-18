@@ -1,0 +1,43 @@
+#!/usr/bin/env poly
+# Differential backend suite #5: string edge cases.
+#
+# Pushes the string model's corners through all four targets:
+#
+#   - Empty strings: `"" + "x" + ""` must equal `"x"` on every backend.
+#     The C helper handles NULL-free empty bytes; the asm arena allocates
+#     a 1-byte NUL; Rust/JS are native. An empty string printed via `put`
+#     still emits its newline.
+#   - `0.to_string()` must be `"0"`, not empty (a C-side trap: `%g`
+#     formatting of 0.0 and `%lld` of 0 both degenerate unless the helper
+#     buffers are sized and written unconditionally).
+#   - `.len()` of a pure-literal concat (compile-time folded by the IR
+#     optimizer on some targets, runtime strlen on others) and `.len()`
+#     of an empty string (0, not 1 — the NUL is not counted).
+#   - A longer chain mixing literals, variables, and to_string(): pins
+#     left-associative operand ordering across targets. `"a"+"b"+s+"c"+
+#     n.to_string()+"3"` with s="" and n=0 is "ab" + "" + "c" + "0" + "3"
+#     = "abc03" (length 5).
+#
+# EXPECTED:
+# x / 0 / 2 / 0 / 11 / 5 / abc03
+fn main()
+    var s ustring := ""
+    var t ustring := s + "x" + s
+    put t
+
+    var n i32 := 0
+    put n.to_string()
+
+    put ("a" + "b").len()
+    put s.len()
+
+    # Chained: "hello " + "" + "world" then length (12 chars incl. space
+    # x2)... actually 11: h-e-l-l-o-space-w-o-r-l-d. Computed as:
+    var phrase ustring := "hello" + " " + "world"
+    put phrase.len()
+
+    # Longer mixed chain; both length and content.
+    var mixed ustring := "a" + "b" + s + "c" + n.to_string() + "3"
+    put mixed.len()
+    put mixed
+end fn

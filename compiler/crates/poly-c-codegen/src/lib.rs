@@ -875,8 +875,13 @@ impl CGenerator {
             )),
             Expression::Identifier(name) => Ok(name.clone()),
             Expression::BinaryOp { op, left, right } => {
+                // is_string_valued (not is_string_expression) so chains like
+                // `x + n.to_string()` where the left spine bottoms out in a
+                // to_string() call still classify as concat. With the plain
+                // literal/var check, `+` between two string-valued subchains
+                // emitted C `+` (pointer arithmetic) instead of poly_concat.
                 if matches!(op, BinaryOp::Add)
-                    && (self.is_string_expression(left) || self.is_string_expression(right))
+                    && (self.is_string_valued(left) || self.is_string_valued(right))
                 {
                     // Value-position string concatenation. `put` flattens
                     // chains into printf pieces instead (see printf_parts);

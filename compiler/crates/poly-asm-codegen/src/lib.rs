@@ -1553,6 +1553,18 @@ impl AsmGenerator {
                 method,
                 args,
             } => {
+                // Scalar `.to_string()`: decimal rendering through the
+                // string arena, matching C's poly_int_to_string. Bools are
+                // integers here (0/1), consistent with their integer print.
+                if method == "to_string" && args.is_empty() {
+                    self.uses_string_concat = true;
+                    let obj_loc = self.emit_expr(object, frame)?;
+                    self.load_to_reg(obj_loc, "%rdi", frame)?;
+                    self.output.push_str("    callq _int_to_string\n");
+                    let result_loc = frame.allocate_temp();
+                    self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
+                    return Ok(result_loc);
+                }
                 // Growable-vector methods on `Vec<T>` variables. The vector
                 // variable holds a writable descriptor; push/pop mutate the
                 // descriptor via the runtime helpers (arena-backed storage).
@@ -1598,27 +1610,19 @@ impl AsmGenerator {
                         }
                     }
                 }
-                // String `.len()`: the variable holds a pointer to
+                // String `.len()`: string values are pointers to
                 // NUL-terminated bytes, so the arena runtime's `_strlen`
-                // (used by concat) answers directly.
-                if let Expression::Identifier(var_name) = object.as_ref() {
-                    if method == "len"
-                        && args.is_empty()
-                        && matches!(
-                            frame.var_types.get(var_name).map(String::as_str),
-                            Some("string") | Some("ustring")
-                        )
-                    {
-                        self.uses_string_concat = true;
-                        let var_loc = frame
-                            .get(var_name)
-                            .ok_or_else(|| format!("Undefined variable `{var_name}`"))?;
-                        self.load_to_reg(var_loc, "%rdi", frame)?;
-                        self.output.push_str("    callq _strlen\n");
-                        let result_loc = frame.allocate_temp();
-                        self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
-                        return Ok(result_loc);
-                    }
+                // (used by concat) answers directly. The object may be a
+                // variable, a parenthesized literal, or a concat chain —
+                // emit_string_ptr materializes any string-valued shape.
+                if method == "len" && args.is_empty() && self.is_string_valued(object, frame) {
+                    self.uses_string_concat = true;
+                    let ptr_loc = self.emit_string_ptr(object, frame)?;
+                    self.load_to_reg(ptr_loc, "%rdi", frame)?;
+                    self.output.push_str("    callq _strlen\n");
+                    let result_loc = frame.allocate_temp();
+                    self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
+                    return Ok(result_loc);
                 }
                 Err(
                     "Assembly backend only supports direct function calls; method calls are limited to vector push/pop/len and string len"
@@ -1974,6 +1978,24 @@ impl AsmGenerator {
             self.emit_string_typed_put(expr, frame)?;
             return Ok(());
         }
+        // `n.to_string()` yields a string pointer; printing it through
+        // _print_int would emit the arena address. Route string-valued
+        // method calls through the strlen writer.
+        if let Expression::MethodCall { method, .. } = expr {
+            if method == "to_string" {
+                let loc = self.emit_expr(expr, frame)?;
+                self.load_to_reg(loc, "%r8", frame)?;
+                self.output.push_str("    movq %r8, %rsi\n");
+                self.output.push_str("    movq %r8, %rdi\n");
+                self.output.push_str("    callq _strlen\n");
+                self.output.push_str("    movq %rax, %rdx\n");
+                self.output.push_str("    movq $1, %rax\n");
+                self.output.push_str("    movq $1, %rdi\n");
+                self.output.push_str("    syscall\n");
+                self.emit_newline();
+                return Ok(());
+            }
+        }
         // An indexed vector element prints per the vector's element type:
         // integer elements through _print_int (the default below), char
         // elements as a single byte, string elements via the strlen writer.
@@ -2099,6 +2121,76 @@ impl AsmGenerator {
         let _ = writeln!(self.output, "{ok_label}:");
         self.output
             .push_str("    movq %rbx, _str_arena_cursor(%rip)\n");
+        self.output.push_str("    popq %rbx\n");
+        self.output.push_str("    movq %rbp, %rsp\n");
+        self.output.push_str("    popq %rbp\n");
+        self.output.push_str("    retq\n\n");
+
+        // _int_to_string: rdi = integer, returns arena pointer to its
+        // decimal rendering (NUL-terminated). Digits are generated into the
+        // 32-byte _itoa_buf from the end, then copied into fresh arena
+        // space. Sign included; INT64_MIN safe because digits are produced
+        // from the absolute magnitude via negation per digit.
+        self.output.push_str("_int_to_string:\n");
+        self.output.push_str("    pushq %rbp\n");
+        self.output.push_str("    movq %rsp, %rbp\n");
+        self.output.push_str("    pushq %rbx\n");
+        self.output.push_str("    pushq %r12\n");
+        self.output.push_str("    movq %rdi, %rbx\n"); // value
+                                                       // Fill _itoa_buf backwards: rcx = write cursor (one past end).
+        self.output.push_str("    leaq _itoa_buf+31(%rip), %rcx\n");
+        self.output.push_str("    movb $0, (%rcx)\n"); // NUL terminator
+        self.output.push_str("    movq $1, %r12\n"); // byte count (NUL)
+        self.output.push_str("    movq %rbx, %rax\n");
+        self.output.push_str("    testq %rax, %rax\n");
+        let its_nonneg = self.fresh_label("its_nonneg");
+        let _ = writeln!(self.output, "    jns {its_nonneg}");
+        self.output.push_str("    negq %rax\n");
+        let _ = writeln!(self.output, "{its_nonneg}:");
+        // Zero must emit one digit: do-while handles it via the first
+        // iteration writing '0' before the test.
+        let its_loop = self.fresh_label("its_loop");
+        let its_done = self.fresh_label("its_done");
+        let _ = writeln!(self.output, "{its_loop}:");
+        self.output.push_str("    xorq %rdx, %rdx\n");
+        self.output.push_str("    movq $10, %r9\n");
+        self.output.push_str("    divq %r9\n"); // rax = quotient, rdx = digit
+        self.output.push_str("    addb $48, %dl\n");
+        self.output.push_str("    decq %rcx\n");
+        self.output.push_str("    movb %dl, (%rcx)\n");
+        self.output.push_str("    incq %r12\n");
+        self.output.push_str("    testq %rax, %rax\n");
+        let _ = writeln!(self.output, "    jnz {its_loop}");
+        let _ = writeln!(self.output, "{its_done}:");
+        // Negative: prepend '-' (absolute magnitude fits i64 except
+        // INT64_MIN, whose negation overflows back to itself — the unsigned
+        // divq chain above still produces correct digits for it).
+        self.output.push_str("    testq %rbx, %rbx\n");
+        let its_no_sign = self.fresh_label("its_nosign");
+        let _ = writeln!(self.output, "    jns {its_no_sign}");
+        self.output.push_str("    decq %rcx\n");
+        self.output.push_str("    movb $45, (%rcx)\n"); // '-'
+        self.output.push_str("    incq %r12\n");
+        let _ = writeln!(self.output, "{its_no_sign}:");
+        // Copy rcx.._itoa_buf+31 (r12 bytes) into fresh arena space.
+        self.output.push_str("    movq %r12, %rdi\n");
+        self.output.push_str("    callq _str_alloc\n");
+        self.output.push_str("    movq %rax, %rbx\n"); // out
+        self.output.push_str("    leaq _itoa_buf+32(%rip), %rdi\n");
+        self.output.push_str("    subq %r12, %rdi\n"); // first byte
+        self.output.push_str("    xorq %rcx, %rcx\n");
+        let its_copy = self.fresh_label("its_copy");
+        let its_copy_done = self.fresh_label("its_copy_done");
+        let _ = writeln!(self.output, "{its_copy}:");
+        self.output.push_str("    cmpq %r12, %rcx\n");
+        let _ = writeln!(self.output, "    jge {its_copy_done}");
+        self.output.push_str("    movb (%rdi,%rcx), %al\n");
+        self.output.push_str("    movb %al, (%rbx,%rcx)\n");
+        self.output.push_str("    incq %rcx\n");
+        let _ = writeln!(self.output, "    jmp {its_copy}");
+        let _ = writeln!(self.output, "{its_copy_done}:");
+        self.output.push_str("    movq %rbx, %rax\n");
+        self.output.push_str("    popq %r12\n");
         self.output.push_str("    popq %rbx\n");
         self.output.push_str("    movq %rbp, %rsp\n");
         self.output.push_str("    popq %rbp\n");
@@ -2408,6 +2500,12 @@ impl AsmGenerator {
             } if self.is_string_valued(expr, frame) => {
                 self.uses_string_concat = true;
                 self.emit_value_concat(expr, frame)
+            }
+            // `n.to_string()` renders through _int_to_string, which returns
+            // an arena pointer — exactly what a string value is here.
+            Expression::MethodCall { method, .. } if method == "to_string" => {
+                self.uses_string_concat = true;
+                self.emit_expr(expr, frame)
             }
             other => Err(format!(
                 "assembly backend cannot use this expression as a string value: {other:?}"

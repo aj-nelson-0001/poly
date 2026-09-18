@@ -3,6 +3,31 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-18.
 
+## Audit of prior followups; nightly stress suite; capability-parity test (2026-09-18)
+
+- **Followup audit** found one genuine gap the earlier sessions had missed:
+  the asm backend's `is_string_valued` rejected *every* method call, so
+  `var s := n.to_string()` — value position in an inferred declaration —
+  misclassified `s` as an integer (differential coverage only exercised
+  `to_string` inside `put` and concat chains, so tests stayed green). Fixed;
+  verified end-to-end on asm (compiles, runs, prints `1`).
+- **Nightly stress suite**: `check_backends.py --stress` discovers
+  `tests/stress_*.poly`; two programs. `stress_strings.poly` calibrates the
+  asm arena (~700 KB of bump allocations across two 600-iteration builds,
+  comfortably inside 1 MiB but well past the every-push suite);
+  `stress_loops.poly` drives i64 accumulation past the i32 boundary.
+  Writing them caught my own header-arithmetic errors (Σ1..100000 is
+  5,000,050,000, not 50,000,050,000) — the backends agreed with each other
+  and with the corrected math. Wired into the nightly differential workflow.
+- **Capability-parity test**
+  (`poly-transpiler/tests/capability_parity.rs`): pins the per-backend
+  method-call acceptance matrix derived by probing all four targets —
+  including the discoveries that `.to_string()` works on int literals in
+  `put` position on asm, that JS supports vector `.len()` but not `.push()`,
+  and that `true.to_string()` renders `true` on rust/js but `1` on c/asm
+  (documented divergence; value-level pinning left to a follow-up since the
+  differential harness is compile-level).
+
 ## String concat across all four targets; asm bump allocator; local CI sweep (2026-09-18)
 
 - **asm target gained value-position string concatenation**: a 1 MiB

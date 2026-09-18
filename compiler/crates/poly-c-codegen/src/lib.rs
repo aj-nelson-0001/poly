@@ -67,6 +67,9 @@ struct CGenerator {
     /// program-scope and struct/impl methods so `var q := make(3, 4)` can
     /// infer a struct type from a call instead of defaulting to `int32_t`.
     fn_return_types: std::collections::HashMap<String, String>,
+    /// Declared/inferred 64-bit variables, consulted by printf_parts so
+    /// int64_t values print with %lld instead of truncating through %d.
+    var_widths: RefCell<std::collections::HashMap<String, String>>,
 }
 
 impl CGenerator {
@@ -86,6 +89,7 @@ impl CGenerator {
             concat_helper_emitted: Cell::new(false),
             to_string_helper_emitted: Cell::new(false),
             fn_return_types: std::collections::HashMap::new(),
+            var_widths: RefCell::new(std::collections::HashMap::new()),
         }
     }
 
@@ -468,6 +472,13 @@ impl CGenerator {
                     .map(|ty| self.ty(ty))
                     .transpose()?
                     .unwrap_or_else(|| self.inferred_type(value.as_ref()));
+                // Track 64-bit variables: printf of an int64_t needs %lld
+                // (an %d/%lld mismatch is undefined behavior and truncates).
+                if type_name == "int64_t" || type_name == "uint64_t" {
+                    self.var_widths
+                        .borrow_mut()
+                        .insert(name.clone(), type_name.clone());
+                }
                 if ty.as_ref().is_some_and(|ty| self.is_string_type(ty))
                     || value.as_ref().is_some_and(|value| {
                         self.is_string_valued(value)
@@ -1195,6 +1206,14 @@ impl CGenerator {
             | Expression::AsExpression { .. } => {
                 let format = if self.is_string_expression(expression) {
                     "%s".to_string()
+                } else if let Expression::Identifier(name) = expression {
+                    // A 64-bit variable must print %lld: %d reads an int,
+                    // truncating and (varargs UB) misreading the argument.
+                    match self.var_widths.borrow().get(name).map(String::as_str) {
+                        Some("int64_t") => "%lld".to_string(),
+                        Some("uint64_t") => "%llu".to_string(),
+                        _ => self.format_for_expression(expression),
+                    }
                 } else {
                     self.format_for_expression(expression)
                 };
@@ -1305,6 +1324,17 @@ impl CGenerator {
                 right,
             } => self.is_string_valued(left) || self.is_string_valued(right),
             Expression::MethodCall { method, .. } if method == "to_string" => true,
+            // A call to a function whose declared return type is string-
+            // valued (`fn build(..): ustring`) produces a string. Checked
+            // through fn_return_types, which the pre-pass populated from
+            // declared return types before body rendering began.
+            Expression::Call { func, .. } => match func.as_ref() {
+                Expression::Identifier(name) => self
+                    .fn_return_types
+                    .get(name)
+                    .is_some_and(|ty| ty == "const char *"),
+                _ => false,
+            },
             _ => self.is_string_expression(expression),
         }
     }

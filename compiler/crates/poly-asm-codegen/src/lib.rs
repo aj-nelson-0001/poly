@@ -136,6 +136,9 @@ struct AsmGenerator {
     /// Function name -> struct type name for functions returning a struct;
     /// used to infer the type of `var x := make()` declarations.
     return_structs: std::collections::HashMap<String, String>,
+    /// Functions whose declared return type is a string (`fn f(..): ustring`).
+    /// Call results of these are string-valued for `.len()`/concat purposes.
+    return_strings: std::collections::HashSet<String>,
     /// Return type of the function currently being emitted, when it is a
     /// struct: struct-returning functions copy the whole struct through
     /// caller-allocated stack space addressed by %rdi, not through %rax.
@@ -155,6 +158,7 @@ impl AsmGenerator {
             structs: std::collections::HashMap::new(),
             enums: std::collections::HashMap::new(),
             return_structs: std::collections::HashMap::new(),
+            return_strings: std::collections::HashSet::new(),
             current_return_struct: None,
         }
     }
@@ -265,6 +269,7 @@ impl AsmGenerator {
         // Function signatures are collected too, so inferred variables bound
         // to a call result (`var a := make()`) can resolve struct types.
         self.return_structs.clear();
+        self.return_strings.clear();
         for statement in &program.statements {
             match &statement.node {
                 Statement::StructDeclaration(decl) => {
@@ -288,6 +293,9 @@ impl AsmGenerator {
                         if self.structs.contains_key(type_name) {
                             self.return_structs
                                 .insert(func.name.clone(), type_name.clone());
+                        }
+                        if type_name == "string" || type_name == "ustring" {
+                            self.return_strings.insert(func.name.clone());
                         }
                     }
                 }
@@ -2433,6 +2441,23 @@ impl AsmGenerator {
                     Some("string") | Some("ustring")
                 )
             }
+            // Calls to functions declaring a string return type are
+            // string-valued (`put build(2000).len()`), like the struct
+            // tracking in return_structs.
+            // Scalar `.to_string()` yields an arena string pointer, so an
+            // inferred declaration (`var s := n.to_string()`) must classify
+            // as string-valued — otherwise `s` is typed as an integer and
+            // later `s.len()` / `put s` take the wrong path. `.len()`
+            // deliberately does NOT match: it returns an integer.
+            Expression::MethodCall { method, args, .. }
+                if method == "to_string" && args.is_empty() =>
+            {
+                true
+            }
+            Expression::Call { func, .. } => match func.as_ref() {
+                Expression::Identifier(callee) => self.return_strings.contains(callee),
+                _ => false,
+            },
             _ => matches!(
                 expr,
                 Expression::StringLiteral(_) | Expression::UnicodeStringLiteral(_)
@@ -2502,9 +2527,14 @@ impl AsmGenerator {
                 self.emit_value_concat(expr, frame)
             }
             // `n.to_string()` renders through _int_to_string, which returns
-            // an arena pointer — exactly what a string value is here.
+            // an arena pointer — exactly what a string value is here. A call
+            // to a string-returning function likewise yields a pointer in
+            // %rax (Poly's asm ABI returns scalars/pointers in %rax).
             Expression::MethodCall { method, .. } if method == "to_string" => {
                 self.uses_string_concat = true;
+                self.emit_expr(expr, frame)
+            }
+            Expression::Call { .. } if self.is_string_valued(expr, frame) => {
                 self.emit_expr(expr, frame)
             }
             other => Err(format!(

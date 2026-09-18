@@ -8,11 +8,17 @@ int32_t-default inference for struct-returning calls, and the asm
 struct-call-argument segfault. Any backend behavior change must keep all
 targets agreeing here.
 
-Usage: check_backends.py [--poly-bin PATH]
+Usage: check_backends.py [--poly-bin PATH] [--stress]
 
 Each `tests/diff_*.poly` program carries its expected output in a header
 block: lines between the `EXPECTED:` marker and the end of the comment
 region, one line of expected stdout per program output line.
+
+`--stress` runs the heavier `tests/stress_*.poly` programs instead of the
+every-push set: same EXPECTED format, larger iteration counts (the asm
+bump arenas are 64 KiB vectors + 1 MiB strings, so ~2000 string results
+and ~7000 vector slots fit), and a longer per-run timeout. Slow because
+asm lacks optimization; CI runs it only in the nightly workflow.
 """
 import argparse
 import os
@@ -47,7 +53,9 @@ def expected_from_source(source: str) -> list[str]:
     return expected
 
 
-def run_target(poly_bin: Path, source: Path, target: str, workdir: Path) -> list[str]:
+def run_target(
+    poly_bin: Path, source: Path, target: str, workdir: Path, timeout: int = 120
+) -> list[str]:
     if target == "rust":
         project = workdir / "proj_rust"
         subprocess.run(
@@ -72,7 +80,9 @@ def run_target(poly_bin: Path, source: Path, target: str, workdir: Path) -> list
             and os.access(p, os.X_OK)
         )
         binary = candidates[0]
-        result = subprocess.run([str(binary)], capture_output=True, text=True)
+        result = subprocess.run(
+            [str(binary)], capture_output=True, text=True, timeout=timeout
+        )
     elif target == "c":
         project = workdir / "proj_c"
         subprocess.run(
@@ -88,7 +98,9 @@ def run_target(poly_bin: Path, source: Path, target: str, workdir: Path) -> list
             capture_output=True,
             text=True,
         )
-        result = subprocess.run([str(binary)], capture_output=True, text=True)
+        result = subprocess.run(
+            [str(binary)], capture_output=True, text=True, timeout=timeout
+        )
     elif target == "js":
         project = workdir / "proj_js"
         subprocess.run(
@@ -98,7 +110,10 @@ def run_target(poly_bin: Path, source: Path, target: str, workdir: Path) -> list
             text=True,
         )
         result = subprocess.run(
-            ["node", str(project / "main.js")], capture_output=True, text=True
+            ["node", str(project / "main.js")],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     elif target == "asm":
         asm_path = workdir / "out.S"
@@ -125,6 +140,11 @@ def run_target(poly_bin: Path, source: Path, target: str, workdir: Path) -> list
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--poly-bin", default=None)
+    parser.add_argument(
+        "--stress",
+        action="store_true",
+        help="run tests/stress_*.poly (heavy, nightly) instead of tests/diff_*.poly",
+    )
     args = parser.parse_args()
 
     poly_bin = (
@@ -141,12 +161,17 @@ def main() -> None:
         targets.append("asm")
 
     failures = 0
-    for source in sorted(TESTS_DIR.glob("diff_*.poly")):
+    pattern = "stress_*.poly" if args.stress else "diff_*.poly"
+    timeout = 300 if args.stress else 120
+    sources = sorted(TESTS_DIR.glob(pattern))
+    if not sources:
+        raise SystemExit(f"no {pattern} programs found in {TESTS_DIR}")
+    for source in sources:
         expected = expected_from_source(source.read_text())
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
             for target in targets:
-                got = run_target(poly_bin, source, target, workdir)
+                got = run_target(poly_bin, source, target, workdir, timeout)
                 if got != expected:
                     failures += 1
                     print(f"FAIL {source.name} [{target}]")
@@ -155,9 +180,15 @@ def main() -> None:
                 else:
                     print(f"ok   {source.name} [{target}] ({len(expected)} lines)")
     if failures:
-        print(f"\n{failures} divergence(s) across the differential suite")
+        print(
+            f"\n{failures} divergence(s) across the "
+            f"{'stress' if args.stress else 'differential'} suite"
+        )
         sys.exit(1)
-    print("\nAll targets agree on every differential program.")
+    print(
+        f"\nAll targets agree on every "
+        f"{'stress' if args.stress else 'differential'} program."
+    )
 
 
 if __name__ == "__main__":

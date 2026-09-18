@@ -1,0 +1,42 @@
+#!/usr/bin/env poly
+# Stress suite #2: 64-bit arithmetic under loop pressure (heavier sibling
+# of diff_structs.poly's i64 cases; nightly-only via --stress).
+#
+# Three things at once, all known C-backend trip hazards:
+#   - an i64 accumulator crossing the i32 boundary (50_000_050_000 needs
+#     the full 64 bits; a 32-bit truncation prints 705082704),
+#   - an i64 loop counter so the induction itself is 64-bit,
+#   - mixed-width ops (i32 step / i64 sum) in one expression.
+#
+# EXPECTED:
+# 5000050000 / 100000 / 41667916675000 / 1
+#
+# (sum 1..=100000 = 100000*100001/2 = 5,000,050,000;
+#  sum of squares 1..=50000 = 50000*50001*100001/6 = 41,667,916,675,000;
+#  5,000,050,000 mod 7 = 1.)
+fn main()
+    var n i64 := 100000
+    var acc i64 := 0
+    var i i64 := 1
+    while i <= n
+        acc := acc + i
+        i := i + 1
+    end while
+    put acc
+
+    put i - 1
+
+    # Every i32/i64 pair product, folded through the same accumulator:
+    # sum of i*i for i in 1..=50000 = 50000*50001*100001/6.
+    var half i64 := 50000
+    var sq i64 := 0
+    var j i64 := 1
+    while j <= half
+        sq := sq + j * j
+        j := j + 1
+    end while
+    put sq
+
+    # Sanity: modular identity n*(n+1)/2 mod 7 must match acc mod 7.
+    put (n * (n + 1)) / 2 mod 7
+end fn

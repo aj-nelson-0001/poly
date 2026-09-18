@@ -52,6 +52,31 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- **Nightly stress differential suite.** `scripts/check_backends.py --stress`
+  runs the heavier `tests/stress_*.poly` programs that are too slow for the
+  every-push suite: `stress_strings.poly` pressures the asm target's 1 MiB
+  string arena with two 600-iteration concat builds (~700 KB of bump
+  allocations, calibrated to stay inside the arena) plus a mixed chain, and
+  `stress_loops.poly` drives 64-bit accumulation past the i32 boundary
+  (Σ1..100000 = 5,000,050,000) with an i64 loop counter and mixed-width
+  operands. Wired into the nightly differential workflow.
+- **Capability-parity test** (`poly-transpiler/tests/capability_parity.rs`)
+  pinning the per-backend method-call matrix — scalar `.to_string()`, string
+  `.len()`, vector `.len()`/`.push()`/`.pop()`, and the rejection set — so a
+  backend silently gaining or losing a capability fails CI instead of
+  drifting. Expected rows mirror `POLY_V2_SUPPORT_MATRIX.md`.
+
+### Fixed
+
+- **asm backend: value-position `n.to_string()` in inferred declarations.**
+  `var s := n.to_string()` was misclassified because `is_string_valued`
+  returned `false` for every method call, so `s` was treated as an integer
+  and `s.len()`/`put s` failed or rendered wrongly. Scalar `.to_string()` is
+  now recognized as string-valued (`.len()` deliberately is not — it returns
+  an integer).
+
 ## [2.0.0-preview.11] - 2026-09-18
 
 ### Fixed

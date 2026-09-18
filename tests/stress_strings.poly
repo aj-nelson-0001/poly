@@ -1,0 +1,41 @@
+#!/usr/bin/env poly
+# Stress suite #1: string arena pressure (heavier sibling of
+# diff_strings.poly; nightly-only via check_backends.py --stress).
+#
+# The asm target materializes every value-position concat into the static
+# 1 MiB _str_arena (never freed), and each `+` in a chain allocates an
+# intermediate buffer — a build loop over n appends is O(n^2) bytes. The
+# counts here are calibrated to that: two 600-iteration builds cost about
+# 2 * 600^2 / 2 * 2 bytes = ~720 KB of arena, comfortably inside 1 MiB but
+# far enough past the every-push suite to catch cursor-arithmetic,
+# alignment, and exhaustion-handling regressions. The exhaustion path
+# itself (a clear diagnostic + exit 1, never corruption) is what a
+# mis-tuned future test should expect if counts grow.
+#
+# EXPECTED:
+# 1200 / 1200 / 0 / 2401
+fn build(n: i32): ustring
+    var s ustring := ""
+    var i i32 := 0
+    while i < n
+        s := s + "xy"
+        i := i + 1
+    end while
+    return s
+end fn
+
+fn main()
+    var r ustring := build(600)
+    put r.len()
+    var q ustring := build(600)
+    put q.len()
+
+    # A scalar that must survive the pressure untouched.
+    var zero i32 := 0
+    put zero
+
+    # Mixed chain over a large string: length of r + "!" + r
+    # (1200 + 1 + 1200 = 2401 is the value; .len() of the chain).
+    var joined ustring := r + "!" + q
+    put joined.len()
+end fn

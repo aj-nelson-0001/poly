@@ -3,6 +3,39 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-18.
 
+## C backend strings; asm concat safety; wasm audit (2026-09-18)
+
+- **C backend gained value-position string support** (`poly-c-codegen`):
+  - String concatenation (`var t := s + "cd"`) now lowers to an emitted
+    `poly_concat` runtime helper (exact-size `malloc` + `memcpy`); it used
+    to be a hard error telling users to write a `#c` helper by hand. `put`
+    still flattens to printf pieces — no allocation on the print path.
+  - `n.to_string()` / `f.to_string()` lower to typed `poly_int_to_string`
+    / `poly_float_to_string` helpers. First design took a `void*` and
+    printed the pointer; the shipped helpers take scalars by copy.
+  - Type inference extended: concat chains containing `to_string()` and
+    their result variables classify as `const char *` / string-valued, so
+    `var chain := "a" + n.to_string() + "b"` declares a pointer and `put
+    chain` prints `%s` (both used to print pointer bytes via `%d`).
+  - Helper definitions are inserted once, after the include block, so
+    they double as prototypes; request flags use `Cell` because
+    `expr(&self)` runs deep inside rendering.
+- **asm backend: value-position concat is now a compile-time error**
+  instead of silently storing 0 (which segfaulted when the variable was
+  later printed as a string pointer). Put-position streaming concat is
+  unchanged and still allocation-free. The guard uses the literals-only
+  `is_string_expr` on purpose — `is_string_typed_expr` recurses through
+  the same arm and would not terminate.
+- **wasm/playground audit**: the playground pipeline never runs the IR
+  optimizer (it goes parse → check → unoptimized IR codegen), so the
+  optimizer fixes can't regress it; the codegen it does share is covered
+  by the workspace tests and tetris `--emit-rust` parity (re-verified).
+  `cargo check -p poly-wasm` clean.
+- **Differential suite stays scalar-only** (asm has no Vec/string
+  variables); C-only string coverage lives in the new c-codegen tests.
+- Verification: full workspace suite green, all four audit scripts pass,
+  tetris parity OK, examples run.
+
 ## Correctness audit: optimizer, checker, generator, codegen speed (2026-09-18)
 
 - **Optimizer bug fixes** (`poly-intermediate-representation/src/optimizer.rs`):

@@ -1284,14 +1284,24 @@ impl AsmGenerator {
                 .get(name)
                 .ok_or_else(|| format!("Undefined variable `{name}`")),
             Expression::BinaryOp { op, left, right } => {
-                // String concatenation: do NOT emit here (no side effects in
-                // emit_expr). The caller (emit_put) handles it.
+                // String concatenation has two cases:
+                //   - put position: emit_put/emit_string_typed_put stream the
+                //     pieces directly via sys_write (no allocation), so this
+                //     arm never sees those.
+                //   - value position: would require a runtime allocator and
+                //     heap ownership rules the asm target does not model.
+                //     That used to silently store 0 (then segfault when the
+                //     variable was printed as a pointer); now it is a clear
+                //     compile-time error. The guard uses is_string_expr
+                //     (literals only): is_string_typed_expr recurses through
+                //     this very arm, so using it here would never terminate.
                 if matches!(op, BinaryOp::Add)
                     && (self.is_string_expr(left) || self.is_string_expr(right))
                 {
-                    let loc = frame.allocate_temp();
-                    self.emit_store_const(loc, 0);
-                    return Ok(loc);
+                    return Err(
+                        "string concatenation in value position is not supported by the assembly backend; it only works directly inside `put` (the asm target has no runtime allocator)"
+                            .to_string(),
+                    );
                 }
 
                 let left_loc = self.emit_expr(left, frame)?;
@@ -2366,6 +2376,26 @@ mod tests {
     fn supports_integer_arithmetic() {
         let output = transpile_source("var x i32 := 10 + 20\nput x");
         assert!(output.contains("addq"));
+    }
+
+    #[test]
+    fn value_position_string_concat_is_rejected() {
+        // Regression: value-position concat used to silently store 0 in the
+        // target slot, segfaulting later when the variable was printed as a
+        // string pointer. It must now fail at compile time with a clear
+        // message; put-position streaming stays supported.
+        let source = "var s ustring := \"ab\"\nvar t ustring := s + \"cd\"\nput t";
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        let mut parser = Parser::new(&tokens);
+        let program = parser.parse().unwrap();
+        let error = transpile(&program)
+            .err()
+            .expect("value-position concat must fail on the asm target");
+        assert!(
+            error.contains("value position is not supported by the assembly backend"),
+            "expected clear value-position error, got {error:?}"
+        );
     }
 
     #[test]

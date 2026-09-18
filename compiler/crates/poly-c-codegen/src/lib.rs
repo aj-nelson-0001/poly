@@ -3,7 +3,7 @@
 //! The C backend intentionally targets the small orchestration subset of Poly.
 //! Complex declarations stay in `#c` blocks and are emitted verbatim.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fmt::Write;
 
 use poly_parser::ast::{
@@ -37,6 +37,11 @@ struct CGenerator {
     /// Definitions discovered while rendering main (closure functions); these
     /// are emitted after the eagerly-rendered declarations, right before main.
     late_definitions: Vec<String>,
+    /// Interior-mutable flag: `expr(&self)` requests the helper, but the
+    /// definition is written into the final output by `generate` (which has
+    /// `&mut self`) after body rendering completes.
+    concat_helper_emitted: Cell<bool>,
+    to_string_helper_emitted: Cell<bool>,
     /// Declared function name -> declared C return type. Collected from both
     /// program-scope and struct/impl methods so `var q := make(3, 4)` can
     /// infer a struct type from a call instead of defaulting to `int32_t`.
@@ -57,6 +62,8 @@ impl CGenerator {
             uses_get: std::cell::Cell::new(false),
             closure_counter: std::cell::Cell::new(0),
             late_definitions: Vec::new(),
+            concat_helper_emitted: Cell::new(false),
+            to_string_helper_emitted: Cell::new(false),
             fn_return_types: std::collections::HashMap::new(),
         }
     }
@@ -179,6 +186,7 @@ impl CGenerator {
         std::mem::swap(&mut main_output, &mut self.output);
         self.indent = 0;
 
+        self.insert_concat_helper();
         if self.uses_get.get()
             || self
                 .main_statements
@@ -441,7 +449,7 @@ impl CGenerator {
                     .unwrap_or_else(|| self.inferred_type(value.as_ref()));
                 if ty.as_ref().is_some_and(|ty| self.is_string_type(ty))
                     || value.as_ref().is_some_and(|value| {
-                        self.is_string_literal(value)
+                        self.is_string_valued(value)
                             || matches!(value, Expression::GetExpression(_))
                     })
                 {
@@ -462,7 +470,7 @@ impl CGenerator {
                     .transpose()?
                     .unwrap_or_else(|| self.inferred_type(Some(value)));
                 if ty.as_ref().is_some_and(|ty| self.is_string_type(ty))
-                    || self.is_string_literal(value)
+                    || self.is_string_valued(value)
                 {
                     self.string_variables.borrow_mut().insert(name.clone());
                 }
@@ -849,7 +857,22 @@ impl CGenerator {
                 if matches!(op, BinaryOp::Add)
                     && (self.is_string_expression(left) || self.is_string_expression(right))
                 {
-                    return Err("string concatenation in C requires a #c helper".to_string());
+                    // Value-position string concatenation. `put` flattens
+                    // chains into printf pieces instead (see printf_parts);
+                    // everything else — assignments, returns, call args —
+                    // materializes the result with poly_concat, which
+                    // allocates `strlen(a) + strlen(b) + 1` bytes exactly
+                    // once. Chains parse left-associative, so `(s+a)+b`
+                    // becomes poly_concat(poly_concat(s,a),b): O(n^2) in the
+                    // worst case like Rust, but correct. The result type is
+                    // `const char *`; the C backend never frees, matching
+                    // its existing leak-until-exit model.
+                    self.ensure_concat_helper();
+                    return Ok(format!(
+                        "poly_concat({}, {})",
+                        self.expr(left)?,
+                        self.expr(right)?
+                    ));
                 }
                 Ok(format!(
                     "({} {} {})",
@@ -954,10 +977,40 @@ impl CGenerator {
                 let chain = self.match_expr_chain(scrutinee, arms)?;
                 Ok(chain)
             }
+            Expression::MethodCall { object, method, args } => {
+                // The C backend supports the small method set the generated
+                // code needs; everything else stays a hard error so callers
+                // know to use a #c helper instead of silently miscompiling.
+                match method.as_str() {
+                    "to_string" if args.is_empty() => {
+                        // Typed scalar helpers: the value is passed by copy so
+                        // no address-of games (a void* + snprintf("%lld")
+                        // design printed the pointer, not the pointee).
+                        // Integers and bools format %lld (matching this
+                        // backend's %d-style bool printing), floats %g, and
+                        // string-typed objects are already `const char *` —
+                        // their to_string() is the identity. Results are
+                        // heap-allocated like poly_concat output; the C
+                        // backend never frees (leak-until-exit model).
+                        let obj = self.expr(object)?;
+                        if self.is_string_expression(object) {
+                            return Ok(obj);
+                        }
+                        self.ensure_to_string_helper();
+                        if self.format_for_expression(object) == "%f" {
+                            return Ok(format!("poly_float_to_string((double)({obj}))"));
+                        }
+                        return Ok(format!("poly_int_to_string((long long)({obj}))"));
+                    }
+                    _ => Err(
+                        "this expression is not supported by the C backend; use a #c helper"
+                            .to_string(),
+                    ),
+                }
+            }
             Expression::Closure { .. }
             | Expression::TryExpression(_)
             | Expression::UnsafeBlock(_)
-            | Expression::MethodCall { .. }
             | Expression::ArrayLiteral(_) => Err(
                 "this expression is not supported by the C backend; use a #c helper".to_string(),
             ),
@@ -1074,7 +1127,7 @@ impl CGenerator {
                 op: BinaryOp::Add,
                 left,
                 right,
-            } if self.is_string_expression(left) || self.is_string_expression(right) => {
+            } if self.is_string_valued(left) || self.is_string_valued(right) => {
                 let (left_format, left_args) = self.printf_parts(left)?;
                 let (right_format, right_args) = self.printf_parts(right)?;
                 Ok((
@@ -1112,6 +1165,53 @@ impl CGenerator {
         matches!(annotation, TypeAnnotation::Named(name) if name == "string" || name == "ustring")
     }
 
+    /// Emit the `poly_concat` helper once. It is declared before main and
+    /// defined after it so every call site sees a prototype.
+    fn ensure_concat_helper(&self) {
+        self.concat_helper_emitted.set(true);
+    }
+
+    /// Request the `poly_to_string` helper (see `insert_concat_helper` for
+    /// how the definition reaches the output). `value` points at the scalar
+    /// to format; `format` is a printf specifier without conversion flags.
+    fn ensure_to_string_helper(&self) {
+        self.to_string_helper_emitted.set(true);
+    }
+
+    /// Insert the `poly_concat` definition into the finished output when any
+    /// value-position concatenation was rendered. Called from `generate`
+    /// after all expression rendering, positioned immediately after the
+    /// include block so the definition doubles as the prototype for every
+    /// call site in user functions and main.
+    /// Insert requested runtime helpers into the finished output, directly
+    /// after the include block (before every user function and main, so the
+    /// definitions double as prototypes for all call sites).
+    fn insert_concat_helper(&mut self) {
+        if !(self.concat_helper_emitted.get() || self.to_string_helper_emitted.get()) {
+            return;
+        }
+        let mut helpers = String::new();
+        if self.to_string_helper_emitted.get() {
+            helpers.push_str(
+                "char *poly_int_to_string(long long value) {\n    char *out = malloc(32);\n    if (out == NULL) {\n        fputs(\"poly_to_string: out of memory\\n\", stderr);\n        exit(1);\n    }\n    snprintf(out, 32, \"%lld\", value);\n    return out;\n}\n\nchar *poly_float_to_string(double value) {\n    char *out = malloc(64);\n    if (out == NULL) {\n        fputs(\"poly_to_string: out of memory\\n\", stderr);\n        exit(1);\n    }\n    snprintf(out, 64, \"%g\", value);\n    return out;\n}\n\n",
+            );
+        }
+        if self.concat_helper_emitted.get() {
+            helpers.push_str(
+                "char *poly_concat(const char *a, const char *b) {\n    if (a == NULL) a = \"\";\n    if (b == NULL) b = \"\";\n    size_t len_a = strlen(a);\n    size_t len_b = strlen(b);\n    char *out = malloc(len_a + len_b + 1);\n    if (out == NULL) {\n        fputs(\"poly_concat: out of memory\\n\", stderr);\n        exit(1);\n    }\n    memcpy(out, a, len_a);\n    memcpy(out + len_a, b, len_b);\n    out[len_a + len_b] = '\\0';\n    return out;\n}\n\n",
+            );
+        }
+        const MARKER: &str = "#include <string.h>\n\n";
+        if let Some(pos) = self.output.find(MARKER) {
+            let insert_at = pos + MARKER.len();
+            self.output.insert_str(insert_at, &helpers);
+        } else {
+            // Includes are always emitted before any user code; fall back to
+            // the top just in case that invariant ever changes.
+            self.output.insert_str(0, &helpers);
+        }
+    }
+
     fn is_string_literal(&self, expression: &Expression) -> bool {
         matches!(
             expression,
@@ -1122,6 +1222,24 @@ impl CGenerator {
     fn is_string_expression(&self, expression: &Expression) -> bool {
         self.is_string_literal(expression)
             || matches!(expression, Expression::Identifier(name) if self.string_variables.borrow().contains(name))
+    }
+
+    /// Whether an expression evaluates to a string value at runtime. Extends
+    /// `is_string_expression` with the string-valued compound forms: concat
+    /// chains (either side string-valued) and `to_string()` method calls.
+    /// Used by printf flattening and type inference; the plain literal/var
+    /// check is deliberately kept separate for contexts that must not treat
+    /// compound expressions as strings.
+    fn is_string_valued(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::BinaryOp {
+                op: BinaryOp::Add,
+                left,
+                right,
+            } => self.is_string_valued(left) || self.is_string_valued(right),
+            Expression::MethodCall { method, .. } if method == "to_string" => true,
+            _ => self.is_string_expression(expression),
+        }
     }
 
     fn format_for_expression(&self, expression: &Expression) -> String {
@@ -1159,6 +1277,26 @@ impl CGenerator {
             Some(Expression::TupleLiteral(_)) => self.tuple_inferred_type(value.unwrap()),
             // Struct literals infer their own type: `var p := Point { ... }`.
             Some(Expression::StructLiteral { name, .. }) => name.clone(),
+            // String-typed expressions infer `const char *` so `var s :=
+            // a + b` (concat) and `var t := n.to_string()` declare pointers,
+            // not integers. Matches the literal cases above. For a concat
+            // chain the left spine is checked recursively because
+            // is_string_expression only recognizes literals and known
+            // string variables — `n.to_string()` on the left is not one.
+            Some(Expression::BinaryOp {
+                op: BinaryOp::Add,
+                left,
+                right,
+            }) => {
+                if self.is_string_valued(left) || self.is_string_valued(right) {
+                    "const char *".to_string()
+                } else {
+                    "int32_t".to_string()
+                }
+            }
+            Some(Expression::MethodCall { method, .. }) if method == "to_string" => {
+                "const char *".to_string()
+            }
             // A call infers the callee's declared return type so struct-returning
             // functions declare struct-typed variables instead of `int32_t`.
             Some(Expression::Call { func, .. }) => match func.as_ref() {
@@ -1443,6 +1581,61 @@ mod tests {
         let mut parser = Parser::new(&tokens);
         let program = parser.parse().unwrap();
         transpile(&program).unwrap()
+    }
+
+    #[test]
+    fn value_position_string_concat_uses_helper() {
+        // Regression: value-position concat used to error with "requires a
+        // #c helper". Now it lowers to the emitted poly_concat runtime
+        // helper (put position still flattens to printf pieces).
+        let output = generate(
+            "var s ustring := \"ab\"\nvar t ustring := s + \"cd\" + \"ef\"\nput t\nput \"x\" + s + \"!\"",
+        );
+        assert!(
+            output.contains("poly_concat("),
+            "expected poly_concat call sites: {output}"
+        );
+        assert!(
+            output.contains("char *poly_concat(const char *a, const char *b)"),
+            "expected emitted helper definition: {output}"
+        );
+        // The definition must appear before the first call site so it also
+        // serves as the prototype.
+        let def_pos = output
+            .find("char *poly_concat(const char *a, const char *b) {")
+            .expect("helper definition");
+        let call_pos = output.find("poly_concat(s").expect("call site");
+        assert!(
+            def_pos < call_pos,
+            "helper definition must precede call sites"
+        );
+    }
+
+    #[test]
+    fn to_string_and_mixed_concat_infer_and_print() {
+        // Regression: `var chain := "a" + n.to_string() + "b"` used to infer
+        // int32_t (printing a pointer through %d) and put of the variable
+        // printed %d for the same reason. Both paths now classify
+        // to_string()-containing chains as string-valued.
+        let output = generate(
+            "var n i32 := 42\nvar chain := \"a\" + n.to_string() + \"b\"\nput chain\nvar pure ustring := \"ab\" + \"cd\"\nput pure",
+        );
+        assert!(
+            output.contains("const char * chain = poly_concat"),
+            "chain must infer as const char *: {output}"
+        );
+        assert!(
+            output.contains("poly_int_to_string"),
+            "expected poly_int_to_string call: {output}"
+        );
+        assert!(
+            output.contains("printf(\"%s\\n\", chain)"),
+            "chain put must use %s: {output}"
+        );
+        assert!(
+            output.contains("poly_concat(\"ab\", \"cd\")"),
+            "literal concat still materializes: {output}"
+        );
     }
 
     #[test]

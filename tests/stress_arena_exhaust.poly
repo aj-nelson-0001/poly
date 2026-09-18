@@ -1,0 +1,33 @@
+#!/usr/bin/env poly
+# Stress suite #3: string arena exhaustion (asm target only; nightly-only
+# via check_backends.py --stress).
+#
+# The asm target materializes every value-position concat into the static
+# 1 MiB _str_arena and never frees, so a build loop long enough to cross
+# the limit must abort with a diagnostic instead of corrupting memory.
+# This is the target-asymmetric program: rust/c/js heap-allocate and print
+# the real length, while asm must exit with the loud-failure code (42, the
+# vector arena's convention) and the diagnostic on stderr.
+#
+# The EXPECTED-FAIL directive is honored by check_backends.py; see its
+# header. The 1100-iteration build needs ~1100*1101 bytes of bump space
+# (each `+` allocates a fresh buffer), well past 1 MiB.
+#
+# EXPECTED:
+# 2200
+#
+# EXPECTED-FAIL asm: exit=42, stderr=poly: string arena exhausted
+fn build(n: i32): ustring
+    var s ustring := ""
+    var i i32 := 0
+    while i < n
+        s := s + "xy"
+        i := i + 1
+    end while
+    return s
+end fn
+
+fn main()
+    var r ustring := build(1100)
+    put r.len()
+end fn

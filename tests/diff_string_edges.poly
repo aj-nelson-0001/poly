@@ -17,9 +17,18 @@
 #     left-associative operand ordering across targets. `"a"+"b"+s+"c"+
 #     n.to_string()+"3"` with s="" and n=0 is "ab" + "" + "c" + "0" + "3"
 #     = "abc03" (length 5).
+#   - Value-position `var text := n.to_string()`: the inferred declaration
+#     must classify as string-typed (the asm backend's is_string_valued
+#     rejected method calls, misclassifying the variable as an integer).
+#   - Mixed put-streaming chains (`put "x=" + n`): scalar leaves print
+#     their rendered text; the asm backend referenced a never-emitted
+#     _print_int_nobuf (link failure) and printed to_string results as
+#     arena addresses before.
+#   - Bools render "true"/"false" on every target — the C/asm 1/0 output
+#     was normalized to the Rust reference implementation's rendering.
 #
 # EXPECTED:
-# x / 0 / 2 / 0 / 11 / 5 / abc03
+# x / 0 / 2 / 0 / 11 / 5 / abc03 / 0 / x=0 / x=0 / false / false / true / f=false / false
 fn main()
     var s ustring := ""
     var t ustring := s + "x" + s
@@ -40,4 +49,21 @@ fn main()
     var mixed ustring := "a" + "b" + s + "c" + n.to_string() + "3"
     put mixed.len()
     put mixed
+
+    # Value-position to_string in an inferred declaration.
+    var text := n.to_string()
+    put text
+
+    # Mixed put-streaming chains: raw integer and to_string leaves.
+    put "x=" + n
+    put "x=" + n.to_string()
+
+    # Bool rendering: variables, comparison expressions, `not`, bool
+    # operands inside concat chains, and bool to_string.
+    var flag bool := n > 0
+    put flag
+    put n > 99
+    put not flag
+    put "f=" + flag
+    put flag.to_string()
 end fn

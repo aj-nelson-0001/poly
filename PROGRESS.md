@@ -3,6 +3,35 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-18.
 
+## Bool rendering normalized; asm concat bugs; arena-exhaustion contract (2026-09-18)
+
+- **Bool output normalized to true/false on all four targets** (was
+  rust/js "true" vs c/asm "1"): C gained `poly_bool_str` + bool-variable
+  and bool-return-function tracking for put/to_string/concat positions;
+  asm gained `_print_bool`/`_bool_str`/`_bool_to_string` with the same
+  classification. Byte-identical outputs verified across rust/c/js/asm,
+  including negatives and chains. Snapshots regenerated per the
+  documented workflow (bools_c/asm, strings_asm, asm fixture).
+- **Three latent asm bugs found by probing while wiring bools**:
+  (1) `put "v=" + 42` failed to *link* — `_print_int_nobuf` was
+  referenced but never emitted (and its length counter kept `_print_int`'s
+  newline byte, printing a trailing NUL once emitted); (2) put-streaming
+  chains printed to_string results and bools as raw integers/addresses
+  (`x=4210736`) because leaves were not classified — now dispatched by
+  kind; (3) `_bool_to_string` stored the loop index instead of a NUL
+  terminator. Also moved the arena exhaustion diagnostics to stderr
+  (matching C's fputs(stderr)) and fixed the string arena's 36-byte
+  over-read + exit-1 (now derived length, exit 42 like the vector arena).
+- **`tests/stress_arena_exhaust.poly`** pins the exhaustion contract:
+  success on rust/c/js, and on asm a stderr diagnostic + exit 42 via the
+  new `# EXPECTED-FAIL asm: exit=…, stderr=…` directives in
+  `check_backends.py` (per-target expected failures; EXPECTED still
+  applies to the rest). Nightly workflow already runs `--stress`.
+- **`diff_string_edges.poly` grew to 15 lines**: value-position
+  `var text := n.to_string()` (the earlier is_string_valued fix), mixed
+  put-streaming chains, and the bool matrix (variable, comparison, `not`,
+  chain operand, to_string).
+
 ## Audit of prior followups; nightly stress suite; capability-parity test (2026-09-18)
 
 - **Followup audit** found one genuine gap the earlier sessions had missed:

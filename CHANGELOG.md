@@ -52,7 +52,26 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- **Bool rendering normalized across targets.** `put flag`,
+  `flag.to_string()`, and bool operands in concat chains now print
+  `true`/`false` on every target; C (via a new `poly_bool_str` helper) and
+  asm (`_print_bool`/`_bool_str`/`_bool_to_string`) previously printed
+  `1`/`0`, diverging from the Rust reference implementation. Covered by
+  the differential suite (`diff_string_edges.poly` grew bool cases).
+
 ### Added
+
+- **Arena-exhaustion differential coverage.**
+  `tests/stress_arena_exhaust.poly` drives the asm target's 1 MiB string
+  arena past its limit nightly and requires the loud-failure contract:
+  diagnostic on stderr, exit code 42 (matching the vector arena's
+  convention). `check_backends.py` now supports target-asymmetric programs
+  via `# EXPECTED-FAIL <target>: exit=…, stderr=…` directives, so one file
+  can expect success on rust/c/js and a specific failure mode on asm. The
+  asm exhaustion diagnostics also moved from stdout to stderr, matching
+  the C backend's `fputs(stderr)`.
 
 - **Nightly stress differential suite.** `scripts/check_backends.py --stress`
   runs the heavier `tests/stress_*.poly` programs that are too slow for the
@@ -70,6 +89,19 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Fixed
 
+- **asm backend: `put "v=" + 42` failed to link.** The put-streaming
+  concat fallback referenced `_print_int_nobuf` but the runtime never
+  emitted it — any mixed chain with an integer leaf was a link error. The
+  helper is now emitted on demand (without `_print_int`'s newline byte in
+  the length count), and chain leaves are dispatched by kind: string-
+  valued leaves write through `_strlen` (printing a to_string result
+  through `_print_int` emitted its arena *address*), bool leaves render
+  `true`/`false`, and integers print in decimal.
+- **asm backend: `_bool_to_string` never NUL-terminated its output**
+  (the epilogue stored the index byte instead of 0), corrupting later
+  string operations. Also: the string-arena exhaustion diagnostic
+  over-wrote its byte length (6 stray bytes of adjacent .data reached
+  stdout) and exited 1 instead of the vector arena's 42.
 - **asm backend: value-position `n.to_string()` in inferred declarations.**
   `var s := n.to_string()` was misclassified because `is_string_valued`
   returned `false` for every method call, so `s` was treated as an integer

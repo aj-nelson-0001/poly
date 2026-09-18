@@ -29,6 +29,12 @@ enum Location {
     Reg(&'static str),
 }
 
+/// Runtime diagnostic written when the string arena is exhausted. Both the
+/// .data label and the write() length are derived from this constant. The
+/// trailing newline is a real byte: write(2) needs no NUL, and gas renders
+/// `\n` inside .ascii as the same 0x0a, so the length matches on both sides.
+const STR_ARENA_FULL_MSG: &str = "poly: string arena exhausted\n";
+
 struct StackFrame {
     next_offset: u32,
     locals: std::collections::HashMap<String, Location>,
@@ -139,6 +145,19 @@ struct AsmGenerator {
     /// Functions whose declared return type is a string (`fn f(..): ustring`).
     /// Call results of these are string-valued for `.len()`/concat purposes.
     return_strings: std::collections::HashSet<String>,
+    /// Functions declared to return bool (from the pre-pass), so printf-
+    /// position call results classify as bool (true/false rendering).
+    return_bools: std::collections::HashSet<String>,
+    /// Whether any code path can call the bool rendering helpers
+    /// (_print_bool/_bool_str/_bool_to_string). Gates their emission; they
+    /// depend on the string runtime (_strlen/_str_alloc), so requesting
+    /// them also forces the string block on.
+    uses_bool_helpers: bool,
+    /// Whether the put-streaming concat path can emit integer leaves
+    /// (`put "v=" + 42`), which call _print_int_nobuf. Gates that helper's
+    /// emission — the flag exists because put-streaming chains do not
+    /// otherwise touch the string runtime.
+    uses_print_nobuf: bool,
     /// Return type of the function currently being emitted, when it is a
     /// struct: struct-returning functions copy the whole struct through
     /// caller-allocated stack space addressed by %rdi, not through %rax.
@@ -159,6 +178,9 @@ impl AsmGenerator {
             enums: std::collections::HashMap::new(),
             return_structs: std::collections::HashMap::new(),
             return_strings: std::collections::HashSet::new(),
+            return_bools: std::collections::HashSet::new(),
+            uses_bool_helpers: false,
+            uses_print_nobuf: false,
             current_return_struct: None,
         }
     }
@@ -297,6 +319,9 @@ impl AsmGenerator {
                         if type_name == "string" || type_name == "ustring" {
                             self.return_strings.insert(func.name.clone());
                         }
+                        if type_name == "bool" {
+                            self.return_bools.insert(func.name.clone());
+                        }
                     }
                 }
                 _ => {}
@@ -420,10 +445,147 @@ impl AsmGenerator {
         self.output.push_str("    popq %rbp\n");
         self.output.push_str("    retq\n\n");
 
+        if self.uses_print_nobuf {
+            self.emit_print_int_nobuf();
+        }
+        // Bool rendering helpers, on request only: they call into the string
+        // runtime (_strlen/_str_alloc), so requesting them forces that block
+        // on (it is emitted just below).
+        if self.uses_bool_helpers {
+            self.uses_string_concat = true;
+            self.emit_bool_runtime();
+        }
+
         self.emit_vector_runtime();
         self.emit_string_concat_runtime();
 
         Ok(std::mem::take(&mut self.output))
+    }
+
+    /// `_print_int_nobuf`: `_print_int` without the trailing newline — the
+    /// put-streaming concat fallback for integer leaves (`put "v=" + 42`).
+    /// The old code referenced this symbol without ever emitting it, so any
+    /// such program failed to link.
+    fn emit_print_int_nobuf(&mut self) {
+        self.output.push_str("_print_int_nobuf:\n");
+        self.output.push_str("    pushq %rbp\n");
+        self.output.push_str("    movq %rsp, %rbp\n");
+        self.output.push_str("    subq $32, %rsp\n");
+        self.output.push_str("    movq %rdi, %rax\n");
+        self.output.push_str("    testq %rax, %rax\n");
+        let digits_label = self.fresh_label("digits");
+        let _ = writeln!(self.output, "    jge {digits_label}");
+        self.output.push_str("    negq %rax\n");
+        self.output.push_str("    movq %rax, (%rsp)\n");
+        self.output.push_str("    movq $1, %rax\n");
+        self.output.push_str("    movq $1, %rdi\n");
+        self.output.push_str("    leaq _minus(%rip), %rsi\n");
+        self.output.push_str("    movq $1, %rdx\n");
+        self.output.push_str("    syscall\n");
+        self.output.push_str("    movq (%rsp), %rax\n");
+        let _ = writeln!(self.output, "{digits_label}:");
+        self.output.push_str("    leaq _itoa_buf+31(%rip), %rcx\n");
+        self.output.push_str("    decq %rcx\n");
+        // Counter starts at 0 — unlike _print_int, no newline byte follows
+        // the digits (its r8=1 counts that newline).
+        self.output.push_str("    xorq %r8, %r8\n");
+        let loop_label = self.fresh_label("itoa");
+        let done_label = self.fresh_label("itoa_done");
+        let _ = writeln!(self.output, "{loop_label}:");
+        self.output.push_str("    xorq %rdx, %rdx\n");
+        self.output.push_str("    movq $10, %r9\n");
+        self.output.push_str("    divq %r9\n");
+        self.output.push_str("    addb $48, %dl\n");
+        self.output.push_str("    movb %dl, (%rcx)\n");
+        self.output.push_str("    decq %rcx\n");
+        self.output.push_str("    incq %r8\n");
+        self.output.push_str("    testq %rax, %rax\n");
+        let _ = writeln!(self.output, "    jnz {loop_label}");
+        self.output.push_str("    incq %rcx\n");
+        let _ = writeln!(self.output, "{done_label}:");
+        self.output.push_str("    movq $1, %rax\n");
+        self.output.push_str("    movq $1, %rdi\n");
+        self.output.push_str("    movq %rcx, %rsi\n");
+        self.output.push_str("    movq %r8, %rdx\n");
+        self.output.push_str("    syscall\n");
+        self.output.push_str("    movq %rbp, %rsp\n");
+        self.output.push_str("    popq %rbp\n");
+        self.output.push_str("    retq\n\n");
+    }
+
+    /// Bool rendering helpers: `_print_bool` (0/1 -> "true"/"false" text +
+    /// newline), `_bool_str` (0/1 -> static "true"/"false" address), and
+    /// `_bool_to_string` (0/1 -> NUL-terminated arena copy). Matching the
+    /// Rust target's Display output keeps all four targets identical. These
+    /// call into the string runtime (_strlen/_str_alloc); the caller must
+    /// ensure that block is emitted (uses_string_concat forced on).
+    fn emit_bool_runtime(&mut self) {
+        // _print_bool: 0/1 in %rdi rendered as "false"/"true" + newline.
+        // The length comes from _strlen because the renderings differ
+        // (4 vs 5 bytes) — never hardcode it.
+        self.output.push_str("_print_bool:\n");
+        self.output.push_str("    pushq %rbp\n");
+        self.output.push_str("    movq %rsp, %rbp\n");
+        self.output.push_str("    callq _bool_str\n");
+        self.output.push_str("    movq %rax, %rdi\n");
+        self.output.push_str("    pushq %rdi\n");
+        self.output.push_str("    callq _strlen\n");
+        self.output.push_str("    movq %rax, %rdx\n");
+        self.output.push_str("    popq %rsi\n");
+        self.output.push_str("    movq $1, %rax\n");
+        self.output.push_str("    movq $1, %rdi\n");
+        self.output.push_str("    syscall\n");
+        self.output.push_str("    leaq _newline(%rip), %rsi\n");
+        self.output.push_str("    movq $1, %rdx\n");
+        self.output.push_str("    movq $1, %rax\n");
+        self.output.push_str("    movq $1, %rdi\n");
+        self.output.push_str("    syscall\n");
+        self.output.push_str("    movq %rbp, %rsp\n");
+        self.output.push_str("    popq %rbp\n");
+        self.output.push_str("    retq\n\n");
+
+        // _bool_str: 0/1 in %rdi -> %rax = address of "false"/"true".
+        // (leaq does not touch flags, so the cmovzq sees testq's ZF.)
+        self.output.push_str("_bool_str:\n");
+        self.output.push_str("    testq %rdi, %rdi\n");
+        self.output.push_str("    leaq _bool_false(%rip), %rax\n");
+        self.output.push_str("    leaq _bool_true(%rip), %rcx\n");
+        self.output.push_str("    cmovzq %rax, %rcx\n");
+        self.output.push_str("    movq %rcx, %rax\n");
+        self.output.push_str("    retq\n\n");
+
+        // Bool renderings (4 and 5 bytes; lengths derived via _strlen).
+        self.output.push_str("_bool_true: .asciz \"true\"\n");
+        self.output.push_str("_bool_false: .asciz \"false\"\n\n");
+
+        // _bool_to_string: 0/1 in %rdi -> %rax = NUL-terminated arena copy
+        // of "false"/"true" (a first-class string value, like _int_to_string).
+        self.output.push_str("_bool_to_string:\n");
+        self.output.push_str("    pushq %rbp\n");
+        self.output.push_str("    movq %rsp, %rbp\n");
+        self.output.push_str("    pushq %rbx\n");
+        self.output.push_str("    callq _bool_str\n");
+        self.output.push_str("    movq %rax, %rbx\n");
+        self.output.push_str("    movq $6, %rdi\n");
+        self.output.push_str("    callq _str_alloc\n");
+        self.output.push_str("    movq %rax, %rdi\n");
+        self.output.push_str("    xorq %rsi, %rsi\n");
+        let bool_ts_label = self.fresh_label("bool_ts");
+        let _ = writeln!(self.output, "{bool_ts_label}:");
+        self.output.push_str("    movzbl (%rbx,%rsi), %eax\n");
+        self.output.push_str("    testb %al, %al\n");
+        let bool_ts_done = self.fresh_label("bool_ts_done");
+        let _ = writeln!(self.output, "    jz {bool_ts_done}");
+        self.output.push_str("    movb %al, (%rdi,%rsi)\n");
+        self.output.push_str("    incq %rsi\n");
+        let _ = writeln!(self.output, "    jmp {bool_ts_label}");
+        let _ = writeln!(self.output, "{bool_ts_done}:");
+        self.output.push_str("    movb $0, (%rdi,%rsi)\n");
+        self.output.push_str("    movq %rdi, %rax\n");
+        self.output.push_str("    popq %rbx\n");
+        self.output.push_str("    movq %rbp, %rsp\n");
+        self.output.push_str("    popq %rbp\n");
+        self.output.push_str("    retq\n\n");
     }
 
     /// Runtime helpers for growable vectors.
@@ -492,7 +654,9 @@ impl AsmGenerator {
             .push_str("    movq %rax, _vec_arena_cursor(%rip)\n");
         let grown = self.fresh_label("grown");
         let _ = writeln!(self.output, "    jmp {grown}");
-        // Arena exhausted: fail loudly (exit code 42) rather than corrupt.
+        // Arena exhausted: fail loudly (diagnostic on stderr, exit code 42)
+        // rather than corrupt. Written to fd 2 so diagnostics never mix
+        // with program stdout.
         let _ = writeln!(self.output, "{arena_full}:");
         self.output.push_str("    movq $60, %rax\n");
         self.output.push_str("    movq $42, %rdi\n");
@@ -793,6 +957,7 @@ impl AsmGenerator {
                             || self.enums.contains_key(type_name)
                             || type_name == "string"
                             || type_name == "ustring"
+                            || type_name == "bool"
                         {
                             frame.var_types.insert(name.clone(), type_name.clone());
                         }
@@ -1562,13 +1727,19 @@ impl AsmGenerator {
                 args,
             } => {
                 // Scalar `.to_string()`: decimal rendering through the
-                // string arena, matching C's poly_int_to_string. Bools are
-                // integers here (0/1), consistent with their integer print.
+                // string arena, matching C's poly_int_to_string. Bool
+                // operands render "true"/"false" through _bool_to_string,
+                // matching every other target's Display output.
                 if method == "to_string" && args.is_empty() {
                     self.uses_string_concat = true;
                     let obj_loc = self.emit_expr(object, frame)?;
                     self.load_to_reg(obj_loc, "%rdi", frame)?;
-                    self.output.push_str("    callq _int_to_string\n");
+                    if self.is_bool_valued(object, frame) {
+                        self.uses_bool_helpers = true;
+                        self.output.push_str("    callq _bool_to_string\n");
+                    } else {
+                        self.output.push_str("    callq _int_to_string\n");
+                    }
                     let result_loc = frame.allocate_temp();
                     self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
                     return Ok(result_loc);
@@ -1981,6 +2152,18 @@ impl AsmGenerator {
     }
 
     fn emit_put(&mut self, expr: &Expression, frame: &mut StackFrame) -> Result<(), String> {
+        // Bool-valued expressions render "true"/"false" (matching the Rust
+        // target), not 0/1. Must run before the integer fallback.
+        if self.is_bool_valued(expr, frame) {
+            // _print_bool calls _strlen; force the string runtime block.
+            self.uses_string_concat = true;
+            self.uses_bool_helpers = true;
+            let loc = self.emit_expr(expr, frame)?;
+            self.load_to_reg(loc, "%rdi", frame)?;
+            self.output.push_str("    # put (bool)\n");
+            self.output.push_str("    callq _print_bool\n");
+            return Ok(());
+        }
         // String-typed expressions: emit the value via sys_write, then a newline.
         if self.is_string_typed_expr(expr) {
             self.emit_string_typed_put(expr, frame)?;
@@ -2116,15 +2299,17 @@ impl AsmGenerator {
         self.output.push_str("    cmpq %rcx, %rbx\n");
         let ok_label = self.fresh_label("str_alloc_ok");
         let _ = writeln!(self.output, "    jbe {ok_label}");
-        // Out of memory: write the diagnostic and exit(1).
+        // Out of memory: write the diagnostic to stderr (matching the C
+        // backend's fputs(stderr)) and exit(42) — the same loud-failure
+        // convention as the vector arena's exhaustion path.
         self.output.push_str("    movq $1, %rax\n");
-        self.output.push_str("    movq $1, %rdi\n");
+        self.output.push_str("    movq $2, %rdi\n");
         self.output
             .push_str("    leaq _str_arena_full(%rip), %rsi\n");
-        self.output.push_str("    movq $36, %rdx\n");
+        let _ = writeln!(self.output, "    movq ${}, %rdx", STR_ARENA_FULL_MSG.len());
         self.output.push_str("    syscall\n");
         self.output.push_str("    movq $60, %rax\n");
-        self.output.push_str("    movq $1, %rdi\n");
+        self.output.push_str("    movq $42, %rdi\n");
         self.output.push_str("    syscall\n");
         let _ = writeln!(self.output, "{ok_label}:");
         self.output
@@ -2274,10 +2459,19 @@ impl AsmGenerator {
         self.output.push_str("    popq %rbp\n");
         self.output.push_str("    retq\n\n");
 
-        // Diagnostic for arena exhaustion (36 bytes including NUL).
+        // Diagnostic for arena exhaustion. The length written by the
+        // failure path comes from the same constant as the bytes, so the
+        // old hardcoded 36 (6 bytes of adjacent .data over-read into
+        // stdout) cannot regress.
         self.output.push_str("\n.section .data\n");
-        self.output
-            .push_str("_str_arena_full: .ascii \"poly: string arena exhausted\\n\\0\"\n");
+        // Emit the gas-escaped form (\n as two source chars); the write()
+        // length uses the real-byte constant, and gas renders the escape to
+        // the same 0x0a, so the two stay equal by construction.
+        let _ = writeln!(
+            self.output,
+            "_str_arena_full: .ascii \"{}\"",
+            STR_ARENA_FULL_MSG.replace('\n', "\\n")
+        );
         self.output.push_str(".section .text\n");
     }
 
@@ -2311,6 +2505,10 @@ impl AsmGenerator {
                 left,
                 right,
             } => {
+                // A chain can mix any leaf kinds (strings, bools, ints,
+                // to_string results); the int fallback calls
+                // _print_int_nobuf, so request its emission.
+                self.uses_print_nobuf = true;
                 self.output.push_str("    # put (string concat)\n");
                 self.emit_string_concat(left, frame)?;
                 self.emit_string_concat(right, frame)?;
@@ -2365,30 +2563,65 @@ impl AsmGenerator {
                 Ok(())
             }
             Expression::Identifier(name) => {
-                // String variable: we need strlen. For simplicity, use sys_write
-                // with a generous max length; the buffer is NUL-terminated.
-                let loc = frame
-                    .get(name)
-                    .ok_or_else(|| format!("Undefined variable `{name}`"))?;
-                self.load_to_reg(loc, "%r8", frame)?; // r8 = string ptr
-                                                      // strlen loop
-                let loop_label = self.fresh_label("strlen");
-                let end_label = self.fresh_label("strlen_end");
-                self.output.push_str("    xorq %rdx, %rdx\n"); // length counter
-                let _ = writeln!(self.output, "{loop_label}:");
-                self.output.push_str("    movb (%r8,%rdx), %al\n");
-                self.output.push_str("    testb %al, %al\n");
-                let _ = writeln!(self.output, "    jz {end_label}");
-                self.output.push_str("    incq %rdx\n");
-                let _ = writeln!(self.output, "    jmp {loop_label}");
-                let _ = writeln!(self.output, "{end_label}:");
-                // sys_write
-                self.output.push_str("    movq $1, %rax\n");
-                self.output.push_str("    movq $1, %rdi\n");
-                self.output.push_str("    movq %r8, %rsi\n");
-                // rdx already has length
-                self.output.push_str("    syscall\n");
-                Ok(())
+                // Dispatch by the variable's recorded type: string variables
+                // are written through a strlen loop; bool variables render
+                // "true"/"false"; anything else (int, unknown) is a scalar
+                // and prints in decimal (the old code strlen-looped the raw
+                // value, reading garbage addresses).
+                match frame.var_types.get(name).map(String::as_str) {
+                    Some("bool") => {
+                        self.uses_bool_helpers = true;
+                        let loc = frame
+                            .get(name)
+                            .ok_or_else(|| format!("Undefined variable `{name}`"))?;
+                        self.load_to_reg(loc, "%rdi", frame)?;
+                        self.output.push_str("    callq _bool_str\n");
+                        self.output.push_str("    movq %rax, %rdi\n");
+                        self.output.push_str("    pushq %rdi\n");
+                        self.output.push_str("    callq _strlen\n");
+                        self.output.push_str("    movq %rax, %rdx\n");
+                        self.output.push_str("    popq %rsi\n");
+                        self.output.push_str("    movq $1, %rax\n");
+                        self.output.push_str("    movq $1, %rdi\n");
+                        self.output.push_str("    syscall\n");
+                        Ok(())
+                    }
+                    Some("string") | Some("ustring") => {
+                        // String variable: sys_write with the strlen-looped
+                        // length; the buffer is NUL-terminated.
+                        let loc = frame
+                            .get(name)
+                            .ok_or_else(|| format!("Undefined variable `{name}`"))?;
+                        self.load_to_reg(loc, "%r8", frame)?; // r8 = string ptr
+                                                              // strlen loop
+                        let loop_label = self.fresh_label("strlen");
+                        let end_label = self.fresh_label("strlen_end");
+                        self.output.push_str("    xorq %rdx, %rdx\n"); // length counter
+                        let _ = writeln!(self.output, "{loop_label}:");
+                        self.output.push_str("    movb (%r8,%rdx), %al\n");
+                        self.output.push_str("    testb %al, %al\n");
+                        let _ = writeln!(self.output, "    jz {end_label}");
+                        self.output.push_str("    incq %rdx\n");
+                        let _ = writeln!(self.output, "    jmp {loop_label}");
+                        let _ = writeln!(self.output, "{end_label}:");
+                        // sys_write
+                        self.output.push_str("    movq $1, %rax\n");
+                        self.output.push_str("    movq $1, %rdi\n");
+                        self.output.push_str("    movq %r8, %rsi\n");
+                        // rdx already has length
+                        self.output.push_str("    syscall\n");
+                        Ok(())
+                    }
+                    _ => {
+                        // Scalar variable: decimal rendering, no newline.
+                        let loc = frame
+                            .get(name)
+                            .ok_or_else(|| format!("Undefined variable `{name}`"))?;
+                        self.load_to_reg(loc, "%rdi", frame)?;
+                        self.output.push_str("    callq _print_int_nobuf\n");
+                        Ok(())
+                    }
+                }
             }
             Expression::BinaryOp {
                 op: BinaryOp::Add,
@@ -2399,8 +2632,44 @@ impl AsmGenerator {
                 self.emit_string_concat(right, frame)?;
                 Ok(())
             }
+            _ if self.is_bool_valued(expr, frame) => {
+                // Bool operand inside a `put "b=" + flag()` chain: write the
+                // "true"/"false" text without a newline (the chain's last
+                // element / emit_string_typed_put adds it).
+                self.uses_string_concat = true;
+                self.uses_bool_helpers = true;
+                let loc = self.emit_expr(expr, frame)?;
+                self.load_to_reg(loc, "%rdi", frame)?;
+                self.output.push_str("    callq _bool_str\n");
+                self.output.push_str("    movq %rax, %rdi\n");
+                self.output.push_str("    pushq %rdi\n");
+                self.output.push_str("    callq _strlen\n");
+                self.output.push_str("    movq %rax, %rdx\n");
+                self.output.push_str("    popq %rsi\n");
+                self.output.push_str("    movq $1, %rax\n");
+                self.output.push_str("    movq $1, %rdi\n");
+                self.output.push_str("    syscall\n");
+                Ok(())
+            }
+            _ if self.is_string_valued(expr, frame) => {
+                // String-valued leaf (`n.to_string()`): strlen-write the
+                // rendered text — printing the raw value through _print_int
+                // would emit an arena *address*.
+                self.uses_string_concat = true;
+                let loc = self.emit_expr(expr, frame)?;
+                self.load_to_reg(loc, "%r8", frame)?;
+                self.output.push_str("    movq %r8, %rdi\n");
+                self.output.push_str("    callq _strlen\n");
+                self.output.push_str("    movq %rax, %rdx\n");
+                self.output.push_str("    movq %r8, %rsi\n");
+                self.output.push_str("    movq $1, %rax\n");
+                self.output.push_str("    movq $1, %rdi\n");
+                self.output.push_str("    syscall\n");
+                Ok(())
+            }
             _ => {
-                // Fall back: treat as integer
+                // Fall back: integer leaf, decimal rendering without a
+                // newline (`put "v=" + 42`).
                 let loc = self.emit_expr(expr, frame)?;
                 self.load_to_reg(loc, "%rdi", frame)?;
                 self.output.push_str("    callq _print_int_nobuf\n");
@@ -2418,6 +2687,40 @@ impl AsmGenerator {
                 left,
                 right,
             } => self.is_string_typed_expr(left) || self.is_string_typed_expr(right),
+            _ => false,
+        }
+    }
+
+    /// Whether an expression evaluates to a bool at runtime: literals,
+    /// comparisons/logical combinators, `not x`, bool variables, and calls
+    /// to functions declared `fn ..(): bool`. Parens are transparent. Used
+    /// by the put path so bools print true/false like the Rust target.
+    fn is_bool_valued(&self, expr: &Expression, frame: &StackFrame) -> bool {
+        match expr {
+            Expression::BoolLiteral(_) => true,
+            Expression::Parenthesized(inner) => self.is_bool_valued(inner, frame),
+            Expression::UnaryOp {
+                op: UnaryOp::Not, ..
+            } => true,
+            Expression::BinaryOp {
+                op:
+                    BinaryOp::Eq
+                    | BinaryOp::NotEq
+                    | BinaryOp::Lt
+                    | BinaryOp::Gt
+                    | BinaryOp::LtEq
+                    | BinaryOp::GtEq
+                    | BinaryOp::And
+                    | BinaryOp::Or,
+                ..
+            } => true,
+            Expression::Identifier(name) => {
+                matches!(frame.var_types.get(name).map(String::as_str), Some("bool"))
+            }
+            Expression::Call { func, .. } => match func.as_ref() {
+                Expression::Identifier(callee) => self.return_bools.contains(callee),
+                _ => false,
+            },
             _ => false,
         }
     }
@@ -2530,8 +2833,26 @@ impl AsmGenerator {
             // an arena pointer — exactly what a string value is here. A call
             // to a string-returning function likewise yields a pointer in
             // %rax (Poly's asm ABI returns scalars/pointers in %rax).
-            Expression::MethodCall { method, .. } if method == "to_string" => {
+            // Scalar `.to_string()` renders through _int_to_string (or
+            // _bool_to_string for bool operands), which returns an arena
+            // pointer — exactly what a string value is here. A call to a
+            // string-returning function likewise yields a pointer in %rax
+            // (Poly's asm ABI returns scalars/pointers in %rax).
+            Expression::MethodCall {
+                method,
+                object,
+                args,
+            } if method == "to_string" && args.is_empty() => {
                 self.uses_string_concat = true;
+                if self.is_bool_valued(object, frame) {
+                    self.uses_bool_helpers = true;
+                    let obj_loc = self.emit_expr(object, frame)?;
+                    self.load_to_reg(obj_loc, "%rdi", frame)?;
+                    self.output.push_str("    callq _bool_to_string\n");
+                    let result_loc = frame.allocate_temp();
+                    self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
+                    return Ok(result_loc);
+                }
                 self.emit_expr(expr, frame)
             }
             Expression::Call { .. } if self.is_string_valued(expr, frame) => {

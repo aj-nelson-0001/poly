@@ -5,10 +5,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+const char *poly_bool_str(int value) {
+    return value ? "true" : "false";
+}
+
 int main(void) {
     bool a = true;
     bool b = false;
     bool c = (a != b);
-    printf("%d\n", c);
+    printf("%s\n", poly_bool_str(c));
     return 0;
 }

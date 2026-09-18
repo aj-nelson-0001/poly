@@ -30,8 +30,8 @@ main:
     movq -48(%rbp), %rax
     movq %rax, -40(%rbp)
     movq -40(%rbp), %rdi
-    # put (integer)
-    callq _print_int
+    # put (bool)
+    callq _print_bool
     movq $0, %rax
     movq %rbp, %rsp
     popq %rbp
@@ -45,6 +45,9 @@ _start:
     pushq %rbp
     movq %rsp, %rbp
     subq $4088, %rsp
+    # Initialize string arena cursor
+    leaq _str_arena(%rip), %rax
+    movq %rax, _str_arena_cursor(%rip)
     callq main
     # sys_exit(0)
     movq $60, %rax
@@ -93,3 +96,210 @@ itoa_done_2:
     popq %rbp
     retq
 
+_print_bool:
+    pushq %rbp
+    movq %rsp, %rbp
+    callq _bool_str
+    movq %rax, %rdi
+    pushq %rdi
+    callq _strlen
+    movq %rax, %rdx
+    popq %rsi
+    movq $1, %rax
+    movq $1, %rdi
+    syscall
+    leaq _newline(%rip), %rsi
+    movq $1, %rdx
+    movq $1, %rax
+    movq $1, %rdi
+    syscall
+    movq %rbp, %rsp
+    popq %rbp
+    retq
+
+_bool_str:
+    testq %rdi, %rdi
+    leaq _bool_false(%rip), %rax
+    leaq _bool_true(%rip), %rcx
+    cmovzq %rax, %rcx
+    movq %rcx, %rax
+    retq
+
+_bool_true: .asciz "true"
+_bool_false: .asciz "false"
+
+_bool_to_string:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    callq _bool_str
+    movq %rax, %rbx
+    movq $6, %rdi
+    callq _str_alloc
+    movq %rax, %rdi
+    xorq %rsi, %rsi
+bool_ts_3:
+    movzbl (%rbx,%rsi), %eax
+    testb %al, %al
+    jz bool_ts_done_4
+    movb %al, (%rdi,%rsi)
+    incq %rsi
+    jmp bool_ts_3
+bool_ts_done_4:
+    movb $0, (%rdi,%rsi)
+    movq %rdi, %rax
+    popq %rbx
+    movq %rbp, %rsp
+    popq %rbp
+    retq
+
+
+# String concat runtime
+
+.section .bss
+_str_arena_cursor: .zero 8
+_str_arena:    .zero 1048576
+_str_arena_end:
+
+.section .text
+
+_str_alloc:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    addq $15, %rdi
+    andq $-16, %rdi
+    movq _str_arena_cursor(%rip), %rax
+    leaq (%rax,%rdi), %rbx
+    leaq _str_arena_end(%rip), %rcx
+    cmpq %rcx, %rbx
+    jbe str_alloc_ok_5
+    movq $1, %rax
+    movq $2, %rdi
+    leaq _str_arena_full(%rip), %rsi
+    movq $29, %rdx
+    syscall
+    movq $60, %rax
+    movq $42, %rdi
+    syscall
+str_alloc_ok_5:
+    movq %rbx, _str_arena_cursor(%rip)
+    popq %rbx
+    movq %rbp, %rsp
+    popq %rbp
+    retq
+
+_int_to_string:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    movq %rdi, %rbx
+    leaq _itoa_buf+31(%rip), %rcx
+    movb $0, (%rcx)
+    movq $1, %r12
+    movq %rbx, %rax
+    testq %rax, %rax
+    jns its_nonneg_6
+    negq %rax
+its_nonneg_6:
+its_loop_7:
+    xorq %rdx, %rdx
+    movq $10, %r9
+    divq %r9
+    addb $48, %dl
+    decq %rcx
+    movb %dl, (%rcx)
+    incq %r12
+    testq %rax, %rax
+    jnz its_loop_7
+its_done_8:
+    testq %rbx, %rbx
+    jns its_nosign_9
+    decq %rcx
+    movb $45, (%rcx)
+    incq %r12
+its_nosign_9:
+    movq %r12, %rdi
+    callq _str_alloc
+    movq %rax, %rbx
+    leaq _itoa_buf+32(%rip), %rdi
+    subq %r12, %rdi
+    xorq %rcx, %rcx
+its_copy_10:
+    cmpq %r12, %rcx
+    jge its_copy_done_11
+    movb (%rdi,%rcx), %al
+    movb %al, (%rbx,%rcx)
+    incq %rcx
+    jmp its_copy_10
+its_copy_done_11:
+    movq %rbx, %rax
+    popq %r12
+    popq %rbx
+    movq %rbp, %rsp
+    popq %rbp
+    retq
+
+_strlen:
+    xorq %rax, %rax
+strlen_12:
+    cmpb $0, (%rdi,%rax)
+    je strlen_done_13
+    incq %rax
+    jmp strlen_12
+strlen_done_13:
+    retq
+
+_poly_concat:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+    movq %rdi, %r12
+    movq %rsi, %r13
+    movq %r12, %rdi
+    callq _strlen
+    movq %rax, %r14
+    movq %r13, %rdi
+    callq _strlen
+    movq %rax, %r15
+    leaq 1(%r14,%r15), %rdi
+    callq _str_alloc
+    movq %rax, %rbx
+    xorq %rcx, %rcx
+concat_a_14:
+    cmpq %r14, %rcx
+    jge concat_a_done_15
+    movb (%r12,%rcx), %al
+    movb %al, (%rbx,%rcx)
+    incq %rcx
+    jmp concat_a_14
+concat_a_done_15:
+    xorq %rcx, %rcx
+concat_b_16:
+    cmpq %r15, %rcx
+    jg concat_b_done_17
+    movb (%r13,%rcx), %al
+    leaq (%r14,%rcx), %rdx
+    movb %al, (%rbx,%rdx)
+    incq %rcx
+    jmp concat_b_16
+concat_b_done_17:
+    movq %rbx, %rax
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %rbx
+    movq %rbp, %rsp
+    popq %rbp
+    retq
+
+
+.section .data
+_str_arena_full: .ascii "poly: string arena exhausted\n"
+.section .text

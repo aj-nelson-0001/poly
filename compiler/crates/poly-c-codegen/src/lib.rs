@@ -16,6 +16,10 @@
 //! - `poly_int_to_string(long long)` / `poly_float_to_string(double)` —
 //!   back `n.to_string()` / `f.to_string()`. Typed by design: an earlier
 //!   `void *` + `snprintf` sketch printed the pointer, not the pointee.
+//! - `poly_bool_str(int)` — bool rendering as `"true"`/`"false"` (put and
+//!   `to_string()`), matching the Rust target's Display output; a bare
+//!   `%d` printed 1/0 instead. Backed by tracked bool variables, bool
+//!   function return types, and comparison/logical expressions.
 //!
 //! `.len()` on strings is `strlen` with an `int32_t` cast. Results print
 //! through `%d` — `printf_parts` defaults unknown compound leaves to `%d`
@@ -70,6 +74,14 @@ struct CGenerator {
     /// Declared/inferred 64-bit variables, consulted by printf_parts so
     /// int64_t values print with %lld instead of truncating through %d.
     var_widths: RefCell<std::collections::HashMap<String, String>>,
+    /// Variables declared/inferred `bool`; printf_parts renders these with
+    /// poly_bool_str ("true"/"false") instead of %d (1/0), matching the
+    /// Rust target's Display rendering.
+    bool_variables: RefCell<std::collections::HashSet<String>>,
+    /// Functions declared to return bool (from the pre-pass), for call-result
+    /// bool classification in printf_parts.
+    bool_functions: RefCell<std::collections::HashSet<String>>,
+    bool_str_emitted: Cell<bool>,
 }
 
 impl CGenerator {
@@ -90,6 +102,9 @@ impl CGenerator {
             to_string_helper_emitted: Cell::new(false),
             fn_return_types: std::collections::HashMap::new(),
             var_widths: RefCell::new(std::collections::HashMap::new()),
+            bool_variables: RefCell::new(std::collections::HashSet::new()),
+            bool_functions: RefCell::new(std::collections::HashSet::new()),
+            bool_str_emitted: Cell::new(false),
         }
     }
 
@@ -107,6 +122,11 @@ impl CGenerator {
                 Statement::FunctionDeclaration(function) => {
                     if let Some(return_type) = &function.return_type {
                         let rendered = self.ty(return_type)?;
+                        if rendered == "bool" {
+                            self.bool_functions
+                                .borrow_mut()
+                                .insert(function.name.clone());
+                        }
                         self.fn_return_types.insert(function.name.clone(), rendered);
                     }
                 }
@@ -478,6 +498,9 @@ impl CGenerator {
                     self.var_widths
                         .borrow_mut()
                         .insert(name.clone(), type_name.clone());
+                }
+                if type_name == "bool" {
+                    self.bool_variables.borrow_mut().insert(name.clone());
                 }
                 if ty.as_ref().is_some_and(|ty| self.is_string_type(ty))
                     || value.as_ref().is_some_and(|value| {
@@ -1040,15 +1063,21 @@ impl CGenerator {
                         // Typed scalar helpers: the value is passed by copy so
                         // no address-of games (a void* + snprintf("%lld")
                         // design printed the pointer, not the pointee).
-                        // Integers and bools format %lld (matching this
-                        // backend's %d-style bool printing), floats %g, and
-                        // string-typed objects are already `const char *` —
-                        // their to_string() is the identity. Results are
+                        // Bools render "true"/"false" via poly_bool_str
+                        // (matching the Rust target), ints %lld, floats %g,
+                        // and string-typed objects are already `const char *`
+                        // — their to_string() is the identity. Results are
                         // heap-allocated like poly_concat output; the C
                         // backend never frees (leak-until-exit model).
                         let obj = self.expr(object)?;
                         if self.is_string_expression(object) {
                             return Ok(obj);
+                        }
+                        if self.is_bool_valued(object) {
+                            // poly_bool_str yields a "true"/"false" literal,
+                            // which is a valid string value as-is.
+                            self.ensure_bool_str_helper();
+                            return Ok(format!("poly_bool_str({obj})"));
                         }
                         self.ensure_to_string_helper();
                         if self.format_for_expression(object) == "%f" {
@@ -1189,6 +1218,16 @@ impl CGenerator {
                     format!("{}{}", left_args, right_args),
                 ))
             }
+            // Bool-valued expressions render "true"/"false" through the
+            // poly_bool_str helper, matching the Rust target's Display
+            // output (a bare %d prints 1/0 instead).
+            Expression::BinaryOp { .. } if self.is_bool_valued(expression) => {
+                self.ensure_bool_str_helper();
+                Ok((
+                    "%s".to_string(),
+                    format!(", {}", self.bool_str_expr(expression)?),
+                ))
+            }
             Expression::BinaryOp { .. } => Ok((
                 self.format_for_expression(expression),
                 format!(", {}", self.expr(expression)?),
@@ -1206,6 +1245,9 @@ impl CGenerator {
             | Expression::AsExpression { .. } => {
                 let format = if self.is_string_expression(expression) {
                     "%s".to_string()
+                } else if self.is_bool_valued(expression) {
+                    self.ensure_bool_str_helper();
+                    "%s".to_string()
                 } else if let Expression::Identifier(name) = expression {
                     // A 64-bit variable must print %lld: %d reads an int,
                     // truncating and (varargs UB) misreading the argument.
@@ -1217,6 +1259,9 @@ impl CGenerator {
                 } else {
                     self.format_for_expression(expression)
                 };
+                if self.is_bool_valued(expression) {
+                    return Ok((format, format!(", {}", self.bool_str_expr(expression)?)));
+                }
                 Ok((format, format!(", {}", self.expr(expression)?)))
             }
             // Compound string-valued leaves (`n.to_string()`, concat
@@ -1235,13 +1280,62 @@ impl CGenerator {
             Expression::GetExpression(_) | Expression::Parenthesized(_) => {
                 let format = if self.is_string_valued(expression) {
                     "%s".to_string()
+                } else if self.is_bool_valued(expression) {
+                    self.ensure_bool_str_helper();
+                    "%s".to_string()
                 } else {
                     "%d".to_string()
                 };
+                if !self.is_string_valued(expression) && self.is_bool_valued(expression) {
+                    return Ok((format, format!(", {}", self.bool_str_expr(expression)?)));
+                }
                 Ok((format, format!(", {}", self.expr(expression)?)))
             }
             _ => Ok(("%d".to_string(), format!(", {}", self.expr(expression)?))),
         }
+    }
+
+    /// Classify printf-position expressions that carry a bool value. Covers
+    /// literals, tracked bool variables, comparisons/logical combinators,
+    /// `!x`, and calls to functions declared `fn ..(): bool`.
+    fn is_bool_valued(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::BoolLiteral(_) => true,
+            Expression::Parenthesized(inner) => self.is_bool_valued(inner),
+            Expression::Identifier(name) => self.bool_variables.borrow().contains(name),
+            Expression::UnaryOp {
+                op: UnaryOp::Not, ..
+            } => true,
+            Expression::BinaryOp {
+                op:
+                    BinaryOp::Eq
+                    | BinaryOp::NotEq
+                    | BinaryOp::Lt
+                    | BinaryOp::Gt
+                    | BinaryOp::LtEq
+                    | BinaryOp::GtEq
+                    | BinaryOp::And
+                    | BinaryOp::Or,
+                ..
+            } => true,
+            Expression::Call { func, .. } => match func.as_ref() {
+                Expression::Identifier(name) => self.bool_functions.borrow().contains(name),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// Render a printf-position bool argument: the expression wrapped in the
+    /// poly_bool_str helper (`(... ? "true" : "false")`), which must be
+    /// emitted first via ensure_bool_str_helper.
+    fn bool_str_expr(&self, expression: &Expression) -> Result<String, String> {
+        Ok(format!("poly_bool_str({})", self.expr(expression)?))
+    }
+
+    /// Request the poly_bool_str helper (emitted by insert_concat_helper).
+    fn ensure_bool_str_helper(&self) {
+        self.bool_str_emitted.set(true);
     }
 
     fn is_string_type(&self, annotation: &TypeAnnotation) -> bool {
@@ -1270,10 +1364,20 @@ impl CGenerator {
     /// after the include block (before every user function and main, so the
     /// definitions double as prototypes for all call sites).
     fn insert_concat_helper(&mut self) {
-        if !(self.concat_helper_emitted.get() || self.to_string_helper_emitted.get()) {
+        if !(self.concat_helper_emitted.get()
+            || self.to_string_helper_emitted.get()
+            || self.bool_str_emitted.get())
+        {
             return;
         }
         let mut helpers = String::new();
+        if self.bool_str_emitted.get() {
+            // bool -> "true"/"false", matching the Rust target's Display
+            // rendering of bools so all targets print the same text.
+            helpers.push_str(
+                "const char *poly_bool_str(int value) {\n    return value ? \"true\" : \"false\";\n}\n\n",
+            );
+        }
         if self.to_string_helper_emitted.get() {
             helpers.push_str(
                 "char *poly_int_to_string(long long value) {\n    char *out = malloc(32);\n    if (out == NULL) {\n        fputs(\"poly_to_string: out of memory\\n\", stderr);\n        exit(1);\n    }\n    snprintf(out, 32, \"%lld\", value);\n    return out;\n}\n\nchar *poly_float_to_string(double value) {\n    char *out = malloc(64);\n    if (out == NULL) {\n        fputs(\"poly_to_string: out of memory\\n\", stderr);\n        exit(1);\n    }\n    snprintf(out, 64, \"%g\", value);\n    return out;\n}\n\n",

@@ -20,6 +20,7 @@ This matrix is the implementation contract for the current Rust, C, assembly, an
 | Construct | Rust | C | Asm | JS | Notes |
 |---|---:|---:|---:|---:|---|
 | Scalar declarations and assignment | Yes | Yes | Limited | Yes | Primitive values and inferred scalar declarations. |
+| Boolean rendering (`put`, `.to_string()`, concat) | Yes | Yes | Yes | Yes | All targets render `true`/`false` text (the C/asm 1/0 output was normalized to the Rust reference behavior). C uses `poly_bool_str`; asm uses `_print_bool`/`_bool_to_string`. |
 | Constants and `let` | Yes | Yes | Limited | Yes | C uses native `const`/local declarations. |
 | Arithmetic, comparison, logical, bitwise operators | Yes | Yes | Limited | Yes | C uses C11-compatible scalar expressions; integer `/` truncates via `Math.trunc` in JS. |
 | Strings and string concatenation | Yes | Yes | Yes | Yes | All targets support `+` concat in value and `put` position plus `.len()`. C materializes concat with an emitted `poly_concat` helper and `to_string()` on scalars with `poly_int_to_string`/`poly_float_to_string`; asm carves results from a static bump arena (`_str_arena`). Asm string method calls beyond `.len()` are rejected with guidance. |

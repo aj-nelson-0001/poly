@@ -311,18 +311,26 @@ impl JsGenerator {
                     else {
                         unreachable!("range part is either Value or Range");
                     };
-                    let comparison = if *inclusive { "<=" } else { "<" };
+                    let descending = step.as_ref().is_some_and(is_negative_expression);
+                    // Descending loops compare against the upper bound with
+                    // the mirrored operator (>= / >), matching the C and
+                    // Rust backends.
+                    let comparison = match (descending, *inclusive) {
+                        (false, true) => "<=",
+                        (false, false) => "<",
+                        (true, true) => ">=",
+                        (true, false) => ">",
+                    };
                     let step_value = step
                         .as_ref()
                         .map(|value| self.expr(value))
                         .transpose()?
                         .unwrap_or_else(|| "1".to_string());
-                    let descending = step.as_ref().is_some_and(is_negative_expression);
-                    let update = if descending {
-                        format!("{} -= {}", variable, step_value)
-                    } else {
-                        format!("{} += {}", variable, step_value)
-                    };
+                    // The step value already carries its sign (e.g. `-1` for
+                    // `step -1`), so always ADD it: `i += -1` decrements.
+                    // Subtracting it here double-negated and turned every
+                    // descending loop into a zero-iteration no-op.
+                    let update = format!("{} += {}", variable, step_value);
                     line_prefix(output);
                     writeln!(
                         output,
@@ -785,7 +793,9 @@ impl JsGenerator {
             BinaryOp::BitOr => "|",
             BinaryOp::BitXor => "^",
             BinaryOp::Shl => "<<",
-            BinaryOp::Shr => ">>>",
+            // Arithmetic (sign-propagating) shift to match Rust `>>` / C `>>`
+            // / asm `sarq`. JS `>>>` would zero-fill, diverging on negatives.
+            BinaryOp::Shr => ">>",
         }
     }
 
@@ -838,6 +848,31 @@ mod tests {
         let mut parser = Parser::new(&tokens);
         let program = parser.parse().unwrap();
         transpile(&program).unwrap()
+    }
+
+    #[test]
+    fn descending_range_loop_flips_comparison_and_update() {
+        // Regression: `step -1` used to emit `i <= 1` (comparison never
+        // flipped) with `i -= (-1)` (double negation), producing zero
+        // iterations on every descending loop.
+        let output = generate(
+            "fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn",
+        );
+        assert!(output.contains("for (let i = 10; i >= 1; i += (-1)) {"));
+    }
+
+    #[test]
+    fn descending_range_loop_step_minus_two() {
+        let output = generate(
+            "fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn",
+        );
+        assert!(output.contains("for (let i = 10; i >= 1; i += (-2)) {"));
+    }
+
+    #[test]
+    fn ascending_range_loop_keeps_comparison() {
+        let output = generate("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn");
+        assert!(output.contains("for (let i = 0; i <= 10; i += 2) {"));
     }
 
     #[test]

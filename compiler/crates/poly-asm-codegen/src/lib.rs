@@ -1237,10 +1237,21 @@ impl AsmGenerator {
                     self.output.push_str("    movq %r12, %rax\n");
                     self.move_to_loc(Location::Reg("%rax"), saved_r12, frame)?;
                     self.move_to_loc(end_loc, Location::Reg("%r12"), frame)?;
-                    let step_val: i64 = if let Some(Expression::IntLiteral(v)) = step {
-                        v.parse().unwrap_or(1)
-                    } else {
-                        1
+                    // Step magnitude for the induction update. A negative
+                    // literal arrives as `UnaryOp::Neg` over an `IntLiteral`
+                    // (never a leading `-` inside IntLiteral), so unwrap the
+                    // negation and SUBTRACT the magnitude; the comparison
+                    // above already flipped for descending loops.
+                    let step_val: i64 = match step {
+                        Some(Expression::IntLiteral(v)) => v.parse().unwrap_or(1),
+                        Some(Expression::UnaryOp {
+                            op: UnaryOp::Neg,
+                            expr,
+                        }) => match expr.as_ref() {
+                            Expression::IntLiteral(v) => -v.parse::<i64>().unwrap_or(1),
+                            _ => 1,
+                        },
+                        _ => 1,
                     };
 
                     let check_label = self.fresh_label("for_check");
@@ -1258,7 +1269,11 @@ impl AsmGenerator {
                     }
                     let _ = writeln!(self.output, "{incr_label}:");
                     self.load_to_reg(var_loc, "%rax", frame)?;
-                    let _ = writeln!(self.output, "    addq ${step_val}, %rax");
+                    if step_val < 0 {
+                        let _ = writeln!(self.output, "    subq ${}, %rax", step_val.unsigned_abs());
+                    } else {
+                        let _ = writeln!(self.output, "    addq ${step_val}, %rax");
+                    }
                     self.move_to_loc(Location::Reg("%rax"), var_loc, frame)?;
                     let _ = writeln!(self.output, "{check_label}:");
                     self.load_to_reg(var_loc, "%rax", frame)?;
@@ -3068,6 +3083,43 @@ mod tests {
         let mut parser = Parser::new(&tokens);
         let program = parser.parse().unwrap();
         transpile(&program).unwrap()
+    }
+
+    #[test]
+    fn descending_range_loop_subtracts_step_magnitude() {
+        // Regression: a negative literal step lexes as UnaryOp::Neg over an
+        // IntLiteral, which the step parser didn't match, so the induction
+        // fell back to +1 while the comparison flipped to jge — an infinite
+        // loop. The update must SUBTRACT the step magnitude.
+        let output = transpile_source(
+            "fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn",
+        );
+        assert!(
+            output.contains("subq $1, %rax"),
+            "expected subq for descending step: {}",
+            output
+        );
+        assert!(output.contains("jge for_body"), "descending check must be jge");
+    }
+
+    #[test]
+    fn descending_range_loop_step_minus_two() {
+        let output = transpile_source(
+            "fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn",
+        );
+        assert!(
+            output.contains("subq $2, %rax"),
+            "expected subq $2 for step -2: {output}"
+        );
+    }
+
+    #[test]
+    fn ascending_range_loop_adds_step() {
+        let output = transpile_source(
+            "fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn",
+        );
+        assert!(output.contains("addq $2, %rax"));
+        assert!(output.contains("jle for_body"), "ascending check must be jle");
     }
 
     #[test]

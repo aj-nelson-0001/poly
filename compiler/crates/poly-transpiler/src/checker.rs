@@ -659,6 +659,14 @@ impl TypeChecker {
             } else {
                 self.require_compatible(&actual, &expected, "return value".to_string());
             }
+        } else if value.is_some() {
+            // A value-returning `return` in a function with no declared
+            // return type emits invalid code on every target (Rust: E0308,
+            // C: discarded value, JS: silently ignored). Report it here so
+            // users get a Poly-level diagnostic instead of a rustc error.
+            self.error(TypeCheckError::new(
+                "function has no declared return type but returns a value; add a return type like `: i32`",
+            ));
         }
     }
 
@@ -1058,6 +1066,7 @@ impl TypeChecker {
                 {
                     PolyType::String
                 } else if is_numeric(left) && is_numeric(right) {
+                    self.require_same_numeric_class(left, right, "`+`");
                     numeric_join(left, right)
                 } else if matches!(left, PolyType::Unknown) || matches!(right, PolyType::Unknown) {
                     // Unknown operands (e.g. untyped closure parameters) are
@@ -1080,6 +1089,7 @@ impl TypeChecker {
             }
             BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 if is_numeric(left) && is_numeric(right) {
+                    self.require_same_numeric_class(left, right, "arithmetic");
                     numeric_join(left, right)
                 } else if matches!(left, PolyType::Unknown) || matches!(right, PolyType::Unknown) {
                     if is_numeric(right) {
@@ -1134,6 +1144,19 @@ impl TypeChecker {
                     numeric_join(left, right)
                 }
             }
+        }
+    }
+
+    fn require_same_numeric_class(&mut self, left: &PolyType, right: &PolyType, op: &str) {
+        // The checker's `numeric_join` model, C, and JS all silently promote
+        // mixed integer/float arithmetic, but the Rust target rejects it, so
+        // identical source compiled differently per target. Require an
+        // explicit `as` cast so every target sees the same program.
+        if is_integer(left) != is_integer(right) {
+            self.error(TypeCheckError::new(format!(
+                "mixed integer/float arithmetic for {} requires an explicit cast, got {} and {} (cast one operand with `as`)",
+                op, left, right
+            )));
         }
     }
 
@@ -3007,6 +3030,28 @@ mod tests {
         let mut parser = Parser::new(&tokens);
         let program = parser.parse().expect("source should parse");
         TypeChecker::check(&program)
+    }
+
+    #[test]
+    fn value_return_without_declared_return_type_is_rejected() {
+        // Regression: `return v * 2` in a fn with no declared return type
+        // passed checking and only failed at rustc with E0308. The checker
+        // must report it with a Poly-level diagnostic.
+        let source = "fn double_val(v: i32)\n    return v * 2\nend fn\nfn main()\n    put double_val(21)\nend fn";
+        let errors = check(source).expect_err("value-return without return type must error");
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.message.contains("no declared return type")),
+            "expected a no-declared-return-type diagnostic: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn bare_return_without_value_is_still_fine() {
+        // An early `return` in a void function stays legal.
+        let source = "fn maybe(x: i32)\n    if x > 0\n        return\n    end if\n    put x\nend fn\nfn main()\n    maybe(1)\nend fn";
+        assert!(check(source).is_ok());
     }
 
     #[test]

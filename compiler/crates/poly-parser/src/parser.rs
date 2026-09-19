@@ -2228,20 +2228,70 @@ impl<'a> Parser<'a> {
     fn extract_range(expr: &Expression) -> Option<(Expression, Expression)> {
         match expr {
             Expression::Range { start, end, .. } => Some(((**start).clone(), (**end).clone())),
+            // `TOTAL - -4..TOTAL - 1` binds the unary minus to the whole
+            // range: `Sub(TOTAL, Neg(Range(4..TOTAL - 1)))`. Strip the
+            // negation and re-associate the left operand onto the range
+            // start.
+            Expression::UnaryOp {
+                op: UnaryOp::Neg,
+                expr: inner,
+            } => {
+                let (start, end) = Parser::extract_range(inner)?;
+                let negated = match start {
+                    Expression::IntLiteral(v) => {
+                        Expression::IntLiteral(format!("-{}", v))
+                    }
+                    other => Expression::UnaryOp {
+                        op: UnaryOp::Neg,
+                        expr: Box::new(other),
+                    },
+                };
+                Some((negated, end))
+            }
             Expression::BinaryOp { op, left, right }
                 if matches!(
                     op,
                     BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
                 ) =>
             {
-                if let Expression::Range { start, end, .. } = right.as_ref() {
-                    if matches!(start.as_ref(), Expression::IntLiteral(_)) {
-                        let new_left = Expression::BinaryOp {
+                // `TOTAL - -4..TOTAL - 1` shells the range one level
+                // deeper: the unary minus wraps the whole Range in the right
+                // operand — `Sub(TOTAL, Neg(Range(4..TOTAL - 1)))`. Strip
+                // the negation from the right operand before matching.
+                let (right_op, right_inner) = match right.as_ref() {
+                    Expression::UnaryOp {
+                        op: UnaryOp::Neg,
+                        expr,
+                    } => (Some(UnaryOp::Neg), expr.as_ref()),
+                    other => (None, other),
+                };
+                if let Expression::Range { start, end, .. } = right_inner {
+                    // Accept bare int literals and negated int literals
+                    // (`TOTAL - -4..TOTAL - 1` shells a UnaryOp::Neg-wrapped
+                    // start into the right operand). Without the negated
+                    // form this mis-parses as an infinite loop.
+                    if matches!(
+                        start.as_ref(),
+                        Expression::IntLiteral(_)
+                            | Expression::UnaryOp {
+                                op: UnaryOp::Neg,
+                                expr: _
+                            }
+                    ) {
+                        let new_start = Expression::BinaryOp {
                             op: op.clone(),
                             left: left.clone(),
-                            right: start.clone(),
+                            right: Box::new(match right_op {
+                                // Re-apply the stripped negation to the
+                                // range start: `TOTAL - (-4)`.
+                                Some(UnaryOp::Neg) => Expression::UnaryOp {
+                                    op: UnaryOp::Neg,
+                                    expr: start.clone(),
+                                },
+                                _ => (**start).clone(),
+                            }),
                         };
-                        return Some((new_left, (**end).clone()));
+                        return Some((new_start, (**end).clone()));
                     }
                 }
                 None
@@ -4005,6 +4055,59 @@ fn substitute_expression(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn negative_start_swallowed_range_parses_as_range_loop() {
+        // Regression: `TOTAL - -4..TOTAL - 1` shells the range under the
+        // unary minus — `Sub(TOTAL, Neg(Range(4..TOTAL-1)))` — which used
+        // to defeat extract_range and classify the loop as an infinite
+        // loop, producing a bogus `unknown variable` error later.
+        let source = concat!(
+            "const TOTAL := 10\n",
+            "fn main()\n",
+            "    var count i32 := 0\n",
+            "    loop i TOTAL - -4..TOTAL - 1\n",
+            "        count := count + 1\n",
+            "    end loop\n",
+            "    put count\n",
+            "end fn\n",
+        );
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        let mut parser = Parser::new(&tokens);
+        let program = parser.parse().unwrap();
+        let debug = format!("{program:?}");
+        assert!(
+            !debug.contains("InfiniteLoop"),
+            "negative-start swallowed range must not parse as an infinite loop"
+        );
+        assert!(
+            debug.contains("LoopRange"),
+            "expected a LoopRange expression: {debug}"
+        );
+    }
+
+    #[test]
+    fn plain_swallowed_range_still_parses_as_range_loop() {
+        // The original `TOTAL - 4..TOTAL - 1` shape must keep working.
+        let source = concat!(
+            "const TOTAL := 10\n",
+            "fn main()\n",
+            "    var count i32 := 0\n",
+            "    loop i TOTAL - 4..TOTAL - 1\n",
+            "        count := count + 1\n",
+            "    end loop\n",
+            "    put count\n",
+            "end fn\n",
+        );
+        let (tokens, errors) = Lexer::lex(source);
+        assert!(errors.is_empty(), "{errors:?}");
+        let mut parser = Parser::new(&tokens);
+        let program = parser.parse().unwrap();
+        let debug = format!("{program:?}");
+        assert!(!debug.contains("InfiniteLoop"));
+        assert!(debug.contains("LoopRange"));
+    }
+
     #[test]
     fn parse_dependency_declarations() {
         let source = concat!(

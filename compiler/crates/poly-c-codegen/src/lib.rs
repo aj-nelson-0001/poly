@@ -74,6 +74,10 @@ struct CGenerator {
     /// Declared/inferred 64-bit variables, consulted by printf_parts so
     /// int64_t values print with %lld instead of truncating through %d.
     var_widths: RefCell<std::collections::HashMap<String, String>>,
+    /// Variables declared/inferred f64; printf_parts renders these with %f
+    /// instead of %d (a double passed to %d is undefined behavior and
+    /// prints garbage).
+    float_variables: RefCell<std::collections::HashSet<String>>,
     /// Variables declared/inferred `bool`; printf_parts renders these with
     /// poly_bool_str ("true"/"false") instead of %d (1/0), matching the
     /// Rust target's Display rendering.
@@ -102,6 +106,7 @@ impl CGenerator {
             to_string_helper_emitted: Cell::new(false),
             fn_return_types: std::collections::HashMap::new(),
             var_widths: RefCell::new(std::collections::HashMap::new()),
+            float_variables: RefCell::new(std::collections::HashSet::new()),
             bool_variables: RefCell::new(std::collections::HashSet::new()),
             bool_functions: RefCell::new(std::collections::HashSet::new()),
             bool_str_emitted: Cell::new(false),
@@ -499,6 +504,11 @@ impl CGenerator {
                         .borrow_mut()
                         .insert(name.clone(), type_name.clone());
                 }
+                // Track f64 variables: printf of a double needs %f (a double
+                // passed to %d is undefined behavior and prints garbage).
+                if type_name == "double" {
+                    self.float_variables.borrow_mut().insert(name.clone());
+                }
                 if type_name == "bool" {
                     self.bool_variables.borrow_mut().insert(name.clone());
                 }
@@ -528,6 +538,9 @@ impl CGenerator {
                     || self.is_string_valued(value)
                 {
                     self.string_variables.borrow_mut().insert(name.clone());
+                }
+                if type_name == "double" {
+                    self.float_variables.borrow_mut().insert(name.clone());
                 }
                 writeln!(output, "{} {} = {};", type_name, name, self.expr(value)?).unwrap();
             }
@@ -1444,11 +1457,34 @@ impl CGenerator {
     }
 
     fn format_for_expression(&self, expression: &Expression) -> String {
+        if self.is_float_valued(expression) {
+            return "%f".to_string();
+        }
         match expression {
-            Expression::FloatLiteral(_) => "%f".to_string(),
             Expression::BoolLiteral(_) => "%d".to_string(),
             Expression::UnicodeCharLiteral(_) => "%c".to_string(),
             _ => "%d".to_string(),
+        }
+    }
+
+    /// Classify printf-position expressions that carry a floating-point
+    /// value: f64 literals, tracked f64 variables, arithmetic over float
+    /// operands, and `as` casts to a float type. A double passed to %d is
+    /// undefined behavior, so anything float-valued must print via %f.
+    fn is_float_valued(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::FloatLiteral(_) => true,
+            Expression::Parenthesized(inner) => self.is_float_valued(inner),
+            Expression::Identifier(name) => self.float_variables.borrow().contains(name),
+            Expression::UnaryOp { expr, .. } => self.is_float_valued(expr),
+            Expression::BinaryOp { left, right, .. } => {
+                self.is_float_valued(left) || self.is_float_valued(right)
+            }
+            Expression::AsExpression { ty, .. } => matches!(
+                ty.as_ref(),
+                TypeAnnotation::Named(name) if name == "f64" || name == "f32"
+            ),
+            _ => false,
         }
     }
 
@@ -1763,6 +1799,40 @@ mod tests {
     use super::*;
     use poly_lexer::Lexer;
     use poly_parser::Parser;
+
+    #[test]
+    fn float_variables_print_with_f() {
+        // Regression: `put f` on an f64 variable emitted printf("%d\n", f);
+        // a double passed to %d is undefined behavior and printed garbage.
+        let output = generate(
+            "fn main()\nvar f f64 := 0.1 + 0.2\nput f\nend fn",
+        );
+        assert!(
+            output.contains("printf(\"%f\\n\", f);"),
+            "expected %f for f64 variable: {output}"
+        );
+    }
+
+    #[test]
+    fn float_arithmetic_prints_with_f() {
+        let output = generate(
+            "fn main()\nvar g f64 := 2.5\nput g * 2.0\nend fn",
+        );
+        assert!(
+            output.contains("printf(\"%f\\n\""),
+            "expected %f for float-valued arithmetic: {output}"
+        );
+    }
+
+    #[test]
+    fn descending_range_loop_negates_step() {
+        // Regression: the C backend emitted `i -= -((-2))`; keep verifying
+        // the comparison flips and the step carries its sign.
+        let output = generate(
+            "fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn",
+        );
+        assert!(output.contains("for (int32_t i = 10; i >= 1; i -= -((-2))) {"));
+    }
 
     #[test]
     fn emits_c_foreign_block_and_main() {

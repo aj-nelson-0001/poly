@@ -209,3 +209,9 @@ matches Rust but diverges visually from C (`(int64_t)(2)`). Consistent, just doc
    (done); variable negative steps now supported via runtime-sign dispatch on all
    four backends (done).
 7. Longer term: explicit `Loop` node in IR (retire the while-as-if encoding).
+
+---
+
+Round 2 (fuzz-driven, post-preview.12) continues in `AUDIT_ROUND2_REPORT.md`:
+findings 11–15, including the asm shared call-result slot and Rust `mut`
+parameter fixes.

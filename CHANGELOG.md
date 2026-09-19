@@ -2,6 +2,30 @@
 
 All notable changes to the Poly language compiler will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **`scripts/fuzz_backends.py`** — a seed-driven differential fuzzer that
+  generates random Poly programs (call DAGs, same-fn calls in one
+  expression, bounded arithmetic) and runs them through all four targets,
+  failing on any output divergence. 100 seeds green.
+
+### Fixed
+
+- **Rust target: assigned parameters now lower to `mut` bindings.**
+  Poly parameters have value semantics, but the Rust signature kept them
+  immutable, so `x := x + 1` in a parameter failed with rustc E0384 while
+  C/JS/asm accepted it.
+- **asm target: call results use a fresh temporary slot per call.**
+  Two calls to the same function in one expression (`f(1) + f(2)`,
+  recursive `fib`) shared one name-keyed slot, so the second call
+  clobbered the first's value.
+- **asm target: large integer constants assemble.** Constants outside the
+  sign-extended 32-bit immediate range (e.g. `0 - 2147483648`) now emit
+  `movabsq` (register) or a `pushq`/`popq` scratch sequence (stack) and
+  loop-step induction takes the 64-bit path.
+
 ## [2.0.0-preview.3] - 2026-09-11
 
 ### Fixed

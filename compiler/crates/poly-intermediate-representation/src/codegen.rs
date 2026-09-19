@@ -4,6 +4,87 @@
 //! the direct AST generator's behavior for the core language while keeping the
 //! walk driven by the flat intermediate representation (which the optimizer may have rewritten).
 
+/// Collect the parameter names a function body assigns to (directly or in a
+/// nested statement), so the Rust signature can mark them `mut`.
+fn assigned_param_names(function: &Function) -> HashSet<String> {
+    let param_names: HashSet<String> = function.params.iter().map(|p| p.name.clone()).collect();
+    let mut assigned = HashSet::new();
+    fn walk(stmts: &[Statement], params: &HashSet<String>, assigned: &mut HashSet<String>) {
+        for stmt in stmts {
+            match stmt {
+                Statement::Assignment { target, .. } | Statement::Mutation { target, .. } => {
+                    if let Expr::Identifier(name) = target {
+                        if params.contains(name) {
+                            assigned.insert(name.clone());
+                        }
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    walk(then_block, params, assigned);
+                    if let Some(else_block) = else_block {
+                        walk(else_block, params, assigned);
+                    }
+                }
+                Statement::Expression(expr) => walk_expr(expr, params, assigned),
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let MatchArmBody::Block(block) = &arm.body {
+                            walk(block, params, assigned);
+                        }
+                    }
+                }
+                Statement::Block(block) => {
+                    walk(block, params, assigned);
+                }
+                Statement::NestedFunction(inner) => {
+                    // A nested fn cannot rebind the outer fn's parameters.
+                    let _ = inner;
+                }
+                _ => {}
+            }
+        }
+    }
+    // Loop and match shapes only occur in expression position; their bodies
+    // are statement lists, so assignments inside them must be found too.
+    fn walk_expr(expr: &Expr, params: &HashSet<String>, assigned: &mut HashSet<String>) {
+        match expr {
+            Expr::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                walk(then_block, params, assigned);
+                if let Some(else_block) = else_block {
+                    walk(else_block, params, assigned);
+                }
+            }
+            Expr::LoopRange { body, .. } => {
+                // Range bounds and steps are expressions, not statements, so
+                // only the body can contain assignments.
+                walk(body, params, assigned);
+            }
+            Expr::ForLoop { body, .. } => walk(body, params, assigned),
+            Expr::InfiniteLoop(body) => walk(body, params, assigned),
+            Expr::WhileLoop { body, .. } => walk(body, params, assigned),
+            Expr::UnsafeBlock(body) => walk(body, params, assigned),
+            Expr::Match { arms, .. } => {
+                for arm in arms {
+                    if let MatchArmBody::Block(block) = &arm.body {
+                        walk(block, params, assigned);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    walk(&function.body, &param_names, &mut assigned);
+    assigned
+}
+
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -347,6 +428,11 @@ impl IntermediateRepresentationCodeGen {
             .borrow_mut()
             .push(collect_returned_binding_names(&function.body));
         let generics = self.gen_generics(&function.generics);
+        // Poly parameters have value semantics: assigning to one rebinds the
+        // local copy, so the Rust lowering must mark assigned parameters
+        // `mut` (C/JS/asm rebind their locals unconditionally). Without this,
+        // valid Poly hits rustc E0384.
+        let mut_param_names = assigned_param_names(function);
         let params: Vec<String> = function
             .params
             .iter()
@@ -356,6 +442,8 @@ impl IntermediateRepresentationCodeGen {
                     "mut self".to_string()
                 } else if p.name == "self" {
                     "self".to_string()
+                } else if mut_param_names.contains(&p.name) {
+                    format!("mut {}: {}", p.name, ty)
                 } else {
                     format!("{}: {}", p.name, ty)
                 }
@@ -3938,6 +4026,27 @@ mod tests {
         );
         assert!(rust.contains("pair.0 = 99;"), "{rust}");
         assert!(rust.contains("pair.1 = false;"), "{rust}");
+    }
+
+    #[test]
+    fn assigned_parameters_lower_to_mut_bindings() {
+        // Regression: Poly parameters have value semantics — assigning to
+        // one rebinds the local copy (C/JS/asm all did). The Rust signature
+        // must mark assigned parameters `mut`, or valid Poly fails with
+        // rustc E0384.
+        let rust = transpile(
+            "fn f(x: i32): i32\n    x := x + 1\n    return x\nend fn\n\nfn main()\n    put f(5)\nend fn",
+        );
+        assert!(
+            rust.contains("fn f(mut x: i32) -> i32"),
+            "assigned parameter must be `mut`: {rust}"
+        );
+        let unassigned =
+            transpile("fn g(x: i32): i32\n    return x\nend fn\n\nfn main()\n    put g(1)\nend fn");
+        assert!(
+            unassigned.contains("fn g(x: i32) -> i32"),
+            "unassigned parameters must stay immutable: {unassigned}"
+        );
     }
 
     #[test]

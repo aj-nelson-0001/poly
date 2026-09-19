@@ -1296,10 +1296,23 @@ impl AsmGenerator {
                         self.load_to_reg(slot, "%rcx", frame)?;
                         self.output.push_str("    addq %rcx, %rax\n");
                     } else if step_val < 0 {
-                        let _ =
-                            writeln!(self.output, "    subq ${}, %rax", step_val.unsigned_abs());
-                    } else {
+                        // |step| beyond the i32 immediate range needs the
+                        // 64-bit path (see emit_store_const).
+                        if step_val.unsigned_abs() <= i32::MAX as u64 {
+                            let _ = writeln!(
+                                self.output,
+                                "    subq ${}, %rax",
+                                step_val.unsigned_abs()
+                            );
+                        } else {
+                            let _ = writeln!(self.output, "    movabsq ${step_val}, %rcx");
+                            self.output.push_str("    addq %rcx, %rax\n");
+                        }
+                    } else if step_val <= i32::MAX as i64 {
                         let _ = writeln!(self.output, "    addq ${step_val}, %rax");
+                    } else {
+                        let _ = writeln!(self.output, "    movabsq ${step_val}, %rcx");
+                        self.output.push_str("    addq %rcx, %rax\n");
                     }
                     self.move_to_loc(Location::Reg("%rax"), var_loc, frame)?;
                     let _ = writeln!(self.output, "{check_label}:");
@@ -1778,7 +1791,11 @@ impl AsmGenerator {
                         .ok_or("internal: return slot missing")?;
                     Ok(loc)
                 } else {
-                    let loc = frame.allocate(&format!("__call_{func_name}"));
+                    // Fresh temp per call: two calls to the same fn in one
+                    // expression would otherwise share one name-keyed slot
+                    // and the second call would overwrite the first's value
+                    // (e.g. f(1) + f(2) evaluated as f(2) + f(2)).
+                    let loc = frame.allocate_temp();
                     self.move_to_loc(Location::Reg("%rax"), loc, frame)?;
                     Ok(loc)
                 }
@@ -2932,12 +2949,28 @@ impl AsmGenerator {
     // -------------------------------------------------------------------
 
     fn emit_store_const(&mut self, loc: Location, value: i64) {
+        // `movq $imm` only encodes a sign-extended 32-bit immediate; larger
+        // constants need `movabsq` (register) or a scratch sequence (memory).
+        // Without this, literals like `-2147483648` fail to assemble.
+        let fits_i32 = (i32::MIN as i64..=i32::MAX as i64).contains(&value);
         match loc {
             Location::Stack(offset) => {
-                let _ = writeln!(self.output, "    movq ${value}, -{offset}(%rbp)");
+                if fits_i32 {
+                    let _ = writeln!(self.output, "    movq ${value}, -{offset}(%rbp)");
+                } else {
+                    // Scratch via the red-zone-free push/pop pair: no live
+                    // register is clobbered and no extra slot is allocated.
+                    let _ = writeln!(self.output, "    movabsq ${value}, %rax");
+                    self.output.push_str("    pushq %rax\n");
+                    let _ = writeln!(self.output, "    popq -{offset}(%rbp)");
+                }
             }
             Location::Reg(reg) => {
-                let _ = writeln!(self.output, "    movq ${value}, {reg}");
+                if fits_i32 {
+                    let _ = writeln!(self.output, "    movq ${value}, {reg}");
+                } else {
+                    let _ = writeln!(self.output, "    movabsq ${value}, {reg}");
+                }
             }
         }
     }
@@ -3167,6 +3200,22 @@ mod tests {
         assert!(
             output.contains("jle for_body"),
             "ascending check must be jle"
+        );
+    }
+
+    #[test]
+    fn out_of_range_immediates_use_movabs() {
+        // Regression: `0 - 2147483648` emitted `movq $2147483648`, which GNU
+        // as rejects (32-bit immediates are sign-extended only). Large
+        // constants must take movabsq (register) or the push/pop path (mem).
+        let output = transpile_source("fn main()\nput 0 - 2147483648\nend fn");
+        assert!(
+            output.contains("movabsq $2147483648"),
+            "expected movabsq for the large constant: {output}"
+        );
+        assert!(
+            output.contains("pushq %rax") && output.contains("popq"),
+            "stack slot loads must use the push/pop scratch: {output}"
         );
     }
 

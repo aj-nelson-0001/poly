@@ -3,6 +3,31 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-19.
 
+## Round-2 audit: fuzz-driven differential testing; 3 more backend bugs fixed (2026-09-19)
+
+- **`scripts/fuzz_backends.py` added** — generates random Poly programs
+  (arithmetic fn DAGs with nested calls, same-fn calls in one expression,
+  if/else mutation statements over a fixed input lattice) and requires all
+  four targets to agree. Deliberately bounds `*`/`/`/`mod`/`shift left`
+  operands so overflow (target-defined semantics, see finding 14) does not
+  pollute the parity signal.
+- **The fuzzer earned its keep immediately** (plus manual probes):
+  - Rust target rejected `x := x + 1` on a value parameter (E0384) while
+    C/JS/asm rebind locals unconditionally — the IR→Rust codegen now marks
+    assigned parameters `mut` (finding 11).
+  - asm stored every call result in one name-keyed slot per callee, so
+    `f(1) + f(2)` evaluated as `f(2) + f(2)` and `fib(20)` printed 0 —
+    call results now take a fresh temp slot (finding 12).
+  - asm emitted `movq $2147483648` for `0 - 2147483648`, which GNU `as`
+    rejects; large constants now take `movabsq`/push-pop paths (finding 13).
+- **Known-open, documented in `AUDIT_ROUND2_REPORT.md`**: integer overflow
+  semantics are target-defined (rust debug denies, c wraps, js uses
+  doubles, asm is 64-bit) — needs a language decision; the fuzzer bounds
+  operands meanwhile. Also noted: a check-to-emit gap where the optimizer
+  constant-folds an expression the checker accepted (seed 88).
+- 504 tests pass; 100 fuzz seeds × 4 targets agree; all curated
+  differential suites still byte-identical.
+
 ## Cross-target audit: 12 findings fixed; WhileLoop IR node; runtime-step support (2026-09-19)
 
 - **Deep audit of the whole pipeline** (lexer → parser → checker → IR → all

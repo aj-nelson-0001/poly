@@ -72,7 +72,7 @@ Findings are ranked by severity. Every "confirmed" item was reproduced empirical
   when `expected` is `None`, a `return <value>` produces **no error**. The generated Rust
   `fn f(v: i32) { return (v * 2); }` then fails rustc with E0308.
 - **Reproduced:** minimal 5-line file:
-  ~~~poly
+  ~~~poly fragment
   fn double_val(v: i32)
       return v * 2
   end fn

@@ -659,21 +659,67 @@ impl CGenerator {
                     } else {
                         format!("{} += {}", variable, step_value)
                     };
-                    line_prefix(output);
-                    writeln!(
-                        output,
-                        "for (int32_t {} = {}; {} {} {}; {}) {{",
-                        variable,
-                        self.expr(start)?,
-                        variable,
-                        comparison,
-                        self.expr(end)?,
-                        update
-                    )
-                    .unwrap();
-                    self.block_into(output, indent + 1, body)?;
-                    line_prefix(output);
-                    output.push_str("}\n");
+                    // A literal step's sign is known at compile time, so a
+                    // plain `for` with the pre-flipped comparison is exact. A
+                    // non-literal step may be negative at runtime, and since
+                    // Poly ranges are inclusive its sign also decides which
+                    // bound terminates the loop — the comparison direction is
+                    // chosen per iteration. A zero step yields zero
+                    // iterations (rather than hanging) to keep the loop total.
+                    let step_is_literal = step.as_ref().is_some_and(|value| match value {
+                        Expression::IntLiteral(_) => true,
+                        Expression::UnaryOp {
+                            op: UnaryOp::Neg,
+                            expr,
+                        } => matches!(expr.as_ref(), Expression::IntLiteral(_)),
+                        _ => false,
+                    });
+                    if step.is_none() || step_is_literal {
+                        line_prefix(output);
+                        writeln!(
+                            output,
+                            "for (int32_t {} = {}; {} {} {}; {}) {{",
+                            variable,
+                            self.expr(start)?,
+                            variable,
+                            comparison,
+                            self.expr(end)?,
+                            update
+                        )
+                        .unwrap();
+                        self.block_into(output, indent + 1, body)?;
+                        line_prefix(output);
+                        output.push_str("}\n");
+                    } else {
+                        let cond_up = if *inclusive { "<=" } else { "<" };
+                        let cond_down = if *inclusive { ">=" } else { ">" };
+                        let end_value = self.expr(end)?;
+                        line_prefix(output);
+                        output.push_str("{\n");
+                        line_prefix_for(output, indent + 1);
+                        writeln!(output, "int64_t __poly_step = (int64_t)({});", step_value)
+                            .unwrap();
+                        line_prefix_for(output, indent + 1);
+                        writeln!(
+                            output,
+                            "for (int32_t {} = {}; __poly_step > 0 ? {} {} {} : (__poly_step < 0 && {} {} {}); {} += (int32_t)__poly_step) {{",
+                            variable,
+                            self.expr(start)?,
+                            variable,
+                            cond_up,
+                            end_value,
+                            variable,
+                            cond_down,
+                            end_value,
+                            variable
+                        )
+                        .unwrap();
+                        self.block_into(output, indent + 2, body)?;
+                        line_prefix_for(output, indent + 1);
+                        output.push_str("}\n");
+                        line_prefix(output);
+                        output.push_str("}\n");
+                    }
                 }
                 Expression::ForLoop {
                     variable,
@@ -1832,6 +1878,31 @@ mod tests {
             "fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn",
         );
         assert!(output.contains("for (int32_t i = 10; i >= 1; i -= -((-2))) {"));
+    }
+
+    #[test]
+    fn runtime_step_uses_sign_dispatch() {
+        // Regression: a non-literal step used to keep the statically-chosen
+        // comparison, so a runtime-negative step yielded zero iterations.
+        let output = generate(
+            "fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn",
+        );
+        assert!(output.contains("int64_t __poly_step = (int64_t)(s);"), "{output}");
+        assert!(
+            output.contains("__poly_step > 0 ? i <= 1 : (__poly_step < 0 && i >= 1)"),
+            "{output}"
+        );
+        assert!(output.contains("i += (int32_t)__poly_step) {"), "{output}");
+    }
+
+    #[test]
+    fn negated_variable_step_goes_through_runtime_dispatch() {
+        // `-(s)` is not a literal: its sign depends on `s` at runtime, so it
+        // must not take the static descending path.
+        let output = generate(
+            "fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn",
+        );
+        assert!(output.contains("int64_t __poly_step = (int64_t)"), "{output}");
     }
 
     #[test]

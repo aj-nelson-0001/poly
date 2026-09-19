@@ -1943,15 +1943,38 @@ impl IntermediateRepresentationCodeGen {
                                 ..
                             }
                         ) || matches!(step, Expr::Literal(Literal::Int(value)) if value.starts_with('-'));
-                        if is_negative {
+                        let is_literal = matches!(step, Expr::Literal(Literal::Int(_)))
+                            || matches!(
+                                step,
+                                Expr::UnaryOp {
+                                    op: UnaryOp::Neg,
+                                    expr,
+                                } if matches!(expr.as_ref(), Expr::Literal(Literal::Int(_)))
+                            );
+                        if is_negative && is_literal {
                             format!(
                                 "({}..={}).rev().step_by({} as usize)",
                                 e,
                                 s,
                                 self.gen_step_magnitude(step)
                             )
-                        } else {
+                        } else if is_literal {
                             format!("({}).step_by({} as usize)", range, self.gen_expr(step))
+                        } else {
+                            // A runtime step may be negative, and since Poly
+                            // ranges are inclusive the step's sign also picks
+                            // the terminating bound. Re-enter the matching
+                            // direction's sequence from each visited value
+                            // (skipping up to it), mirroring the C backend's
+                            // per-iteration comparison. A zero step yields
+                            // nothing, so the loop terminates.
+                            let step_str = self.gen_expr(step);
+                            format!(
+                                "std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if {step_str} > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by({step_str} as usize).skip(((__poly_sv - {s}) as usize) / ({step_str} as usize))) }} else if {step_str} < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-({step_str})) as usize).skip((({s} - __poly_sv) as usize) / ((-({step_str})) as usize))) }} else {{ Box::new(std::iter::empty()) }} }})",
+                                s = s,
+                                e = e,
+                                step_str = step_str
+                            )
                         }
                     } else {
                         range
@@ -2026,15 +2049,33 @@ impl IntermediateRepresentationCodeGen {
                                 step,
                                 Expr::Literal(Literal::Int(value)) if value.starts_with('-')
                             );
-                            if is_negative {
+                            let is_literal = matches!(step, Expr::Literal(Literal::Int(_)))
+                                || matches!(
+                                    step,
+                                    Expr::UnaryOp {
+                                        op: UnaryOp::Neg,
+                                        expr,
+                                    } if matches!(expr.as_ref(), Expr::Literal(Literal::Int(_)))
+                                );
+                            if is_negative && is_literal {
                                 format!(
                                     "({}..={}).rev().step_by({} as usize)",
                                     e,
                                     s,
                                     self.gen_step_magnitude(step)
                                 )
-                            } else {
+                            } else if is_literal {
                                 format!("({}).step_by({} as usize)", range, self.gen_expr(step))
+                            } else {
+                                // Same runtime-sign dispatch as the single-range
+                                // branch above.
+                                let step_str = self.gen_expr(step);
+                                format!(
+                                    "std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if {step_str} > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by({step_str} as usize).skip(((__poly_sv - {s}) as usize) / ({step_str} as usize))) }} else if {step_str} < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-({step_str})) as usize).skip((({s} - __poly_sv) as usize) / ((-({step_str})) as usize))) }} else {{ Box::new(std::iter::empty()) }} }})",
+                                    s = s,
+                                    e = e,
+                                    step_str = step_str
+                                )
                             }
                         } else {
                             format!("({})", range)
@@ -4046,6 +4087,34 @@ mod tests {
         assert!(
             rust.contains("for j in (10..=1).step_by(2 as usize)"),
             "descending positive step should be empty: {rust}"
+        );
+    }
+
+    #[test]
+    fn runtime_loop_step_dispatches_on_sign() {
+        // Regression: a variable step lowered to `.step_by(s)` with a fixed
+        // ascending sequence, so a runtime-negative `s` silently produced
+        // zero iterations. Non-literal steps must lower to the sign-dispatch
+        // iterator that picks the terminating bound per iteration.
+        let rust = transpile(
+            "fn main()\n    var s i32 := -1\n    loop i 10..1 step s\n        put i\n    end loop\nend fn",
+        );
+        assert!(
+            rust.contains("flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>>"),
+            "runtime step must use the sign-dispatch iterator: {rust}"
+        );
+        assert!(rust.contains("std::iter::empty()"), "{rust}");
+    }
+
+    #[test]
+    fn literal_loop_steps_avoid_runtime_dispatch() {
+        let rust = transpile(
+            "fn main()\n    loop i 10..1 step -2\n        put i\n    end loop\nend fn",
+        );
+        assert!(!rust.contains("flat_map"), "{rust}");
+        assert!(
+            rust.contains("(1..=10).rev().step_by(2 as usize)"),
+            "{rust}"
         );
     }
 

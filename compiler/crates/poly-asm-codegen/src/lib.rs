@@ -1253,6 +1253,31 @@ impl AsmGenerator {
                         },
                         _ => 1,
                     };
+                    // A literal step's sign is known at compile time. A runtime
+                    // step may be negative, and since Poly ranges are inclusive
+                    // its sign also picks the terminating bound — the check
+                    // below dispatches on the step's sign each iteration. A
+                    // zero step falls through to the end label (zero
+                    // iterations) rather than hanging.
+                    let step_is_literal = matches!(step, Some(Expression::IntLiteral(_)))
+                        || matches!(
+                            step,
+                            Some(Expression::UnaryOp {
+                                op: UnaryOp::Neg,
+                                expr,
+                            }) if matches!(expr.as_ref(), Expression::IntLiteral(_))
+                        );
+                    let step_slot = if step.is_none() || step_is_literal {
+                        None
+                    } else {
+                        // A fresh temp (not a name-keyed slot): nested loops
+                        // stepping the same variable by different expressions
+                        // must not share one slot.
+                        let slot = frame.allocate_temp();
+                        let step_loc = self.emit_expr(step.as_ref().unwrap(), frame)?;
+                        self.move_to_loc(step_loc, slot, frame)?;
+                        Some(slot)
+                    };
 
                     let check_label = self.fresh_label("for_check");
                     let body_label = self.fresh_label("for_body");
@@ -1269,7 +1294,12 @@ impl AsmGenerator {
                     }
                     let _ = writeln!(self.output, "{incr_label}:");
                     self.load_to_reg(var_loc, "%rax", frame)?;
-                    if step_val < 0 {
+                    if let Some(slot) = step_slot {
+                        // Runtime step: add the stored step value (its sign
+                        // carries the direction).
+                        self.load_to_reg(slot, "%rcx", frame)?;
+                        self.output.push_str("    addq %rcx, %rax\n");
+                    } else if step_val < 0 {
                         let _ = writeln!(self.output, "    subq ${}, %rax", step_val.unsigned_abs());
                     } else {
                         let _ = writeln!(self.output, "    addq ${step_val}, %rax");
@@ -1277,19 +1307,39 @@ impl AsmGenerator {
                     self.move_to_loc(Location::Reg("%rax"), var_loc, frame)?;
                     let _ = writeln!(self.output, "{check_label}:");
                     self.load_to_reg(var_loc, "%rax", frame)?;
-                    self.output.push_str("    cmpq %r12, %rax\n");
-                    let jmp = if descending {
-                        if *inclusive {
-                            "jge"
-                        } else {
-                            "jg"
-                        }
-                    } else if *inclusive {
-                        "jle"
+                    if let Some(slot) = step_slot {
+                        // Dispatch on the runtime step's sign; %rax still
+                        // holds the loop variable for the comparison.
+                        self.load_to_reg(slot, "%rcx", frame)?;
+                        self.output.push_str("    testq %rcx, %rcx\n");
+                        let _ = writeln!(self.output, "    jg {}_up", check_label);
+                        let _ = writeln!(self.output, "    jl {}_down", check_label);
+                        let _ = writeln!(self.output, "    jmp {end_label}");
+                        let _ = writeln!(self.output, "{}_up:", check_label);
+                        self.output.push_str("    cmpq %r12, %rax\n");
+                        let up_jmp = if *inclusive { "jle" } else { "jl" };
+                        let _ = writeln!(self.output, "    {up_jmp} {body_label}");
+                        let _ = writeln!(self.output, "    jmp {end_label}");
+                        let _ = writeln!(self.output, "{}_down:", check_label);
+                        self.output.push_str("    cmpq %r12, %rax\n");
+                        let down_jmp = if *inclusive { "jge" } else { "jg" };
+                        let _ = writeln!(self.output, "    {down_jmp} {body_label}");
+                        let _ = writeln!(self.output, "    jmp {end_label}");
                     } else {
-                        "jl"
-                    };
-                    let _ = writeln!(self.output, "    {jmp} {body_label}");
+                        self.output.push_str("    cmpq %r12, %rax\n");
+                        let jmp = if descending {
+                            if *inclusive {
+                                "jge"
+                            } else {
+                                "jg"
+                            }
+                        } else if *inclusive {
+                            "jle"
+                        } else {
+                            "jl"
+                        };
+                        let _ = writeln!(self.output, "    {jmp} {body_label}");
+                    }
                     let _ = writeln!(self.output, "{end_label}:");
                     // Restore the previous loop's end bound.
                     self.load_to_reg(saved_r12, "%r12", frame)?;
@@ -3120,6 +3170,37 @@ mod tests {
         );
         assert!(output.contains("addq $2, %rax"));
         assert!(output.contains("jle for_body"), "ascending check must be jle");
+    }
+
+    #[test]
+    fn runtime_step_uses_sign_dispatch() {
+        // Regression: a non-literal step used to be ignored (the induction
+        // fell back to +1 with the ascending check), so a runtime-negative
+        // step silently looped forever or zero times. A runtime step must
+        // store its value in a slot and dispatch the comparison on its sign.
+        let output = transpile_source(
+            "fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn",
+        );
+        assert!(
+            output.contains("addq %rcx, %rax"),
+            "induction must add the stored step: {output}"
+        );
+        assert!(
+            output.contains("jg for_check_") && output.contains("jl for_check_"),
+            "check must dispatch on the step's sign: {output}"
+        );
+        assert!(output.contains("_up:") && output.contains("_down:"), "{output}");
+    }
+
+    #[test]
+    fn literal_step_still_uses_static_fast_path() {
+        // Literal steps must not grow a runtime dispatch: no sign test, and
+        // the induction stays an immediate add/sub.
+        let output = transpile_source(
+            "fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn",
+        );
+        assert!(!output.contains("for_check_up"), "{output}");
+        assert!(output.contains("addq $2, %rax"));
     }
 
     #[test]

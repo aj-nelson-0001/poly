@@ -115,6 +115,11 @@ Findings are ranked by severity. Every "confirmed" item was reproduced empirical
   written with a computed negative step is simply broken everywhere. Either support it
   (runtime check of step sign) or make the checker reject non-literal/negative steps
   explicitly.
+- **FIXED:** non-literal steps now lower to a runtime-sign dispatch on every backend:
+  C/JS use a ternary loop condition over a step slot, the Rust path re-enters the
+  matching direction's sequence per visited value (`once().flat_map(...)`), and asm
+  stores the step in a fresh slot with per-sign check labels. Literal steps keep the
+  compile-time fast paths; a zero step yields zero iterations everywhere.
 
 ### 8. JS `shift right` on negative numbers is an unsigned shift (confirmed)
 - **Repro:** `put -5 shift right 1` →
@@ -201,5 +206,6 @@ matches Rust but diverges visually from C (`(int64_t)(2)`). Consistent, just doc
 4. Checker: value-return in fn without return type (turns rustc errors into Poly errors).
 5. Parser: `extract_range` negative-start guard (misleading parse errors).
 6. Checker: mixed int/float arithmetic now rejected with explicit-cast guidance
-   (done); variable negative steps still require a design decision.
+   (done); variable negative steps now supported via runtime-sign dispatch on all
+   four backends (done).
 7. Longer term: explicit `Loop` node in IR (retire the while-as-if encoding).

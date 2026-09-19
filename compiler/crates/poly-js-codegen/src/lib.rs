@@ -331,17 +331,52 @@ impl JsGenerator {
                     // Subtracting it here double-negated and turned every
                     // descending loop into a zero-iteration no-op.
                     let update = format!("{} += {}", variable, step_value);
-                    line_prefix(output);
-                    writeln!(
-                        output,
-                        "for (let {variable} = {}; {variable} {comparison} {}; {update}) {{",
-                        self.expr(start)?,
-                        self.expr(end)?
-                    )
-                    .unwrap();
-                    self.block_into(output, indent + 1, body)?;
-                    line_prefix(output);
-                    output.push_str("}\n");
+                    // Mirror the C backend: literal steps use the pre-flipped
+                    // comparison; runtime steps pick their direction per
+                    // iteration and a zero step terminates the loop.
+                    let step_is_literal = step.as_ref().is_some_and(|value| match value {
+                        Expression::IntLiteral(_) => true,
+                        Expression::UnaryOp {
+                            op: UnaryOp::Neg,
+                            expr,
+                        } => matches!(expr.as_ref(), Expression::IntLiteral(_)),
+                        _ => false,
+                    });
+                    if step.is_none() || step_is_literal {
+                        line_prefix(output);
+                        writeln!(
+                            output,
+                            "for (let {variable} = {}; {variable} {comparison} {}; {update}) {{",
+                            self.expr(start)?,
+                            self.expr(end)?
+                        )
+                        .unwrap();
+                        self.block_into(output, indent + 1, body)?;
+                        line_prefix(output);
+                        output.push_str("}\n");
+                    } else {
+                        let cond_up = if *inclusive { "<=" } else { "<" };
+                        let cond_down = if *inclusive { ">=" } else { ">" };
+                        let end_value = self.expr(end)?;
+                        line_prefix(output);
+                        output.push_str("{\n");
+                        line_prefix_for(output, indent + 1);
+                        writeln!(output, "let __poly_step = Number({});", step_value).unwrap();
+                        line_prefix_for(output, indent + 1);
+                        writeln!(
+                            output,
+                            "for (let {variable} = {}; __poly_step > 0 ? {variable} {cond_up} {} : (__poly_step < 0 && {variable} {cond_down} {}); {variable} += __poly_step) {{",
+                            self.expr(start)?,
+                            end_value,
+                            end_value
+                        )
+                        .unwrap();
+                        self.block_into(output, indent + 2, body)?;
+                        line_prefix_for(output, indent + 1);
+                        output.push_str("}\n");
+                        line_prefix(output);
+                        output.push_str("}\n");
+                    }
                 }
                 Expression::ForLoop {
                     variable,
@@ -873,6 +908,32 @@ mod tests {
     fn ascending_range_loop_keeps_comparison() {
         let output = generate("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn");
         assert!(output.contains("for (let i = 0; i <= 10; i += 2) {"));
+    }
+
+    #[test]
+    fn runtime_step_uses_sign_dispatch() {
+        // Regression: `step s` with a runtime-negative `s` used to keep the
+        // ascending `<=` comparison, silently yielding zero iterations. A
+        // non-literal step must emit a runtime sign dispatch.
+        let output = generate(
+            "fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn",
+        );
+        assert!(output.contains("let __poly_step = Number(s);"), "{output}");
+        assert!(
+            output.contains("__poly_step > 0 ? i <= 1 : (__poly_step < 0 && i >= 1)"),
+            "{output}"
+        );
+        assert!(output.contains("i += __poly_step) {"), "{output}");
+    }
+
+    #[test]
+    fn negated_variable_step_goes_through_runtime_dispatch() {
+        // `-(s)` is not a literal: its sign depends on `s` at runtime, so it
+        // must not take the static descending path.
+        let output = generate(
+            "fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn",
+        );
+        assert!(output.contains("let __poly_step = Number"), "{output}");
     }
 
     #[test]

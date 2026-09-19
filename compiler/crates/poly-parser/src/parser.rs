@@ -684,10 +684,9 @@ impl<'a> Parser<'a> {
         let body = self.parse_block()?;
         self.expect(&TokenKind::End)?;
         self.expect(&TokenKind::While)?;
-        Ok(Statement::ExpressionStatement(Expression::IfExpression {
+        Ok(Statement::ExpressionStatement(Expression::WhileLoop {
             condition: Box::new(condition),
-            then_block: body,
-            else_block: None,
+            body,
         }))
     }
 
@@ -3473,6 +3472,12 @@ fn expression_contains_target(expr: &Expression, target: &Expression) -> bool {
                         .any(|stmt| statement_contains_target(&stmt.node, target))
                 })
         }
+        Expression::WhileLoop { condition, body } => {
+            expression_contains_target(condition, target)
+                || body
+                    .iter()
+                    .any(|stmt| statement_contains_target(&stmt.node, target))
+        }
         Expression::ArrayLiteral(elements) | Expression::TupleLiteral(elements) => elements
             .iter()
             .any(|element| expression_contains_target(element, target)),
@@ -3882,6 +3887,13 @@ fn substitute_expression(
                     .map(|statement| substitute_spanned_statement(statement, substitutions))
                     .collect()
             }),
+        },
+        Expression::WhileLoop { condition, body } => Expression::WhileLoop {
+            condition: Box::new(substitute_expression(condition, substitutions)),
+            body: body
+                .iter()
+                .map(|statement| substitute_spanned_statement(statement, substitutions))
+                .collect(),
         },
         Expression::MatchExpression { scrutinee, arms } => Expression::MatchExpression {
             scrutinee: Box::new(substitute_expression(scrutinee, substitutions)),
@@ -4620,6 +4632,32 @@ end match"#
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression { .. }) => {}
+            _ => panic!("Expected IfExpression"),
+        }
+    }
+
+    #[test]
+    fn test_while_parses_to_dedicated_node() {
+        // Regression: `while` used to be encoded as an if-without-else, so
+        // every backend had to guess a loop from the missing else block.
+        let prog = parse_source("while i < 3\n    put i\nend while").unwrap();
+        match &prog.statements[0].node {
+            Statement::ExpressionStatement(Expression::WhileLoop { condition, body }) => {
+                assert!(matches!(
+                    condition.as_ref(),
+                    Expression::BinaryOp { .. }
+                ));
+                assert_eq!(body.len(), 1);
+            }
+            _ => panic!("Expected WhileLoop, got {:?}", prog.statements[0].node),
+        }
+        // A real if-without-else must stay an IfExpression with an explicit
+        // empty else block.
+        let prog = parse_source("if i < 3\n    put i\nend if").unwrap();
+        match &prog.statements[0].node {
+            Statement::ExpressionStatement(Expression::IfExpression { else_block, .. }) => {
+                assert!(else_block.is_some());
+            }
             _ => panic!("Expected IfExpression"),
         }
     }

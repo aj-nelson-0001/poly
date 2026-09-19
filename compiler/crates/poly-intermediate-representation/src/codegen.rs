@@ -739,18 +739,14 @@ impl IntermediateRepresentationCodeGen {
                 // are now exclusively `put ... to "file"`, so a top-level
                 // binary expression statement is generated as an ordinary
                 // expression.
-                if let Expr::If {
-                    condition,
-                    then_block,
-                    else_block: None,
-                } = expr
-                {
-                    // While loop shape (parser encodes while as if-without-else).
+                if let Expr::WhileLoop { condition, body } = expr {
+                    // While loops are their own IR node; no more guessing a
+                    // loop from an if-without-else.
                     let cond = self.gen_expr(condition);
                     self.writeln_fmt(format_args!("while {} {{", cond));
                     self.indent += 1;
                     self.enter_scope();
-                    for statement in then_block {
+                    for statement in body {
                         self.gen_statement(statement);
                     }
                     self.exit_scope();
@@ -1806,6 +1802,14 @@ impl IntermediateRepresentationCodeGen {
             } => self.gen_for_loop(variable, iterable, body),
             Expr::InfiniteLoop(body) => {
                 let mut result = "loop {\n".to_string();
+                for statement in body {
+                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                }
+                result.push('}');
+                result
+            }
+            Expr::WhileLoop { condition, body } => {
+                let mut result = format!("while {} {{\n", self.gen_expr(condition));
                 for statement in body {
                     result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
                 }

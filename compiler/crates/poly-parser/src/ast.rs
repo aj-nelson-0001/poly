@@ -218,6 +218,12 @@ pub enum Expression {
         then_block: Block,
         else_block: Option<Block>,
     },
+    /// While loop (`while <cond> ... end while`). A dedicated node so
+    /// backends never have to guess a loop from an if-without-else.
+    WhileLoop {
+        condition: Box<Expression>,
+        body: Block,
+    },
     /// Match expression
     MatchExpression {
         scrutinee: Box<Expression>,

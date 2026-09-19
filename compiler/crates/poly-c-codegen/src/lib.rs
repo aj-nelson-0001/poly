@@ -591,14 +591,10 @@ impl CGenerator {
             // the branch below preserves that compatibility representation while
             // ordinary if statements use the explicit else-block branch.
             Statement::ExpressionStatement(expr) => match expr {
-                Expression::IfExpression {
-                    condition,
-                    then_block,
-                    else_block: None,
-                } => {
+                Expression::WhileLoop { condition, body } => {
                     line_prefix(output);
                     writeln!(output, "while {} {{", self.condition_expr(condition)?).unwrap();
-                    self.block_into(output, indent + 1, then_block)?;
+                    self.block_into(output, indent + 1, body)?;
                     line_prefix(output);
                     output.push_str("}\n");
                 }
@@ -1153,6 +1149,7 @@ impl CGenerator {
             Expression::Closure { .. }
             | Expression::TryExpression(_)
             | Expression::UnsafeBlock(_)
+            | Expression::WhileLoop { .. }
             | Expression::ArrayLiteral(_) => Err(
                 "this expression is not supported by the C backend; use a #c helper".to_string(),
             ),

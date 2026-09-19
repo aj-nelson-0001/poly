@@ -770,19 +770,9 @@ impl TypeChecker {
                     &PolyType::Bool,
                     "if condition".to_string(),
                 );
-                // `while` statements are encoded by the parser as an
-                // if-expression without an else block; keep the loop depth
-                // bumped while checking the body so `break`/`continue` work.
-                let is_while = else_block.is_none();
-                if is_while {
-                    self.loop_depth += 1;
-                }
                 self.push_scope();
                 for statement in then_block {
                     self.check_statement(&statement.node);
-                }
-                if is_while {
-                    self.loop_depth -= 1;
                 }
                 if let Some(else_block) = else_block {
                     for statement in else_block {
@@ -790,6 +780,22 @@ impl TypeChecker {
                     }
                 }
                 self.pop_scope();
+                PolyType::Unknown
+            }
+            Expression::WhileLoop { condition, body } => {
+                let condition_type = self.check_expression(condition);
+                self.require_compatible(
+                    &condition_type,
+                    &PolyType::Bool,
+                    "while condition".to_string(),
+                );
+                self.loop_depth += 1;
+                self.push_scope();
+                for statement in body {
+                    self.check_statement(&statement.node);
+                }
+                self.pop_scope();
+                self.loop_depth -= 1;
                 PolyType::Unknown
             }
             Expression::MatchExpression { scrutinee, arms } => {

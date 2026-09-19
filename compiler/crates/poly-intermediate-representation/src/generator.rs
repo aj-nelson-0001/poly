@@ -376,6 +376,13 @@ fn gen_expr(expr: &ast::Expression) -> Expr {
             scrutinee: Box::new(gen_expr(scrutinee)),
             arms: arms.iter().map(gen_match_arm).collect(),
         },
+        ast::Expression::WhileLoop { condition, body } => Expr::WhileLoop {
+            condition: Box::new(gen_expr(condition)),
+            body: body
+                .iter()
+                .map(|spanned| gen_statement(&spanned.node))
+                .collect(),
+        },
         ast::Expression::Closure { params, body } => Expr::Closure {
             params: params.iter().map(gen_parameter).collect(),
             body: Box::new(gen_expr(body)),

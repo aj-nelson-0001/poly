@@ -1161,11 +1161,7 @@ impl AsmGenerator {
                 let _ = writeln!(self.output, "    jmp {}", ctx.continue_label);
             }
             Statement::ExpressionStatement(expr) => match expr {
-                Expression::IfExpression {
-                    condition,
-                    then_block,
-                    else_block: None,
-                } => {
+                Expression::WhileLoop { condition, body } => {
                     let loop_label = self.fresh_label("while");
                     let body_label = self.fresh_label("while_body");
                     let end_label = self.fresh_label("while_end");
@@ -1175,7 +1171,7 @@ impl AsmGenerator {
                     });
                     let _ = writeln!(self.output, "    jmp {loop_label}");
                     let _ = writeln!(self.output, "{body_label}:");
-                    for stmt in then_block {
+                    for stmt in body {
                         self.emit_statement(&stmt.node, frame)?;
                     }
                     let _ = writeln!(self.output, "{loop_label}:");
@@ -2161,6 +2157,7 @@ impl AsmGenerator {
             | Expression::LoopRange { .. }
             | Expression::ForLoop { .. }
             | Expression::InfiniteLoop(_)
+            | Expression::WhileLoop { .. }
             | Expression::IfExpression { .. }
             | Expression::Closure { .. }
             | Expression::TryExpression(_)

@@ -251,14 +251,10 @@ impl JsGenerator {
             // the branch below preserves that compatibility representation while
             // ordinary if statements use the explicit else-block branch.
             Statement::ExpressionStatement(expr) => match expr {
-                Expression::IfExpression {
-                    condition,
-                    then_block,
-                    else_block: None,
-                } => {
+                Expression::WhileLoop { condition, body } => {
                     line_prefix(output);
                     writeln!(output, "while ({}) {{", self.expr(condition)?).unwrap();
-                    self.block_into(output, indent + 1, then_block)?;
+                    self.block_into(output, indent + 1, body)?;
                     line_prefix(output);
                     output.push_str("}\n");
                 }
@@ -642,26 +638,13 @@ impl JsGenerator {
             Expression::Range { .. }
             | Expression::LoopRange { .. }
             | Expression::ForLoop { .. }
-            | Expression::InfiniteLoop(_) => {
+            | Expression::InfiniteLoop(_)
+            | Expression::WhileLoop { .. } => {
                 Err("loop expressions are only valid as statements in the JS backend".to_string())
             }
-            Expression::IfExpression {
-                condition,
-                then_block,
-                else_block,
-            } => {
-                if else_block.is_none() {
-                    return Err(
-                        "while expressions are only valid as statements in the JS backend"
-                            .to_string(),
-                    );
-                }
-                let _ = (condition, then_block, else_block);
-                Err(
-                    "if expressions in value position are not supported by the JS backend"
-                        .to_string(),
-                )
-            }
+            Expression::IfExpression { .. } => Err(
+                "if expressions in value position are not supported by the JS backend".to_string(),
+            ),
             Expression::GetExpression(get) => {
                 let _ = get;
                 Err(

@@ -355,6 +355,18 @@ distinguishes a range loop from an infinite loop whose first statement begins
 with an identifier: a body statement like `acc := acc + 1` or `tick()` keeps
 the loop infinite.
 
+**Step semantics** (identical on every target — rust, c, asm, js):
+
+- A **literal** step's sign is known at compile time: a negative step iterates
+  downward from the start bound, a positive step upward. The direction is fixed
+  even when the bounds would imply the opposite (`10..1 step 2` visits nothing).
+- A **non-literal** step (a variable or expression) picks its direction from its
+  runtime value each iteration: a positive step compares against the upper
+  bound, a negative step against the lower bound, and a zero step yields zero
+  iterations (the loop terminates rather than hanging).
+- In all cases an iteration runs only while the step has not carried the loop
+  variable past the terminating bound.
+
 ~~~poly fragment
 const TOTAL := 5
 const BUF := 2
@@ -520,6 +532,14 @@ Equality (`=` / `!=`) and ordering comparisons are strictly same-type: the
 checker rejects mixed integer or numeric comparisons (`u64 = i64`, `f64 =
 i64`) with `equality comparison: expected <T>, got <U>`. Convert explicitly
 with `as`:
+
+### Arithmetic
+
+Arithmetic is also strictly same-class: the checker rejects mixed
+integer/float arithmetic (`1 + 0.5`, `count + total_f64`) with a diagnostic
+telling you to cast one operand with `as`. This keeps every backend honest —
+without the rule the rust target rejected the program outright while c and js
+silently accepted it with different results.
 
 ~~~poly fragment
 const FONT_A := 240            # untyped consts infer i32

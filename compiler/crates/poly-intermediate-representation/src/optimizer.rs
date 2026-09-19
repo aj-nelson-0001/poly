@@ -349,6 +349,10 @@ fn fold_expr(expr: &mut Expr) -> bool {
             changed |= fold_statements(body);
         }
         Expr::InfiniteLoop(body) => changed |= fold_statements(body),
+        Expr::WhileLoop { condition, body } => {
+            changed |= fold_expr(condition);
+            changed |= fold_statements(body);
+        }
         Expr::Try(inner) => changed |= fold_expr(inner),
         Expr::As { expr: inner, .. } => changed |= fold_expr(inner),
         Expr::Get(get) => {
@@ -877,6 +881,10 @@ fn inline_in_expr(expr: &mut Expr, inlinable: &HashMap<String, Function>) -> boo
             changed |= inline_in_statements(body, inlinable);
         }
         Expr::InfiniteLoop(body) => changed |= inline_in_statements(body, inlinable),
+        Expr::WhileLoop { condition, body } => {
+            changed |= inline_in_expr(condition, inlinable);
+            changed |= inline_in_statements(body, inlinable);
+        }
         Expr::Try(inner) => changed |= inline_in_expr(inner, inlinable),
         Expr::As { expr: inner, .. } => changed |= inline_in_expr(inner, inlinable),
         Expr::Get(get) => {

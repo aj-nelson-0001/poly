@@ -350,6 +350,11 @@ pub enum Expr {
     },
     /// Infinite loop: `loop` ... `end loop`.
     InfiniteLoop(Vec<Statement>),
+    /// While loop: `while <cond> ... end while`.
+    WhileLoop {
+        condition: Box<Expr>,
+        body: Vec<Statement>,
+    },
     Try(Box<Expr>),
     As {
         expr: Box<Expr>,

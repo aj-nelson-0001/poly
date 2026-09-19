@@ -1967,14 +1967,15 @@ impl IntermediateRepresentationCodeGen {
                         } else {
                             // A runtime step may be negative, and since Poly
                             // ranges are inclusive the step's sign also picks
-                            // the terminating bound. Re-enter the matching
-                            // direction's sequence from each visited value
-                            // (skipping up to it), mirroring the C backend's
-                            // per-iteration comparison. A zero step yields
-                            // nothing, so the loop terminates.
+                            // the terminating bound. The step is snapshotted
+                            // once at loop entry (matching the c/js/asm step
+                            // slots), then the iterator re-enters the matching
+                            // direction's sequence from each visited value. A
+                            // zero step yields nothing, so the loop
+                            // terminates.
                             let step_str = self.gen_expr(step);
                             format!(
-                                "std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if {step_str} > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by({step_str} as usize).skip(((__poly_sv - {s}) as usize) / ({step_str} as usize))) }} else if {step_str} < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-({step_str})) as usize).skip((({s} - __poly_sv) as usize) / ((-({step_str})) as usize))) }} else {{ Box::new(std::iter::empty()) }} }})",
+                                "{{ let __poly_st = ({step_str}); std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if __poly_st > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by(__poly_st as usize).skip(((__poly_sv - {s}) as usize) / (__poly_st as usize))) }} else if __poly_st < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-(__poly_st)) as usize).skip((({s} - __poly_sv) as usize) / ((-(__poly_st)) as usize))) }} else {{ Box::new(std::iter::empty()) }} }}) }}",
                                 s = s,
                                 e = e,
                                 step_str = step_str
@@ -2072,10 +2073,10 @@ impl IntermediateRepresentationCodeGen {
                                 format!("({}).step_by({} as usize)", range, self.gen_expr(step))
                             } else {
                                 // Same runtime-sign dispatch as the single-range
-                                // branch above.
+                                // branch above; the step is snapshotted once.
                                 let step_str = self.gen_expr(step);
                                 format!(
-                                    "std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if {step_str} > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by({step_str} as usize).skip(((__poly_sv - {s}) as usize) / ({step_str} as usize))) }} else if {step_str} < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-({step_str})) as usize).skip((({s} - __poly_sv) as usize) / ((-({step_str})) as usize))) }} else {{ Box::new(std::iter::empty()) }} }})",
+                                    "{{ let __poly_st = ({step_str}); std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if __poly_st > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by(__poly_st as usize).skip(((__poly_sv - {s}) as usize) / (__poly_st as usize))) }} else if __poly_st < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-(__poly_st)) as usize).skip((({s} - __poly_sv) as usize) / ((-(__poly_st)) as usize))) }} else {{ Box::new(std::iter::empty()) }} }}) }}",
                                     s = s,
                                     e = e,
                                     step_str = step_str
@@ -4112,9 +4113,8 @@ mod tests {
 
     #[test]
     fn literal_loop_steps_avoid_runtime_dispatch() {
-        let rust = transpile(
-            "fn main()\n    loop i 10..1 step -2\n        put i\n    end loop\nend fn",
-        );
+        let rust =
+            transpile("fn main()\n    loop i 10..1 step -2\n        put i\n    end loop\nend fn");
         assert!(!rust.contains("flat_map"), "{rust}");
         assert!(
             rust.contains("(1..=10).rev().step_by(2 as usize)"),

@@ -1847,9 +1847,7 @@ mod tests {
     fn float_variables_print_with_f() {
         // Regression: `put f` on an f64 variable emitted printf("%d\n", f);
         // a double passed to %d is undefined behavior and printed garbage.
-        let output = generate(
-            "fn main()\nvar f f64 := 0.1 + 0.2\nput f\nend fn",
-        );
+        let output = generate("fn main()\nvar f f64 := 0.1 + 0.2\nput f\nend fn");
         assert!(
             output.contains("printf(\"%f\\n\", f);"),
             "expected %f for f64 variable: {output}"
@@ -1858,9 +1856,7 @@ mod tests {
 
     #[test]
     fn float_arithmetic_prints_with_f() {
-        let output = generate(
-            "fn main()\nvar g f64 := 2.5\nput g * 2.0\nend fn",
-        );
+        let output = generate("fn main()\nvar g f64 := 2.5\nput g * 2.0\nend fn");
         assert!(
             output.contains("printf(\"%f\\n\""),
             "expected %f for float-valued arithmetic: {output}"
@@ -1871,9 +1867,7 @@ mod tests {
     fn descending_range_loop_negates_step() {
         // Regression: the C backend emitted `i -= -((-2))`; keep verifying
         // the comparison flips and the step carries its sign.
-        let output = generate(
-            "fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn",
-        );
+        let output = generate("fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn");
         assert!(output.contains("for (int32_t i = 10; i >= 1; i -= -((-2))) {"));
     }
 
@@ -1881,10 +1875,12 @@ mod tests {
     fn runtime_step_uses_sign_dispatch() {
         // Regression: a non-literal step used to keep the statically-chosen
         // comparison, so a runtime-negative step yielded zero iterations.
-        let output = generate(
-            "fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn",
+        let output =
+            generate("fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn");
+        assert!(
+            output.contains("int64_t __poly_step = (int64_t)(s);"),
+            "{output}"
         );
-        assert!(output.contains("int64_t __poly_step = (int64_t)(s);"), "{output}");
         assert!(
             output.contains("__poly_step > 0 ? i <= 1 : (__poly_step < 0 && i >= 1)"),
             "{output}"
@@ -1896,10 +1892,12 @@ mod tests {
     fn negated_variable_step_goes_through_runtime_dispatch() {
         // `-(s)` is not a literal: its sign depends on `s` at runtime, so it
         // must not take the static descending path.
-        let output = generate(
-            "fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn",
+        let output =
+            generate("fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn");
+        assert!(
+            output.contains("int64_t __poly_step = (int64_t)"),
+            "{output}"
         );
-        assert!(output.contains("int64_t __poly_step = (int64_t)"), "{output}");
     }
 
     #[test]

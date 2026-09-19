@@ -1296,7 +1296,8 @@ impl AsmGenerator {
                         self.load_to_reg(slot, "%rcx", frame)?;
                         self.output.push_str("    addq %rcx, %rax\n");
                     } else if step_val < 0 {
-                        let _ = writeln!(self.output, "    subq ${}, %rax", step_val.unsigned_abs());
+                        let _ =
+                            writeln!(self.output, "    subq ${}, %rax", step_val.unsigned_abs());
                     } else {
                         let _ = writeln!(self.output, "    addq ${step_val}, %rax");
                     }
@@ -3138,22 +3139,21 @@ mod tests {
         // IntLiteral, which the step parser didn't match, so the induction
         // fell back to +1 while the comparison flipped to jge — an infinite
         // loop. The update must SUBTRACT the step magnitude.
-        let output = transpile_source(
-            "fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn",
-        );
+        let output = transpile_source("fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn");
         assert!(
             output.contains("subq $1, %rax"),
             "expected subq for descending step: {}",
             output
         );
-        assert!(output.contains("jge for_body"), "descending check must be jge");
+        assert!(
+            output.contains("jge for_body"),
+            "descending check must be jge"
+        );
     }
 
     #[test]
     fn descending_range_loop_step_minus_two() {
-        let output = transpile_source(
-            "fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn",
-        );
+        let output = transpile_source("fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn");
         assert!(
             output.contains("subq $2, %rax"),
             "expected subq $2 for step -2: {output}"
@@ -3162,11 +3162,12 @@ mod tests {
 
     #[test]
     fn ascending_range_loop_adds_step() {
-        let output = transpile_source(
-            "fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn",
-        );
+        let output = transpile_source("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn");
         assert!(output.contains("addq $2, %rax"));
-        assert!(output.contains("jle for_body"), "ascending check must be jle");
+        assert!(
+            output.contains("jle for_body"),
+            "ascending check must be jle"
+        );
     }
 
     #[test]
@@ -3186,16 +3187,17 @@ mod tests {
             output.contains("jg for_check_") && output.contains("jl for_check_"),
             "check must dispatch on the step's sign: {output}"
         );
-        assert!(output.contains("_up:") && output.contains("_down:"), "{output}");
+        assert!(
+            output.contains("_up:") && output.contains("_down:"),
+            "{output}"
+        );
     }
 
     #[test]
     fn literal_step_still_uses_static_fast_path() {
         // Literal steps must not grow a runtime dispatch: no sign test, and
         // the induction stays an immediate add/sub.
-        let output = transpile_source(
-            "fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn",
-        );
+        let output = transpile_source("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn");
         assert!(!output.contains("for_check_up"), "{output}");
         assert!(output.contains("addq $2, %rax"));
     }

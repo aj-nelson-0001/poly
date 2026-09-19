@@ -2237,9 +2237,7 @@ impl<'a> Parser<'a> {
             } => {
                 let (start, end) = Parser::extract_range(inner)?;
                 let negated = match start {
-                    Expression::IntLiteral(v) => {
-                        Expression::IntLiteral(format!("-{}", v))
-                    }
+                    Expression::IntLiteral(v) => Expression::IntLiteral(format!("-{}", v)),
                     other => Expression::UnaryOp {
                         op: UnaryOp::Neg,
                         expr: Box::new(other),
@@ -4643,10 +4641,7 @@ end match"#
         let prog = parse_source("while i < 3\n    put i\nend while").unwrap();
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::WhileLoop { condition, body }) => {
-                assert!(matches!(
-                    condition.as_ref(),
-                    Expression::BinaryOp { .. }
-                ));
+                assert!(matches!(condition.as_ref(), Expression::BinaryOp { .. }));
                 assert_eq!(body.len(), 1);
             }
             _ => panic!("Expected WhileLoop, got {:?}", prog.statements[0].node),

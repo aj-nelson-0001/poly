@@ -1,0 +1,83 @@
+#!/usr/bin/env poly
+# Differential backend suite: while loops and runtime loop steps.
+#
+# Covers the two loop shapes whose lowering has historically diverged
+# between targets:
+#
+#   - `while` with break/continue, including nested loops where `break`
+#     must bind to the innermost loop and `continue` must skip to the
+#     innermost loop's check.
+#   - `while true` with a body-side exit: constant folding must leave the
+#     loop intact (an if-true fold would have destroyed it under the old
+#     while-as-if encoding).
+#   - Runtime (variable) steps: the step's sign is not known until the
+#     loop runs, so every backend must dispatch the comparison direction
+#     per iteration and terminate on a zero step. The step expression is
+#     evaluated exactly once, at loop entry — the suite mutates the step
+#     variable inside the body and requires the iteration to be unchanged.
+#
+# Note: everything here stays inside the common subset of all four
+# backends (scalars only).
+#
+# EXPECTED:
+# 1 / 2 / 4 / 1 / 2 / 3 / 11 / 12 / 13 / 0 / 2 / 4 / 6 / 8 / 1
+# 6 / 5 / 4 / 3 / 2 / 1 / 0 / 30
+fn main()
+    # while with continue (skip 3) and break (stop at 5)
+    var i i32 := 0
+    while i < 10
+        i := i + 1
+        if i = 3,
+            continue
+        end if
+        if i = 5,
+            break
+        end if
+        put i
+    end while
+
+    # nested whiles with an inner `while true`: break exits only the
+    # inner loop; the outer loop keeps running
+    var row i32 := 0
+    while row < 2
+        var col i32 := 0
+        while true
+            col := col + 1
+            if col = 4,
+                break
+            end if
+            put row * 10 + col
+        end while
+        row := row + 1
+    end while
+
+    # runtime ascending step; mutating the step variable mid-loop must
+    # not change the iteration (step evaluated once at entry)
+    var s i32 := 2
+    loop n 0..9 step s
+        put n
+        s := 1
+    end loop
+    put s
+
+    # runtime descending step
+    var d i32 := -1
+    loop m 6..1 step d
+        put m
+    end loop
+
+    # runtime zero step terminates with zero iterations
+    var z i32 := 0
+    loop k 5..1 step z
+        put k
+    end loop
+    put 0
+
+    # ascending runtime step over an empty range also yields zero
+    # iterations
+    var u i32 := 3
+    loop w 2..1 step u
+        put w
+    end loop
+    put 30
+end fn

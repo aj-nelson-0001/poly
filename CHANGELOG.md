@@ -54,6 +54,53 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Changed
 
+- **Strict same-class arithmetic.** Mixed integer/float arithmetic
+  (`1 + 0.5`, `count + total_f64`) is now rejected at the Poly level with a
+  diagnostic naming the cast (`cast one operand with \`as\``). Previously the
+  rust target rejected such programs at rustc while c printed garbage and js
+  silently truncated — the same source produced three different outcomes.
+- **`while` is a dedicated AST/IR node.** The parser no longer encodes `while`
+  as an if-expression without an else block for backends to decode; the
+  checker no longer treats every if-without-else as a loop (so `break` inside
+  a genuine if-without-else is now correctly an error), and the intermediate
+  representation pipeline generates a plain `if` for one.
+
+### Added
+
+- **Runtime-sign dispatch for variable loop steps.**
+  `loop i 10..1 step s` previously used the compile-time comparison
+  direction, so a runtime-negative step silently produced zero iterations on
+  every target (and a zero step hung the asm backend). All four backends now
+  dispatch on the step's sign per iteration; literal steps keep their
+  compile-time fast paths and a zero step terminates.
+- **Loop-step semantics documented** in `POLY_SPEC_v2.md` alongside the
+  same-class arithmetic rule.
+- **`tests/diff_whiles.poly`** differential suite covering `while` with
+  `break`/`continue`, nested loops, `while true` under constant folding, and
+  runtime-step `loop` ranges — byte-identical output required on
+  rust/c/js/asm. Wired into the differential workflow.
+- **`AUDIT_REPORT.md`** documenting the full cross-target audit that produced
+  this changelog's fixes (12 findings, empirically confirmed, with repros).
+
+### Fixed
+
+- **asm backend: descending literal steps looped forever.**
+  `loop i 10..1 step -1` parsed the step with `if let Some(IntLiteral(v))`,
+  which never matches `-1` (it lexes as a negation), so the induction fell
+  back to `+1` while the comparison correctly flipped — an infinite loop.
+- **js backend: descending literal steps did zero iterations.** The
+  comparison never flipped (`i <= 1`) and the update double-negated
+  (`i -= (-1)`).
+- **c backend: f64 variables printed garbage.** `put f` on an `f64` variable
+  emitted `printf("%d\n", f)`; float classification now covers variables and
+  float-valued expressions, not just float literals.
+- **Checker: value-returning functions without a declared return type**
+  passed checking and failed only at rustc; this now produces a Poly-level
+  diagnostic (the repository's own `tests/asm_target_tests.poly` triggered
+  it).
+- **Parser: negative-literal range starts** (`loop i TOTAL - -4..TOTAL - 1`)
+  mis-parsed as an infinite loop with a misleading `unknown variable`
+  error; `extract_range` now unwraps the negation shell.
 - **Bool rendering normalized across targets.** `put flag`,
   `flag.to_string()`, and bool operands in concat chains now print
   `true`/`false` on every target; C (via a new `poly_bool_str` helper) and

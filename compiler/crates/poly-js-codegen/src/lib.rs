@@ -873,17 +873,13 @@ mod tests {
         // Regression: `step -1` used to emit `i <= 1` (comparison never
         // flipped) with `i -= (-1)` (double negation), producing zero
         // iterations on every descending loop.
-        let output = generate(
-            "fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn",
-        );
+        let output = generate("fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn");
         assert!(output.contains("for (let i = 10; i >= 1; i += (-1)) {"));
     }
 
     #[test]
     fn descending_range_loop_step_minus_two() {
-        let output = generate(
-            "fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn",
-        );
+        let output = generate("fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn");
         assert!(output.contains("for (let i = 10; i >= 1; i += (-2)) {"));
     }
 
@@ -898,9 +894,8 @@ mod tests {
         // Regression: `step s` with a runtime-negative `s` used to keep the
         // ascending `<=` comparison, silently yielding zero iterations. A
         // non-literal step must emit a runtime sign dispatch.
-        let output = generate(
-            "fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn",
-        );
+        let output =
+            generate("fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn");
         assert!(output.contains("let __poly_step = Number(s);"), "{output}");
         assert!(
             output.contains("__poly_step > 0 ? i <= 1 : (__poly_step < 0 && i >= 1)"),
@@ -913,9 +908,8 @@ mod tests {
     fn negated_variable_step_goes_through_runtime_dispatch() {
         // `-(s)` is not a literal: its sign depends on `s` at runtime, so it
         // must not take the static descending path.
-        let output = generate(
-            "fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn",
-        );
+        let output =
+            generate("fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn");
         assert!(output.contains("let __poly_step = Number"), "{output}");
     }
 

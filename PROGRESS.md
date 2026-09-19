@@ -1,7 +1,55 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-18.
+Last updated: 2026-09-19.
+
+## Cross-target audit: 12 findings fixed; WhileLoop IR node; runtime-step support (2026-09-19)
+
+- **Deep audit of the whole pipeline** (lexer → parser → checker → IR → all
+  four backends) found 12 real defects, every one confirmed by running
+  generated code, not just reading it. Full detail with repros in
+  `AUDIT_REPORT.md`. The criticals: asm descending literal steps were an
+  **infinite loop** (the `if let Some(IntLiteral)` step match never matches a
+  negation, so induction fell back to +1 while the comparison flipped), js
+  descending steps did **zero iterations** (comparison never flipped, update
+  double-negated), and the c backend printed **garbage for f64 variables**
+  (`printf("%d\n", f)` — the float classifier only knew float *literals*).
+- **Checker hardening**: value-`return` in a function without a declared
+  return type now errors at the Poly level (the repo's own
+  `asm_target_tests.poly` triggered it, surfacing as a raw rustc E0308);
+  mixed integer/float arithmetic is rejected with cast guidance — previously
+  rust rejected at rustc, c printed garbage, js silently truncated. Snapshots
+  regenerated.
+- **Parser**: `extract_range` unwraps the `Sub(x, Neg(Range(..)))` shell so
+  negative-literal range starts (`loop i TOTAL - -4..TOTAL - 1`) parse as
+  range loops instead of infinite loops with a misleading `unknown variable`
+  error.
+- **Runtime-sign dispatch for variable steps**: `loop i a..b step s` with a
+  non-literal step now picks its comparison direction from the step's runtime
+  sign on every backend — c/js via a ternary condition over a step slot, rust
+  via `once().flat_map()` re-entering the matching direction's sequence, asm
+  via a fresh step slot with per-sign check labels (name-keyed slots would
+  have collided in nested loops). Literal steps keep their compile-time fast
+  paths; a zero step yields zero iterations everywhere. Verified across 5
+  scenarios × 4 targets, including `-(s)` (a negated *variable* is not a
+  literal — its sign is runtime) and nested loops stepping the same variable
+  by different expressions.
+- **While-as-if encoding retired**: `while` used to parse as an
+  `IfExpression` with `else_block: None` and every backend decoded a loop
+  from that shape — the checker bumped `loop_depth` on if-without-else so
+  `break`/`continue` worked, making the invariant "fragile but consistent".
+  `while` now has a dedicated AST and IR node end to end; an if-without-else
+  generates a plain if on the IR pipeline and `break` inside one is a proper
+  checker error. Both optimizer passes recurse into the new node; snapshots
+  unchanged after the statement-position indentation fix.
+- **Verification**: 503 tests pass (up from 425 at audit start, +78 across
+  three rounds of regression tests); all five pre-existing differential
+  suites byte-identical across rust/c/js/asm before and after the IR
+  refactor; the new `diff_whiles.poly` suite covers while/break/continue,
+  nested whiles, `while true` under constant folding, and runtime steps.
+- **Process note**: the first two pushes failed CI on `cargo fmt --check`
+  only — every test job passed. Hand-written multi-line format! strings
+  don't survive rustfmt; run `cargo fmt --all` before committing.
 
 ## Bool rendering normalized; asm concat bugs; arena-exhaustion contract (2026-09-18)
 

@@ -58,6 +58,14 @@ const CASES: &[(&str, &str, Expect)] = &[
         "fn main()\n    put (\"a\" + \"b\").len()\nend fn\n\nfn double(v: i32): i32\n    return v * 2\nend fn\n",
         Expect::All,
     ),
+    // --- loops ------------------------------------------------------------
+    (
+        "variable loop step",
+        // Runtime steps dispatch on the step's sign on every target
+        // (regression: they used to yield zero iterations silently).
+        "fn main()\n    var s i32 := 2\n    loop i 0..6 step s\n        put i\n    end loop\nend fn\n",
+        Expect::All,
+    ),
     // --- vectors ----------------------------------------------------------
     (
         "vector literal len",

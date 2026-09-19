@@ -31,7 +31,7 @@ This matrix is the implementation contract for the current Rust, C, assembly, an
 | `if`/`else` | Yes | Yes | Limited | Yes | |
 | `while` | Yes | Yes | Limited | Yes | |
 | Infinite loops | Yes | Yes | Limited | Yes | |
-| Inclusive numeric loops | Yes | Yes | Limited | Yes | C currently supports one numeric range per loop; JS supports optional `step`. |
+| Inclusive numeric loops | Yes | Yes | Limited | Yes | C currently supports one numeric range per loop. `step` is supported everywhere: literal steps fix the direction at compile time, and variable steps dispatch on the step's runtime sign (a zero step terminates) — identical iteration semantics on all four targets. |
 | Multi-range loops | Yes | No | No | No | C and JS reject multiple range parts. |
 | Collection loops | Yes | Limited | Limited | Yes | C only supports a shallow C-array form. Asm supports `for x in <vector>` and `for x in <string>`. JS lowers both `for x in` and `loop x in` to `for...of`. |
 | `break`/`continue` | Yes | Yes | Limited | Yes | |

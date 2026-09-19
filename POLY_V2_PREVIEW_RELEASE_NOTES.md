@@ -2,9 +2,9 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.11 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.12 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
 
-## What's New in 2.0.0-preview.11
+## What's New in 2.0.0-preview.12
 
 Strings work on every target: C materializes value-position concatenation
 and scalar `to_string()` through emitted runtime helpers (with correct

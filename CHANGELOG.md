@@ -50,7 +50,7 @@ All notable changes to the Poly language compiler will be documented in this fil
   operator; PROGRESS.md records the audit-fix session and corrects the
   stale string-mutation claim.
 
-## [Unreleased]
+## [2.0.0-preview.12] - 2026-09-19
 
 ### Changed
 

@@ -1,6 +1,6 @@
 [package]
 name = "tetris"
-version = "2.0.0-preview.11"
+version = "2.0.0-preview.12"
 edition = "2021"
 
 # Generated projects default to optimized builds: Poly programs are

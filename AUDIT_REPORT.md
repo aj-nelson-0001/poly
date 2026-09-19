@@ -17,13 +17,13 @@ Findings are ranked by severity. Every "confirmed" item was reproduced empirical
 
 ### 1. asm backend: `loop a..b step -N` is an INFINITE loop (confirmed)
 - **Where:** `compiler/crates/poly-asm-codegen/src/lib.rs` ~line 1240:
-  ```rust
+  ~~~rust
   let step_val: i64 = if let Some(Expression::IntLiteral(v)) = step {
       v.parse().unwrap_or(1)
   } else {
       1
   };
-  ```
+  ~~~
   A negative step lexes as `UnaryOp(Neg, IntLiteral("2"))`, **not** `IntLiteral("-2")`, so
   `step_val` falls back to **1**. Meanwhile `descending` (line 1229, via
   `is_negative_expression`) *is* detected, flipping the comparison to `jge` — so the loop
@@ -48,14 +48,14 @@ Findings are ranked by severity. Every "confirmed" item was reproduced empirical
 ### 3. C backend: f64 variables print as garbage via `%d` (confirmed)
 - **Where:** `compiler/crates/poly-c-codegen/src/lib.rs` — `printf_parts` →
   `format_for_expression` (line 1446):
-  ```rust
+  ~~~rust
   fn format_for_expression(&self, expression: &Expression) -> String {
       match expression {
           Expression::FloatLiteral(_) => "%f".to_string(),
           _ => "%d".to_string(),
       }
   }
-  ```
+  ~~~
   Float *literals* print with `%f`, but **any float-typed variable or computed float**
   falls through to `%d`. Passing a `double` to `%d` is varargs UB → garbage.
 - **Reproduced:** `var f f64 := 0.1 + 0.2; put f` emitted `printf("%d\n", f);` and printed
@@ -72,11 +72,11 @@ Findings are ranked by severity. Every "confirmed" item was reproduced empirical
   when `expected` is `None`, a `return <value>` produces **no error**. The generated Rust
   `fn f(v: i32) { return (v * 2); }` then fails rustc with E0308.
 - **Reproduced:** minimal 5-line file:
-  ```poly
+  ~~~poly
   fn double_val(v: i32)
       return v * 2
   end fn
-  ```
+  ~~~
   → `--check` fails with a raw rustc error instead of a Poly diagnostic.
 - **Fix:** in `check_return`, when `expected` is `None` and `value` is `Some(_)`, report
   "function has no declared return type but returns a value" (or infer/annotate).

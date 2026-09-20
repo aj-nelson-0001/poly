@@ -41,10 +41,20 @@ rust/c/asm/js) and corrected:
   green (all jobs, 7m43s). GitHub release published as a prerelease with
   notes mirroring POLY_V2_PREVIEW_RELEASE_NOTES.md and a Linux binary
   asset attached (matching the older v-prefixed releases).
-- **Release workflow widened**: `release.yml` now triggers on both tag
-  spellings (`v*` and unprefixed `2.*`) — the tag history uses both, and
-  the version guard's `${GITHUB_REF_NAME#v}` strip is a no-op for
-  unprefixed tags, so future preview tags publish automatically.
+- **Release workflow widened and test-verified**: `release.yml` now
+  triggers on both tag spellings (`v*` and unprefixed `2.*`) — the tag
+  history uses both, and the version guard's `${GITHUB_REF_NAME#v}` strip
+  is a no-op for unprefixed tags. Proven end-to-end with a throwaway
+  `2.0.0-test-publish` tag: the workflow fired, the build succeeded, and
+  the version guard correctly rejected the mismatch
+  ("binary reports 'poly 2.0.0-preview.13'") without creating a release.
+  Test tag and run deleted afterwards.
+- **Tag naming standardized**: unprefixed version tags are the convention,
+  documented in POLY_VERSION_FILES_MAP.md alongside the full publish
+  flow (manual doc edits → prepare_release.py → tag → push → replace
+  generated notes, add sha256sums.txt).
+- The preview.13 release now ships a `sha256sums.txt` asset covering the
+  binary, round-trip verified with `sha256sum -c` on a downloaded copy.
 - **tetris.hs is runtime state, not junk**: the file (a saved high score)
   is written by `tetris.poly` at runtime; added to `.gitignore` instead
   of committing or deleting it.

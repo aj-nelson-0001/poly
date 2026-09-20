@@ -53,10 +53,12 @@ function transpileTarget(src, target) {
 }
 
 const good = [
-  ['fn main()\n    put 5 mod 3\n    put 6 xor 3\nend fn\n', ['%', '^']],
+  ['fn main()\n    put 5 mod 3\n    put 6 xor 3\nend fn\n', ['wrapping_rem', '^']],
   ['fn main()\n    put true and false\n    put not false\nend fn\n', ['&&', '!']],
   ['fn main()\n    put 12 bitand 10\n    put 12 bitor 10\nend fn\n', ['&', '|']],
-  ['fn main()\n    put 1 shift left 2\n    put 8 shift right 2\nend fn\n', ['<<', '>>']],
+  // Shifts lower to wrapping_shl/shr (defined 32-bit wrap semantics), so
+  // assert the method names rather than raw operator tokens.
+  ['fn main()\n    put 1 shift left 2\n    put 8 shift right 2\nend fn\n', ['wrapping_shl', 'wrapping_shr']],
   ['fn main()\n    if 5 = 5,\n        put "eq"\n    end if\nend fn\n', ['==']],
 ];
 

@@ -951,8 +951,13 @@ impl AsmGenerator {
                             .insert(format!("__vecelem_{name}"), elem_name);
                     }
                     // Record struct/enum/string types for typed access (fields,
-                    // strlen-based `put` of string variables).
+                    // strlen-based `put` of string variables). Declared-`i64`
+                    // variables are recorded so `is_i64_expr` keeps their
+                    // arithmetic at 64 bits instead of the default 32-bit wrap.
                     if let TypeAnnotation::Named(type_name) = ty {
+                        if type_name == "i64" || type_name == "u64" {
+                            frame.var_types.insert(name.clone(), type_name.clone());
+                        }
                         if self.structs.contains_key(type_name)
                             || self.enums.contains_key(type_name)
                             || type_name == "string"
@@ -1578,17 +1583,101 @@ impl AsmGenerator {
 
                 self.load_to_reg(left_loc, "%rax", frame)?;
                 self.load_to_reg(right_loc, "%rcx", frame)?;
+                // Default-width Poly integers are 32-bit two's complement:
+                // arithmetic happens at 32 bits and the result is sign-extended
+                // to keep the value canonical (matches the wrapping i32 targets).
+                // Declared-i64 variables keep exact 64-bit arithmetic.
+                let wide = self.is_i64_expr(left, frame) || self.is_i64_expr(right, frame);
+                if !wide {
+                    self.output.push_str("    movslq %eax, %rax\n");
+                    self.output.push_str("    movslq %ecx, %rcx\n");
+                }
                 match op {
+                    BinaryOp::Add if !wide => self.output.push_str("    addl %ecx, %eax\n"),
+                    BinaryOp::Sub if !wide => self.output.push_str("    subl %ecx, %eax\n"),
+                    BinaryOp::Mul if !wide => self.output.push_str("    imull %ecx, %eax\n"),
                     BinaryOp::Add => self.output.push_str("    addq %rcx, %rax\n"),
                     BinaryOp::Sub => self.output.push_str("    subq %rcx, %rax\n"),
                     BinaryOp::Mul => self.output.push_str("    imulq %rcx, %rax\n"),
+                    BinaryOp::Div if !wide => {
+                        // INT_MIN / -1 traps on idivl; defined as INT_MIN via
+                        // a runtime guard on both operands (a plain min value
+                        // with a variable -1 divisor must divide normally).
+                        let trap_free = self.fresh_label("div");
+                        let int_min = self.fresh_label("divmin");
+                        let done = self.fresh_label("divdone");
+                        self.output.push_str("    cmpl $-1, %ecx\n");
+                        let _ = writeln!(self.output, "    jne {trap_free}");
+                        self.output.push_str("    cmpl $-2147483648, %eax\n");
+                        let _ = writeln!(self.output, "    jne {trap_free}");
+                        let _ = writeln!(self.output, "    jmp {int_min}");
+                        let _ = writeln!(self.output, "{trap_free}:");
+                        self.output.push_str("    cdq\n");
+                        self.output.push_str("    idivl %ecx\n");
+                        let _ = writeln!(self.output, "    jmp {done}");
+                        let _ = writeln!(self.output, "{int_min}:");
+                        self.output.push_str("    xorl %eax, %eax\n");
+                        self.output.push_str("    subl $2147483648, %eax\n");
+                        let _ = writeln!(self.output, "{done}:");
+                    }
                     BinaryOp::Div => {
+                        // I64_MIN / -1 traps on idivq; defined as I64_MIN via
+                        // a runtime guard on both operands.
+                        let trap_free = self.fresh_label("divq");
+                        let i64_min = self.fresh_label("divmin64");
+                        let done = self.fresh_label("divdone64");
+                        self.output.push_str("    cmpq $-1, %rcx\n");
+                        let _ = writeln!(self.output, "    jne {trap_free}");
+                        self.output
+                            .push_str("    movabsq $-9223372036854775808, %r8\n");
+                        self.output.push_str("    cmpq %r8, %rax\n");
+                        let _ = writeln!(self.output, "    jne {trap_free}");
+                        let _ = writeln!(self.output, "    jmp {i64_min}");
+                        let _ = writeln!(self.output, "{trap_free}:");
                         self.output.push_str("    cqo\n");
                         self.output.push_str("    idivq %rcx\n");
+                        let _ = writeln!(self.output, "    jmp {done}");
+                        let _ = writeln!(self.output, "{i64_min}:");
+                        self.output
+                            .push_str("    movabsq $-9223372036854775808, %rax\n");
+                        let _ = writeln!(self.output, "{done}:");
+                    }
+                    BinaryOp::Mod if !wide => {
+                        let trap_free = self.fresh_label("mod");
+                        let zero = self.fresh_label("modzero");
+                        let done = self.fresh_label("moddone");
+                        self.output.push_str("    cmpl $-1, %ecx\n");
+                        let _ = writeln!(self.output, "    jne {trap_free}");
+                        self.output.push_str("    cmpl $-2147483648, %eax\n");
+                        let _ = writeln!(self.output, "    jne {trap_free}");
+                        let _ = writeln!(self.output, "    jmp {zero}");
+                        let _ = writeln!(self.output, "{trap_free}:");
+                        self.output.push_str("    cdq\n");
+                        self.output.push_str("    idivl %ecx\n");
+                        let _ = writeln!(self.output, "    jmp {done}");
+                        let _ = writeln!(self.output, "{zero}:");
+                        self.output.push_str("    xorl %edx, %edx\n");
+                        let _ = writeln!(self.output, "{done}:");
+                        self.output.push_str("    movl %edx, %eax\n");
                     }
                     BinaryOp::Mod => {
+                        let trap_free = self.fresh_label("modq");
+                        let zero = self.fresh_label("modzero64");
+                        let done = self.fresh_label("moddone64");
+                        self.output.push_str("    cmpq $-1, %rcx\n");
+                        let _ = writeln!(self.output, "    jne {trap_free}");
+                        self.output
+                            .push_str("    movabsq $-9223372036854775808, %r8\n");
+                        self.output.push_str("    cmpq %r8, %rax\n");
+                        let _ = writeln!(self.output, "    jne {trap_free}");
+                        let _ = writeln!(self.output, "    jmp {zero}");
+                        let _ = writeln!(self.output, "{trap_free}:");
                         self.output.push_str("    cqo\n");
                         self.output.push_str("    idivq %rcx\n");
+                        let _ = writeln!(self.output, "    jmp {done}");
+                        let _ = writeln!(self.output, "{zero}:");
+                        self.output.push_str("    xorl %edx, %edx\n");
+                        let _ = writeln!(self.output, "{done}:");
                         self.output.push_str("    movq %rdx, %rax\n");
                     }
                     BinaryOp::Eq => {
@@ -1640,8 +1729,15 @@ impl AsmGenerator {
                     BinaryOp::BitAnd => self.output.push_str("    andq %rcx, %rax\n"),
                     BinaryOp::BitOr => self.output.push_str("    orq %rcx, %rax\n"),
                     BinaryOp::BitXor => self.output.push_str("    xorq %rcx, %rax\n"),
+                    BinaryOp::Shl if !wide => self.output.push_str("    sall %cl, %eax\n"),
+                    BinaryOp::Shr if !wide => self.output.push_str("    sarl %cl, %eax\n"),
                     BinaryOp::Shl => self.output.push_str("    salq %cl, %rax\n"),
                     BinaryOp::Shr => self.output.push_str("    sarq %cl, %rax\n"),
+                }
+                if !wide {
+                    // Sign-extend the 32-bit result to the canonical 64-bit
+                    // form used for storage and printing.
+                    self.output.push_str("    movslq %eax, %rax\n");
                 }
                 let loc = frame.allocate_temp();
                 self.move_to_loc(Location::Reg("%rax"), loc, frame)?;
@@ -2948,6 +3044,32 @@ impl AsmGenerator {
     // Register / memory helpers
     // -------------------------------------------------------------------
 
+    /// True when the expression is known 64-bit: a declared `i64` variable
+    /// or a literal outside the i32 range (matches the C target's promotion).
+    fn is_i64_expr(&self, expression: &Expression, frame: &StackFrame) -> bool {
+        match expression {
+            Expression::IntLiteral(value) => match value.parse::<i64>() {
+                Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                Err(_) => true,
+            },
+            Expression::Identifier(name) => frame
+                .var_types
+                .get(name)
+                .is_some_and(|ty| ty == "i64" || ty == "u64" || ty == "int64_t"),
+            Expression::Parenthesized(inner) => self.is_i64_expr(inner, frame),
+            Expression::UnaryOp { expr, .. } => self.is_i64_expr(expr, frame),
+            // Arithmetic with a 64-bit operand widens the result (matches
+            // the C target's is_i64_valued classification).
+            Expression::BinaryOp { op, left, right } => {
+                matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                ) && (self.is_i64_expr(left, frame) || self.is_i64_expr(right, frame))
+            }
+            _ => false,
+        }
+    }
+
     fn emit_store_const(&mut self, loc: Location, value: i64) {
         // `movq $imm` only encodes a sign-extended 32-bit immediate; larger
         // constants need `movabsq` (register) or a scratch sequence (memory).
@@ -3268,7 +3390,8 @@ mod tests {
     #[test]
     fn supports_integer_arithmetic() {
         let output = transpile_source("var x i32 := 10 + 20\nput x");
-        assert!(output.contains("addq"));
+        // Default-width ints add at 32 bits (wrapping semantics).
+        assert!(output.contains("addl"), "{output}");
     }
 
     #[test]

@@ -35,7 +35,10 @@ double_val:
     movq $2, -16(%rbp)
     movq -8(%rbp), %rax
     movq -16(%rbp), %rcx
-    imulq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    imull %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -24(%rbp)
     movq -24(%rbp), %rax
     movq %rbp, %rsp
@@ -56,11 +59,17 @@ add_three:
     movq %rdx, -24(%rbp)
     movq -8(%rbp), %rax
     movq -16(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -32(%rbp)
     movq -32(%rbp), %rax
     movq -24(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -40(%rbp)
     movq -40(%rbp), %rax
     movq %rbp, %rsp
@@ -95,7 +104,10 @@ main:
     movq %rax, -24(%rbp)
     movq -8(%rbp), %rax
     movq -24(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -40(%rbp)
     movq -40(%rbp), %rdi
     # put (integer)
@@ -104,9 +116,12 @@ main:
     movq $3, -64(%rbp)
     movq -56(%rbp), %rax
     movq -64(%rbp), %rcx
+    movslq %eax, %rax
+    movslq %ecx, %rcx
     cmpq %rcx, %rax
     setg %al
     movzbq %al, %rax
+    movslq %eax, %rax
     movq %rax, -72(%rbp)
     movq -72(%rbp), %rax
     movq %rax, -48(%rbp)
@@ -134,14 +149,20 @@ if_end_2:
 while_body_4:
     movq -104(%rbp), %rax
     movq -96(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -112(%rbp)
     movq -112(%rbp), %rax
     movq %rax, -104(%rbp)
     movq $1, -80(%rbp)
     movq -96(%rbp), %rax
     movq -80(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -120(%rbp)
     movq -120(%rbp), %rax
     movq %rax, -96(%rbp)
@@ -149,9 +170,12 @@ while_3:
     movq $5, -56(%rbp)
     movq -96(%rbp), %rax
     movq -56(%rbp), %rcx
+    movslq %eax, %rax
+    movslq %ecx, %rcx
     cmpq %rcx, %rax
     setl %al
     movzbq %al, %rax
+    movslq %eax, %rax
     movq %rax, -128(%rbp)
     movq -128(%rbp), %rax
     testq %rax, %rax
@@ -174,7 +198,10 @@ while_end_5:
 for_body_8:
     movq -136(%rbp), %rax
     movq -144(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -168(%rbp)
     movq -168(%rbp), %rax
     movq %rax, -136(%rbp)
@@ -257,9 +284,12 @@ for_body_16:
     movq $7, -264(%rbp)
     movq -240(%rbp), %rax
     movq -264(%rbp), %rcx
+    movslq %eax, %rax
+    movslq %ecx, %rcx
     cmpq %rcx, %rax
     sete %al
     movzbq %al, %rax
+    movslq %eax, %rax
     movq %rax, -272(%rbp)
     movq -272(%rbp), %rax
     testq %rax, %rax
@@ -298,16 +328,32 @@ for_body_23:
     movq $2, -304(%rbp)
     movq -288(%rbp), %rax
     movq -304(%rbp), %rcx
-    cqo
-    idivq %rcx
-    movq %rdx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    cmpl $-1, %ecx
+    jne mod_28
+    cmpl $-2147483648, %eax
+    jne mod_28
+    jmp modzero_29
+mod_28:
+    cdq
+    idivl %ecx
+    jmp moddone_30
+modzero_29:
+    xorl %edx, %edx
+moddone_30:
+    movl %edx, %eax
+    movslq %eax, %rax
     movq %rax, -312(%rbp)
     movq $0, -88(%rbp)
     movq -312(%rbp), %rax
     movq -88(%rbp), %rcx
+    movslq %eax, %rax
+    movslq %ecx, %rcx
     cmpq %rcx, %rax
     sete %al
     movzbq %al, %rax
+    movslq %eax, %rax
     movq %rax, -320(%rbp)
     movq -320(%rbp), %rax
     testq %rax, %rax
@@ -318,7 +364,10 @@ else_26:
 if_end_27:
     movq -280(%rbp), %rax
     movq -288(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -328(%rbp)
     movq -328(%rbp), %rax
     movq %rax, -280(%rbp)
@@ -345,8 +394,8 @@ for_end_25:
     movq %r12, %rax
     movq %rax, -352(%rbp)
     movq -56(%rbp), %r12
-    jmp for_check_29
-for_body_30:
+    jmp for_check_32
+for_body_33:
     movq $0, -88(%rbp)
     movq -88(%rbp), %rax
     movq %rax, -360(%rbp)
@@ -354,48 +403,54 @@ for_body_30:
     movq %r12, %rax
     movq %rax, -368(%rbp)
     movq -248(%rbp), %r12
-    jmp for_check_34
-for_body_35:
+    jmp for_check_37
+for_body_38:
     movq $3, -64(%rbp)
     movq -360(%rbp), %rax
     movq -64(%rbp), %rcx
+    movslq %eax, %rax
+    movslq %ecx, %rcx
     cmpq %rcx, %rax
     sete %al
     movzbq %al, %rax
+    movslq %eax, %rax
     movq %rax, -376(%rbp)
     movq -376(%rbp), %rax
     testq %rax, %rax
-    jz else_38
-    jmp for_end_37
-    jmp if_end_39
-else_38:
-if_end_39:
+    jz else_41
+    jmp for_end_40
+    jmp if_end_42
+else_41:
+if_end_42:
     movq $1, -80(%rbp)
     movq -336(%rbp), %rax
     movq -80(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -384(%rbp)
     movq -384(%rbp), %rax
     movq %rax, -336(%rbp)
-for_incr_36:
+for_incr_39:
     movq -360(%rbp), %rax
     addq $1, %rax
     movq %rax, -360(%rbp)
-for_check_34:
+for_check_37:
     movq -360(%rbp), %rax
     cmpq %r12, %rax
-    jle for_body_35
-for_end_37:
+    jle for_body_38
+for_end_40:
     movq -368(%rbp), %r12
-for_incr_31:
+for_incr_34:
     movq -344(%rbp), %rax
     addq $1, %rax
     movq %rax, -344(%rbp)
-for_check_29:
+for_check_32:
     movq -344(%rbp), %rax
     cmpq %r12, %rax
-    jle for_body_30
-for_end_32:
+    jle for_body_33
+for_end_35:
     movq -352(%rbp), %r12
     movq -336(%rbp), %rdi
     # put (integer)
@@ -426,7 +481,10 @@ for_end_32:
     movq %rax, -432(%rbp)
     movq -424(%rbp), %rax
     movq -432(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -440(%rbp)
     movq -440(%rbp), %rdi
     # put (integer)
@@ -442,48 +500,48 @@ for_end_32:
     movq %rax, -472(%rbp)
     movq -520(%rbp), %rax
     movq %rax, -480(%rbp)
-next_arm_0_45:
+next_arm_0_48:
     movq -448(%rbp), %rax
     cmpq $0, %rax
-    je arm_0_41
-    jmp next_arm_1_46
-next_arm_1_46:
+    je arm_0_44
+    jmp next_arm_1_49
+next_arm_1_49:
     movq -448(%rbp), %rax
     cmpq $1, %rax
-    je arm_1_42
-    jmp next_arm_2_47
-next_arm_2_47:
+    je arm_1_45
+    jmp next_arm_2_50
+next_arm_2_50:
     movq -448(%rbp), %rax
     cmpq $2, %rax
-    je arm_2_43
-    jmp next_arm_3_48
-next_arm_3_48:
-    jmp arm_3_44
-arm_0_41:
+    je arm_2_46
+    jmp next_arm_3_51
+next_arm_3_51:
+    jmp arm_3_47
+arm_0_44:
     movq $100, -248(%rbp)
     movq -248(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_40
-arm_1_42:
+    jmp match_end_43
+arm_1_45:
     movq $200, -536(%rbp)
     movq -536(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_40
-arm_2_43:
+    jmp match_end_43
+arm_2_46:
     movq $300, -544(%rbp)
     movq -544(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_40
-arm_3_44:
+    jmp match_end_43
+arm_3_47:
     movq $0, -88(%rbp)
     movq -88(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_40
-match_end_40:
+    jmp match_end_43
+match_end_43:
     movq $0, -592(%rbp)
     movq $42, -632(%rbp)
     movq -632(%rbp), %rax
@@ -498,26 +556,26 @@ match_end_40:
     movq %rax, -576(%rbp)
     movq -624(%rbp), %rax
     movq %rax, -584(%rbp)
-next_arm_0_53:
+next_arm_0_56:
     movq -552(%rbp), %rax
     cmpq $0, %rax
-    je arm_0_50
-    jmp next_arm_1_54
-next_arm_1_54:
+    je arm_0_53
+    jmp next_arm_1_57
+next_arm_1_57:
     movq -552(%rbp), %rax
     cmpq $1, %rax
-    je arm_1_51
-    jmp next_arm_2_55
-next_arm_2_55:
-    jmp arm_2_52
-arm_0_50:
+    je arm_1_54
+    jmp next_arm_2_58
+next_arm_2_58:
+    jmp arm_2_55
+arm_0_53:
     movq -560(%rbp), %rax
     movq %rax, -648(%rbp)
     movq -648(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_49
-arm_1_51:
+    jmp match_end_52
+arm_1_54:
     movq -560(%rbp), %rax
     movq %rax, -656(%rbp)
     movq -568(%rbp), %rax
@@ -525,14 +583,14 @@ arm_1_51:
     movq -656(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_49
-arm_2_52:
+    jmp match_end_52
+arm_2_55:
     movq $0, -88(%rbp)
     movq -88(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_49
-match_end_49:
+    jmp match_end_52
+match_end_52:
     movq $1, -712(%rbp)
     movq $10, -16(%rbp)
     movq -16(%rbp), %rax
@@ -550,45 +608,48 @@ match_end_49:
     movq %rax, -696(%rbp)
     movq -744(%rbp), %rax
     movq %rax, -704(%rbp)
-next_arm_0_60:
+next_arm_0_63:
     movq -672(%rbp), %rax
     cmpq $0, %rax
-    je arm_0_57
-    jmp next_arm_1_61
-next_arm_1_61:
+    je arm_0_60
+    jmp next_arm_1_64
+next_arm_1_64:
     movq -672(%rbp), %rax
     cmpq $1, %rax
-    je arm_1_58
-    jmp next_arm_2_62
-next_arm_2_62:
-    jmp arm_2_59
-arm_0_57:
+    je arm_1_61
+    jmp next_arm_2_65
+next_arm_2_65:
+    jmp arm_2_62
+arm_0_60:
     movq -680(%rbp), %rax
     movq %rax, -648(%rbp)
     movq -648(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_56
-arm_1_58:
+    jmp match_end_59
+arm_1_61:
     movq -680(%rbp), %rax
     movq %rax, -656(%rbp)
     movq -688(%rbp), %rax
     movq %rax, -664(%rbp)
     movq -656(%rbp), %rax
     movq -664(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -760(%rbp)
     movq -760(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_56
-arm_2_59:
+    jmp match_end_59
+arm_2_62:
     movq $0, -88(%rbp)
     movq -88(%rbp), %rdi
     # put (integer)
     callq _print_int
-    jmp match_end_56
-match_end_56:
+    jmp match_end_59
+match_end_59:
     movq $0, %rax
     movq %rbp, %rsp
     popq %rbp
@@ -615,7 +676,7 @@ _print_int:
     subq $32, %rsp
     movq %rdi, %rax
     testq %rax, %rax
-    jge digits_63
+    jge digits_66
     negq %rax
     movq %rax, (%rsp)
     movq $1, %rax
@@ -624,12 +685,12 @@ _print_int:
     movq $1, %rdx
     syscall
     movq (%rsp), %rax
-digits_63:
+digits_66:
     leaq _itoa_buf+31(%rip), %rcx
     movb $10, (%rcx)
     decq %rcx
     movq $1, %r8
-itoa_64:
+itoa_67:
     xorq %rdx, %rdx
     movq $10, %r9
     divq %r9
@@ -638,9 +699,9 @@ itoa_64:
     decq %rcx
     incq %r8
     testq %rax, %rax
-    jnz itoa_64
+    jnz itoa_67
     incq %rcx
-itoa_done_65:
+itoa_done_68:
     movq $1, %rax
     movq $1, %rdi
     movq %rcx, %rsi
@@ -656,7 +717,7 @@ _print_int_nobuf:
     subq $32, %rsp
     movq %rdi, %rax
     testq %rax, %rax
-    jge digits_66
+    jge digits_69
     negq %rax
     movq %rax, (%rsp)
     movq $1, %rax
@@ -665,11 +726,11 @@ _print_int_nobuf:
     movq $1, %rdx
     syscall
     movq (%rsp), %rax
-digits_66:
+digits_69:
     leaq _itoa_buf+31(%rip), %rcx
     decq %rcx
     xorq %r8, %r8
-itoa_67:
+itoa_70:
     xorq %rdx, %rdx
     movq $10, %r9
     divq %r9
@@ -678,9 +739,9 @@ itoa_67:
     decq %rcx
     incq %r8
     testq %rax, %rax
-    jnz itoa_67
+    jnz itoa_70
     incq %rcx
-itoa_done_68:
+itoa_done_71:
     movq $1, %rax
     movq $1, %rdi
     movq %rcx, %rsi

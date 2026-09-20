@@ -111,6 +111,12 @@ pub struct IntermediateRepresentationCodeGen {
     vec_element_scopes: RefCell<Vec<HashMap<String, String>>>,
     /// Functions whose return annotation lowers to Rust `String`.
     string_functions: HashSet<String>,
+    /// Variables declared `i64` (their arithmetic must stay 64-bit and
+    /// out-of-i32 literals in their initializers must not be typed as i32).
+    int64_variables: RefCell<HashSet<String>>,
+    /// Stack of untyped closure parameter name sets for the closure body
+    /// currently being rendered; reads of these names cast to `i32`.
+    untyped_closure_params: RefCell<Vec<Vec<String>>>,
     /// Methods keyed by receiver type and method name whose return type is `String`.
     string_methods: HashSet<(String, String)>,
     /// String constants emitted as `&str` and converted at use sites.
@@ -160,6 +166,8 @@ impl IntermediateRepresentationCodeGen {
             vec_scopes: RefCell::new(vec![HashSet::new()]),
             vec_element_scopes: RefCell::new(vec![HashMap::new()]),
             string_functions: HashSet::new(),
+            int64_variables: RefCell::new(HashSet::new()),
+            untyped_closure_params: RefCell::new(Vec::new()),
             string_methods: HashSet::new(),
             string_constants: HashSet::new(),
             enum_variants: HashMap::new(),
@@ -665,6 +673,12 @@ impl IntermediateRepresentationCodeGen {
                     && value
                         .as_ref()
                         .is_some_and(|value| self.is_string_expr(value));
+                if ty
+                    .as_ref()
+                    .is_some_and(|ty| matches!(ty, Type::Named(n) if n == "i64"))
+                {
+                    self.int64_variables.borrow_mut().insert(name.clone());
+                }
                 if ty.as_ref().is_some_and(Self::is_string_type) || value_is_string {
                     self.declare_string(name.clone());
                 }
@@ -774,27 +788,48 @@ impl IntermediateRepresentationCodeGen {
             }
             Statement::Mutation { target, op, value } => {
                 let target_str = self.gen_expr(target);
-                let operator = match op {
-                    MutationOp::Add => "+=",
-                    MutationOp::Sub => "-=",
-                    MutationOp::Inc => "+=",
-                    MutationOp::Dec => "-=",
-                };
+                // String append lowers to `String += &str` (borrowed amount);
+                // declared-i64 and vector targets keep plain `+=`. Every other
+                // numeric target wraps by definition — a plain `+=` on a
+                // default-width i32 would panic in a debug build on overflow.
+                if self.is_string_expr(target)
+                    || self.is_int64_expr(target)
+                    || self.is_vec_expr(target)
+                {
+                    let operator = match op {
+                        MutationOp::Add => "+=",
+                        MutationOp::Sub => "-=",
+                        MutationOp::Inc => "+=",
+                        MutationOp::Dec => "-=",
+                    };
+                    let amount = value
+                        .as_ref()
+                        .map(|value| self.gen_expr(value))
+                        .unwrap_or_else(|| "1".to_string());
+                    let amount = if matches!(op, MutationOp::Add | MutationOp::Inc)
+                        && self.is_string_expr(target)
+                    {
+                        format!("&({})", amount)
+                    } else {
+                        amount
+                    };
+                    self.writeln_fmt(format_args!("{} {} {};", target_str, operator, amount));
+                    return;
+                }
                 let amount = value
                     .as_ref()
                     .map(|value| self.gen_expr(value))
                     .unwrap_or_else(|| "1".to_string());
-                // String append lowers to `String += &str`; the amount must be
-                // borrowed so `+= String::from(...)` compiles. Numeric targets
-                // keep the plain amount (loop variables are already `&T`).
-                let amount = if matches!(op, MutationOp::Add | MutationOp::Inc)
-                    && self.is_string_expr(target)
-                {
-                    format!("&({})", amount)
-                } else {
+                self.writeln_fmt(format_args!(
+                    "{} = ({}).{}({});",
+                    target_str,
+                    target_str,
+                    match op {
+                        MutationOp::Add | MutationOp::Inc => "wrapping_add",
+                        MutationOp::Sub | MutationOp::Dec => "wrapping_sub",
+                    },
                     amount
-                };
-                self.writeln_fmt(format_args!("{} {} {};", target_str, operator, amount));
+                ));
             }
             Statement::Return(value) => match value {
                 Some(value) => {
@@ -1183,7 +1218,7 @@ impl IntermediateRepresentationCodeGen {
 
     fn gen_expr(&self, expr: &Expr) -> String {
         match expr {
-            Expr::Literal(Literal::Int(value)) => value.clone(),
+            Expr::Literal(Literal::Int(value)) => self.gen_int_literal(value),
             Expr::Literal(Literal::Float(value)) => value.clone(),
             Expr::Literal(Literal::String(value))
             | Expr::Literal(Literal::UnicodeString(value)) => {
@@ -1238,6 +1273,59 @@ impl IntermediateRepresentationCodeGen {
                     self.collect_string_concat_operands(expr, &mut operands);
                     let specs = "{}".repeat(operands.len());
                     format!("format!(\"{}\", {})", specs, operands.join(", "))
+                } else if self.is_float_valued_expr(left) || self.is_float_valued_expr(right) {
+                    // Float arithmetic keeps plain operators (no wrapping,
+                    // no 32-bit narrowing).
+                    let op_str = self.gen_binary_op(op);
+                    format!("({} {} {})", l, op_str, r)
+                } else if self.is_int64_expr(left) || self.is_int64_expr(right) {
+                    // 64-bit involvement (declared-i64 variables or big
+                    // literals): coerce both sides to i64 so the result keeps
+                    // 64-bit precision and the literal isn't typed as i32.
+                    // All four targets define i64 overflow as two's-complement
+                    // wrap (the asm target's native behavior), so the Rust
+                    // lowering wraps explicitly.
+                    let func = match op {
+                        BinaryOp::Add => "wrapping_add",
+                        BinaryOp::Sub => "wrapping_sub",
+                        BinaryOp::Mul => "wrapping_mul",
+                        BinaryOp::Div => "wrapping_div", // i64::MIN / -1 panics on plain `/`
+                        BinaryOp::Mod => "wrapping_rem",
+                        _ => {
+                            let op_str = self.gen_binary_op(op);
+                            return format!("((({}) as i64) {} ({} as i64))", l, op_str, r);
+                        }
+                    };
+                    format!("((({}) as i64).{func}(({}) as i64))", l, r)
+                } else if let Some(wrapped) = self.wrap_arith_expr(op, left, right, &l, &r) {
+                    wrapped
+                } else if matches!(op, BinaryOp::Div | BinaryOp::Mod)
+                    && self.is_proven_int_expr(left)
+                    && self.is_proven_int_expr(right)
+                {
+                    // i32::MIN / -1 traps (SIGFPE); define div as INT_MIN and
+                    // mod as 0 like the guarded C/asm targets. Requires proven
+                    // int operands (see `is_proven_int_expr`).
+                    let func = if matches!(op, BinaryOp::Div) {
+                        "wrapping_div"
+                    } else {
+                        "wrapping_rem"
+                    };
+                    let l = self.suffix_i32_operand(left, &l);
+                    let r = self.suffix_i32_operand(right, &r);
+                    format!("(({}).{func}({}))", l, r)
+                } else if matches!(op, BinaryOp::Shl | BinaryOp::Shr)
+                    && self.is_proven_int_expr(left)
+                {
+                    // Shift amounts are masked mod 32, matching the x86
+                    // hardware behavior the asm target inherits. `wrapping_shl`
+                    // takes a u32 rhs; cast so i32 variable amounts still work.
+                    let l = self.suffix_i32_operand(left, &l);
+                    if matches!(op, BinaryOp::Shl) {
+                        format!("(({}).wrapping_shl(({}) as u32))", l, r)
+                    } else {
+                        format!("(({}).wrapping_shr(({}) as u32))", l, r)
+                    }
                 } else {
                     let op_str = self.gen_binary_op(op);
                     format!("({} {} {})", l, op_str, r)
@@ -1759,6 +1847,11 @@ impl IntermediateRepresentationCodeGen {
                 result
             }
             Expr::Closure { params, body } => {
+                let untyped_params: Vec<String> = params
+                    .iter()
+                    .filter(|p| self.gen_type(&p.ty) == "_")
+                    .map(|p| p.name.clone())
+                    .collect();
                 let params_str: Vec<String> = params
                     .iter()
                     .map(|p| {
@@ -1777,12 +1870,15 @@ impl IntermediateRepresentationCodeGen {
                 } else {
                     ""
                 };
-                format!(
-                    "{}|{}| {}",
-                    prefix,
-                    params_str.join(", "),
+                // Untyped closure parameters would otherwise leave the body's
+                // wrapping_* method calls type-ambiguous (E0282). Anchor them
+                // to the default int width by casting reads of the parameter.
+                let body_str = if untyped_params.is_empty() {
                     self.gen_expr(body)
-                )
+                } else {
+                    self.with_untyped_param_casts(&untyped_params, |codegen| codegen.gen_expr(body))
+                };
+                format!("{}|{}| {}", prefix, params_str.join(", "), body_str)
             }
             Expr::Array(elements) => {
                 let elems: Vec<String> = elements.iter().map(|e| self.gen_expr(e)).collect();
@@ -1917,6 +2013,259 @@ impl IntermediateRepresentationCodeGen {
                 result.push('}');
                 result
             }
+        }
+    }
+
+    /// Renders `expr` with reads of the given untyped closure parameters cast
+    /// to `i32`, anchoring inference so wrapping method calls type-check.
+    fn with_untyped_param_casts(
+        &self,
+        params: &[String],
+        render: impl FnOnce(&Self) -> String,
+    ) -> String {
+        self.untyped_closure_params
+            .borrow_mut()
+            .push(params.to_vec());
+        let result = render(self);
+        self.untyped_closure_params.borrow_mut().pop();
+        result
+    }
+
+    /// Structurally int-classified expression (no float involvement). Used to
+    /// decide whether an inferred-typed declaration should anchor to `i32`.
+    fn is_int_classified(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Literal(Literal::Int(_)) => true,
+            Expr::Literal(Literal::Float(_)) => false,
+            Expr::Literal(_) => false,
+            Expr::Parenthesized(inner) => self.is_int_classified(inner),
+            Expr::UnaryOp {
+                op: UnaryOp::Neg,
+                expr,
+            } => self.is_int_classified(expr),
+            Expr::BinaryOp { op, left, right } => {
+                matches!(
+                    op,
+                    BinaryOp::Add
+                        | BinaryOp::Sub
+                        | BinaryOp::Mul
+                        | BinaryOp::Div
+                        | BinaryOp::Mod
+                        | BinaryOp::BitAnd
+                        | BinaryOp::BitOr
+                        | BinaryOp::BitXor
+                        | BinaryOp::Shl
+                        | BinaryOp::Shr
+                ) && self.is_int_classified(left)
+                    && self.is_int_classified(right)
+            }
+            _ => false,
+        }
+    }
+
+    /// True when the expression is float-valued (structural or via the known
+    /// type of an identifier). The wrapping path must not capture floats.
+    fn is_float_valued_expr(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Literal(Literal::Float(_)) => true,
+            Expr::Literal(Literal::Int(_)) => false,
+            Expr::Literal(_) => false,
+            Expr::Parenthesized(inner) => self.is_float_valued_expr(inner),
+            Expr::UnaryOp {
+                op: UnaryOp::Neg,
+                expr,
+            } => self.is_float_valued_expr(expr),
+            Expr::BinaryOp { op, left, right } => {
+                if matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                ) {
+                    self.is_float_valued_expr(left) || self.is_float_valued_expr(right)
+                } else {
+                    false
+                }
+            }
+            Expr::Identifier(name) => self
+                .type_scopes
+                .borrow()
+                .iter()
+                .rev()
+                .find_map(|scope| scope.get(name).cloned())
+                .is_some_and(|ty| ty == "f64" || ty == "f32"),
+            _ => false,
+        }
+    }
+
+    /// Render an expression anchoring bare integer literals to `i32` so an
+    /// inferred-typed declaration (`var x := 10`) becomes concretely `i32`
+    /// and can later take `wrapping_*` method calls (E0689).
+    fn render_anchored_int(&self, expr: &Expr) -> String {
+        match expr {
+            Expr::Literal(Literal::Int(v)) => format!("{v}_i32"),
+            Expr::Parenthesized(inner) => format!("({})", self.render_anchored_int(inner)),
+            Expr::UnaryOp {
+                op: UnaryOp::Neg,
+                expr,
+            } => {
+                format!("(-{})", self.render_anchored_int(expr))
+            }
+            Expr::BinaryOp { op, left, right } => {
+                let op_str = self.gen_binary_op(op);
+                format!(
+                    "({} {} {})",
+                    self.render_anchored_int(left),
+                    op_str,
+                    self.render_anchored_int(right)
+                )
+            }
+            // Tuple literals: anchor int-classified elements so element
+            // assignment (`nums.1 := nums.1 + 1`) has a concrete type; bool,
+            // float, and string elements already have definite types.
+            Expr::Tuple(elements) => {
+                let rendered: Vec<String> = elements
+                    .iter()
+                    .map(|element| {
+                        if self.is_int_classified(element) && !self.is_float_valued_expr(element) {
+                            self.render_anchored_int(element)
+                        } else {
+                            self.gen_expr(element)
+                        }
+                    })
+                    .collect();
+                format!("({})", rendered.join(", "))
+            }
+            other => self.gen_expr(other),
+        }
+    }
+
+    /// Render an integer literal for expression position. Rust types unsuffixed
+    /// literals by inference and defaults standalone big values to i32 (E3028),
+    /// while Poly's other targets keep declared-`i64` values 64-bit — so any
+    /// literal outside the i32 range gets an explicit `i64` suffix.
+    fn gen_int_literal(&self, value: &str) -> String {
+        match value.parse::<i64>() {
+            Ok(v) if (i32::MIN as i64..=i32::MAX as i64).contains(&v) => value.to_string(),
+            Ok(_) => format!("{value}_i64"),
+            // Literals beyond i64 (u64-level magnitudes) render verbatim;
+            // Rust still types them by context, matching the C target.
+            Err(_) => value.to_string(),
+        }
+    }
+
+    /// True when the expression is known to be a 64-bit value: a declared
+    /// `i64` variable, or an integer literal outside the i32 range (the C
+    /// target promotes such literals to `long`, so the other targets must
+    /// stay 64-bit too).
+    fn is_int64_expr(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Identifier(name) => self.int64_variables.borrow().contains(name),
+            Expr::Literal(Literal::Int(value)) => match value.parse::<i64>() {
+                Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                Err(_) => true,
+            },
+            Expr::Parenthesized(inner) => self.is_int64_expr(inner),
+            Expr::UnaryOp {
+                op: UnaryOp::Neg,
+                expr,
+            } => self.is_int64_expr(expr),
+            // Arithmetic involving a 64-bit operand lowers to the i64-coercion
+            // path, so its result is 64-bit too (subtree recursion keeps the
+            // enclosing operation from re-narrowing it to i32).
+            Expr::BinaryOp { op, left, right } => {
+                matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                ) && (self.is_int64_expr(left) || self.is_int64_expr(right))
+            }
+            _ => false,
+        }
+    }
+
+    /// True when the receiver is concretely a default-width integer *in the
+    /// emitted Rust*: an i32-range literal (rendered `_i32`-suffixed) or a
+    /// variable codegen registered under a narrow int type. Inferred-numeric
+    /// sites (loop variables, match pattern bindings, untyped closure
+    /// re-bindings) return `false` — rustc cannot anchor a method call on an
+    /// ambiguous receiver there (E0689), and the binding may not even be an
+    /// integer (E0599 on `f64`), so arithmetic falls back to plain operators,
+    /// which are inference-agnostic.
+    fn is_proven_int_expr(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Literal(Literal::Int(value)) => match value.parse::<i64>() {
+                Ok(v) => (i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                Err(_) => false, // out-of-i32 literals take the i64 path
+            },
+            Expr::Identifier(name) => self
+                .type_scopes
+                .borrow()
+                .iter()
+                .rev()
+                .find_map(|scope| scope.get(name).cloned())
+                .is_some_and(|ty| {
+                    matches!(ty.as_str(), "i8" | "i16" | "i32" | "u8" | "u16" | "u32")
+                }),
+            Expr::Parenthesized(inner) => self.is_proven_int_expr(inner),
+            _ => false,
+        }
+    }
+
+    /// Default-width (`i32`) integer arithmetic is defined to wrap with
+    /// two's-complement semantics on every target. Rust debug builds deny
+    /// overflow, so its lowering must use the explicit wrapping ops; the C
+    /// and asm targets already wrap naturally. Only `+`/`-`/`*` fold into
+    /// this helper — division/modulo keep their own paths. Declared-`i64`
+    /// operands keep exact 64-bit arithmetic.
+    ///
+    /// Wrapping ops are emitted only when *both* operands are provably
+    /// integer in the emitted Rust (`is_proven_int_expr`); otherwise the
+    /// plain operator renders and rustc infers the operand types (loop
+    /// variables are `u32`, pattern bindings can be `f64`).
+    fn wrap_arith_expr(
+        &self,
+        op: &BinaryOp,
+        left_expr: &Expr,
+        right_expr: &Expr,
+        left: &str,
+        right: &str,
+    ) -> Option<String> {
+        let func = match op {
+            BinaryOp::Add => "wrapping_add",
+            BinaryOp::Sub => "wrapping_sub",
+            BinaryOp::Mul => "wrapping_mul",
+            _ => return None,
+        };
+        if self.is_int64_expr(left_expr) && self.is_int64_expr(right_expr) {
+            return None; // declared-i64 arithmetic stays exact 64-bit
+        }
+        if self.is_float_valued_expr(left_expr) || self.is_float_valued_expr(right_expr) {
+            return None; // float arithmetic keeps plain `+`/`-`/`*`
+        }
+        if !self.is_proven_int_expr(left_expr) || !self.is_proven_int_expr(right_expr) {
+            return None; // inference-agnostic sites keep plain operators
+        }
+        // A bare literal has no inference anchor for the method call (E0689),
+        // so literal operands carry an explicit _i32 suffix here. Parenthesized
+        // literals are equally bare (`(2147483647).wrapping_add(1)`), so they
+        // are unwrapped and suffixed too.
+        let l = self.suffix_i32_operand(left_expr, left);
+        let r = self.suffix_i32_operand(right_expr, right);
+        Some(format!("({}).{func}({})", l, r))
+    }
+
+    /// Suffix a literal operand with `_i32` when it is in i32 range; unwrap
+    /// parenthesized/negated literal shells first.
+    fn suffix_i32_operand(&self, e: &Expr, rendered: &str) -> String {
+        match e {
+            Expr::Literal(Literal::Int(v)) => match v.parse::<i64>() {
+                Ok(x) if (i32::MIN as i64..=i32::MAX as i64).contains(&x) => format!("{v}_i32"),
+                _ => rendered.to_string(),
+            },
+            Expr::Parenthesized(inner) => self.suffix_i32_operand(inner, rendered),
+            Expr::UnaryOp {
+                op: UnaryOp::Neg,
+                expr,
+            } => self.suffix_i32_operand(expr, rendered),
+            _ => rendered.to_string(),
         }
     }
 
@@ -2488,6 +2837,12 @@ impl IntermediateRepresentationCodeGen {
                     && value
                         .as_ref()
                         .is_some_and(|value| self.is_string_expr(value));
+                if ty
+                    .as_ref()
+                    .is_some_and(|ty| matches!(ty, Type::Named(n) if n == "i64"))
+                {
+                    self.int64_variables.borrow_mut().insert(name.clone());
+                }
                 if ty.as_ref().is_some_and(Self::is_string_type) || value_is_string {
                     self.declare_string(name.clone());
                 }
@@ -2544,25 +2899,33 @@ impl IntermediateRepresentationCodeGen {
                 format!("{} = {};", self.gen_expr(target), self.gen_expr(value))
             }
             Statement::Mutation { target, op, value } => {
-                let operator = match op {
-                    MutationOp::Add | MutationOp::Inc => "+=",
-                    MutationOp::Sub | MutationOp::Dec => "-=",
-                };
+                let target_str = self.gen_expr(target);
                 let amount = value
                     .as_ref()
                     .map(|value| self.gen_expr(value))
                     .unwrap_or_else(|| "1".to_string());
-                // String append lowers to `String += &str`; the amount must be
-                // borrowed so `+= String::from(...)` compiles. Numeric targets
-                // keep the plain amount (loop variables are already `&T`).
-                let amount = if matches!(op, MutationOp::Add | MutationOp::Inc)
-                    && self.is_string_expr(target)
-                {
-                    format!("&({})", amount)
-                } else {
+                // String append borrows the amount; declared-i64 targets keep
+                // exact 64-bit arithmetic; every other numeric target wraps.
+                if self.is_string_expr(target) {
+                    return format!("{} += ({});", target_str, amount);
+                }
+                if self.is_int64_expr(target) || self.is_vec_expr(target) {
+                    let operator = match op {
+                        MutationOp::Add | MutationOp::Inc => "+=",
+                        MutationOp::Sub | MutationOp::Dec => "-=",
+                    };
+                    return format!("{} {} {};", target_str, operator, amount);
+                }
+                format!(
+                    "{} = ({}).{}({});",
+                    target_str,
+                    target_str,
+                    match op {
+                        MutationOp::Add | MutationOp::Inc => "wrapping_add",
+                        MutationOp::Sub | MutationOp::Dec => "wrapping_sub",
+                    },
                     amount
-                };
-                format!("{} {} {};", self.gen_expr(target), operator, amount)
+                )
             }
             Statement::If {
                 condition,
@@ -2721,15 +3084,42 @@ impl IntermediateRepresentationCodeGen {
         if should_move {
             let previous = *self.closure_move.borrow();
             *self.closure_move.borrow_mut() = true;
-            let rendered = self.gen_value_expr(value, declared_type);
+            let rendered = self.gen_value_expr(name, value, declared_type);
             *self.closure_move.borrow_mut() = previous;
             rendered
         } else {
-            self.gen_value_expr(value, declared_type)
+            self.gen_value_expr(name, value, declared_type)
         }
     }
 
-    fn gen_value_expr(&self, value: &Expr, declared_type: Option<&Type>) -> String {
+    fn gen_value_expr(&self, name: &str, value: &Expr, declared_type: Option<&Type>) -> String {
+        // Anchor inferred-typed integer declarations (`var x := 10`) to a
+        // concrete `i32` so later wrapping method calls type-check (E0689).
+        // Tuples are anchored per-element (mixed tuples keep their non-int
+        // elements verbatim). Skip when a declared type or string/vec
+        // inference applies.
+        if declared_type.is_none()
+            && !self.is_string_expr(value)
+            && !self.is_vec_expr(value)
+            && (self.is_int_classified(value) || matches!(value, Expr::Tuple(_)))
+            && !self.is_float_valued_expr(value)
+        {
+            // The declaration renders with `_i32` anchors, so the binding (or
+            // its int elements) is concretely i32 from here on: register it
+            // so later reads qualify as proven-int for the wrapping path.
+            if matches!(value, Expr::Tuple(_)) {
+                if let Expr::Tuple(elements) = value {
+                    for (index, element) in elements.iter().enumerate() {
+                        if self.is_int_classified(element) && !self.is_float_valued_expr(element) {
+                            self.declare_type(format!("{name}.{index}"), "i32".to_string());
+                        }
+                    }
+                }
+            } else {
+                self.declare_type(name.to_string(), "i32".to_string());
+            }
+            return self.render_anchored_int(value);
+        }
         if let Expr::Get(get) = value {
             if let Some(Type::Named(name)) = declared_type {
                 if name == "bytes" {
@@ -3969,7 +4359,7 @@ mod tests {
         );
         assert!(rust.contains("loop {"), "missing loop block: {rust}");
         assert!(
-            rust.contains("count = (count + 1);"),
+            rust.contains("count = (count).wrapping_add(1_i32);"),
             "missing body: {rust}"
         );
         assert!(rust.contains("break;"), "missing break: {rust}");

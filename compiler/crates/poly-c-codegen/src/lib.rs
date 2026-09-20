@@ -945,7 +945,20 @@ impl CGenerator {
     /// unsupported variants as errors prevents silently incorrect C programs.
     fn expr(&self, expression: &Expression) -> Result<String, String> {
         match expression {
-            Expression::IntLiteral(value) => Ok(value.clone()),
+            // Literals outside the i32 range render with the LL suffix so the
+            // C type is `long long`: matches the i64-typed Rust lowering and
+            // prints with %lld (see printf_parts).
+            Expression::IntLiteral(value) => {
+                let is_big = match value.parse::<i64>() {
+                    Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                    Err(_) => true,
+                };
+                if is_big {
+                    Ok(format!("{value}LL"))
+                } else {
+                    Ok(value.clone())
+                }
+            }
             Expression::FloatLiteral(value) => Ok(value.clone()),
             Expression::StringLiteral(value) | Expression::UnicodeStringLiteral(value) => {
                 Ok(format!("\"{}\"", c_escape(value)))
@@ -989,11 +1002,57 @@ impl CGenerator {
                         self.expr(right)?
                     ));
                 }
+                let left_str = self.expr(left)?;
+                let right_str = self.expr(right)?;
+                if matches!(op, BinaryOp::Div | BinaryOp::Mod) {
+                    // INT_MIN / -1 and I64_MIN / -1 trap at runtime (SIGFPE).
+                    // Both are defined: div yields the minimum, mod yields 0.
+                    // The guard checks the dividend IS the minimum (a plain
+                    // min-as-i64 value divided by -1 must divide normally).
+                    if self.is_i64_valued(left) {
+                        let op_str = self.binary_op(op);
+                        return Ok(format!(
+                            "(((({}) == (-9223372036854775807LL - 1LL)) && (({}) == -1LL)) ? (({})) : ((((long long)({})) {} (long long)({}))))",
+                            left_str,
+                            right_str,
+                            if matches!(op, BinaryOp::Div) {
+                                "(-9223372036854775807LL - 1LL)"
+                            } else {
+                                "0LL"
+                            },
+                            left_str,
+                            op_str,
+                            right_str
+                        ));
+                    }
+                    let op_str = self.binary_op(op);
+                    return Ok(format!(
+                        "(((({}) == (-2147483647 - 1)) && (({}) == -1)) ? (({})) : (((({})) {} ({}))))",
+                        left_str,
+                        right_str,
+                        if matches!(op, BinaryOp::Div) {
+                            "(-2147483647 - 1)"
+                        } else {
+                            "0"
+                        },
+                        left_str,
+                        op_str,
+                        right_str
+                    ));
+                }
+                if self.is_i64_valued(left) {
+                    // 64-bit arithmetic: keep long long throughout.
+                    let op_str = self.binary_op(op);
+                    return Ok(format!(
+                        "((long long)({}) {} (long long)({}))",
+                        left_str, op_str, right_str
+                    ));
+                }
                 Ok(format!(
                     "({} {} {})",
-                    self.expr(left)?,
+                    left_str,
                     self.binary_op(op),
-                    self.expr(right)?
+                    right_str
                 ))
             }
             Expression::UnaryOp { op, expr } => {
@@ -1284,10 +1343,14 @@ impl CGenerator {
                     format!(", {}", self.bool_str_expr(expression)?),
                 ))
             }
-            Expression::BinaryOp { .. } => Ok((
-                self.format_for_expression(expression),
-                format!(", {}", self.expr(expression)?),
-            )),
+            Expression::BinaryOp { .. } => {
+                let format = if self.is_i64_valued(expression) {
+                    "%lld".to_string()
+                } else {
+                    self.format_for_expression(expression)
+                };
+                Ok((format, format!(", {}", self.expr(expression)?)))
+            }
             Expression::IntLiteral(_)
             | Expression::FloatLiteral(_)
             | Expression::BoolLiteral(_)
@@ -1637,6 +1700,32 @@ impl CGenerator {
             | TypeAnnotation::Function { .. } => {
                 Err("this Poly type is not supported by the C backend".to_string())
             }
+        }
+    }
+
+    /// True when the expression is known 64-bit: a declared `i64` variable,
+    /// or a literal outside the i32 range (rendered with the LL suffix).
+    fn is_i64_valued(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::IntLiteral(value) => match value.parse::<i64>() {
+                Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                Err(_) => true,
+            },
+            Expression::Identifier(name) => self
+                .var_widths
+                .borrow()
+                .get(name)
+                .is_some_and(|width| width == "int64_t" || width == "uint64_t"),
+            Expression::Parenthesized(inner) => self.is_i64_valued(inner),
+            Expression::UnaryOp { expr, .. } => self.is_i64_valued(expr),
+            // Arithmetic with a 64-bit operand widens the result.
+            Expression::BinaryOp { op, left, right } => {
+                matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                ) && (self.is_i64_valued(left) || self.is_i64_valued(right))
+            }
+            _ => false,
         }
     }
 

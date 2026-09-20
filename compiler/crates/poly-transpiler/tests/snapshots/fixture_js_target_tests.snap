@@ -10,7 +10,7 @@ function greet(name) {
 }
 
 function add(a, b) {
-  return ((a) + (b));
+  return ((((a) | 0) + ((b) | 0)) | 0);
 }
 
 
@@ -20,7 +20,7 @@ function main() {
   console.log(String(greet("world")));
   let total = 0;
   for (let i = 1; i <= 5; i += 1) {
-    total = ((total) + (i));
+    total = ((((total) | 0) + ((i) | 0)) | 0);
   }
   console.log(String(total));
   if (((total) === (15))) {

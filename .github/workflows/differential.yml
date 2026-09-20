@@ -32,3 +32,36 @@ jobs:
         # Heavier programs (long chains, thousands of arena allocations,
         # big loops): slow on the unoptimized asm target, so nightly only.
         run: python3 scripts/check_backends.py --poly-bin compiler/target/release/poly --stress
+
+  fuzz:
+    name: Differential fuzz sweep (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.98.0
+
+      - name: Build compiler
+        run: cargo build --release -p poly-cli
+        working-directory: compiler
+
+      - name: Run differential fuzzer
+        # A day-derived start seed rotates coverage nightly while keeping a
+        # given day's run reproducible.
+        run: |
+          python3 scripts/fuzz_backends.py \
+            --poly-bin compiler/target/release/poly \
+            --seeds 60 --start "$(( ($(date +%s) / 86400) * 1000 ))" \
+            | tee fuzz_output.txt
+
+      - name: Upload divergence artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-divergences
+          path: |
+            /tmp/fuzz_divergence_*.poly
+            fuzz_output.txt
+          if-no-files-found: ignore

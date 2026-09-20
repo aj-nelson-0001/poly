@@ -23,9 +23,12 @@ main:
     movq %rax, -24(%rbp)
     movq -8(%rbp), %rax
     movq -24(%rbp), %rcx
+    movslq %eax, %rax
+    movslq %ecx, %rcx
     cmpq %rcx, %rax
     setne %al
     movzbq %al, %rax
+    movslq %eax, %rax
     movq %rax, -48(%rbp)
     movq -48(%rbp), %rax
     movq %rax, -40(%rbp)

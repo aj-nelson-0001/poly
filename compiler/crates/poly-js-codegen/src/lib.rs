@@ -29,6 +29,10 @@ struct JsGenerator {
     js_blocks: Vec<String>,
     /// Variables known to hold strings (gates `+` string handling in output).
     string_variables: std::cell::RefCell<std::collections::HashSet<String>>,
+    /// Variables declared `i64`: excluded from the 32-bit masking path
+    /// (double precision holds them exactly up to 2^53; beyond that the
+    /// JS target's precision limit applies, as documented).
+    int64_variables: std::cell::RefCell<std::collections::HashSet<String>>,
     main_statements: Vec<ast::Spanned<Statement>>,
 }
 
@@ -41,6 +45,7 @@ impl JsGenerator {
             structs: Vec::new(),
             js_blocks: Vec::new(),
             string_variables: std::cell::RefCell::new(std::collections::HashSet::new()),
+            int64_variables: std::cell::RefCell::new(std::collections::HashSet::new()),
             main_statements: Vec::new(),
         }
     }
@@ -189,6 +194,7 @@ impl JsGenerator {
         match statement {
             Statement::VarDeclaration { name, ty, value } => {
                 line_prefix(output);
+                self.register_i64_declaration(name, ty.as_ref());
                 if ty.as_ref().is_some_and(|ty| self.is_string_type(ty))
                     || value
                         .as_ref()
@@ -204,6 +210,7 @@ impl JsGenerator {
             }
             Statement::LetDeclaration { name, ty, value } => {
                 line_prefix(output);
+                self.register_i64_declaration(name, ty.as_ref());
                 if ty.as_ref().is_some_and(|ty| self.is_string_type(ty))
                     || self.is_string_literal(value)
                 {
@@ -548,6 +555,41 @@ impl JsGenerator {
                     }
                     _ => {}
                 }
+                // Default-width integer arithmetic must wrap at 32 bits like
+                // the rust/C/asm targets: operands are coerced with `| 0`
+                // (ToInt32 two's-complement) and the result re-masked — plain
+                // JS `+`/`*` would silently leave the 32-bit range.
+                // Comparisons/logical operators are excluded: they must stay
+                // unmasked so they still produce real JS booleans (masking
+                // would turn `a != b` into the number 0/1 and print `0`
+                // instead of `false`), and `| 0` would break string `===`.
+                let maskable = matches!(
+                    op,
+                    BinaryOp::Add
+                        | BinaryOp::Sub
+                        | BinaryOp::Mul
+                        | BinaryOp::Div
+                        | BinaryOp::Mod
+                        | BinaryOp::BitAnd
+                        | BinaryOp::BitOr
+                        | BinaryOp::BitXor
+                        | BinaryOp::Shl
+                        | BinaryOp::Shr
+                );
+                if maskable
+                    && self.is_int_operand(left)
+                    && self.is_int_operand(right)
+                    && !self.is_string_expression(left)
+                    && !self.is_string_expression(right)
+                {
+                    let op_str = self.binary_op(op);
+                    return Ok(format!(
+                        "(((({}) | 0) {} (({}) | 0)) | 0)",
+                        self.expr(left)?,
+                        op_str,
+                        self.expr(right)?
+                    ));
+                }
                 Ok(format!(
                     "(({}) {} ({}))",
                     self.expr(left)?,
@@ -765,6 +807,46 @@ impl JsGenerator {
         ))
     }
 
+    /// True when the expression is plausibly a default-width integer (the
+    /// 32-bit-wrap class): int literals, identifiers that are not known
+    /// strings, and arithmetic over those. Float-typed identifiers are
+    /// included conservatively — masking a float would corrupt it, but the
+    /// checker's same-class rule keeps floats out of int arithmetic.
+    fn is_int_operand(&self, expression: &Expression) -> bool {
+        match expression {
+            // Big literals take the i64 class: masking them to 32 bits would
+            // corrupt the value before the operation.
+            Expression::IntLiteral(value) => match value.parse::<i64>() {
+                Ok(v) => (i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                Err(_) => false,
+            },
+            Expression::FloatLiteral(_) => false,
+            Expression::StringLiteral(_) | Expression::UnicodeStringLiteral(_) => false,
+            Expression::BoolLiteral(_) => true,
+            Expression::Identifier(name) => {
+                !self.string_variables.borrow().contains(name)
+                    && !self.int64_variables.borrow().contains(name)
+            }
+            Expression::UnaryOp { expr, .. } => self.is_int_operand(expr),
+            Expression::BinaryOp { left, right, .. } => {
+                self.is_int_operand(left) && self.is_int_operand(right)
+            }
+            Expression::Parenthesized(inner) => self.is_int_operand(inner),
+            // Calls/lengths/get reads produce ints in the supported subset;
+            // anything exotic falls back to the unmasked path.
+            Expression::Call { .. } => true,
+            _ => true,
+        }
+    }
+
+    /// Register declared-`i64` variables so arithmetic on them skips the
+    /// 32-bit masking path.
+    fn register_i64_declaration(&self, name: &str, ty: Option<&TypeAnnotation>) {
+        if ty.is_some_and(|ty| matches!(ty, TypeAnnotation::Named(n) if n == "i64" || n == "u64")) {
+            self.int64_variables.borrow_mut().insert(name.to_string());
+        }
+    }
+
     fn is_string_type(&self, annotation: &TypeAnnotation) -> bool {
         matches!(annotation, TypeAnnotation::Named(name) if name == "string" || name == "ustring")
     }
@@ -963,7 +1045,9 @@ mod tests {
             "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nvar i i32 := 0\nwhile i < 3\n    i := i + 1\nend while\nloop j 0..3\n    put j\nend loop\nif 1 > 2,\n    put 1\nelse\n    put 0\nend if\nloop k in [1, 2]\n    put k\nend loop",
         );
         assert!(output.contains("function add(a, b) {"));
-        assert!(output.contains("return ((a) + (b));"));
+        // Typed i32 arithmetic masks to 32 bits (defined wrap semantics);
+        // comparisons stay unmasked so they produce real JS booleans.
+        assert!(output.contains("return ((((a) | 0) + ((b) | 0)) | 0);"));
         assert!(output.contains("while (((i) < (3))) {"));
         assert!(output.contains("for (let j = 0; j <= 3; j += 1) {"));
         assert!(output.contains("for (const k of [1, 2]) {"));

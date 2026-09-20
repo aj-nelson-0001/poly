@@ -190,7 +190,7 @@ fn function_local_consts_work_across_backends() {
     );
     let rust = String::from_utf8_lossy(&output.stdout);
     assert!(
-        rust.contains("let mut base = 10;"),
+        rust.contains("let mut base = 10_i32;"),
         "expected fn-local const lowered to a Rust local, got: {rust}"
     );
 

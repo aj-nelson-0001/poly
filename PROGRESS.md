@@ -1,7 +1,35 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-19.
+Last updated: 2026-09-20.
+
+## Overflow semantics defined on all four targets; fuzzer catches a C mod bug (2026-09-20)
+
+- **Language decision implemented**: default-width (`i32`) arithmetic is
+  two's-complement wrap on every target (`100000 * 100000` → `1410065408`
+  on rust/c/js/asm), division/modulo by `-1` is guarded in both widths
+  (`INT_MIN / -1` = `INT_MIN`, mod = `0`; asm previously SIGFPE'd), and
+  declared-`i64` arithmetic stays exact on rust/C/asm (JS exact to 2^53).
+  Rust wraps via `wrapping_*` only when both operands are provably int in
+  the emitted Rust — inference-agnostic sites (loop variables, pattern
+  bindings, untyped closures) keep plain operators, fixing four example
+  programs that stopped compiling when wrapping was applied blindly.
+- **The extended fuzzer immediately paid off again**: seeds reaching
+  guarded `mod` with negative dividends exposed that the C backend's
+  INT_MIN guard hardcoded `/` in its non-trap branch — every guarded mod
+  executed a division (`(0-7) mod 2` printed `-3`). Operator now
+  interpolated; 40 fresh seeds × 4 targets all agree.
+- **Three more parity bugs fixed en route** (found by differential/stress
+  suites after the semantics change): asm 32-bit shifts used the 64-bit
+  register name (`sall %cl, %rax` — would not assemble), the JS masking
+  initially wrapped comparisons so booleans printed as 0/1, and asm never
+  recorded declared-`i64` variables so `tests/stress_loops.poly` truncated
+  to 32 bits.
+- The fuzzer now runs **nightly in CI** (`differential.yml` fuzz job,
+  day-derived rotating seed, divergence artifacts uploaded on failure).
+- 505 workspace tests pass; differential + stress suites byte-identical;
+  snapshots regenerated and reviewed; changelog ordering repaired
+  (stranded `[2.0.0-preview.3]` block restored to its chronological slot).
 
 ## Round-2 audit: fuzz-driven differential testing; 3 more backend bugs fixed (2026-09-19)
 

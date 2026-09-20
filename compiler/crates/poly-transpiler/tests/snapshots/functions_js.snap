@@ -2,7 +2,7 @@
 'use strict';
 
 function double(v) {
-  return ((v) * (2));
+  return ((((v) | 0) * ((2) | 0)) | 0);
 }
 
 

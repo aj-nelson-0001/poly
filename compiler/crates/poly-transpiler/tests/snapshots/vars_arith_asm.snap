@@ -21,12 +21,18 @@ main:
     movq $4, -32(%rbp)
     movq -8(%rbp), %rax
     movq -32(%rbp), %rcx
-    imulq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    imull %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -40(%rbp)
     movq $2, -48(%rbp)
     movq -40(%rbp), %rax
     movq -48(%rbp), %rcx
-    addq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    addl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -56(%rbp)
     movq -56(%rbp), %rax
     movq %rax, -24(%rbp)
@@ -36,7 +42,10 @@ main:
     movq $1, -64(%rbp)
     movq -8(%rbp), %rax
     movq -64(%rbp), %rcx
-    subq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    subl %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -72(%rbp)
     movq -72(%rbp), %rdi
     # put (integer)

@@ -6,13 +6,43 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Added
 
+- **Defined integer-overflow semantics on every target.** Default-width
+  (`i32`) arithmetic is now two's-complement wrap on all four backends —
+  `100000 * 100000` is `1410065408` everywhere — and division/modulo by
+  `-1` is guarded on both widths (`INT_MIN / -1` is `INT_MIN`, mod is `0`;
+  the asm target previously died of SIGFPE). Declared-`i64` arithmetic
+  stays exact 64-bit on rust/C/asm; the JS target is exact to its
+  documented 2^53 double limit. Big integer literals (outside i32) are
+  i64-class on every target.
 - **`scripts/fuzz_backends.py`** — a seed-driven differential fuzzer that
   generates random Poly programs (call DAGs, same-fn calls in one
   expression, bounded arithmetic) and runs them through all four targets,
-  failing on any output divergence. 100 seeds green.
+  failing on any output divergence.
+
+### Changed
+
+- **Rust target: inference-agnostic wrap lowering.** Wrapping method calls
+  (`wrapping_add`, …) are emitted only when both operands are concretely
+  integer in the emitted Rust (i32 literals, registered narrow-int
+  variables); inferred-numeric sites (loop variables, match pattern
+  bindings, untyped closures) keep plain operators, which rustc resolves
+  contextually — including `f64` enum-payload arithmetic.
 
 ### Fixed
 
+- **C target: guarded `mod` executed division.** The INT_MIN guard's
+  non-trap branch hardcoded `/`, so any guarded `mod` whose dividend was
+  negative computed the quotient instead of the remainder
+  (`(0-7) mod 2` printed `-3`). The operator is now interpolated for both
+  `div` and `mod`.
+- **asm target: 32-bit shift register class.** Narrow shifts emitted
+  `sall/sarl` with the 64-bit register name, failing to assemble.
+- **asm target: declared-`i64` variables keep 64-bit arithmetic.** The
+  backend never recorded `i64` declarations, so loop-heavy i64 code
+  (e.g. `tests/stress_loops.poly`) silently truncated to 32 bits.
+- **JS target: booleans print as `true`/`false` again.** The 32-bit
+  masking initially applied to comparison operators, turning `a != b`
+  into the number 0/1.
 - **Rust target: assigned parameters now lower to `mut` bindings.**
   Poly parameters have value semantics, but the Rust signature kept them
   immutable, so `x := x + 1` in a parameter failed with rustc E0384 while
@@ -25,54 +55,6 @@ All notable changes to the Poly language compiler will be documented in this fil
   sign-extended 32-bit immediate range (e.g. `0 - 2147483648`) now emit
   `movabsq` (register) or a `pushq`/`popq` scratch sequence (stack) and
   loop-step induction takes the 64-bit path.
-
-## [2.0.0-preview.3] - 2026-09-11
-
-### Fixed
-
-- **CLI flags are now accepted in any position.** `poly file.poly --emit-rust`,
-  `poly file.poly --check`, and every other flag previously worked only when
-  the flag preceded the file (`poly --emit-rust file.poly`); a file-first
-  invocation silently fell through to a default build. Arguments are now
-  pre-parsed into flags plus positionals, so documented invocations work in
-  any order, unknown flags are rejected in every position, and `--project`
-  accepts its two operands either way around.
-- **`--target js` now runs the generated program with Node** when a default
-  build produces a `.js` file, matching the documented CLI behavior (the
-  Rust target mirrors this by building the generated project). When Node is
-  unavailable the emitted file is still verified with `node --check` and the
-  build succeeds.
-- **Retired-syntax diagnostics restored.** The `set x to y` detector matched
-  an `Identifier("to")` token, but `to` lexes as a keyword, so the migration
-  hint never fired. `set x to y`, `add x n`, `sub x n`, `inc x`, and `dec x`
-  now all produce named errors with targeted suggestions, and `x += value` /
-  `x -= value` (lexed as two tokens) get the same treatment. Assignments to
-  variables that happen to be named `add` (`add := 5`) and calls like
-  `inc(counter)` are still accepted.
-- **Macros now expand in value position.** `var y := double(21)` previously
-  failed with `unknown function` because expansion only ran for
-  statement-position calls. A macro whose body is a single expression or
-  `return expr` lowers to that expression; multi-statement macros still
-  expand only at statement position, with a clear arity error in both
-  positions.
-
-### Added
-
-- MIT `LICENSE` file (declared by every workspace `Cargo.toml` but missing
-  from the repository).
-- 13 new tests: 8 parser tests covering the restored diagnostics,
-  false-positive guards, and value-position macro expansion; 5 CLI
-  end-to-end tests running the real binary for file-first flags, JS
-  auto-run, unknown-flag rejection, and migration hints.
-
-### Documentation
-
-- Roadmap kept-features table no longer lists retired `add`/`sub`/`inc`/
-  `dec` as arithmetic syntax; `POLY_JS_DESIGN.md` status updated from
-  "proposal" to "implemented"; `POLY_SPEC_v2.md` documents that `^` is
-  retired xor spelling (not exponentiation) and that Poly has no power
-  operator; PROGRESS.md records the audit-fix session and corrects the
-  stale string-mutation claim.
 
 ## [2.0.0-preview.12] - 2026-09-19
 
@@ -503,6 +485,54 @@ was red while the release build itself succeeded.
   integration touchpoints table (lexer, parser, target dispatch, CLI, CI),
   strict-mode interaction, first-cut `#js` declaration requirements, and
   acceptance criteria.
+
+## [2.0.0-preview.3] - 2026-09-11
+
+### Fixed
+
+- **CLI flags are now accepted in any position.** `poly file.poly --emit-rust`,
+  `poly file.poly --check`, and every other flag previously worked only when
+  the flag preceded the file (`poly --emit-rust file.poly`); a file-first
+  invocation silently fell through to a default build. Arguments are now
+  pre-parsed into flags plus positionals, so documented invocations work in
+  any order, unknown flags are rejected in every position, and `--project`
+  accepts its two operands either way around.
+- **`--target js` now runs the generated program with Node** when a default
+  build produces a `.js` file, matching the documented CLI behavior (the
+  Rust target mirrors this by building the generated project). When Node is
+  unavailable the emitted file is still verified with `node --check` and the
+  build succeeds.
+- **Retired-syntax diagnostics restored.** The `set x to y` detector matched
+  an `Identifier("to")` token, but `to` lexes as a keyword, so the migration
+  hint never fired. `set x to y`, `add x n`, `sub x n`, `inc x`, and `dec x`
+  now all produce named errors with targeted suggestions, and `x += value` /
+  `x -= value` (lexed as two tokens) get the same treatment. Assignments to
+  variables that happen to be named `add` (`add := 5`) and calls like
+  `inc(counter)` are still accepted.
+- **Macros now expand in value position.** `var y := double(21)` previously
+  failed with `unknown function` because expansion only ran for
+  statement-position calls. A macro whose body is a single expression or
+  `return expr` lowers to that expression; multi-statement macros still
+  expand only at statement position, with a clear arity error in both
+  positions.
+
+### Added
+
+- MIT `LICENSE` file (declared by every workspace `Cargo.toml` but missing
+  from the repository).
+- 13 new tests: 8 parser tests covering the restored diagnostics,
+  false-positive guards, and value-position macro expansion; 5 CLI
+  end-to-end tests running the real binary for file-first flags, JS
+  auto-run, unknown-flag rejection, and migration hints.
+
+### Documentation
+
+- Roadmap kept-features table no longer lists retired `add`/`sub`/`inc`/
+  `dec` as arithmetic syntax; `POLY_JS_DESIGN.md` status updated from
+  "proposal" to "implemented"; `POLY_SPEC_v2.md` documents that `^` is
+  retired xor spelling (not exponentiation) and that Poly has no power
+  operator; PROGRESS.md records the audit-fix session and corrects the
+  stale string-mutation claim.
 
 ## [2.0.0-preview.2] - 2026-09-08
 

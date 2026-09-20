@@ -19,7 +19,10 @@ double:
     movq $2, -16(%rbp)
     movq -8(%rbp), %rax
     movq -16(%rbp), %rcx
-    imulq %rcx, %rax
+    movslq %eax, %rax
+    movslq %ecx, %rcx
+    imull %ecx, %eax
+    movslq %eax, %rax
     movq %rax, -24(%rbp)
     movq -24(%rbp), %rax
     movq %rbp, %rsp

@@ -10,7 +10,7 @@ function main() {
   }
   let i = 0;
   while (((i) < (3))) {
-    i = ((i) + (1));
+    i = ((((i) | 0) + ((1) | 0)) | 0);
   }
   for (let j = 0; j <= 3; j += 1) {
     console.log(String(j));

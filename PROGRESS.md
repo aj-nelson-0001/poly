@@ -3,6 +3,27 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-20.
 
+## Release pipeline automated; preview.14 cut through it end-to-end (2026-09-20)
+
+- **Multi-platform releases**: `release.yml` now builds Linux (amd64),
+  macOS (arm64), and Windows (amd64) binaries in a matrix, renames each
+  at build time (same-named `poly` outputs would clobber each other when
+  artifacts merge), and ships them as versioned assets under one
+  `sha256sums.txt`. The release body is the committed
+  POLY_V2_PREVIEW_RELEASE_NOTES.md; a CHANGELOG guard refuses to publish
+  a tag whose version has no section (guard logic verified for accept
+  and reject paths; action inputs checked against
+  softprops/action-gh-release v2).
+- **2.0.0-preview.14 is the first release published entirely by the
+  pipeline** (run `35532172254`, all 4 jobs green): 3 versioned binaries
+  + checksums, all verified by downloading and `sha256sum -c`, Linux
+  binary runs and reports the right version.
+- **Post-rewrite sanity on preview.13**: after squashing post-release
+  commits, the release page, tag target, checksums, and binary were
+  re-verified (the squash deliberately avoided the tag target commit).
+- `prepare_release.py --skip-tests` idempotent against a released tree
+  (zero diff) before preview.14 was cut with it.
+
 ## Documentation audit: backend claims verified; preview.13 released (2026-09-20)
 
 Full audit of the documentation set against the implementation; every

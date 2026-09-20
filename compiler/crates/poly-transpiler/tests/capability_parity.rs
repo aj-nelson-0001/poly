@@ -10,56 +10,57 @@
 //! compiled outputs (see also `tests/diff_string_edges.poly` for
 //! value-level parity of the string methods).
 //!
-//! To change the matrix: update the backend, then update the expected rows
-//! here and the support matrix doc in the same commit.
+//! The expectation enum, target list, and runner are shared with
+//! `doc_claim_guards.rs` via the `common` module so the two suites cannot
+//! disagree about what "supported on target X" means. To change the matrix:
+//! update the backend, then update the expected rows here and the support
+//! matrix doc in the same commit.
 
-use poly_transpiler::Transpiler;
+mod common;
 
-/// Row of the capability matrix: (case name, source, per-target expectation).
-///
-/// `Expect::Accept`  — the backend must compile this source.
-/// `Expect::Reject`  — the backend must refuse (any error text is fine;
-///                     the error usually names the limitation).
-const CASES: &[(&str, &str, Expect)] = &[
+use common::{Case, Expect};
+
+/// Rows of the capability matrix: method-call surface per target.
+const CASES: &[Case] = &[
     // --- scalar to_string -------------------------------------------------
-    (
+    Case::accepted(
         "int to_string via variable",
         "fn main()\n    var n i32 := 5\n    var s := n.to_string()\n    put s.len()\nend fn\n",
         Expect::All,
     ),
-    (
+    Case::accepted(
         "int to_string via literal",
         "fn main()\n    put 5.to_string()\nend fn\n",
         Expect::All,
     ),
-    (
+    Case::accepted(
         "int to_string decl + put value",
         "fn main()\n    var n i32 := 5\n    var s := n.to_string()\n    put s\nend fn\n",
         Expect::All,
     ),
-    (
+    Case::accepted(
         "float to_string",
         "fn main()\n    put 1.5.to_string()\nend fn\n",
         Expect::AllExceptAsm,
     ),
-    (
+    Case::accepted(
         "float to_string decl",
         "fn main()\n    var s := 1.5.to_string()\n    put s\nend fn\n",
         Expect::AllExceptAsm,
     ),
     // --- string len -------------------------------------------------------
-    (
+    Case::accepted(
         "string len on variable",
         "fn main()\n    var s ustring := \"abcd\"\n    put s.len()\nend fn\n",
         Expect::All,
     ),
-    (
+    Case::accepted(
         "string len on parenthesized concat",
         "fn main()\n    put (\"a\" + \"b\").len()\nend fn\n\nfn double(v: i32): i32\n    return v * 2\nend fn\n",
         Expect::All,
     ),
     // --- loops ------------------------------------------------------------
-    (
+    Case::accepted(
         "variable loop step",
         // Runtime steps dispatch on the step's sign on every target
         // (regression: they used to yield zero iterations silently).
@@ -67,89 +68,39 @@ const CASES: &[(&str, &str, Expect)] = &[
         Expect::All,
     ),
     // --- vectors ----------------------------------------------------------
-    (
+    Case::accepted(
         "vector literal len",
         "fn main()\n    var v Vec<i32> := [1, 2, 3]\n    put v.len()\nend fn\n",
         Expect::RustAsmJs,
     ),
-    (
+    Case::accepted(
         "vector push",
         "fn main()\n    var v Vec<i32> := [1, 2]\n    v.push(3)\n    put v.len()\nend fn\n",
         Expect::RustAsm,
     ),
     // --- rejection set (same error on every target that refuses) ----------
-    (
+    Case::accepted(
         "unknown method",
         "fn main()\n    var s ustring := \"ab\"\n    put s.reverse()\nend fn\n",
         Expect::AllReject,
     ),
-    (
+    Case::accepted(
         "len on integer",
         "fn main()\n    var n i32 := 5\n    put n.len()\nend fn\n\nfn main2()\n    put 1\nend fn\n",
         Expect::AllReject,
     ),
 ];
 
-/// Per-target expectation for a matrix row.
-#[derive(Clone, Copy)]
-enum Expect {
-    /// Accepted by all four backends.
-    All,
-    /// Accepted by rust, c, js; asm refuses (its scalar MethodCall gate
-    /// covers only integer `.to_string()`).
-    AllExceptAsm,
-    /// Accepted by rust, asm, js; c has no vector support at all.
-    RustAsmJs,
-    /// Accepted by rust and asm only: c has no vectors, and the JS backend
-    /// supports vector `.len()` but no mutators like `.push`.
-    RustAsm,
-    /// Rejected by the type checker before codegen — identical behavior on
-    /// every target (used for cases whose acceptance would diverge).
-    AllReject,
-}
-
-impl Expect {
-    fn accepted(self, target: &str) -> bool {
-        match self {
-            Expect::All => true,
-            Expect::AllExceptAsm => target != "asm",
-            Expect::RustAsmJs => target != "c",
-            Expect::RustAsm => matches!(target, "rust" | "asm"),
-            Expect::AllReject => false,
-        }
-    }
-}
-
-const TARGETS: &[&str] = &["rust", "c", "asm", "js"];
-
 #[test]
 fn backend_capability_matrix_is_pinned() {
-    let transpiler = Transpiler::new();
-    for (name, source, expect) in CASES {
-        for target in TARGETS {
-            let result = transpiler.transpile_target(source, target);
-            match (&result, expect.accepted(target)) {
-                (Ok(_), true) => {}
-                (Err(_), false) => {}
-                (Ok(_), false) => panic!(
-                    "capability matrix drift: case `{name}` compiled on `{target}` \
-                     but is pinned as rejected — if intentional, update the \
-                     backend docs and this matrix"
-                ),
-                (Err(err), true) => panic!(
-                    "capability matrix drift: case `{name}` failed on `{target}` \
-                     but is pinned as accepted — error: {err}"
-                ),
-            }
-        }
-    }
+    common::run_matrix(CASES);
 }
 
 #[test]
 fn rejection_errors_name_the_backend_or_limitation() {
     // The refusal path must be a *clear* compile-time error, not a wrong
     // binary or a panic. Pin the distinguishing words per refusing target.
-    let transpiler = Transpiler::new();
+    let transpiler = poly_transpiler::Transpiler::new();
     let cases: &[(&str, &str, &str, &[&str])] = &[
         (
             // Every backend's type checker rejects before codegen.

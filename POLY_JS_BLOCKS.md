@@ -1,6 +1,6 @@
 # Poly JavaScript Backend
 
-**Status:** Current for Poly 2.0.0-preview.2
+**Status:** Current for Poly 2.0.0-preview.12
 
 This document describes the implemented JavaScript target. It is not a proposal for a future general-purpose JS translator.
 
@@ -37,12 +37,14 @@ The JS backend currently supports:
 - scalar variable, `let`, and `const` declarations
 - primitive JS-compatible types: booleans, integers (emitted as `Number`; `/` on integers is wrapped in `Math.trunc` to preserve Poly's truncated division), `f32`/`f64`, `string`, and `ustring`
 - simple Poly functions without async or generics, emitted as top-level `function` declarations
+- plain structs without methods or generics, emitted as factory-style constructor functions, with struct literals lowering to `new Point({ x: 3, y: 4 })`
+- tuple literals and typed tuple declarations (arrays with `.N` index access)
 - assignments, arithmetic, comparisons, logical and bitwise operators
 - `if`/`else`, `while`, inclusive numeric `loop` ranges (with optional `step`), infinite loops, and `break`/`continue`
 - `for x in <iterable>` and `loop x in <collection>` lowering to `for (const x of ...)`
-- `match` statements lowered to a `switch` over the scrutinee
+- `match` statements lowered to a `switch` over the scrutinee; `match` expressions in value position lower to an IIFE `switch` (literal, wildcard, and unit-enum patterns)
 - calls to functions defined in `#js` blocks
-- `put` for scalar values and string concatenation in output expressions (numbers print through `String(...)`; strings print directly)
+- `put` for scalar values and string concatenation in output expressions (numbers print through `String(...)`; strings print directly); string interpolation lowers to concatenation
 
 A JS target source must keep unsupported operations in a `#js` helper and call that helper from supported Poly orchestration, or use the Rust target instead.
 
@@ -50,11 +52,12 @@ A JS target source must keep unsupported operations in a `#js` helper and call t
 
 Unsupported constructs are rejected with guidance rather than miscompiled:
 
-- structs, enums, and tuple types
+- enum declarations, payload-carrying enum variants, and structured/guarded match patterns
 - async/await and generators
-- capturing closures
-- file I/O (`to "file"`, `-append`) and stdin `get` with file sources
-- vectors with backend-specific operations beyond indexing/iteration
+- closures (capturing and non-capturing)
+- file I/O (`to "file"`, `-append`) and all stdin `get` input (browser-hostile)
+- vectors and arrays with backend-specific operations beyond indexing/iteration
+- method calls, `try` propagation, `if` expressions in value position, and unsafe blocks
 
 ## Type Mapping
 
@@ -65,6 +68,7 @@ Unsupported constructs are rejected with guidance rather than miscompiled:
 | `f32`/`f64` | `number` |
 | `string`/`ustring` | `string` |
 | `char` | single-character `string` |
+| `(T, U)` tuple | array with `.N` index access |
 
 ## Strict Mode
 

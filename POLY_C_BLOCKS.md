@@ -1,6 +1,6 @@
 # Poly C11 Backend
 
-**Status:** Current for Poly 2.0.0-preview.2
+**Status:** Current for Poly 2.0.0-preview.12
 
 This document describes the implemented C target. It is not a proposal for a future general-purpose C translator.
 

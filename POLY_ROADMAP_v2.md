@@ -6,7 +6,7 @@
 
 ## Vision
 
-Poly becomes a **thin, assembly-inspired syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming. For everything else — generics, async, closures, traits, pattern matching — users provide definitions in foreign language blocks (`#rust`, `#c`, `#cpp`, etc.).
+Poly becomes a **thin, assembly-inspired syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming. For everything else — generics, async, closures, traits, pattern matching — users provide definitions in foreign language blocks (`#rust`, `#c`, `#asm`, `#js`, etc.).
 
 **Key principle:** Foreign blocks provide target-language definitions at file scope. Poly provides the orchestration and generated entry point. The selected native compiler validates foreign code.
 
@@ -34,7 +34,7 @@ source.poly
 
 ### What's Implemented
 
-- **Lexer**: `#rust`, `#c`, and `#cpp` blocks lexed as `ForeignBlock { language, content }` tokens
+- **Lexer**: `#rust`, `#c`, `#asm`, `#js`, and `#cpp` blocks lexed as `ForeignBlock { language, content }` tokens
 - **Parser**: foreign blocks are represented explicitly in the AST and rejected inside Poly blocks
 - **IR**: Rust foreign blocks are lowered into the Rust IR; other targets are handled by target-specific backends
 - **Codegen**: Verbatim emission of selected Rust blocks at module scope
@@ -45,9 +45,9 @@ source.poly
 
 ### Known Limitations
 
-- Foreign function signatures remain opaque to Poly; the selected Rust/C compiler validates their argument and return types.
+- Foreign function signatures remain opaque to Poly unless the source adds an explicit `extern <target> fn ...` declaration; the selected native compiler validates their argument and return types.
 - `#cpp` is recognized and preserved in the syntax model, but no C++ code generator exists yet.
-- The C backend currently covers the orchestration subset: scalar values, plain structs, functions, conditions, loops, arithmetic, and stdout/stderr output. Complex values should remain in foreign helper definitions.
+- The C backend currently covers the orchestration subset: scalar values, plain structs, tuples, simple match patterns, non-capturing closures, plain stdin `get`, functions, conditions, loops, arithmetic, and stdout/stderr output. Complex values should remain in foreign helper definitions.
 
 ### Verified Working
 
@@ -209,7 +209,7 @@ All 20+ `POLY_*_GUIDE.md` files. The language is simple enough that the spec + e
 | Phase 2: Language Boundary | ✅ Preview contract documented | Ongoing design work |
 | Phase 2.5: C backend | ✅ Hardened Preview | ~1 day |
 | Phase 2.6: Asm backend | ✅ Linux x86-64 subset shipped | `2.0.0-preview.2` |
-| Phase 2.7: JS backend | ✅ ES2020 subset shipped | Strict-mode CI + playground selector |
+| Phase 2.7: JS backend | ✅ ES2020 subset shipped (`2.0.0-preview.2`) | Strict-mode CI + playground selector |
 | Phase 3: Polish & Tooling | 🟡 In progress | Cross-platform CI and interface diagnostics are now implemented; packaging and UX remain |
 | Phase 3.5: Preview Release Hardening | 📋 Current | Support matrix, release checklist, and clean-tree review |
 | Phase 4: Documentation | ✅ Maintained v2 set indexed | Ongoing historical cleanup |

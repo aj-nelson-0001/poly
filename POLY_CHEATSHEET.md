@@ -55,7 +55,7 @@ fn main()
 end fn
 ~~~
 
-`get` is a Rust-backend feature. `--timeout`, `--default`, `--mask`, `--until`, `--bytes`, and `--as` are parsed as structured flags; the generated Rust runtime implements the supported forms. The C backend rejects `get`.
+`get` is a Rust-backend feature. `--timeout`, `--default`, `--mask`, `--until`, `--bytes`, and `--as` are parsed as structured flags; the generated Rust runtime implements the supported forms. The C backend supports plain `get` with an optional prompt (a line of stdin through an emitted runtime helper) and rejects flags, file sources, and `with` clauses.
 
 ## Loops
 
@@ -185,8 +185,8 @@ end fn
 Rust lowers `s := s + x` in loops to in-place `push_str` (amortized O(1)).
 C materializes concat with an emitted `poly_concat` helper and `.len()` via
 `strlen`; asm uses a static bump arena (`_str_arena`) for concat results.
-The JS target maps everything to native string operations. Interpolation is
-Rust-target; other backends reject it with guidance.
+The JS target maps everything to native string operations. Interpolation
+lowers to concatenation on every target (C formats through `printf`).
 
 ## Targets
 
@@ -197,7 +197,7 @@ poly --emit-rust program.poly
 poly --target c --emit-c program.poly
 ~~~
 
-Rust is the default target. The C target is a C11 orchestration subset and supports scalar declarations, calls to foreign C helpers, numeric control flow, and stdout/stderr output. Unsupported C features fail with a diagnostic instead of being silently rewritten.
+Rust is the default target. The C target is a C11 orchestration subset and supports scalar declarations, calls to foreign C helpers, numeric control flow, plain stdin `get` with an optional prompt, tuples, struct literals, simple `match` patterns, and stdout/stderr output. Unsupported C features fail with a diagnostic instead of being silently rewritten.
 
 ## Common Diagnostics
 

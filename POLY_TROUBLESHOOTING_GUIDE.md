@@ -78,11 +78,11 @@ fn main()
 end fn
 ~~~
 
-The Rust backend implements redirects. The C backend intentionally rejects them because its current contract is stdout/stderr orchestration only; move file behavior into a `#c` helper.
+The Rust backend implements redirects. The C, asm, and JS backends reject them because their contracts are stdout/stderr orchestration only; move file behavior into a `#c`, `#asm`, or `#js` helper.
 
 ## Input Problems
 
-`get` is implemented by the Rust backend. It reads stdin or a file and can apply the supported flags:
+`get` reads stdin or a file and can apply the supported flags. File sources and the input flags are Rust-target features:
 
 ~~~poly
 fn main()
@@ -94,7 +94,7 @@ fn main()
 end fn
 ~~~
 
-The C backend rejects `get`. Use a foreign C function for input when targeting C.
+The C backend supports plain `get` — with an optional prompt — reading one line of stdin through an emitted runtime helper; file sources, input flags, and `with` clauses require a `#c` helper. The asm and JS backends reject input entirely; move input into a foreign helper when targeting them.
 
 If a Rust input program appears to hang, it is waiting for stdin. Provide input through the terminal or redirect a file at the process level. Do not rely on undocumented `is_input_available`, network, or line-editor helpers.
 
@@ -109,7 +109,7 @@ fn main()
 end fn
 ~~~
 
-Equality and ordering operators require compatible operands. String concatenation is supported for strings and scalar values in the Rust backend:
+Equality and ordering operators require compatible operands. String concatenation is supported for strings and scalar values on every target:
 
 ~~~poly
 fn main()

@@ -1,6 +1,6 @@
 # Poly Language Grammar v2 Preview
 
-**Status:** Current preview grammar for Poly 2.0.0-preview.7
+**Status:** Current preview grammar for Poly 2.0.0-preview.12
 
 This document describes the syntax accepted by the current lexer and parser. It is intentionally a compact grammar, not a promise that every parsed construct is supported by every target backend.
 
@@ -196,12 +196,13 @@ loop_statement ::= "loop" "end" "loop"
 loop_source   ::= "in" expression | range_list
 range_list    ::= range_part { "," range_part }
 range_part    ::= expression ".." expression [ "step" expression ]
+                 | expression "..=" expression [ "step" expression ]
                  | expression
 
 match_expression ::= "match" expression { pattern "," expression } "end" "match"
 ~~~
 
-Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected by semantic checking. The range start may be any expression (a constant, index, or call as well as a literal); a literal in the loop-variable position names a var-less counted loop whose counter is discarded (`loop 0..10`). An infinite loop whose first statement begins with an identifier (an assignment or a call) is still parsed as infinite, not as a range loop.
+Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected — a literal zero step at parse/check time, a runtime zero step by yielding zero iterations. The range start may be any expression (a constant, index, or call as well as a literal); a literal in the loop-variable position names a var-less counted loop whose counter is discarded (`loop 0..10`). An infinite loop whose first statement begins with an identifier (an assignment or a call) is still parsed as infinite, not as a range loop.
 
 ## I/O
 

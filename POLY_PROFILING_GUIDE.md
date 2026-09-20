@@ -1,6 +1,6 @@
 # Poly Language Profiling Guide
 
-> **Historical guide:** Profiling examples target earlier compiler workflows and are not normative for Poly 2.0.0-preview.1.
+> **Historical guide:** Profiling examples target earlier compiler workflows and are not normative for Poly 2.0.0-preview.12.
 
 ## Overview
 
@@ -18,18 +18,18 @@ This guide covers profiling and performance analysis techniques for Poly program
 // Measure execution time
 fn benchmark(name: ustring, iterations: i32, fn: () -> T): BenchmarkResult
     var times Vec<i64> := []
-    
+
     loop iteration in iterations
         var start := time_now()
         fn()
         var duration := time_now() - start
         times.push(duration)
     end loop
-    
+
     var avg := times.iter().sum() / iterations
     var min := times.iter().min()
     var max := times.iter().max()
-    
+
     return BenchmarkResult {
         name: name,
         iterations: iterations,
@@ -52,17 +52,17 @@ put "Max: " + result.max_ms.to_string() + "ms"
 // Detect memory leaks
 fn detect_leaks(iterations: i32)
     var initial_memory := get_memory_usage()
-    
+
     loop iteration in iterations
         // Code that might leak memory
         var data := allocate_large_array()
         // ... process data
         // If not properly freed, memory increases
     end loop
-    
+
     var final_memory := get_memory_usage()
     var leaked := final_memory - initial_memory
-    
+
     if leaked > 0,
         warn "Potential memory leak: " + leaked.to_string() + " bytes"
     else
@@ -82,7 +82,7 @@ end fn
 fn profile_calls(fn: () -> T, iterations: i32): ProfileResult
     var call_count i32 := 0
     var total_time i64 := 0
-    
+
     var profiled_fn := || {
         call_count := call_count + 1
         var start := time_now()
@@ -91,11 +91,11 @@ fn profile_calls(fn: () -> T, iterations: i32): ProfileResult
         total_time := total_time + duration
         return result
     }
-    
+
     loop iteration in iterations
         profiled_fn()
     end loop
-    
+
     return ProfileResult {
         call_count: call_count,
         total_time_ms: total_time,
@@ -116,7 +116,7 @@ put "Average: " + result.avg_time_ms.to_string() + "ms"
 // Detect hotspots
 fn detect_hotspots(functions: Vec<(ustring, fn() -> T)>): Vec<Hotspot>
     var hotspots Vec<Hotspot> := []
-    
+
     loop function in functions
         var result := benchmark(name, 100, func)
         hotspots.push(Hotspot {
@@ -125,16 +125,16 @@ fn detect_hotspots(functions: Vec<(ustring, fn() -> T)>): Vec<Hotspot>
             percentage: 0.0  // Calculated later
         })
     end loop
-    
+
     // Calculate percentages
     var total_time := hotspots.iter().map(|h| h.avg_ms).sum()
     loop hotspot in hotspots.iter_mut()
         hotspot.percentage := (hotspot.avg_ms as f64) / (total_time as f64) * 100.0
     end loop
-    
+
     // Sort by time (descending)
     hotspots.sort_by(|a, b| b.avg_ms.compare(a.avg_ms))
-    
+
     return hotspots
 end fn
 ~~~
@@ -156,7 +156,7 @@ fn profile_file_io(filename: ustring, iterations: i32): FileIOProfile
         var duration := time_now() - start
         write_times.push(duration)
     end loop
-    
+
     // Profile reads
     var read_times Vec<i64> := []
     loop iteration in iterations
@@ -165,9 +165,9 @@ fn profile_file_io(filename: ustring, iterations: i32): FileIOProfile
         var duration := time_now() - start
         read_times.push(duration)
     end loop
-    
+
     delete_file(filename)
-    
+
     return FileIOProfile {
         write_avg_ms: write_times.iter().sum() / iterations,
         read_avg_ms: read_times.iter().sum() / iterations
@@ -182,7 +182,7 @@ end fn
 fn profile_network(url: ustring, iterations: i32): NetworkProfile
     var times Vec<i64> := []
     var errors i32 := 0
-    
+
     loop iteration in iterations
         var start := time_now()
         match get from  url --timeout 5000
@@ -192,7 +192,7 @@ fn profile_network(url: ustring, iterations: i32): NetworkProfile
             Error(_), errors = errors + 1
         end match
     end loop
-    
+
     return NetworkProfile {
         avg_ms: times.iter().sum() / times.len(),
         min_ms: times.iter().min(),
@@ -213,7 +213,7 @@ end fn
 fn profile_threads(iterations: i32): ThreadProfile
     var thread_count i32 := 0
     var creation_times Vec<i64> := []
-    
+
     loop iteration in iterations
         var start := time_now()
         spawn(|| {
@@ -223,7 +223,7 @@ fn profile_threads(iterations: i32): ThreadProfile
         var duration := time_now() - start
         creation_times.push(duration)
     end loop
-    
+
     return ThreadProfile {
         avg_creation_ms: creation_times.iter().sum() / iterations,
         threads_created: thread_count
@@ -239,22 +239,22 @@ fn profile_locks(iterations: i32): LockProfile
     var lock := Mutex::new(0)
     var contention_count i32 := 0
     var wait_times Vec<i64> := []
-    
+
     loop iteration in iterations
         var start := time_now()
         lock.lock()
         var duration := time_now() - start
         wait_times.push(duration)
-        
+
         if duration > 10, // Contention threshold
             contention_count := contention_count + 1
         end if
-        
+
         // Critical section
         sleep(1)
         lock.unlock()
     end loop
-    
+
     return LockProfile {
         avg_wait_ms: wait_times.iter().sum() / iterations,
         contention_count: contention_count,
@@ -273,23 +273,23 @@ end fn
 // Generate profiling report
 fn generate_report(results: Vec<ProfileResult>): ustring
     var report ustring := "# Performance Report\n\n"
-    
+
     // Summary
     report := report + "## Summary\n\n"
     report := report + "- Total tests: " + results.len().to_string() + "\n"
     var total_time := results.iter().map(|r| r.time_ms).sum()
     report := report + "- Total time: " + total_time.to_string() + "ms\n\n"
-    
+
     // Detailed results
     report := report + "## Detailed Results\n\n"
     report := report + "| Test | Time (ms) | Status |\n"
     report := report + "|------|-----------|--------|\n"
-    
+
     loop result in results
         var status := if result.passed,"PASS" else "FAIL" end if
         report := report + "| " + result.name + " | " + result.time_ms.to_string() + " | " + status + " |\n"
     end loop
-    
+
     return report
 end fn
 
@@ -306,7 +306,7 @@ end fn
 // Analyze profiling results
 fn analyze_results(results: Vec<ProfileResult>): Vec<Recommendation>
     var recommendations Vec<Recommendation> := []
-    
+
     loop result in results
         // Check for slow operations
         if result.time_ms > 1000,
@@ -316,7 +316,7 @@ fn analyze_results(results: Vec<ProfileResult>): Vec<Recommendation>
                 priority: "high"
             })
         end if
-        
+
         // Check for memory issues
         if result.memory_allocated > 1000000,
             recommendations.push(Recommendation {
@@ -325,7 +325,7 @@ fn analyze_results(results: Vec<ProfileResult>): Vec<Recommendation>
                 priority: "high"
             })
         end if
-        
+
         // Check for error rates
         if result.error_rate > 0.01,
             recommendations.push(Recommendation {
@@ -335,7 +335,7 @@ fn analyze_results(results: Vec<ProfileResult>): Vec<Recommendation>
             })
         end if
     end loop
-    
+
     return recommendations
 end fn
 ~~~

@@ -297,6 +297,7 @@ end fn
 | Rust block | `#rust ... #endrust` | Rust definitions emitted at module scope |
 | C block | `#c ... #endc` | C declarations emitted at file scope |
 | Asm block | `#asm ... #endasm` | Assembly definitions emitted at file scope (Linux x86-64) |
+| JS block | `#js ... #endjs` | JavaScript definitions emitted at module scope |
 | C++ block | `#cpp ... #endcpp` | Reserved; rejected until a backend exists |
 
 **Rule:** Foreign blocks are top-level target-language definitions and are opaque to Poly. Poly programs declare their own `fn main() ... end fn`, which the backends emit as `fn main()` (Rust), `int main(void)` (C), `main:` (asm), or `function main()` (JS). The native compiler validates foreign contents.
@@ -353,15 +354,16 @@ end fn
 | `char` / `uchar` | 4 bytes | `char` |
 | `string` | byte-oriented | `String` |
 | `ustring` | 1-4 bytes/char | `String` / `&str` |
+| `byte` | 1 byte | `u8` |
+| `bytes` | Variable | `Vec<u8>` |
+| `ptr T` | Pointer size | `*const T` |
 
 String operations across targets: `+` concat (value and `put` position) and
 `.len()` are supported on Rust, C (emitted `poly_concat`/`strlen` helpers),
 asm (`_str_arena` bump allocator), and JS. `.to_string()` on scalars is
-supported on Rust and C. See `POLY_V2_SUPPORT_MATRIX.md` for the full
-per-target contract.
-| `byte` | 1 byte | `u8` |
-| `bytes` | Variable | `Vec<u8>` |
-| `ptr T` | Pointer size | `*const T` |
+supported on Rust and C, and string interpolation lowers to concatenation on
+every target. See `POLY_V2_SUPPORT_MATRIX.md` for the full per-target
+contract.
 
 ### Language Constructs
 
@@ -389,8 +391,9 @@ per-target contract.
 - **Unsafe**: `unsafe ... end unsafe`
 - **Mutation**: `count := count + 1`, `total := total - amount`
 - **Strings**: concatenation with `+` in value and `put` position on every
-  target; `n.to_string()` for scalars; `s.len()` for byte length; string
-  interpolation `"n is {n}"` (Rust target)
+  target; `n.to_string()` for scalars (Rust and C targets); `s.len()` for byte
+  length; string interpolation `"n is {n}"` lowers to concatenation on every
+  target
 
 ---
 
@@ -417,7 +420,8 @@ Poly/
 ├── POLY_MIGRATION_GUIDE.md            # Migration paths
 ├── POLY_FUTURE_MIGRATION_GUIDE.md     # Future migration plans
 ├── POLY_DOCUMENTATION_STYLE_GUIDE.md  # Documentation and example conventions
-├── POLY_GRAMMAR.md                    # Formal BNF grammar
+├── POLY_GRAMMAR.md                    # Compact v2 grammar accepted by the parser
+├── POLY_SPEC_v2.md                    # Current v2 language contract
 ├── examples/
 │   ├── prime_numbers.poly             # Loop ranges, basic functions
 │   ├── interactive_menu.poly          # Menus, match, get flags
@@ -444,7 +448,7 @@ Poly/
 │   ├── poly-js-codegen/           # JavaScript backend (`--target js`)
 │   └── poly-cli/                  # Command-line interface
     └── grammar/
-        └── poly.bnf                   # Formal grammar
+        └── poly.bnf                   # Historical v1.5 BNF draft (see POLY_GRAMMAR.md)
 ~~~
 
 ---
@@ -463,7 +467,9 @@ Poly/
 | [Performance Guide](POLY_PERFORMANCE_GUIDE.md) | Optimization techniques |
 | [Security Guide](POLY_SECURITY_GUIDE.md) | Security considerations |
 | [Documentation Style Guide](POLY_DOCUMENTATION_STYLE_GUIDE.md) | Documentation and example conventions |
-| [Grammar](POLY_GRAMMAR.md) | Formal BNF grammar |
+| [Grammar](POLY_GRAMMAR.md) | Compact v2 grammar accepted by the parser |
+| [Support Matrix](POLY_V2_SUPPORT_MATRIX.md) | Frozen per-target feature contract |
+| [Documentation Index](POLY_DOCUMENTATION_INDEX.md) | Maintained vs. historical documents |
 
 ---
 
@@ -609,7 +615,7 @@ Use `poly --emit-rust file.poly` when you want the generated Rust on stdout. Fla
 | `poly --format <file>` | Format output with rustfmt |
 | `poly --diff <file>` | Show diff between unformatted and formatted |
 | `poly --watch <file>` | Watch file and re-transpile on changes |
-| `poly --project <dir> <file>` | Generate a Rust Cargo project or a C project with `--target c` |
+| `poly --project <dir> <file>` | Generate a target project: a Rust Cargo project, or a C, asm, or JS project with the matching `--target` |
 | `poly --repl` | Start interactive REPL |
 | `poly --help` | Show help message |
 | `poly --version` | Show version information |

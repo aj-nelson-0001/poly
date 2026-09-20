@@ -51,7 +51,7 @@ fn main()
 end fn
 ~~~
 
-`get` and its input flags are Rust-backend features. The C backend rejects `get`; provide input through a target-language helper in `#c`.
+`get` and its input flags are Rust-backend features. The C backend supports plain `get` — with an optional prompt — reading a line of stdin through an emitted runtime helper; file sources and input flags require a target-language helper in `#c`.
 
 ## Control Flow
 

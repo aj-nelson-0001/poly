@@ -1,6 +1,6 @@
 # Poly v2 Support Matrix
 
-**Status:** Frozen preview contract for `2.0.0-preview.2`
+**Status:** Frozen preview contract, current through `2.0.0-preview.12`
 
 This matrix is the implementation contract for the current Rust, C, assembly, and JavaScript targets. A construct marked `Parsed` may exist in the parser and AST without being runnable on every backend.
 
@@ -23,10 +23,10 @@ This matrix is the implementation contract for the current Rust, C, assembly, an
 | Boolean rendering (`put`, `.to_string()`, concat) | Yes | Yes | Yes | Yes | All targets render `true`/`false` text (the C/asm 1/0 output was normalized to the Rust reference behavior). C uses `poly_bool_str`; asm uses `_print_bool`/`_bool_to_string`. |
 | Constants and `let` | Yes | Yes | Limited | Yes | C uses native `const`/local declarations. |
 | Arithmetic, comparison, logical, bitwise operators | Yes | Yes | Limited | Yes | C uses C11-compatible scalar expressions; integer `/` truncates via `Math.trunc` in JS. Integer overflow is defined on every target: default-width (`i32`) arithmetic wraps two's-complement (rust emits `wrapping_*`, JS masks with `\| 0`, C and asm wrap naturally at 32 bits), and division/modulo by `-1` is guarded in both widths (`INT_MIN / -1` is `INT_MIN`, mod is `0` — no SIGFPE). Declared-`i64` arithmetic stays exact 64-bit on rust/C/asm; JS is exact to the 2^53 double limit. Big integer literals (outside i32) are i64-class on every target. |
-| Strings and string concatenation | Yes | Yes | Yes | Yes | All targets support `+` concat in value and `put` position plus `.len()`. C materializes concat with an emitted `poly_concat` helper and `to_string()` on scalars with `poly_int_to_string`/`poly_float_to_string`; asm carves results from a static bump arena (`_str_arena`). Asm string method calls beyond `.len()` are rejected with guidance. |
+| Strings and string concatenation | Yes | Yes | Yes | Yes | All targets support `+` concat in value and `put` position plus `.len()`. C materializes concat with an emitted `poly_concat` helper and `to_string()` on scalars with `poly_int_to_string`/`poly_float_to_string`; asm carves results from a static bump arena (`_str_arena`). String interpolation lowers to concatenation on every target. Asm string method calls beyond `.len()` are rejected with guidance. |
 | `put`, `error`, `warn`, `info` | Yes | Yes | Limited | Yes | C supports scalar output and diagnostics; JS maps the diagnostics to `console` streams. |
 | File output redirects | Yes | No | No | No | C must call a `#c` helper. |
-| `get`, stdin, file input | Yes | Limited | No | No | C supports plain `get` (with optional prompt) via an emitted runtime helper; file input and input flags need a `#c` helper. |
+| `get`, stdin, file input | Yes | Limited | No | No | C supports plain `get` (with optional prompt) via an emitted runtime helper; file input and input flags need a `#c` helper. JS rejects all stdin input as browser-hostile. |
 | Typed input flags | Yes | No | No | No | `--as`, `--default`, `--mask`, `--until`, `--timeout`, and `--bytes` are Rust runtime behavior. |
 | `if`/`else` | Yes | Yes | Limited | Yes | |
 | `while` | Yes | Yes | Limited | Yes | |
@@ -36,13 +36,13 @@ This matrix is the implementation contract for the current Rust, C, assembly, an
 | Collection loops | Yes | Limited | Limited | Yes | C only supports a shallow C-array form. Asm supports `for x in <vector>` and `for x in <string>`. JS lowers both `for x in` and `loop x in` to `for...of`. |
 | `break`/`continue` | Yes | Yes | Limited | Yes | |
 | Simple Poly functions | Yes | Yes | Limited | Yes | C functions cannot be async or generic. |
-| Structs | Yes | Plain only | Yes | No | C rejects methods and generics; struct literals lower to C99 compound literals. Asm supports program-scope structs: field access, struct-literal variables, struct parameters (passed by reference), and struct-returning functions. |
+| Structs | Yes | Plain only | Yes | Plain only | C rejects methods and generics; struct literals lower to C99 compound literals. Asm supports program-scope structs: field access, struct-literal variables, struct parameters (passed by reference), and struct-returning functions. JS supports plain structs as factory-style constructor functions; methods and generics are rejected. |
 | Enum declarations and variant values | Yes | Limited | Limited | No | C emits `typedef enum` with qualified enumerators; simple variants work in expressions and `match` patterns, payload-carrying variants are rejected. Asm supports unit variants in expressions and `match`; payload-carrying variants are rejected. |
 | Traits, impls, modules, aliases | Yes | No | No | No | Use a foreign helper or the Rust target. |
 | Generics | Yes | No | No | No | C rejects generic Poly declarations. |
 | Closures and higher-order operations | Yes | Limited | No | No | C compiles non-capturing closures (static function + typed pointer); capturing closures are rejected with guidance. |
-| Tuples | Yes | Yes | No | No | C tuples are anonymous structs with `_N` fields; `.N` index access, nesting, and match over them are supported. |
-| `match` statements | Yes | Limited | No | Yes | C lowers literal, wildcard, range, and identifier arms to an if/else-if chain; structured patterns and guards are rejected. JS lowers literal and wildcard arms to `switch`. |
+| Tuples | Yes | Yes | No | Yes | C tuples are anonymous structs with `_N` fields; `.N` index access, nesting, and match over them are supported. JS tuples lower to arrays with `.N` index access. |
+| `match` statements | Yes | Limited | No | Yes | C lowers literal, wildcard, range, and identifier arms to an if/else-if chain; structured patterns and guards are rejected. JS lowers literal, wildcard, and unit-enum arms to `switch`. |
 | `match` expressions (value position) | Yes | Limited | Limited | Limited | All four targets support literal and wildcard arms in initializers and other value positions. C lowers to a ternary chain (also range and unit-enum patterns; qualified `Enum::Variant` patterns only — the C subset cannot resolve bare variant names) and aborts on an unmatched scrutinee, mirroring the Rust target's panic. JS lowers to an IIFE `switch` (unit-enum patterns subject to the JS enum row) and throws on an unmatched scrutinee. Asm treats the last arm as always-matching. Block arms and guards are rejected in value position on C/JS/asm. |
 | `Option`/`Result` | Yes | No | No | No | |
 | Vectors | Yes | No | Limited | Limited | Asm vectors are static descriptor-backed data; `push`/`pop`/`len` switch to a growable in-place runtime (static bump arena). JS supports array literals and iteration. |

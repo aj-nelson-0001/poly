@@ -1,6 +1,6 @@
 # The Poly Programming Language
 
-> **Historical reference:** This document describes the v1 language. It is retained for context and migration only; it is not normative for Poly 2.0.0-preview.1. See [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md).
+> **Historical reference:** This document describes the v1 language. It is retained for context and migration only; it is not normative for Poly 2.0.0-preview.12. See [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md).
 
 *A Tutorial Introduction*
 

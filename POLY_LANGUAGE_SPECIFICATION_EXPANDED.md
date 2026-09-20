@@ -1,11 +1,11 @@
 # Poly Language Specification - Expanded Draft
 
-> **Historical draft:** This document describes an earlier v1 design and is not normative for Poly 2.0.0-preview.1. Use [POLY_SPEC_v2.md](POLY_SPEC_v2.md) and [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md) for current behavior.
+> **Historical draft:** This document describes an earlier v1 design and is not normative for Poly 2.0.0-preview.12. Use [POLY_SPEC_v2.md](POLY_SPEC_v2.md) and [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md) for current behavior.
 ## Version: 1.5 Draft (Work in Progress)
 
-**Target Backend:** Rust (Cargo Workspace)  
-**Status:** Active Definition - Major Expansion  
-**Latest Addition:** Generic type parameters, compile-time macros, and standard library math/string functions
+- **Target Backend:** Rust (Cargo Workspace)
+- **Status:** Active Definition - Major Expansion
+- **Latest Addition:** Generic type parameters, compile-time macros, and standard library math/string functions
 
 ---
 
@@ -382,7 +382,7 @@ end trait
 trait Logger
     fn log(self, message: ustring)
     fn log_error(self, message: ustring)
-    
+
     // Default implementation
     fn log_warning(self, message: ustring)
         self.log(unicode "[WARNING] " + message)
@@ -523,7 +523,7 @@ module mymodule
     fn private_function() { }        // Private
     pub const PUBLIC_CONST = 1       // Public
     const PRIVATE_CONST := 2          // Private
-    
+
     pub struct PublicStruct { }      // Public struct
     struct PrivateStruct { }         // Private struct
 end module
@@ -734,7 +734,7 @@ end enum
 fn read_file(path: ustring): Result<ustring, FileError>
     // 'try' handles error propagation (like Rust's ?)
     var file := try open_file(path)
-    
+
     if file.is_valid
         var content := try file.read_all()
         return Ok(content)
@@ -771,15 +771,15 @@ fn validate_name(name: ustring): Result<ustring, ValidationError>
     if name.len() = 0,
         return Error(ValidationError::EmptyInput)
     end if
-    
+
     if name.len() < 2,
         return Error(ValidationError::TooShort(2))
     end if
-    
+
     if name.len() > 50,
         return Error(ValidationError::TooLong(50))
     end if
-    
+
     return Ok(name)
 end fn
 
@@ -1294,7 +1294,7 @@ impl HttpClient
         var response := http_get(url).await
         return Ok(response)
     end fn
-    
+
     async fn post(self, path: ustring, body: ustring): Result<ustring, ustring>
         var url := self.base_url + path
         var response := http_post(url, body).await
@@ -1343,12 +1343,12 @@ async fn main()
     var task1 := fetch_data(unicode "url1")
     var task2 := fetch_data(unicode "url2")
     var task3 := fetch_data(unicode "url3")
-    
+
     // Await all results
     var result1 := task1.await
     var result2 := task2.await
     var result3 := task3.await
-    
+
     put unicode "All data fetched!"
 end fn
 
@@ -1403,7 +1403,7 @@ impl ApiClient
             Error(e), return Error(e)
         end match
     end fn
-    
+
     async fn create_user(self, name: ustring): Result<ustring, ustring>
         var body := unicode "{\"name\": \"" + name + unicode "\"}"
         var response := http_post(self.base_url + unicode "/users", body).await
@@ -1414,7 +1414,7 @@ end impl
 # Main async function
 async fn main_task()
     var client := ApiClient { base_url: unicode "https://api.example.com" }
-    
+
     # Fetch users
     match client.get_users().await
         Ok(users),
@@ -1424,7 +1424,7 @@ async fn main_task()
             end loop
         Error(e), error e
     end match
-    
+
     # Create new user
     var result := client.create_user(unicode "Alice").await
     put unicode "User created: " + result
@@ -1640,7 +1640,7 @@ put unicode "Pi rounded: {3.14159:.2f}"
 
 // Format with width and alignment
 put unicode "{'left':<10}{'right':>10}{'center':^10}"
-// Output: left      right     center   
+// Output: left      right     center
 
 // Format with padding
 put unicode "{'5':0>5}"    // 00005
@@ -1754,12 +1754,12 @@ fn display_progress(current: i32, total: i32)
     var percent f64 := (current as f64) / (total as f64) * 100.0
     put "\rProgress: "
     put percent.to_string() + "% "
-    
+
     // Build progress bar
     var bar_width i32 := 30
     var filled i32 := (percent / 100.0 * bar_width as f64) as i32
     var empty i32 := bar_width - filled
-    
+
     put "["
     loop i 0..filled - 1
         put "#"
@@ -1776,9 +1776,9 @@ fn log_request(method: ustring, path: ustring, status: i32, duration_ms: i32)
         else if status >= 400,unicode "WARN"
         else unicode "INFO"
     end if
-    
+
     var message ustring := "{method} {path} -> {status} ({duration_ms}ms)"
-    
+
     match level
         unicode "ERROR", error message
         unicode "WARN", warn message
@@ -1793,13 +1793,13 @@ fn display_table(headers: Vec<ustring>, rows: Vec<Vec<ustring>>)
         put header.pad_right(15)
     end loop
     put ""
-    
+
     // Print separator
     loop i 0..headers.len() - 1
         put "-".repeat(15)
     end loop
     put ""
-    
+
     // Print rows
     loop row in rows
         loop cell in row
@@ -1887,7 +1887,7 @@ var name ustring := get
 
 // Provide text alternatives for visual elements
 put "Progress: 50% complete"  // Text alternative to progress bar
-put "[" 
+put "["
 put "#".repeat(5)  // Visual progress bar
 put "-".repeat(5)
 put "]"
@@ -2003,7 +2003,7 @@ fn translate(key: ustring, locale: ustring): ustring
             unicode "zh": unicode "再见"
         }
     }
-    
+
     return translations[key][language] or key
 end fn
 
@@ -2044,7 +2044,7 @@ end fn
 // Currency formatting
 fn format_currency(amount: f64, currency: ustring, locale: ustring): ustring
     var formatted_amount := format_number(amount, locale)
-    
+
     match currency
         unicode "USD", return unicode "$" + formatted_amount
         unicode "EUR", return unicode "€" + formatted_amount
@@ -2116,16 +2116,16 @@ end while
 // Async I/O
 async fn process_files(filenames: Vec<ustring>): Vec<Result<ustring, ustring>>
     var futures Vec<Future<Result<ustring, ustring>>> := []
-    
+
     loop filenames
         futures.push(async read_file(filename))
     end loop
-    
+
     var results Vec<Result<ustring, ustring>> := []
     loop future in futures
         results.push(await future)
     end loop
-    
+
     return results
 end fn
 
@@ -2133,17 +2133,17 @@ end fn
 fn parallel_process(data: Vec<T>): Vec<R>
     var chunk_size := data.len() / num_cpus()
     var chunks := data.chunks(chunk_size)
-    
+
     var futures Vec<Future<Vec<R>>> := []
     loop chunk in chunks
         futures.push(async process_chunk(chunk))
     end loop
-    
+
     var results Vec<R> := []
     loop future in futures
         results.extend(await future)
     end loop
-    
+
     return results
 end fn
 
@@ -3173,6 +3173,6 @@ my_poly_project/
 
 ---
 
-**Document Version:** 1.4 Draft  
-**Last Updated:** August 6, 2026  
+**Document Version:** 1.4 Draft
+**Last Updated:** August 6, 2026
 **Status:** Work in Progress - Major Expansion Complete

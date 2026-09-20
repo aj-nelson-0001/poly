@@ -1,6 +1,6 @@
 # Poly Language Specification v2.0
 
-*A minimal, assembly-inspired meta-language that transpiles to Rust or C.*
+*A minimal, assembly-inspired meta-language that transpiles to Rust, C, assembly, or JavaScript.*
 
 ---
 
@@ -231,7 +231,7 @@ and suggests the explicit `name := name + value` form.
 | `bytes` | `Vec<u8>` | Byte buffer |
 | `ptr T` | `*const T` | Raw pointer |
 
-**Complex types** (generics, tuples, enums, traits) should be written in `#rust` blocks using native Rust syntax.
+**Complex types** (generics, enums, traits) should be written in `#rust` blocks using native Rust syntax. Tuples (`(i32, i32)`, indexed as `pair.0`) are part of the Poly surface.
 
 ---
 
@@ -360,6 +360,8 @@ the loop infinite.
 - A **literal** step's sign is known at compile time: a negative step iterates
   downward from the start bound, a positive step upward. The direction is fixed
   even when the bounds would imply the opposite (`10..1 step 2` visits nothing).
+  A literal zero step is rejected at compile time (`loop range step must not be
+  zero`).
 - A **non-literal** step (a variable or expression) picks its direction from its
   runtime value each iteration: a positive step compares against the upper
   bound, a negative step against the lower bound, and a zero step yields zero
@@ -557,9 +559,13 @@ end if
 `bitand` `bitor` `xor` `bitnot` `shift left` / `shift right` (alternatively `<<` `>>`)
 
 ### Assignment
-`:=` `=` `+=` `-=` `->`
+
+`:=` assigns and initializes. `=` compares values. The compound spellings
+`+=` and `-=` listed in older drafts are retired syntax, rejected with a
+migration hint.
 
 ### Range
+
 `..` `..=`
 
 ### Path
@@ -648,6 +654,7 @@ fn main() {
 | `error` / `warn` / `info` | ✅ | |
 | Explicit mutation (`x := x + 1`) | ✅ | |
 | `if` / `while` / `loop` | ✅ | |
+| Tuples (`pair.0`) | ✅ | |
 | Simple `fn` (no generics) | ✅ | |
 | Simple `struct` (no methods) | ✅ | |
 | `impl` methods (take-and-return `self`) | ✅ | |

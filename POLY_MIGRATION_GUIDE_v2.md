@@ -62,6 +62,6 @@ See [POLY_MIGRATION_GUIDE_v1.8.md](POLY_MIGRATION_GUIDE_v1.8.md) for the complet
 
 ## C Preview Scope
 
-The C backend currently supports scalar variables, primitive types, plain structs, simple Poly functions, arithmetic, conditions, loops, and stdout/stderr output through `put`, `error`, `warn`, and `info`.
+The C backend currently supports scalar variables, primitive types, plain structs, simple Poly functions, arithmetic, conditions, loops, plain stdin `get` (with an optional prompt), tuples, simple `match` patterns, non-capturing closures, and stdout/stderr output through `put`, `error`, `warn`, and `info`.
 
-File redirects, stdin, vectors, tuples, pattern matching, closures, async, and complex Poly types are rejected with diagnostics. Put those operations in a `#c` helper until their C representation is specified.
+File redirects, file input, typed input flags, vectors, capturing closures, async, and complex Poly types are rejected with diagnostics. Put those operations in a `#c` helper until their C representation is specified.

@@ -1,6 +1,6 @@
 # Poly Language Tutorial: I/O and Error Handling
 
-> **Historical tutorial:** This tutorial targets the v1 syntax. It is retained for migration context and is not normative for Poly 2.0.0-preview.1.
+> **Historical tutorial:** This tutorial targets the v1 syntax. It is retained for migration context and is not normative for Poly 2.0.0-preview.12.
 
 ## Introduction
 
@@ -281,7 +281,7 @@ end match
 fn main()
     put "=== User Registration ==="
     put ""
-    
+
     # Get name (validated with a loop)
     put "Enter your name (2+ characters): "
     var name ustring := ""
@@ -293,7 +293,7 @@ fn main()
             put "Name must be at least 2 characters"
         end if
     end while
-    
+
     # Get email (validated with a loop)
     put "Enter your email: "
     var email ustring := ""
@@ -305,7 +305,7 @@ fn main()
             put "Email must contain @"
         end if
     end while
-    
+
     # Get password (mask suppresses echo on Unix terminals)
     put "Enter password (8+ characters): "
     var password ustring := get --mask unicode "*"
@@ -313,7 +313,7 @@ fn main()
         put "Password must be at least 8 characters"
         password := get --mask unicode "*"
     end while
-    
+
     # Confirm registration
     put ""
     put "Registration successful!"

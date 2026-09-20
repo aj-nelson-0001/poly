@@ -339,7 +339,7 @@ impl CGenerator {
         }
         let prompt = match &get.prompt {
             Some(prompt) => self.expr(prompt)?,
-            None => String::new(),
+            None => "\"\"".to_string(),
         };
         self.uses_get.set(true);
         Ok(format!("__poly_get_line({prompt})"))
@@ -2138,6 +2138,23 @@ mod tests {
         let helper = output.find("__poly_get_line(const char").unwrap();
         let main = output.find("int main(void)").unwrap();
         assert!(helper < main);
+    }
+
+    #[test]
+    fn supports_get_stdin_without_prompt() {
+        // Regression: a prompt-less `get` emitted `__poly_get_line()` — zero
+        // args to a one-arg helper — so the generated C failed to compile.
+        // The empty-prompt form must pass an explicit empty string literal.
+        let output = generate("var line := get\nput line");
+        assert!(
+            output.contains("__poly_get_line(\"\")"),
+            "expected __poly_get_line(\"\") call site: {output}"
+        );
+        assert!(
+            !output.contains("__poly_get_line()"),
+            "prompt-less get must not emit a zero-argument call: {output}"
+        );
+        assert!(output.contains("printf(\"%s\\n\", line)"), "{output}");
     }
 
     #[test]

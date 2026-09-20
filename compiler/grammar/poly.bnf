@@ -1,9 +1,9 @@
 # Poly Language Grammar (BNF)
 
-**Version:** 1.5 Draft  
-**Status:** Work in Progress
+**Version:** 1.5 Draft (historical)  
+**Status:** Superseded — see POLY_GRAMMAR.md at the repository root for the current v2 grammar
 
-The canonical syntax uses `:=` for variable initialization, `=` for later assignment, `==` for equality, compound assignment operators such as `+=`, and delimiter-free `if` blocks. The parser retains the previous spellings where compatibility is supported.
+This draft predates the v1.8 and v2 syntax changes and is retained only as historical material. It does not describe the current parser: equality is spelled `=` (not `==`), compound assignment operators such as `+=` are rejected with migration diagnostics, and range loops no longer use a colon after `loop`. The maintained grammar is [POLY_GRAMMAR.md](../../POLY_GRAMMAR.md).
 
 This document defines the formal grammar for the Poly programming language using Extended Backus-Naur Form (EBNF) notation.
 

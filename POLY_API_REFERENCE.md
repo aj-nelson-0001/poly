@@ -49,7 +49,7 @@ All three commands write to stderr. The generated Rust and C backends prefix the
 
 ## `get` and Input Flags
 
-`get` is a Rust-backend input operation. The C backend rejects it.
+`get` is a Rust-backend input operation. The C backend supports plain `get` (with an optional prompt) reading a line of stdin through an emitted runtime helper; file sources, flags, and `with` clauses are rejected with diagnostics.
 
 ~~~poly
 fn main()
@@ -164,7 +164,7 @@ poly --ast program.poly
 poly --intermediate-representation program.poly
 ~~~
 
-Rust is the default target. The C backend currently supports scalar declarations, numeric expressions and control flow, calls to foreign C helpers, and stdout/stderr diagnostics. It rejects Rust-specific input, file redirects, tuples, complex collection operations, and unsupported expression forms with diagnostics. See [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the frozen target contract.
+Rust is the default target. The C backend currently supports scalar declarations, numeric expressions and control flow, calls to foreign C helpers, plain stdin `get` with an optional prompt, tuples, struct literals, simple `match` patterns, non-capturing closures, and stdout/stderr diagnostics. It rejects Rust-specific input flags, file redirects, vectors, complex collection operations, and unsupported expression forms with diagnostics. See [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the frozen target contract.
 
 ## Errors and Results
 

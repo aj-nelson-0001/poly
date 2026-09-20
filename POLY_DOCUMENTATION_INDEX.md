@@ -14,6 +14,8 @@ Poly 2.0.0-preview.12 is the current implementation baseline. The files below ar
 | [POLY_JS_BLOCKS.md](POLY_JS_BLOCKS.md) | JavaScript backend scope and `#js` block behavior |
 | [POLY_API_REFERENCE.md](POLY_API_REFERENCE.md) | Current I/O, builtin, and runtime API reference |
 | [POLY_QUICK_REFERENCE.md](POLY_QUICK_REFERENCE.md) | Current syntax and I/O quick reference |
+| [POLY_CHEATSHEET.md](POLY_CHEATSHEET.md) | Compact v2 syntax and target cheat sheet |
+| [POLY_TROUBLESHOOTING_GUIDE.md](POLY_TROUBLESHOOTING_GUIDE.md) | Current error, input/output, and target troubleshooting |
 | [POLY_DOCUMENTATION_STYLE_GUIDE.md](POLY_DOCUMENTATION_STYLE_GUIDE.md) | Example, fence, and terminology rules |
 | [POLY_V2_AUDIT.md](POLY_V2_AUDIT.md) | Verified v2 status and remaining risks |
 | [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) | Frozen Rust/C feature and foreign-interface contract |
@@ -31,11 +33,12 @@ Complete runnable Poly programs live in [`examples/`](examples/); executable beh
 - `--target rust` is the default and emits Rust through the AST, IR, optimizer, and Rust code generator.
 - `--target c` emits and checks a C11 orchestration subset through `poly-c-codegen`.
 - `--target asm` emits freestanding Linux x86-64 assembly through `poly-asm-codegen`.
-- `#rust`, `#c`, and `#asm` blocks are top-level, opaque to Poly, and selected by target.
-- `extern rust fn ...`, `extern c fn ...`, and `extern asm fn ...` provide opt-in Poly-side checks for opaque foreign calls.
+- `--target js` emits an ES2020 JavaScript module through `poly-js-codegen`.
+- `#rust`, `#c`, `#asm`, and `#js` blocks are top-level, opaque to Poly, and selected by target.
+- `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, and `extern js fn ...` provide opt-in Poly-side checks for opaque foreign calls.
 - `#cpp` syntax is reserved and rejected explicitly because no C++ backend exists.
 - `=` is equality; `:=` is assignment. `==` is rejected legacy syntax.
-- Append output uses `put value to "file" -append`.
+- Append output uses `put value to "file" -append` (Rust target; the C, asm, and JS backends reject file redirects).
 - `put` always writes a trailing newline. `error`, `warn`, and `info` write prefixed messages to stderr.
 
 ## Historical References
@@ -44,6 +47,7 @@ The v1 guides, blog posts, release notes, and expanded drafts remain in the repo
 
 Historical documents include:
 
+- `compiler/grammar/poly.bnf` (stale v1.5 draft; `POLY_GRAMMAR.md` is the maintained grammar)
 - `POLY_LANGUAGE_SPECIFICATION_EXPANDED.md`
 - `THE_POLY_PROGRAMMING_LANGUAGE.md`
 - `POLY_COMPREHENSIVE_GUIDE.md`

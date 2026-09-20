@@ -78,6 +78,15 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.14
+
+**Releases you can verify, on every platform:** the release workflow now
+builds Linux, macOS, and Windows binaries, names each asset after its
+platform and version, and publishes them with a `sha256sums.txt` so any
+download can be checksummed. Releases carry the maintained release-notes
+document as their body, and the workflow refuses to publish a tag whose
+version is missing from the changelog or mismatches the built binary.
+
 ### What's New in 2.0.0-preview.13
 
 **Documentation truth release:** every per-backend claim in the maintained

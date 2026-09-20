@@ -2,7 +2,15 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.13 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.14 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.14
+
+- **Multi-platform release binaries:** Linux (amd64), macOS (arm64), and
+  Windows (amd64) builds ship as versioned assets with a `sha256sums.txt`
+  covering all of them. The release body is the committed release-notes
+  document, and the workflow refuses to publish a tag whose version is
+  absent from the changelog or mismatches the built binary.
 
 ## What's New in 2.0.0-preview.13
 

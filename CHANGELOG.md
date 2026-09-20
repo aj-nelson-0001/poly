@@ -2,6 +2,27 @@
 
 All notable changes to the Poly language compiler will be documented in this file.
 
+## [2.0.0-preview.14] - 2026-09-20
+
+### Added
+
+- **Multi-platform release binaries.** The release workflow now builds
+  Linux (amd64), macOS (arm64), and Windows (amd64) binaries and ships
+  them as versioned assets under one `sha256sums.txt`. Releases ship the
+  committed `POLY_V2_PREVIEW_RELEASE_NOTES.md` as their body instead of
+  generated notes.
+
+### Changed
+
+- **Release publishing is hardened and automatic.** `release.yml`
+  triggers on both tag spellings (`v*` and unprefixed `2.*`; the
+  convention is unprefixed), refuses to publish when the built binary's
+  version does not match the tag or when `CHANGELOG.md` has no section
+  for the tagged version, and was verified end-to-end by re-publishing
+  `2.0.0-preview.13` through the workflow.
+- **`prepare_release.py` and the release workflow agree.** Re-running
+  the script against a released tree produces a zero diff.
+
 ## [2.0.0-preview.13] - 2026-09-20
 
 ### Added

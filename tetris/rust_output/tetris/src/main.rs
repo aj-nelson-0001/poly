@@ -86,14 +86,14 @@ impl Bag {
         let mut i: i32 = 6;
         let mut s: u64 = seed;
         while (i > 0) {
-            s = (s ^ (s << 13));
-            s = (s ^ (s >> 7));
-            s = (s ^ (s << 17));
-            let mut j: i32 = (((s >> 33) as i32) % i);
+            s = ((s) ^ (((s) << (13)) as u64 as u64));
+            s = ((s) ^ (((s) >> (7)) as u64 as u64));
+            s = ((s) ^ (((s) << (17)) as u64 as u64));
+            let mut j: i32 = ((((s) >> (33)) as i32) % i);
             let mut tmp: i32 = arr[(i) as usize];
             arr[(i) as usize] = arr[(j) as usize];
             arr[(j) as usize] = tmp;
-            i = (i - 1);
+            i = (i).wrapping_sub(1_i32);
         }
         self.q = arr;
         return (self, s);
@@ -154,7 +154,7 @@ impl GameState {
             t = r.1;
         }
 
-        let mut w: i32 = piece_w(shape_bits((t * 4)));
+        let mut w: i32 = piece_w(shape_bits((t).wrapping_mul(4_i32)));
         self.cur = Piece {
             t: t,
             rot: 0,
@@ -164,7 +164,7 @@ impl GameState {
         return self;
     }
     fn collides(mut self, t: i32, rot: i32, row: i32, col: i32) -> GameState {
-        let mut bits: i32 = shape_bits(((t * 4) + rot));
+        let mut bits: i32 = shape_bits(((t).wrapping_mul(4_i32) + rot));
         self.q_hit = false;
         for r in 0..=3 {
             for c in 0..=3 {
@@ -194,7 +194,7 @@ impl GameState {
         let mut rot: i32 = self.cur.rot;
         let mut row: i32 = self.cur.row;
         let mut col: i32 = self.cur.col;
-        self = self.collides(t, rot, row, (col + dx));
+        self = self.collides(t, rot, row, (col).wrapping_add(dx));
         if (!self.q_hit) {
             self.cur.col = (self.cur.col + dx);
             audio_play(0)
@@ -225,16 +225,16 @@ impl GameState {
         let mut rot: i32 = self.cur.rot;
         let mut col: i32 = self.cur.col;
         let mut row: i32 = self.cur.row;
-        self = self.collides(t, rot, (row + 1), col);
+        self = self.collides(t, rot, (row).wrapping_add(1_i32), col);
         while (!self.q_hit) {
-            self = self.collides(t, rot, (row + 1), col);
+            self = self.collides(t, rot, (row).wrapping_add(1_i32), col);
             if (!self.q_hit) {
-                row = (row + 1);
-                d = (d + 1);
+                row = (row).wrapping_add(1_i32);
+                d = (d).wrapping_add(1_i32);
             }
         }
         self.cur.row = row;
-        self.score = (self.score + (d * 2));
+        self.score = (self.score + (d).wrapping_mul(2_i32));
         audio_play(6);
         self = self.lock();
         return self;
@@ -400,20 +400,20 @@ impl GameState {
 
         let mut stepms: i64 = self.gms;
         if self.soft {
-            stepms = (stepms / 12);
-            if (stepms < 20) {
+            stepms = (((stepms) as i64).wrapping_div((12) as i64));
+            if (((stepms) as i64) < (20 as i64)) {
                 stepms = 20;
             }
         }
 
-        self.accum = (self.accum + dt);
-        while (self.accum >= stepms) {
-            self.accum = (self.accum - stepms);
+        self.accum = (((self.accum) as i64).wrapping_add((dt) as i64));
+        while (((self.accum) as i64) >= (stepms as i64)) {
+            self.accum = (((self.accum) as i64).wrapping_sub((stepms) as i64));
             let mut gt: i32 = self.cur.t;
             let mut grot: i32 = self.cur.rot;
             let mut grow: i32 = self.cur.row;
             let mut gcol: i32 = self.cur.col;
-            self = self.collides(gt, grot, (grow + 1), gcol);
+            self = self.collides(gt, grot, (grow).wrapping_add(1_i32), gcol);
             if self.q_hit {
                 self.accum = 0;
                 self = self.lock();
@@ -432,10 +432,10 @@ impl GameState {
         let mut t: i32 = self.cur.t;
         let mut rot: i32 = self.cur.rot;
         let mut col: i32 = self.cur.col;
-        self = self.collides(t, rot, (row + 1), col);
+        self = self.collides(t, rot, (row).wrapping_add(1_i32), col);
         while (!self.q_hit) {
-            row = (row + 1);
-            self = self.collides(t, rot, (row + 1), col);
+            row = (row).wrapping_add(1_i32);
+            self = self.collides(t, rot, (row).wrapping_add(1_i32), col);
         }
         self.q_ghost_row = row;
         return self;
@@ -551,7 +551,7 @@ fn shape_bits(kr: i32) -> i32 {
 }
 
 fn bit_at(bits: i32, r: i32, c: i32) -> bool {
-    return (((bits >> ((r * 4) + c)) & 1) == 1);
+    return ((((bits).wrapping_shr(((r).wrapping_mul(4_i32) + c) as u32)) & 1) == 1);
 }
 
 fn piece_w(bits: i32) -> i32 {
@@ -643,115 +643,115 @@ fn gravity_ms(level: i32) -> i64 {
 fn glyph(ch: i32) -> u64 {
     match ch {
         48 => {
-            return 15623448110;
+            return 15623448110_u64;
         }
         49 => {
-            return 15170932932;
+            return 15170932932_u64;
         }
         50 => {
-            return 33357578798;
+            return 33357578798_u64;
         }
         51 => {
-            return 15619854623;
+            return 15619854623_u64;
         }
         52 => {
-            return 8891181448;
+            return 8891181448_u64;
         }
         53 => {
-            return 15620127807;
+            return 15620127807_u64;
         }
         54 => {
-            return 15621129292;
+            return 15621129292_u64;
         }
         55 => {
-            return 2216829471;
+            return 2216829471_u64;
         }
         56 => {
-            return 15621113390;
+            return 15621113390_u64;
         }
         57 => {
-            return 6728664622;
+            return 6728664622_u64;
         }
         65 => {
-            return 18842895918;
+            return 18842895918_u64;
         }
         66 => {
-            return 16694887983;
+            return 16694887983_u64;
         }
         67 => {
-            return 15603893806;
+            return 15603893806_u64;
         }
         68 => {
-            return 7836583207;
+            return 7836583207_u64;
         }
         69 => {
-            return 33321092159;
+            return 33321092159_u64;
         }
         70 => {
             return 1108837439;
         }
         71 => {
-            return 32801457710;
+            return 32801457710_u64;
         }
         72 => {
-            return 18842895921;
+            return 18842895921_u64;
         }
         73 => {
-            return 15170932878;
+            return 15170932878_u64;
         }
         74 => {
-            return 6753100060;
+            return 6753100060_u64;
         }
         75 => {
-            return 18560947505;
+            return 18560947505_u64;
         }
         76 => {
-            return 33320633377;
+            return 33320633377_u64;
         }
         77 => {
-            return 18842572657;
+            return 18842572657_u64;
         }
         78 => {
-            return 18842703473;
+            return 18842703473_u64;
         }
         79 => {
-            return 15621211694;
+            return 15621211694_u64;
         }
         80 => {
             return 1108854319;
         }
         81 => {
-            return 23946905134;
+            return 23946905134_u64;
         }
         82 => {
-            return 18561353263;
+            return 18561353263_u64;
         }
         83 => {
-            return 16660235326;
+            return 16660235326_u64;
         }
         84 => {
-            return 4433514655;
+            return 4433514655_u64;
         }
         85 => {
-            return 15621211697;
+            return 15621211697_u64;
         }
         86 => {
-            return 4648912433;
+            return 4648912433_u64;
         }
         87 => {
-            return 19182306865;
+            return 19182306865_u64;
         }
         88 => {
-            return 18834663985;
+            return 18834663985_u64;
         }
         89 => {
-            return 4433521201;
+            return 4433521201_u64;
         }
         90 => {
-            return 33321787935;
+            return 33321787935_u64;
         }
         33 => {
-            return 4299296900;
+            return 4299296900_u64;
         }
         47 => {
             return 1143087376;
@@ -760,13 +760,13 @@ fn glyph(ch: i32) -> u64 {
             return 1015808;
         }
         46 => {
-            return 6643777536;
+            return 6643777536_u64;
         }
         60 => {
-            return 8726284424;
+            return 8726284424_u64;
         }
         62 => {
-            return 2290622594;
+            return 2290622594_u64;
         }
         58 => {
             return 207624384;
@@ -787,24 +787,25 @@ fn pad(n: i32, w: i32) -> String {
 
 fn fill_cell(fb0: Vec<i32>, x0: i32, y0: i32, sz: i32, col: i32, alpha: i32) -> Vec<i32> {
     let mut fb: Vec<i32> = fb0;
-    for yy in y0..=((y0 + sz) - 1) {
-        for xx in x0..=((x0 + sz) - 1) {
+    for yy in y0..=((y0).wrapping_add(sz) - 1) {
+        for xx in x0..=((x0).wrapping_add(sz) - 1) {
             if ((((xx >= 0) && (xx < WINW)) && (yy >= 0)) && (yy < WINH)) {
                 let mut idx: i32 = ((yy * WINW) + xx);
                 if (alpha == 1) {
                     fb[(idx) as usize] = col;
                 } else {
                     let mut base: i32 = fb[(idx) as usize];
-                    let mut br: i32 = ((base >> 16) & 255);
-                    let mut bg: i32 = ((base >> 8) & 255);
+                    let mut br: i32 = (((base).wrapping_shr((16) as u32)) & 255);
+                    let mut bg: i32 = (((base).wrapping_shr((8) as u32)) & 255);
                     let mut bb: i32 = (base & 255);
-                    let mut cr: i32 = ((col >> 16) & 255);
-                    let mut cg: i32 = ((col >> 8) & 255);
+                    let mut cr: i32 = (((col).wrapping_shr((16) as u32)) & 255);
+                    let mut cg: i32 = (((col).wrapping_shr((8) as u32)) & 255);
                     let mut cb: i32 = (col & 255);
-                    let mut nr: i32 = (((br * 4) + cr) / 5);
-                    let mut ng: i32 = (((bg * 4) + cg) / 5);
-                    let mut nb: i32 = (((bb * 4) + cb) / 5);
-                    fb[(idx) as usize] = (((nr << 16) | (ng << 8)) | nb);
+                    let mut nr: i32 = (((br).wrapping_mul(4_i32) + cr) / 5);
+                    let mut ng: i32 = (((bg).wrapping_mul(4_i32) + cg) / 5);
+                    let mut nb: i32 = (((bb).wrapping_mul(4_i32) + cb) / 5);
+                    fb[(idx) as usize] =
+                        ((((nr).wrapping_shl((16) as u32)) | ((ng).wrapping_shl((8) as u32))) | nb);
                 }
             }
         }
@@ -814,8 +815,8 @@ fn fill_cell(fb0: Vec<i32>, x0: i32, y0: i32, sz: i32, col: i32, alpha: i32) -> 
 
 fn fill_rect(fb0: Vec<i32>, x0: i32, y0: i32, w: i32, h: i32, col: i32) -> Vec<i32> {
     let mut fb: Vec<i32> = fb0;
-    for yy in y0..=((y0 + h) - 1) {
-        for xx in x0..=((x0 + w) - 1) {
+    for yy in y0..=((y0).wrapping_add(h) - 1) {
+        for xx in x0..=((x0).wrapping_add(w) - 1) {
             if ((((xx >= 0) && (xx < WINW)) && (yy >= 0)) && (yy < WINH)) {
                 fb[((yy * WINW) + xx) as usize] = col;
             }
@@ -829,13 +830,13 @@ fn draw_glyph(fb0: Vec<i32>, text: String, x0: i32, y0: i32, sc: i32, col: i32) 
     let mut cx: i32 = x0;
     for ch in text.chars() {
         let mut g: u64 = glyph(ch as i32);
-        if (g > 0) {
+        if ((g) > (0 as u64)) {
             for gy in 0..=6 {
                 for gx in 0..=4 {
-                    let mut bit: u64 = ((g >> ((gy * 5) + gx)) & 1);
-                    if (bit > 0) {
-                        for py in 0..=(sc - 1) {
-                            for px in 0..=(sc - 1) {
+                    let mut bit: u64 = (((g) >> ((gy * 5) + gx)) & (1 as u64));
+                    if ((bit) > (0 as u64)) {
+                        for py in 0..=(sc).wrapping_sub(1_i32) {
+                            for px in 0..=(sc).wrapping_sub(1_i32) {
                                 let mut x: i32 = ((cx + (gx * sc)) + px);
                                 let mut y: i32 = ((y0 + (gy * sc)) + py);
                                 if ((((x >= 0) && (x < WINW)) && (y >= 0)) && (y < WINH)) {
@@ -848,7 +849,7 @@ fn draw_glyph(fb0: Vec<i32>, text: String, x0: i32, y0: i32, sc: i32, col: i32) 
             }
         }
 
-        cx = (cx + (6 * sc));
+        cx = (cx + (6_i32).wrapping_mul(sc));
     }
     return fb;
 }
@@ -859,7 +860,7 @@ fn draw_piece(fb0: Vec<i32>, t: i32, alpha: i32, off_x: i32, off_y: i32) -> Vec<
         return fb;
     }
 
-    let mut bits: i32 = shape_bits((t * 4));
+    let mut bits: i32 = shape_bits((t).wrapping_mul(4_i32));
     for r in 0..=3 {
         for c in 0..=3 {
             if bit_at(bits, r, c) {
@@ -891,11 +892,11 @@ fn draw_piece_box(
         return fb;
     }
 
-    let mut bits: i32 = shape_bits((t * 4));
+    let mut bits: i32 = shape_bits((t).wrapping_mul(4_i32));
     let mut w: i32 = (piece_w(bits) * PREV);
     let mut h: i32 = (piece_h(bits) * PREV);
-    let mut ox: i32 = (bx + ((bw - w) / 2));
-    let mut oy: i32 = (by + ((bh - h) / 2));
+    let mut ox: i32 = (bx + (((bw).wrapping_sub(w)) / 2));
+    let mut oy: i32 = (by + (((bh).wrapping_sub(h)) / 2));
     for r in 0..=3 {
         for c in 0..=3 {
             if bit_at(bits, r, c) {
@@ -925,41 +926,48 @@ fn draw_cell_sprite(fb0: Vec<i32>, x0: i32, y0: i32, sz: i32, col: i32, a: i32) 
     }
 
     let mut mm: i32 = 1;
-    let mut ix: i32 = (x0 + mm);
-    let mut iy: i32 = (y0 + mm);
-    let mut iw: i32 = (sz - (2 * mm));
-    let mut edge: i32 = ((sz - (2 * mm)) / 5);
+    let mut ix: i32 = (x0).wrapping_add(mm);
+    let mut iy: i32 = (y0).wrapping_add(mm);
+    let mut iw: i32 = (sz - (2_i32).wrapping_mul(mm));
+    let mut edge: i32 = ((sz - (2_i32).wrapping_mul(mm)) / 5);
     if (edge > 3) {
         edge = 3;
     }
 
-    let mut cr: i32 = ((col >> 16) & 255);
-    let mut cg: i32 = ((col >> 8) & 255);
+    let mut cr: i32 = (((col).wrapping_shr((16) as u32)) & 255);
+    let mut cg: i32 = (((col).wrapping_shr((8) as u32)) & 255);
     let mut cb: i32 = (col & 255);
-    let mut hr: i32 = (((cr * 55) + (255 * 45)) / 100);
-    let mut hg: i32 = (((cg * 55) + (255 * 45)) / 100);
-    let mut hb: i32 = (((cb * 55) + (255 * 45)) / 100);
-    let mut hcol: i32 = (((hr << 16) | (hg << 8)) | hb);
-    let mut sr: i32 = ((cr * 55) / 100);
-    let mut sg: i32 = ((cg * 55) / 100);
-    let mut sb: i32 = ((cb * 55) / 100);
-    let mut scol: i32 = (((sr << 16) | (sg << 8)) | sb);
-    let mut gr: i32 = (((cr * 95) + (255 * 5)) / 100);
-    let mut gg: i32 = (((cg * 95) + (255 * 5)) / 100);
-    let mut gb: i32 = (((cb * 95) + (255 * 5)) / 100);
-    let mut gcol: i32 = (((gr << 16) | (gg << 8)) | gb);
+    let mut hr: i32 = (((cr).wrapping_mul(55_i32) + (255_i32).wrapping_mul(45_i32)) / 100);
+    let mut hg: i32 = (((cg).wrapping_mul(55_i32) + (255_i32).wrapping_mul(45_i32)) / 100);
+    let mut hb: i32 = (((cb).wrapping_mul(55_i32) + (255_i32).wrapping_mul(45_i32)) / 100);
+    let mut hcol: i32 = ((((hr).wrapping_shl((16) as u32)) | ((hg).wrapping_shl((8) as u32))) | hb);
+    let mut sr: i32 = ((cr).wrapping_mul(55_i32) / 100);
+    let mut sg: i32 = ((cg).wrapping_mul(55_i32) / 100);
+    let mut sb: i32 = ((cb).wrapping_mul(55_i32) / 100);
+    let mut scol: i32 = ((((sr).wrapping_shl((16) as u32)) | ((sg).wrapping_shl((8) as u32))) | sb);
+    let mut gr: i32 = (((cr).wrapping_mul(95_i32) + (255_i32).wrapping_mul(5_i32)) / 100);
+    let mut gg: i32 = (((cg).wrapping_mul(95_i32) + (255_i32).wrapping_mul(5_i32)) / 100);
+    let mut gb: i32 = (((cb).wrapping_mul(95_i32) + (255_i32).wrapping_mul(5_i32)) / 100);
+    let mut gcol: i32 = ((((gr).wrapping_shl((16) as u32)) | ((gg).wrapping_shl((8) as u32))) | gb);
     if (a >= 8) {
         fb = fill_rect(fb, ix, iy, iw, iw, col);
         fb = fill_rect(fb, ix, iy, iw, edge, hcol);
         fb = fill_rect(fb, ix, iy, edge, iw, hcol);
-        fb = fill_rect(fb, ix, ((iy + iw) - edge), iw, edge, scol);
-        fb = fill_rect(fb, ((ix + iw) - edge), iy, edge, iw, scol);
+        fb = fill_rect(fb, ix, ((iy).wrapping_add(iw) - edge), iw, edge, scol);
+        fb = fill_rect(fb, ((ix).wrapping_add(iw) - edge), iy, edge, iw, scol);
         if (iw > 8) {
-            fb = fill_rect(fb, (ix + 4), (iy + 4), (iw - 8), (iw - 8), gcol);
+            fb = fill_rect(
+                fb,
+                (ix).wrapping_add(4_i32),
+                (iy).wrapping_add(4_i32),
+                (iw).wrapping_sub(8_i32),
+                (iw).wrapping_sub(8_i32),
+                gcol,
+            );
         }
     } else {
-        for yy in 0..=(iw - 1) {
-            for xx in 0..=(iw - 1) {
+        for yy in 0..=(iw).wrapping_sub(1_i32) {
+            for xx in 0..=(iw).wrapping_sub(1_i32) {
                 let mut px: i32 = (ix + xx);
                 let mut py: i32 = (iy + yy);
                 if ((((px >= 0) && (px < WINW)) && (py >= 0)) && (py < WINH)) {
@@ -967,10 +975,14 @@ fn draw_cell_sprite(fb0: Vec<i32>, x0: i32, y0: i32, sz: i32, col: i32, a: i32) 
                     let mut br: i32 = ((fb[(idx) as usize] >> 16) & 255);
                     let mut obg: i32 = ((fb[(idx) as usize] >> 8) & 255);
                     let mut bb: i32 = (fb[(idx) as usize] & 255);
-                    let mut nr: i32 = (((br * (8 - a)) + (cr * a)) / 8);
-                    let mut ng: i32 = (((obg * (8 - a)) + (cg * a)) / 8);
-                    let mut nb: i32 = (((bb * (8 - a)) + (cb * a)) / 8);
-                    fb[(idx) as usize] = (((nr << 16) | (ng << 8)) | nb);
+                    let mut nr: i32 =
+                        (((br * ((8_i32).wrapping_sub(a))) + (cr).wrapping_mul(a)) / 8);
+                    let mut ng: i32 =
+                        (((obg * ((8_i32).wrapping_sub(a))) + (cg).wrapping_mul(a)) / 8);
+                    let mut nb: i32 =
+                        (((bb * ((8_i32).wrapping_sub(a))) + (cb).wrapping_mul(a)) / 8);
+                    fb[(idx) as usize] =
+                        ((((nr).wrapping_shl((16) as u32)) | ((ng).wrapping_shl((8) as u32))) | nb);
                 }
             }
         }
@@ -1041,10 +1053,17 @@ fn render_frame(s0: GameState, fb0: Vec<i32>) -> (GameState, Vec<i32>) {
     let mut fb: Vec<i32> = fb0;
     for y in 0..=(WINH - 1) {
         let mut t: i32 = ((y * 255) / WINH);
-        let mut r: i32 = (((21 * (255 - t)) + (5 * t)) / 255);
-        let mut g: i32 = (((8 * (255 - t)) + (1 * t)) / 255);
-        let mut bch: i32 = (((61 * (255 - t)) + (10 * t)) / 255);
-        fb = fill_rect(fb, 0, y, WINW, 1, (((r << 16) | (g << 8)) | bch));
+        let mut r: i32 = (((21 * ((255_i32).wrapping_sub(t))) + (5_i32).wrapping_mul(t)) / 255);
+        let mut g: i32 = (((8 * ((255_i32).wrapping_sub(t))) + (1_i32).wrapping_mul(t)) / 255);
+        let mut bch: i32 = (((61 * ((255_i32).wrapping_sub(t))) + (10_i32).wrapping_mul(t)) / 255);
+        fb = fill_rect(
+            fb,
+            0,
+            y,
+            WINW,
+            1,
+            ((((r).wrapping_shl((16) as u32)) | ((g).wrapping_shl((8) as u32))) | bch),
+        );
     }
     fb = fill_rect(fb, (BX - 1), (BY - 1), (BW + 2), (BH + 2), PANELB);
     fb = fill_rect(fb, BX, BY, BW, BH, GRIDBG);
@@ -1060,7 +1079,7 @@ fn render_frame(s0: GameState, fb0: Vec<i32>) -> (GameState, Vec<i32>) {
             if (v > 0) {
                 let mut x: i32 = (BX + (col * CELL));
                 let mut y: i32 = (BY + ((row - BUF) * CELL));
-                fb = draw_cell_sprite(fb, x, y, CELL, color_of((v - 1)), 8);
+                fb = draw_cell_sprite(fb, x, y, CELL, color_of((v).wrapping_sub(1_i32)), 8);
             }
         }
     }
@@ -1110,10 +1129,10 @@ fn render_frame(s0: GameState, fb0: Vec<i32>) -> (GameState, Vec<i32>) {
                 if (v > 0) {
                     let mut x: i32 = (BX + (c * CELL));
                     let mut y: i32 = (BY + (slot * CELL));
-                    fb = draw_cell_sprite(fb, x, y, CELL, color_of((v - 1)), a);
+                    fb = draw_cell_sprite(fb, x, y, CELL, color_of((v).wrapping_sub(1_i32)), a);
                 }
             }
-            slot = (slot + 1);
+            slot = (slot).wrapping_add(1_i32);
         }
     }
 
@@ -1127,8 +1146,22 @@ fn render_frame(s0: GameState, fb0: Vec<i32>) -> (GameState, Vec<i32>) {
     fb = draw_glyph(fb, String::from("LINES"), lx, 174, 2, WHITE);
     fb = draw_glyph(fb, pad(s.lines, 3), lx, 194, 2, CYNE);
     fb = draw_glyph(fb, String::from("HOLD"), lx, 232, 2, WHITE);
-    fb = fill_rect(fb, (lx - 2), 252, (PW + 4), ((4 * PREV) + 8), PANELB);
-    fb = fill_rect(fb, (lx - 1), 253, (PW + 2), ((4 * PREV) + 6), GRIDBG);
+    fb = fill_rect(
+        fb,
+        (lx).wrapping_sub(2_i32),
+        252,
+        (PW + 4),
+        ((4 * PREV) + 8),
+        PANELB,
+    );
+    fb = fill_rect(
+        fb,
+        (lx).wrapping_sub(1_i32),
+        253,
+        (PW + 2),
+        ((4 * PREV) + 6),
+        GRIDBG,
+    );
     let mut halpha: i32 = 8;
     if (!s.can_hold) {
         halpha = 2;
@@ -1142,10 +1175,24 @@ fn render_frame(s0: GameState, fb0: Vec<i32>) -> (GameState, Vec<i32>) {
     for i in 0..=4 {
         let mut y: i32 = (44 + (i * ((4 * PREV) + 10)));
         if (i == 0) {
-            fb = fill_rect(fb, (rx - 2), (y - 2), (PW + 4), ((4 * PREV) + 8), PANELB);
+            fb = fill_rect(
+                fb,
+                (rx).wrapping_sub(2_i32),
+                (y).wrapping_sub(2_i32),
+                (PW + 4),
+                ((4 * PREV) + 8),
+                PANELB,
+            );
         }
 
-        fb = fill_rect(fb, (rx - 1), (y - 1), (PW + 2), ((4 * PREV) + 6), GRIDBG);
+        fb = fill_rect(
+            fb,
+            (rx).wrapping_sub(1_i32),
+            (y).wrapping_sub(1_i32),
+            (PW + 2),
+            ((4 * PREV) + 6),
+            GRIDBG,
+        );
         let mut pal: i32 = 2;
         if (i == 0) {
             pal = 8;
@@ -1211,13 +1258,14 @@ fn render_frame(s0: GameState, fb0: Vec<i32>) -> (GameState, Vec<i32>) {
             let mut x: i32 = (BX + sx);
             let mut y: i32 = ((BY + (sy * 2)) + 1);
             let mut v: i32 = fb[((y * WINW) + x) as usize];
-            let mut r: i32 = ((v >> 16) & 255);
-            let mut g: i32 = ((v >> 8) & 255);
+            let mut r: i32 = (((v).wrapping_shr((16) as u32)) & 255);
+            let mut g: i32 = (((v).wrapping_shr((8) as u32)) & 255);
             let mut b: i32 = (v & 255);
-            r = ((r * 90) / 100);
-            g = ((g * 90) / 100);
-            b = ((b * 90) / 100);
-            fb[((y * WINW) + x) as usize] = (((r << 16) | (g << 8)) | b);
+            r = ((r).wrapping_mul(90_i32) / 100);
+            g = ((g).wrapping_mul(90_i32) / 100);
+            b = ((b).wrapping_mul(90_i32) / 100);
+            fb[((y * WINW) + x) as usize] =
+                ((((r).wrapping_shl((16) as u32)) | ((g).wrapping_shl((8) as u32))) | b);
         }
     }
     return (s, fb);
@@ -1239,7 +1287,7 @@ fn run_gui(s0: GameState) {
 
         let mut now: i32 = now_ms() as i32;
         let mut dt: i64 = (now as i64 - s.last_t);
-        if (dt > 250 as i64) {
+        if (((dt) as i64) > (250 as i64 as i64)) {
             dt = 250;
         }
 
@@ -1376,61 +1424,61 @@ fn run_selftest(s0: GameState) {
             for r in 0..=3 {
                 for c in 0..=3 {
                     if bit_at(bits, r, c) {
-                        n = (n + 1);
+                        n = (n).wrapping_add(1_i32);
                     }
                 }
             }
             if (n != 4) {
-                fails = (fails + 1);
+                fails = (fails).wrapping_add(1_i32);
                 println!("{}", String::from("FAIL shape cells"));
             }
         }
     }
     for rot in 0..=3 {
         if (shape_bits((4 + rot)) != 51) {
-            fails = (fails + 1);
+            fails = (fails).wrapping_add(1_i32);
             println!("{}", String::from("FAIL O invariance"));
         }
     }
     if (gravity_ms(0) != 800 as i64) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL gravity0"));
     }
 
     if (gravity_ms(29) != 16 as i64) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL gravity29"));
     }
 
     if (gravity_ms(99) != 16 as i64) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL gravity-cap"));
     }
 
     if (((glyph(48) < 1) || (glyph(90) < 1)) || (glyph(64) > 0)) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL font"));
     }
 
-    if (color_of(0) != 0x2BF2FF) {
-        fails = (fails + 1);
+    if (((color_of(0)) as i64) != (0x2BF2FF as i64)) {
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL color"));
     }
 
     if (pad(42, 6) != String::from("000042")) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL pad"));
     }
 
     let mut sg = make_game(s.seed, highscore_load());
     let mut g = sg;
     if (g.cur.row != BUF) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL spawn row"));
     }
 
     if (g.cur.col != ((COLS - piece_w(shape_bits((g.cur.t * 4)))) / 2)) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL spawn col"));
     }
 
@@ -1440,7 +1488,7 @@ fn run_selftest(s0: GameState) {
     }
     for t in 0..=6 {
         if (counts[(t) as usize] != 1) {
-            fails = (fails + 1);
+            fails = (fails).wrapping_add(1_i32);
             println!("{}", String::from("FAIL bag"));
         }
     }
@@ -1454,7 +1502,7 @@ fn run_selftest(s0: GameState) {
         }
     }
     if (!okq) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL queue-peek"));
     }
 
@@ -1464,38 +1512,38 @@ fn run_selftest(s0: GameState) {
     let mut gcol: i32 = g.cur.col;
     g = g.collides(gt, grot, grow, gcol);
     if g.q_hit {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL collide-empty"));
     }
 
     g = g.collides(gt, grot, grow, (-1));
     if (!g.q_hit) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL collide-wall"));
     }
 
     g = g.collides(gt, grot, TOTAL, gcol);
     if (!g.q_hit) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL collide-floor"));
     }
 
     g.grid[((10 * COLS) + 5) as usize] = 4;
     g = g.query_cell(10, 5);
     if (g.q_scored != 4) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL cell-read"));
     }
 
     g = g.query_cell(11, 5);
     if (g.q_scored != 0) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL cell-empty"));
     }
 
     g = g.query_cell((-1), 0);
     if (g.q_scored != 0) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL cell-bounds"));
     }
 
@@ -1506,19 +1554,19 @@ fn run_selftest(s0: GameState) {
     }
     let mut before: i32 = g2.score;
     g2 = g2.clear_lines();
-    if (g2.score != (before + 40)) {
-        fails = (fails + 1);
+    if (g2.score != (before).wrapping_add(40_i32)) {
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL clear-score"));
     }
 
     if (g2.lines != 1) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL clear-lines"));
     }
 
     g2 = g2.query_cell((TOTAL - 1), 5);
     if (g2.q_scored != 0) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL clear-removes"));
     }
 
@@ -1531,22 +1579,22 @@ fn run_selftest(s0: GameState) {
     g9.grid[(((TOTAL - 2) * COLS) + 1) as usize] = 2;
     g9 = g9.clear_lines();
     if (g9.grid[(((TOTAL - 1) * COLS) + 0) as usize] != 2) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL stack-survives-a"));
     }
 
     if (g9.grid[(((TOTAL - 1) * COLS) + 1) as usize] != 2) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL stack-survives-b"));
     }
 
     if (g9.grid[(((TOTAL - 1) * COLS) + 5) as usize] != 0) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL stack-cleared-col"));
     }
 
     if (g9.grid[(((TOTAL - 2) * COLS) + 0) as usize] != 0) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL stack-row-above-empty"));
     }
 
@@ -1559,8 +1607,8 @@ fn run_selftest(s0: GameState) {
     }
     let mut b3: i32 = g3.score;
     g3 = g3.clear_lines();
-    if (g3.score != (b3 + 800)) {
-        fails = (fails + 1);
+    if (g3.score != (b3).wrapping_add(800_i32)) {
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL tetris-score"));
     }
 
@@ -1572,12 +1620,12 @@ fn run_selftest(s0: GameState) {
     for r in BUF..=(TOTAL - 1) {
         for c in 0..=(COLS - 1) {
             if (g4.grid[((r * COLS) + c) as usize] > 0) {
-                landed = (landed + 1);
+                landed = (landed).wrapping_add(1_i32);
             }
         }
     }
     if (landed != 4) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL harddrop-lock"));
     }
 
@@ -1587,14 +1635,14 @@ fn run_selftest(s0: GameState) {
     let mut t0: i32 = g5.cur.t;
     g5 = g5.do_hold();
     if (g5.hold != t0) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL hold-store"));
     }
 
     let mut t1: i32 = g5.cur.t;
     g5 = g5.do_hold();
     if ((g5.hold != t0) || (g5.cur.t != t1)) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL hold-deny"));
     }
 
@@ -1603,7 +1651,7 @@ fn run_selftest(s0: GameState) {
     g6 = g6.query_drop();
     let mut exp: i32 = (TOTAL - piece_h(shape_bits((g6.cur.t * 4))));
     if (g6.q_ghost_row != exp) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL ghost"));
     }
 
@@ -1625,7 +1673,7 @@ fn run_selftest(s0: GameState) {
         }
     }
     if (minc < 0) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL wall-clamp"));
     }
 
@@ -1633,13 +1681,13 @@ fn run_selftest(s0: GameState) {
     let mut g8 = sg8;
     g8 = g8.query_queue();
     if ((g8.q_queue.len() as i32) != 5) {
-        fails = (fails + 1);
+        fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL queue-len"));
     }
 
     for i in 0..=4 {
         if ((g8.q_queue[(i) as usize] < 0) || (g8.q_queue[(i) as usize] > 6)) {
-            fails = (fails + 1);
+            fails = (fails).wrapping_add(1_i32);
             println!("{}", String::from("FAIL queue-range"));
         }
     }

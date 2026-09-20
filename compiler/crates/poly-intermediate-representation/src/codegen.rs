@@ -85,6 +85,7 @@ fn assigned_param_names(function: &Function) -> HashSet<String> {
     assigned
 }
 
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -114,6 +115,10 @@ pub struct IntermediateRepresentationCodeGen {
     /// Variables declared `i64` (their arithmetic must stay 64-bit and
     /// out-of-i32 literals in their initializers must not be typed as i32).
     int64_variables: RefCell<HashSet<String>>,
+    /// True when rendering inside a `u64` context (declared-`u64` function
+    /// return/params, or the body of a `var x u64` assignment): big integer
+    /// literals suffix `_u64` instead of `_i64` (E0308, e.g. tetris glyphs).
+    u64_context: Cell<bool>,
     /// Stack of untyped closure parameter name sets for the closure body
     /// currently being rendered; reads of these names cast to `i32`.
     untyped_closure_params: RefCell<Vec<Vec<String>>>,
@@ -167,6 +172,7 @@ impl IntermediateRepresentationCodeGen {
             vec_element_scopes: RefCell::new(vec![HashMap::new()]),
             string_functions: HashSet::new(),
             int64_variables: RefCell::new(HashSet::new()),
+            u64_context: Cell::new(false),
             untyped_closure_params: RefCell::new(Vec::new()),
             string_methods: HashSet::new(),
             string_constants: HashSet::new(),
@@ -471,6 +477,18 @@ impl IntermediateRepresentationCodeGen {
             Some(ty) => format!(" -> {}", self.gen_type(ty)),
             None => String::new(),
         };
+        // Big integer literals in a `u64` context (declared-`u64` return,
+        // parameters, or locals) must suffix `_u64`, not `_i64` (E0308).
+        let previous_u64 = self.u64_context.replace(
+            function
+                .return_type
+                .as_ref()
+                .is_some_and(|ty| matches!(ty, Type::Named(n) if n == "u64"))
+                || function
+                    .params
+                    .iter()
+                    .any(|p| matches!(&p.ty, Type::Named(n) if n == "u64")),
+        );
 
         for parameter in &function.params {
             if let Some(type_name) = named_type_name(&parameter.ty) {
@@ -505,6 +523,7 @@ impl IntermediateRepresentationCodeGen {
         self.indent -= 1;
         self.writeln("}");
         self.returned_closure_names.borrow_mut().pop();
+        self.u64_context.set(previous_u64);
         self.exit_scope();
     }
 
@@ -675,7 +694,7 @@ impl IntermediateRepresentationCodeGen {
                         .is_some_and(|value| self.is_string_expr(value));
                 if ty
                     .as_ref()
-                    .is_some_and(|ty| matches!(ty, Type::Named(n) if n == "i64"))
+                    .is_some_and(|ty| matches!(ty, Type::Named(n) if n == "i64" || n == "u64"))
                 {
                     self.int64_variables.borrow_mut().insert(name.clone());
                 }
@@ -789,9 +808,36 @@ impl IntermediateRepresentationCodeGen {
             Statement::Mutation { target, op, value } => {
                 let target_str = self.gen_expr(target);
                 // String append lowers to `String += &str` (borrowed amount);
-                // declared-i64 and vector targets keep plain `+=`. Every other
-                // numeric target wraps by definition — a plain `+=` on a
-                // default-width i32 would panic in a debug build on overflow.
+                // declared-i64 and vector targets keep plain `+=`. A u64
+                // target wraps at 64 bits via `wrapping_*` with the amount
+                // coerced to `u64` (plain `+=` of an i32-typed amount is
+                // E0308). Every other numeric target wraps by definition —
+                // a plain `+=` on a default-width i32 would panic in a
+                // debug build on overflow.
+                if let Expr::Identifier(target_name) = target {
+                    if self
+                        .type_scopes
+                        .borrow()
+                        .iter()
+                        .rev()
+                        .find_map(|scope| scope.get(target_name).cloned())
+                        .is_some_and(|ty| ty == "u64")
+                    {
+                        let operator = match op {
+                            MutationOp::Add | MutationOp::Inc => "wrapping_add",
+                            MutationOp::Sub | MutationOp::Dec => "wrapping_sub",
+                        };
+                        let amount = value
+                            .as_ref()
+                            .map(|value| self.gen_u64_operand(value))
+                            .unwrap_or_else(|| "1_u64".to_string());
+                        self.writeln_fmt(format_args!(
+                            "{} = ({}).{}({});",
+                            target_str, target_str, operator, amount
+                        ));
+                        return;
+                    }
+                }
                 if self.is_string_expr(target)
                     || self.is_int64_expr(target)
                     || self.is_vec_expr(target)
@@ -1278,6 +1324,27 @@ impl IntermediateRepresentationCodeGen {
                     // no 32-bit narrowing).
                     let op_str = self.gen_binary_op(op);
                     format!("({} {} {})", l, op_str, r)
+                } else if self.is_u64_expr(left) || self.is_u64_expr(right) {
+                    // Declared-`u64` involvement stays unsigned 64-bit: wrap
+                    // two's complement, logical `>>`. This must precede the
+                    // i64 coercion path, which would corrupt both (E0308 on
+                    // assignment, arithmetic shift). Shifts of non-u64
+                    // amounts keep plain operators — u64 receivers already
+                    // anchor inference.
+                    let op_str = self.gen_binary_op(op);
+                    if matches!(op, BinaryOp::Shl | BinaryOp::Shr)
+                        && !self.is_u64_expr(right)
+                        && !self.is_int64_expr(right)
+                    {
+                        format!("(({}) {} ({}))", l, op_str, r)
+                    } else {
+                        format!(
+                            "(({}) {} ({} as u64))",
+                            l,
+                            op_str,
+                            self.gen_u64_operand(right)
+                        )
+                    }
                 } else if self.is_int64_expr(left) || self.is_int64_expr(right) {
                     // 64-bit involvement (declared-i64 variables or big
                     // literals): coerce both sides to i64 so the result keeps
@@ -2141,14 +2208,73 @@ impl IntermediateRepresentationCodeGen {
     /// Render an integer literal for expression position. Rust types unsuffixed
     /// literals by inference and defaults standalone big values to i32 (E3028),
     /// while Poly's other targets keep declared-`i64` values 64-bit — so any
-    /// literal outside the i32 range gets an explicit `i64` suffix.
+    /// literal outside the i32 range gets an explicit `i64` suffix (or `u64`
+    /// inside a `u64` context, where the value may exceed i64's range).
     fn gen_int_literal(&self, value: &str) -> String {
         match value.parse::<i64>() {
             Ok(v) if (i32::MIN as i64..=i32::MAX as i64).contains(&v) => value.to_string(),
+            Ok(_) if self.u64_context.get() => format!("{value}_u64"),
             Ok(_) => format!("{value}_i64"),
             // Literals beyond i64 (u64-level magnitudes) render verbatim;
             // Rust still types them by context, matching the C target.
             Err(_) => value.to_string(),
+        }
+    }
+
+    /// True when the expression involves a declared-`u64` variable (or a big
+    /// literal inside a `u64` context): its arithmetic must stay *unsigned*
+    /// 64-bit — logical `>>`, u64 wrap — which the signed i64-coercion path
+    /// would corrupt (E0308 on assignment, arithmetic shift on `>>`).
+    fn is_u64_expr(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Identifier(name) => self
+                .type_scopes
+                .borrow()
+                .iter()
+                .rev()
+                .find_map(|scope| scope.get(name).cloned())
+                .is_some_and(|ty| ty == "u64"),
+            Expr::Literal(Literal::Int(value)) => {
+                self.u64_context.get()
+                    && match value.parse::<i64>() {
+                        Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                        Err(_) => true,
+                    }
+            }
+            Expr::Parenthesized(inner) => self.is_u64_expr(inner),
+            Expr::UnaryOp {
+                op: UnaryOp::Neg,
+                expr,
+            } => self.is_u64_expr(expr),
+            Expr::BinaryOp { op, left, right } => {
+                matches!(
+                    op,
+                    BinaryOp::Add
+                        | BinaryOp::Sub
+                        | BinaryOp::Mul
+                        | BinaryOp::Div
+                        | BinaryOp::Mod
+                        | BinaryOp::BitAnd
+                        | BinaryOp::BitOr
+                        | BinaryOp::BitXor
+                        | BinaryOp::Shl
+                        | BinaryOp::Shr
+                ) && (self.is_u64_expr(left) || self.is_u64_expr(right))
+            }
+            _ => false,
+        }
+    }
+
+    /// Render one operand of a u64-context operation, coercing to `u64`.
+    /// Bare literals keep their context-driven suffix (`1_u64`), so a plain
+    /// `(1)` would still infer correctly — but the explicit cast keeps mixed
+    /// expressions (u64 var with i32 variable) unambiguous.
+    fn gen_u64_operand(&self, expr: &Expr) -> String {
+        let rendered = self.gen_expr(expr);
+        if matches!(expr, Expr::Literal(Literal::Int(_))) {
+            rendered // already suffixed `_u64` by the u64 context
+        } else {
+            format!("({}) as u64", rendered)
         }
     }
 
@@ -2158,7 +2284,24 @@ impl IntermediateRepresentationCodeGen {
     /// stay 64-bit too).
     fn is_int64_expr(&self, expr: &Expr) -> bool {
         match expr {
-            Expr::Identifier(name) => self.int64_variables.borrow().contains(name),
+            Expr::Identifier(name) => {
+                // The scoped declaration wins over the generator-wide
+                // `int64_variables` set: a local `var g i32` must not inherit
+                // 64-bit-ness from an outer/global `var g u64` (tetris has
+                // exactly that collision). u64 is classified by
+                // `is_u64_expr`; treating it as i64 here would coerce
+                // through signed casts.
+                if let Some(ty) = self
+                    .type_scopes
+                    .borrow()
+                    .iter()
+                    .rev()
+                    .find_map(|scope| scope.get(name).cloned())
+                {
+                    return ty == "i64";
+                }
+                self.int64_variables.borrow().contains(name)
+            }
             Expr::Literal(Literal::Int(value)) => match value.parse::<i64>() {
                 Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
                 Err(_) => true,
@@ -2839,7 +2982,7 @@ impl IntermediateRepresentationCodeGen {
                         .is_some_and(|value| self.is_string_expr(value));
                 if ty
                     .as_ref()
-                    .is_some_and(|ty| matches!(ty, Type::Named(n) if n == "i64"))
+                    .is_some_and(|ty| matches!(ty, Type::Named(n) if n == "i64" || n == "u64"))
                 {
                     self.int64_variables.borrow_mut().insert(name.clone());
                 }
@@ -3093,6 +3236,22 @@ impl IntermediateRepresentationCodeGen {
     }
 
     fn gen_value_expr(&self, name: &str, value: &Expr, declared_type: Option<&Type>) -> String {
+        // A declared-`u64` initializer renders inside a u64 context so big
+        // literals in it suffix `_u64` (E0308, e.g. tetris glyph bitmaps).
+        let previous_u64 = self
+            .u64_context
+            .replace(declared_type.is_some_and(|ty| matches!(ty, Type::Named(n) if n == "u64")));
+        let rendered = self.gen_value_expr_inner(name, value, declared_type);
+        self.u64_context.set(previous_u64);
+        rendered
+    }
+
+    fn gen_value_expr_inner(
+        &self,
+        name: &str,
+        value: &Expr,
+        declared_type: Option<&Type>,
+    ) -> String {
         // Anchor inferred-typed integer declarations (`var x := 10`) to a
         // concrete `i32` so later wrapping method calls type-check (E0689).
         // Tuples are anchored per-element (mixed tuples keep their non-int

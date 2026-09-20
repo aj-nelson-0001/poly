@@ -78,6 +78,18 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.13
+
+**Documentation truth release:** every per-backend claim in the maintained
+docs was verified empirically against the compiler and corrected — the C
+target supports plain stdin `get` (with optional prompt), the JS target
+supports structs and tuples, string interpolation works on all four
+targets, and a literal zero loop `step` is a compile-time error. A
+prompt-less `get` on the C target generated C that failed to compile; that
+codegen bug is fixed. New `doc_claim_guards` tests pin the corrected
+claims across rust/c/asm/js so docs and backends cannot drift apart
+silently again.
+
 ### What's New in 2.0.0-preview.10
 
 **Backend robustness:** a differential sweep of one program through all four

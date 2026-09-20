@@ -2,7 +2,18 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.12 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.13 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.13
+
+- **Backend-claim audit shipped:** the maintained docs now state only
+  claims verified against the compiler — C supports plain stdin `get`, JS
+  supports structs and tuples, interpolation works everywhere, and the
+  per-target contract is pinned end-to-end by the new
+  `doc_claim_guards` test suite.
+- **Fixed:** a prompt-less `get` on the C target emitted a zero-argument
+  call to a one-argument runtime helper, so the generated C failed to
+  compile.
 
 ## What's New in 2.0.0-preview.12
 

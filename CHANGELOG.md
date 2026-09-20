@@ -2,6 +2,45 @@
 
 All notable changes to the Poly language compiler will be documented in this file.
 
+## [2.0.0-preview.13] - 2026-09-20
+
+### Added
+
+- **`doc_claim_guards.rs`** — new transpiler integration test that pins
+  each audited per-backend claim (input, structs, tuples, enums, closures,
+  vectors, file I/O, loops) end-to-end across all four targets, so the
+  support-matrix contract cannot drift silently again.
+
+### Changed
+
+- **`capability_parity.rs` and `doc_claim_guards.rs` share one matrix.**
+  The expectation enum, target list, runner, and output-needle assertion
+  live in `tests/common/mod.rs`; both suites declare cases against it so
+  they cannot disagree about per-target acceptance.
+
+### Fixed
+
+- **C target: prompt-less `get` compiles.** The generated C called
+  `__poly_get_line()` with zero arguments against a one-argument helper,
+  so `var line := get` failed at C compile time; the call now passes an
+  explicit empty string literal (the helper already treats an empty
+  prompt as "no prompt").
+
+### Documentation
+
+- **Backend-claim audit.** Every disputed documentation claim was verified
+  empirically (probes compiled through rust/c/asm/js) and corrected:
+  the C backend supports plain stdin `get` with an optional prompt;
+  the JS backend supports structs and tuples; string interpolation works
+  on all four targets; a literal zero `step` is a compile-time error
+  (only runtime zero steps terminate); `..=` inclusive range loops are
+  part of the grammar; retired `+=`/`-=` were removed from the SPEC
+  operator table. Stale version stamps and status headers were refreshed
+  to preview.12, the documentation index gained the missing `--target js`
+  contract rows and the troubleshooting guide, and the stale v1.5
+  `compiler/grammar/poly.bnf` draft is marked historical pointing at
+  POLY_GRAMMAR.md.
+
 ## [Unreleased]
 
 ### Added

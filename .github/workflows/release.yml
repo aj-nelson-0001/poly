@@ -60,12 +60,28 @@ jobs:
           fi
           echo "binary version matches tag ${GITHUB_REF_NAME}"
 
+      - name: Generate checksums and rename binary asset
+        run: |
+          # Ship a sha256sums.txt covering every uploaded asset. The binary
+          # is renamed to carry the version so assets from different
+          # releases are distinguishable in a downloads directory.
+          version="${GITHUB_REF_NAME#v}"
+          mv ./bin/poly "./bin/poly-linux-amd64-${version}"
+          cd ./bin
+          sha256sum poly-linux-amd64-* > sha256sums.txt
+          cat sha256sums.txt
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          # Use the committed release-notes document as the body:
+          # POLY_V2_PREVIEW_RELEASE_NOTES.md is maintained by hand each
+          # release and carries the Target Contract, Compatibility Notes,
+          # and Verification Evidence sections.
+          body_path: POLY_V2_PREVIEW_RELEASE_NOTES.md
           # Preview tags publish as prereleases; stable tags (no "preview"
           # segment in the tag name) publish as full releases.
           prerelease: ${{ contains(github.ref_name, 'preview') }}
           files: |
-            ./bin/poly
+            ./bin/poly-linux-amd64-*
+            ./bin/sha256sums.txt

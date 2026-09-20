@@ -39,9 +39,34 @@ rust/c/asm/js) and corrected:
   verified 0 test failures, clippy `-D warnings` clean, tetris
   regeneration byte-identical. Tag pushed; CI run `35526701552` fully
   green (all jobs, 7m43s). GitHub release published as a prerelease with
-  notes mirroring POLY_V2_PREVIEW_RELEASE_NOTES.md (unprefixed tag, no
-  binary assets — matching the preview.12 convention; note
-  `release.yml` only auto-publishes on `v*` tags).
+  notes mirroring POLY_V2_PREVIEW_RELEASE_NOTES.md and a Linux binary
+  asset attached (matching the older v-prefixed releases).
+- **Release workflow widened and test-verified**: `release.yml` now
+  triggers on both tag spellings (`v*` and unprefixed `2.*`) — the tag
+  history uses both, and the version guard's `${GITHUB_REF_NAME#v}` strip
+  is a no-op for unprefixed tags. Proven end-to-end with a throwaway
+  `2.0.0-test-publish` tag: the workflow fired, the build succeeded, and
+  the version guard correctly rejected the mismatch
+  ("binary reports 'poly 2.0.0-preview.13'") without creating a release.
+  Test tag and run deleted afterwards.
+- **Tag naming standardized**: unprefixed version tags are the convention,
+  documented in POLY_VERSION_FILES_MAP.md alongside the full publish
+  flow (manual doc edits → prepare_release.py → tag → push → replace
+  generated notes, add sha256sums.txt).
+- The preview.13 release now ships a `sha256sums.txt` asset covering the
+  binary, round-trip verified with `sha256sum -c` on a downloaded copy.
+- **Release publishing fully automated**: `release.yml` now renames the
+  binary to `poly-linux-amd64-<version>`, generates `sha256sums.txt`,
+  and uses the committed POLY_V2_PREVIEW_RELEASE_NOTES.md as the release
+  body (action inputs checked against softprops/action-gh-release v2 —
+  no such input as `generate_release_notes_if_empty`). Verified
+  end-to-end by re-running the workflow on a re-pushed preview.13 tag:
+  run `35530633420` green, assets and checksum correct, notes body from
+  the repo doc. The release-notes doc's stale preview.4-era evidence
+  numbers (573 blocks / 52 files / 22 examples) were refreshed.
+- **tetris.hs is runtime state, not junk**: the file (a saved high score)
+  is written by `tetris.poly` at runtime; added to `.gitignore` instead
+  of committing or deleting it.
 
 ## CI-green closure: wasm artifact, u64 lowering, tetris parity (2026-09-20)
 

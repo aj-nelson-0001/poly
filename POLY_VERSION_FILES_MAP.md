@@ -49,3 +49,36 @@ version correct keeps those two correct for free.
 - The tetris CI job diffs regenerated output against the committed project.
 - `release.yml` refuses to publish when `poly --version` does not equal the
   tag name minus the `v` prefix.
+
+## Tag naming convention
+
+**Standard: unprefixed version tags** — `2.0.0-preview.13`, not
+`v2.0.0-preview.13`. The tag text equals the version string everywhere
+else (`compiler/Cargo.toml`, `poly --version`, the playground footer), so
+nothing needs mental stripping, and the tag matches the version the
+release publishes.
+
+The early preview tags used both spellings (`v2.0.0-preview.10` and
+`v2.0.0-preview.11` prefixed; `2.0.0-preview.12` onward unprefixed), so
+`release.yml` triggers on both (`v*` and `2.*`). Its version guard strips
+a leading `v` only when present, so either spelling still releases the
+version it names. New tags must be unprefixed.
+
+Publishing flow for a new release:
+
+1. Edit the manual docs (CHANGELOG section, README "What's New", the two
+   doc baselines) **before** running `prepare_release.py`.
+2. Run `python3 scripts/prepare_release.py <version>`; review the diff.
+3. Commit, then `git tag -a <version> -m "Poly <version>"` (unprefixed).
+4. Push the branch and tag; `release.yml` builds, verifies the binary
+   version against the tag, renames the asset to
+   `poly-linux-amd64-<version>`, generates `sha256sums.txt` over the
+   uploaded assets, and publishes a prerelease whose body is the
+   committed `POLY_V2_PREVIEW_RELEASE_NOTES.md` — no manual post-release
+   steps. (Verified end-to-end by re-publishing 2.0.0-preview.13 through
+   the workflow.)
+5. One manual step remains: the tagged commit's version of
+   `POLY_V2_PREVIEW_RELEASE_NOTES.md` becomes the release body, so its
+   What's New section must already describe the release being cut (step 1
+   covers this). The verification-evidence numbers in it should be
+   re-checked at tag time.

@@ -92,7 +92,7 @@ explicit explanatory warning instead of being silently dropped.
 ## What's New in 2.0.0-preview.4
 
 - **Compiler correctness fixes found by real code:** nested `while` loops now generate a real loop in every position (they previously ran exactly once inside `if` bodies, `match` arms, and loop bodies); range loops with expression start bounds (`loop i BUF..TOTAL - 1`, `loop i TOTAL - 4..TOTAL - 1`) parse correctly; the var-less `loop 0..10` form is a real counted loop instead of a silently infinite one; and a `const` declared inside a function no longer panics the IR generator — it lowers to an immutable local across the Rust, C, JS, and asm backends.
-- **Documentation complete and CI-verified:** every current-guide example is an explicit `fn main` program that passes `poly --check` — 573 blocks audited, 0 unmarked failures, verified in CI over all 52 markdown files via `check_poly_examples.py --poly-bin`.
+- **Documentation complete and CI-verified:** every current-guide example is an explicit `fn main` program that passes `poly --check` — 579 blocks audited, 0 unmarked failures, verified in CI over all 55 markdown files via `check_poly_examples.py --poly-bin`.
 - **CI runs on `v2.0-dev`** and now also builds and self-tests the Tetris example on Linux, including a regeneration-drift guard over the tracked generated project.
 - Documented language rules: range-loop grammar, reserved words `spawn`/`step`, take-and-return `impl` method move semantics, and the strict same-type comparison rule (cast with `as`).
 
@@ -143,11 +143,11 @@ python3 scripts/check_markdown.py
 python3 scripts/check_poly_examples.py --poly-bin compiler/target/release/poly
 ~~~
 
-The full-repository documentation audit covers 573 example blocks with 0
+The full-repository documentation audit covers 579 example blocks with 0
 unmarked failures; the Tetris example regenerates, builds, and passes its
 headless self-test with the release compiler.
 
-Additional target checks passed for all 22 Rust examples, the mixed-target fixture, the C fixture, native C execution, explicit C foreign signatures, and unsupported C diagnostics. The C check was also run with `POLY_CC=cc`.
+Additional target checks passed for the Rust examples, the mixed-target fixture, the C fixture, native C execution, explicit C foreign signatures, and unsupported C diagnostics. The asm and JS fixtures were checked, compiled/executed, and their outputs verified on Linux.
 
 The committed CI workflow runs the same Rust/C test path on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Hosted-runner results are release evidence that must be recorded after the workflow executes; they are not claimed by this local verification.
 

@@ -3,6 +3,33 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-20.
 
+## CI-green closure: wasm artifact, u64 lowering, tetris parity (2026-09-20)
+
+Follow-up round verifying every prior suggested followup was carried out;
+three shipped regressions were caught by CI and fixed:
+
+- **Playground wasm**: the committed artifact predated the wrap-semantics
+  codegen and the smoke test pinned raw operator tokens (`%`, `<<`, `>>`)
+  that now lower to `wrapping_rem`/`wrapping_shl`/`wrapping_shr`. Rebuilt
+  the artifact and updated the assertions (`ci.yml` wasm job green).
+- **u64 lowering** (found by the CI Tetris job): big integer literals
+  always suffixed `_i64` even in `u64` context (`return 15623448110` in a
+  `u64`-returning fn → E0308); assignments to `u64` bindings flowed
+  through the signed i64-coercion path; and the generator-wide 64-bit set
+  leaked across scopes (a local `var g i32` inherited 64-bit-ness from a
+  global `var g u64`, corrupting `render_frame`). Big literals now take
+  `_u64` inside u64 contexts, u64 arithmetic lowers to wrapping ops with
+  logical shifts (`is_u64_expr` / `gen_u64_operand`), and the scoped
+  declaration wins over the width sets. Verified against an independent
+  Python xorshift model — values match exactly.
+- Tetris regenerates, builds, and passes its self-test; regenerated
+  `rust_output` committed.
+- Final state: 505/505 tests, differential + stress + fuzz (60 fresh
+  seeds) all byte-identical, fmt/clippy/docs lints clean, **CI fully
+  green across all 8 jobs** (run `35487380379`).
+- Known-open: fuzzer generation covers only integer/call-DAG programs —
+  string/vector/struct value generation is future work.
+
 ## Overflow semantics defined on all four targets; fuzzer catches a C mod bug (2026-09-20)
 
 - **Language decision implemented**: default-width (`i32`) arithmetic is

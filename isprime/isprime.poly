@@ -1,0 +1,51 @@
+# isprime.poly — read numbers from stdin and report primality, one per line.
+#
+# Target: Rust (the default). `get --as i32` is a Rust-target input form.
+# The loop stops on EOF, an empty line, or an entered 0: the input helper
+# reads an empty/EOF line as 0, which doubles as the sentinel.
+#
+# Note: the primality branch lives in `report` rather than inline because
+# the parser does not currently accept an `if` nested inside an `else`
+# inside a `while`.
+
+fn is_prime(n: i32): bool
+    if n < 2
+        return false
+    end if
+    if n = 2
+        return true
+    end if
+    if n mod 2 = 0
+        return false
+    end if
+    var d i32 := 3
+    while d * d <= n
+        if n mod d = 0
+            return false
+        end if
+        d := d + 2
+    end while
+    return true
+end fn
+
+fn report(n: i32)
+    if is_prime(n)
+        put n.to_string() + " is prime"
+    else
+        put n.to_string() + " is not prime"
+    end if
+end fn
+
+fn main()
+    put "Enter numbers, one per line (0 or EOF to stop):"
+    var running bool := true
+    while running
+        var n i32 := get --as i32
+        if n = 0
+            running := false
+        else
+            report(n)
+        end if
+    end while
+    put "done"
+end fn

@@ -3,6 +3,7 @@
 **A minimal, assembly-inspired meta-language for any systems language.**
 
 [![CI](https://github.com/aj-nelson-0001/poly/actions/workflows/ci.yml/badge.svg?branch=v2.0-dev)](https://github.com/aj-nelson-0001/poly/actions/workflows/ci.yml?query=branch%3Av2.0-dev)
+[![Release](https://github.com/aj-nelson-0001/poly/actions/workflows/release.yml/badge.svg)](https://github.com/aj-nelson-0001/poly/actions/workflows/release.yml)
 ![Version](https://img.shields.io/badge/version-2.0--preview-green)
 ![Status](https://img.shields.io/badge/status-Active%20Development-blue)
 ![Backend](https://img.shields.io/badge/backends-Rust%20%7C%20C%20%7C%20Asm%20%7C%20JS-black)

@@ -66,6 +66,16 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Added
 
+- **Release binaries are smoke-tested on their native platform.** Each
+  release build compiles and runs a generated Rust program and checks
+  its output before the artifact can be published.
+- **The playground wasm transpiler ships as a release asset.**
+  `release.yml` builds and smoke-tests `playground/poly.wasm` and
+  publishes it as `poly-playground-<version>.wasm`, checksummed alongside
+  the binaries.
+
+### Added
+
 - **Defined integer-overflow semantics on every target.** Default-width
   (`i32`) arithmetic is now two's-complement wrap on all four backends —
   `100000 * 100000` is `1410065408` everywhere — and division/modulo by

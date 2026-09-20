@@ -52,10 +52,53 @@ jobs:
           name: ${{ matrix.asset }}
           path: compiler/target/release/${{ matrix.asset }}*
 
+      - name: Native smoke test
+        shell: bash
+        # The release binary must actually run on the platform it was built
+        # for. Emit Rust from a small program, compile it with the runner's
+        # rustc, execute it, and compare the output.
+        run: |
+          bin=$(ls compiler/target/release/${{ matrix.asset }}* | head -n 1)
+          reported="$($bin --version)"
+          echo "smoke: $bin reports $reported"
+          printf 'fn main()\n    put 42\nend fn\n' > smoke.poly
+          "$bin" --emit-rust smoke.poly > smoke.rs
+          rustc -O smoke.rs -o smoke_bin
+          out="$(./smoke_bin)"
+          if [ "$out" != "42" ]; then
+            echo "smoke test failed: expected 42, got '$out'"
+            exit 1
+          fi
+          echo "smoke: native execution prints 42"
+
+  wasm:
+    name: Playground wasm artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build playground wasm
+        run: bash compiler/scripts/build_playground_wasm.sh
+
+      - name: Smoke test the wasm artifact
+        run: node scripts/playground_wasm_smoke.mjs
+
+      - name: Upload wasm artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: poly-playground-wasm
+          path: playground/poly.wasm
+
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, wasm]
     permissions:
       contents: write
     steps:
@@ -106,6 +149,7 @@ jobs:
           mv poly-linux-amd64 "poly-linux-amd64-${version}"
           mv poly-macos-arm64 "poly-macos-arm64-${version}"
           mv poly-windows-amd64.exe "poly-windows-amd64-${version}.exe"
+          mv poly.wasm "poly-playground-${version}.wasm"
           ls -la
           sha256sum poly-* > sha256sums.txt
           cat sha256sums.txt

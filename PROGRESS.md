@@ -39,9 +39,15 @@ rust/c/asm/js) and corrected:
   verified 0 test failures, clippy `-D warnings` clean, tetris
   regeneration byte-identical. Tag pushed; CI run `35526701552` fully
   green (all jobs, 7m43s). GitHub release published as a prerelease with
-  notes mirroring POLY_V2_PREVIEW_RELEASE_NOTES.md (unprefixed tag, no
-  binary assets — matching the preview.12 convention; note
-  `release.yml` only auto-publishes on `v*` tags).
+  notes mirroring POLY_V2_PREVIEW_RELEASE_NOTES.md and a Linux binary
+  asset attached (matching the older v-prefixed releases).
+- **Release workflow widened**: `release.yml` now triggers on both tag
+  spellings (`v*` and unprefixed `2.*`) — the tag history uses both, and
+  the version guard's `${GITHUB_REF_NAME#v}` strip is a no-op for
+  unprefixed tags, so future preview tags publish automatically.
+- **tetris.hs is runtime state, not junk**: the file (a saved high score)
+  is written by `tetris.poly` at runtime; added to `.gitignore` instead
+  of committing or deleting it.
 
 ## CI-green closure: wasm artifact, u64 lowering, tetris parity (2026-09-20)
 

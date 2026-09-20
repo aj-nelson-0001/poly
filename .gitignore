@@ -1,6 +1,8 @@
 /rust_output/
 /dclock_poly/target/
 /tetris/rust_output/tetris/target/
+# Tetris high-score file written by the game at runtime (tetris/tetris.poly).
+/tetris/tetris.hs
 __pycache__/
 *.pyc
 *.rs.org

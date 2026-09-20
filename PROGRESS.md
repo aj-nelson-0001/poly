@@ -3,6 +3,46 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-20.
 
+## Documentation audit: backend claims verified; preview.13 released (2026-09-20)
+
+Full audit of the documentation set against the implementation; every
+stale claim was verified empirically (probes compiled through
+rust/c/asm/js) and corrected:
+
+- **Claims fixed across 13 maintained docs**: the C backend supports
+  plain stdin `get` with an optional prompt (QUICK_REFERENCE,
+  API_REFERENCE, CHEATSHEET, TROUBLESHOOTING); the JS backend supports
+  structs and tuples (JS_BLOCKS, SUPPORT_MATRIX); string interpolation
+  works on all four targets (README, CHEATSHEET); a literal zero loop
+  `step` is a compile-time error while a runtime zero step terminates
+  (SPEC, SUPPORT_MATRIX, agreeing with GRAMMAR); `..=` inclusive range
+  loops added to the grammar's range production; retired `+=`/`-=`
+  removed from the SPEC operator table; stale preview.2/.7/.12 status
+  stamps refreshed.
+- **Real codegen bug found by the audit**: a prompt-less `get` on the C
+  target emitted `__poly_get_line()` — zero args to a one-arg helper —
+  so the generated C failed to compile. Fixed to pass an explicit empty
+  string literal; regression test added.
+- **`doc_claim_guards.rs`** pins every corrected per-target claim
+  end-to-end across all four backends (input, structs, tuples, enums,
+  closures, vectors, file I/O, loops). It and `capability_parity.rs`
+  now share one expectation matrix (`tests/common/mod.rs`), so the two
+  suites cannot disagree about what "supported on target X" means.
+- **Index completeness**: POLY_TROUBLESHOOTING_GUIDE added to the
+  maintained table; the Target Contract gained `--target js`, `#js`
+  blocks, `extern js fn`, and the redirect-rejection scope; historical
+  banners updated from preview.1 to preview.12; the stale v1.5
+  `compiler/grammar/poly.bnf` draft marked historical pointing at
+  POLY_GRAMMAR.md.
+- **Release**: cut `2.0.0-preview.13` via `prepare_release.py` after the
+  manual edits (CHANGELOG section, README What's New, doc baselines);
+  verified 0 test failures, clippy `-D warnings` clean, tetris
+  regeneration byte-identical. Tag pushed; CI run `35526701552` fully
+  green (all jobs, 7m43s). GitHub release published as a prerelease with
+  notes mirroring POLY_V2_PREVIEW_RELEASE_NOTES.md (unprefixed tag, no
+  binary assets — matching the preview.12 convention; note
+  `release.yml` only auto-publishes on `v*` tags).
+
 ## CI-green closure: wasm artifact, u64 lowering, tetris parity (2026-09-20)
 
 Follow-up round verifying every prior suggested followup was carried out;

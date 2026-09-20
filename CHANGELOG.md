@@ -55,6 +55,30 @@ All notable changes to the Poly language compiler will be documented in this fil
   sign-extended 32-bit immediate range (e.g. `0 - 2147483648`) now emit
   `movabsq` (register) or a `pushq`/`popq` scratch sequence (stack) and
   loop-step induction takes the 64-bit path.
+- **C target: prompt-less `get` compiles.** The generated C called
+  `__poly_get_line()` with zero arguments against a one-argument helper,
+  so `var line := get` failed at C compile time; the call now passes an
+  explicit empty string literal (the helper already treats an empty
+  prompt as "no prompt").
+
+### Documentation
+
+- **Backend-claim audit.** Every disputed documentation claim was verified
+  empirically (probes compiled through rust/c/asm/js) and corrected:
+  the C backend supports plain stdin `get` with an optional prompt;
+  the JS backend supports structs and tuples; string interpolation works
+  on all four targets; a literal zero `step` is a compile-time error
+  (only runtime zero steps terminate); `..=` inclusive range loops are
+  part of the grammar; retired `+=`/`-=` were removed from the SPEC
+  operator table. Stale version stamps and status headers were refreshed
+  to preview.12, the documentation index gained the missing `--target js`
+  contract rows and the troubleshooting guide, and the stale v1.5
+  `compiler/grammar/poly.bnf` draft is marked historical pointing at
+  POLY_GRAMMAR.md.
+- **`doc_claim_guards.rs`** — new transpiler integration test that pins
+  each corrected per-backend claim (input, structs, tuples, enums,
+  closures, vectors, file I/O, loops) end-to-end across all four targets,
+  so the support-matrix contract cannot drift silently again.
 
 ## [2.0.0-preview.12] - 2026-09-19
 

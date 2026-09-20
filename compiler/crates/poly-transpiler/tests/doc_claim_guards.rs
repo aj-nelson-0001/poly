@@ -27,6 +27,18 @@ enum Claim {
     RustCWithC(&'static str),
     /// Rust, C, and JS compile this; asm rejects the construct (e.g. tuples).
     RustCJs,
+    /// Only Rust compiles this (e.g. file redirects and file input).
+    RustOnly,
+    /// Rust, asm, and JS compile this; C has no vector support (e.g. vector
+    /// literal + len).
+    RustAsmJs,
+    /// Rust and asm compile this; C and JS reject it (e.g. vector push).
+    RustAsm,
+    /// Rust, C, and asm compile this; JS rejects it (e.g. unit enums).
+    RustCAsm,
+    /// Rust and C compile this; asm and JS reject it (e.g. non-capturing
+    /// closures).
+    RustC,
     /// Every backend must refuse this at compile time (docs pin it as an
     /// error, not a runtime behavior).
     AllReject,
@@ -94,6 +106,50 @@ const CASES: &[(&str, &str, Claim)] = &[
         "fn main()\n    var s i32 := 0\n    loop i 0..10 step s\n        put i\n    end loop\n    put \"after\"\nend fn\n",
         Claim::All,
     ),
+    // --- rows pinned from POLY_V2_SUPPORT_MATRIX.md (probed 2026-09-20) ----
+    // Enum declarations: C/asm support unit variants (payload-carrying are
+    // rejected); JS rejects enums entirely.
+    (
+        "unit enum declaration and qualified match",
+        "enum Color\n    Red\n    Green\nend enum\n\nfn main()\n    var c := Color::Green\n    match c\n        Color::Red, put 1\n        Color::Green, put 2\n        _, put 0\n    end match\nend fn\n",
+        Claim::RustCAsm,
+    ),
+    // Closures: C compiles non-capturing only; capturing are rejected with
+    // guidance; asm and JS reject all closures.
+    (
+        "non-capturing closure",
+        "fn main()\n    var twice := |x: i32| x * 2\n    put twice(21)\nend fn\n",
+        Claim::RustC,
+    ),
+    (
+        "capturing closure is rejected outside rust",
+        "fn main()\n    var n i32 := 10\n    var addn := |x: i32| x + n\n    put addn(5)\nend fn\n",
+        Claim::RustOnly,
+    ),
+    // Vectors: C has none; JS supports literals/len but no mutators; asm
+    // supports literals and mutators via its growable runtime.
+    (
+        "vector literal and len",
+        "fn main()\n    var v Vec<i32> := [1, 2, 3]\n    put v.len()\nend fn\n",
+        Claim::RustAsmJs,
+    ),
+    (
+        "vector push",
+        "fn main()\n    var v Vec<i32> := [1, 2]\n    v.push(3)\n    put v.len()\nend fn\n",
+        Claim::RustAsm,
+    ),
+    // File I/O: redirects and file input are Rust-target features; C, asm,
+    // and JS reject them with guidance.
+    (
+        "file output redirect",
+        "fn main()\n    put \"x\" to \"out.txt\"\nend fn\n",
+        Claim::RustOnly,
+    ),
+    (
+        "file input via get from",
+        "fn main()\n    var d bytes := get from \"data.bin\" --bytes 8\n    put d.len()\nend fn\n",
+        Claim::RustOnly,
+    ),
 ];
 
 impl Claim {
@@ -103,6 +159,11 @@ impl Claim {
             Claim::All | Claim::AllWithJs(_) => true,
             Claim::RustCWithC(_) => matches!(target, "rust" | "c"),
             Claim::RustCJs => matches!(target, "rust" | "c" | "js"),
+            Claim::RustOnly => target == "rust",
+            Claim::RustAsmJs => matches!(target, "rust" | "asm" | "js"),
+            Claim::RustAsm => matches!(target, "rust" | "asm"),
+            Claim::RustCAsm => !matches!(target, "js"),
+            Claim::RustC => matches!(target, "rust" | "c"),
             Claim::AllReject => false,
         }
     }

@@ -470,6 +470,65 @@ end fn
 
 ---
 
+## Part 6: Structs and Methods
+
+### Defining a Struct
+
+A struct groups related fields under one named type. Fields are declared with
+a type and no initial value:
+
+~~~poly
+# A struct groups related fields under one named type.
+struct Point
+    x: f64
+    y: f64
+end struct
+
+fn main()
+    # Build a value with a struct literal; read fields with dot syntax
+    var p := Point { x: 3.0, y: 4.0 }
+    put p.x + p.y
+end fn
+~~~
+
+### Adding Methods with `impl`
+
+An `impl` block attaches methods to a struct. Poly moves values into calls,
+so a method that changes state takes `self` and returns it — callers must
+reassign the result:
+
+~~~poly
+struct Counter
+    n: i32
+end struct
+
+# impl adds methods; methods that mutate take and return self
+impl Counter
+    fn bump(self): Counter
+        self.n := self.n + 1
+        return self
+    end fn
+end impl
+
+fn main()
+    var c := Counter { n: 0 }
+    c := c.bump()   # the call consumes c, so reassign the returned value
+    c := c.bump()
+    put c.n         # 2
+end fn
+~~~
+
+Two rules worth remembering:
+
+- Method calls are not in-place: `c.bump()` alone discards the result. Always
+  write `c := c.bump()`.
+- `spawn` and `step` are reserved words and cannot name fields or methods.
+
+For generics, traits, or default field values, put the definition in a
+`#rust` (or `#c`) foreign block and call it from Poly.
+
+---
+
 ## Summary
 
 - **Output**: Use `put` for console output (always adds a newline)
@@ -481,5 +540,7 @@ end fn
 - **Error Propagation**: Use `try` to propagate errors
 - **Loop Ranges**: Use `loop` with ranges, multiple values, and steps
 - **Comments**: Use `#` for line comments; `//` and `/* ... */` also work
+- **Structs**: Define data with `struct`, attach methods with `impl`
+- **Methods**: Mutating methods take and return `self`; write `c := c.bump()`
 
 Practice these concepts by building small programs that read user input, validate it, and handle errors gracefully.

@@ -114,6 +114,25 @@ const CASES: &[Case] = &[
         "fn main()\n    var v Vec<i32> := [1, 2]\n    v.push(3)\n    put v.len()\nend fn\n",
         Expect::RustAsm,
     ),
+    // --- comment styles (POLY_QUICK_REFERENCE.md, POLY_TUTORIAL.md) -------
+    // All three comment styles are stripped by the lexer before any backend
+    // sees the token stream, so every target must accept them identically —
+    // and the statements around each comment must survive compilation.
+    Case::accepted(
+        "hash line comments on every target",
+        "# leading comment\nfn main()\n    var n i32 := 1 # trailing comment\n    # standalone comment\n    put n\nend fn\n",
+        Expect::All,
+    ),
+    Case::accepted(
+        "c++-style line comments on every target",
+        "// leading comment\nfn main()\n    var n i32 := 2 // trailing comment\n    // standalone comment\n    put n\nend fn\n",
+        Expect::All,
+    ),
+    Case::accepted(
+        "block comments on every target",
+        "/* leading\n   multi-line */\nfn main()\n    /* inline */ var n i32 := 3\n    put n\nend fn\n",
+        Expect::All,
+    ),
     // File I/O: redirects and file input are Rust-target features; C, asm,
     // and JS reject them with guidance.
     Case::accepted(

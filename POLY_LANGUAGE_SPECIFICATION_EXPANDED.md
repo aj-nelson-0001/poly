@@ -877,6 +877,11 @@ fn main()
 end fn
 ~~~
 
+The `else if` arms and the final `else` share one `end if`, which the
+innermost arm owns. An `if` statement nested directly inside an `else`
+is not part of the language; express the nested condition as another
+`else if` arm instead.
+
 ### While Loops
 
 ~~~poly fragment

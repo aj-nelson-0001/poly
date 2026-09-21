@@ -2,6 +2,18 @@
 
 All notable changes to the Poly language compiler will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **Clearer diagnostic for a nested `if` directly after `else`.**
+  `else if` chains share a single `end if`, owned by the innermost arm,
+  so an `if` statement nested directly inside an `else` has never been
+  part of the language. When that form strands an extra `end if` at the
+  outermost level, the parser now reports it at the stray terminator
+  with a suggestion to merge the condition into the chain, instead of a
+  confusing "Expected Fn/While, got If" error at the next construct.
+
 ## [2.0.0-preview.14] - 2026-09-20
 
 ### Added

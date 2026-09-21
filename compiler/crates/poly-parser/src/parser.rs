@@ -2906,17 +2906,43 @@ impl<'a> Parser<'a> {
                     self.pos = else_start;
                 }
             }
+            // The speculative compact-expression parse did not produce a
+            // compact if; rewind so the block path re-reads the body.
+            self.pos = expression_start;
         }
-        self.pos = expression_start;
         let then_block = self.parse_block()?;
         let else_block = if self.match_token(&TokenKind::Else) {
             // Consume comma after 'else' if present
             self.match_token(&TokenKind::Comma);
             if self.peek() == &TokenKind::If {
                 // `else if` is one chained conditional, so the recursive
-                // branch owns the final shared `end if`.
+                // branch owns the final shared `end if`. An `if` statement
+                // nested directly inside an `else` is not part of the
+                // language: the chain consumes the single `end if`, so any
+                // further `end if` afterwards can only be a stray one (an
+                // enclosing construct ends with `end fn`, `end while`, ...,
+                // never `end if`). When this if is itself outermost
+                // (`if_depth == 1`), nothing can own that stray terminator,
+                // which reliably identifies the nested form.
                 let else_start = self.pos;
                 let else_if = self.parse_if_expression_inner(true)?;
+                if self.if_depth == 1
+                    && self.peek() == &TokenKind::End
+                    && matches!(
+                        self.tokens.get(self.pos + 1).map(|token| &token.kind),
+                        Some(TokenKind::If)
+                    )
+                {
+                    let span = Span::new(
+                        self.current().span.start,
+                        self.tokens[self.pos + 1].span.end,
+                    );
+                    return Err(ParseError::with_suggestion(
+                        "A nested `if` statement cannot directly follow `else`",
+                        span,
+                        "`else if` chains share one `end if`; merge the nested condition into the chain, e.g. `else if <condition>` followed by the arm body".to_string(),
+                    ));
+                }
                 vec![Spanned::new(
                     Statement::ExpressionStatement(else_if),
                     self.statement_span(else_start),
@@ -5107,6 +5133,51 @@ end match"#
                 // The else block should contain a nested if-else-if chain
                 let else_block = else_block.as_ref().unwrap();
                 assert_eq!(else_block.len(), 1);
+            }
+            _ => panic!("Expected IfExpression"),
+        }
+    }
+
+    #[test]
+    fn test_reject_nested_if_statement_after_else() {
+        // `else if` chains share one `end if`, so an `if` statement nested
+        // directly inside an `else` is not part of the language: the chain
+        // consumes the single terminator and the outer `end if` is left
+        // stranded, which the parser reports with a targeted suggestion
+        // instead of a confusing error at the next construct.
+        let error = parse_source(
+            "if x > 0\n    put \"pos\"\nelse\n    if x < 0\n        put \"neg\"\n    end if\nend if",
+        )
+        .unwrap_err();
+        assert!(error.message.contains("nested"));
+        assert!(error
+            .suggestion
+            .as_deref()
+            .is_some_and(|text| text.contains("else if")));
+    }
+
+    #[test]
+    fn test_parse_else_if_chain_inside_then_block() {
+        // A same-line `else if` arm nested inside another if's then-block
+        // still shares the chain terminator: the innermost arm consumes the
+        // single `end if` and the outer if is left with none to consume.
+        let prog = parse_source(
+            "if x > 0\n    if a\n        put \"A\"\n    else if b\n        put \"B\"\n    end if\nend if",
+        )
+        .unwrap();
+        assert_eq!(prog.statements.len(), 1);
+        match &prog.statements[0].node {
+            Statement::ExpressionStatement(Expression::IfExpression { then_block, .. }) => {
+                assert_eq!(then_block.len(), 1);
+                match &then_block[0].node {
+                    Statement::ExpressionStatement(Expression::IfExpression {
+                        else_block, ..
+                    }) => {
+                        let else_block = else_block.as_ref().unwrap();
+                        assert_eq!(else_block.len(), 1);
+                    }
+                    _ => panic!("Expected inner IfExpression"),
+                }
             }
             _ => panic!("Expected IfExpression"),
         }

@@ -311,6 +311,11 @@ else,
 end if
 ~~~
 
+All `else if` arms and the final `else` share one `end if`, which the
+innermost arm owns. An `if` statement nested directly inside an `else`
+is not valid Poly; fold the nested condition into the chain as an
+`else if` arm.
+
 ### While
 
 ~~~poly fragment

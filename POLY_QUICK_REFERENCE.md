@@ -131,3 +131,21 @@ Rust is the default target. `--check` runs parsing, semantic checking, transpila
 - Use `put value to "file" -append`, not legacy redirection operators.
 - Move unsupported target-specific work into a foreign helper and call it from Poly.
 - Annotate Poly code with `#` comments; `//` and `/* ... */` are also accepted.
+
+## Comments
+
+~~~poly
+# A hash comment runs from `#` to the end of the line.
+// A C++-style line comment also runs to the end of the line.
+/* A block comment can span
+   several lines. */
+
+fn main()
+    var attempts i32 := 0    # A comment may trail a line of code
+    put attempts
+end fn
+~~~
+
+`#` starts a comment unless it names a foreign block: a line beginning `#rust`,
+`#c`, `#asm`, or `#js` opens a foreign block instead. Comments inside a foreign
+block belong to the target language and are copied verbatim.

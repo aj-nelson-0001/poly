@@ -159,6 +159,7 @@ impl JsGenerator {
             .collect::<Vec<_>>()
             .join(", ");
         for parameter in &function.params {
+            self.reject_128_bit_type(&parameter.name, Some(&parameter.ty))?;
             if self.is_string_type(&parameter.ty) {
                 self.string_variables
                     .borrow_mut()
@@ -194,6 +195,7 @@ impl JsGenerator {
         match statement {
             Statement::VarDeclaration { name, ty, value } => {
                 line_prefix(output);
+                self.reject_128_bit_type(name, ty.as_ref())?;
                 self.register_i64_declaration(name, ty.as_ref());
                 if ty.as_ref().is_some_and(|ty| self.is_string_type(ty))
                     || value
@@ -210,6 +212,7 @@ impl JsGenerator {
             }
             Statement::LetDeclaration { name, ty, value } => {
                 line_prefix(output);
+                self.reject_128_bit_type(name, ty.as_ref())?;
                 self.register_i64_declaration(name, ty.as_ref());
                 if ty.as_ref().is_some_and(|ty| self.is_string_type(ty))
                     || self.is_string_literal(value)
@@ -845,6 +848,20 @@ impl JsGenerator {
         if ty.is_some_and(|ty| matches!(ty, TypeAnnotation::Named(n) if n == "i64" || n == "u64")) {
             self.int64_variables.borrow_mut().insert(name.to_string());
         }
+    }
+
+    /// 128-bit integers have no faithful JS representation (doubles lose
+    /// integer precision past 2^53), so they are rejected with guidance
+    /// instead of silently miscompiled — the same contract the asm backend
+    /// applies to unsupported types.
+    fn reject_128_bit_type(&self, name: &str, ty: Option<&TypeAnnotation>) -> Result<(), String> {
+        if ty.is_some_and(|ty| matches!(ty, TypeAnnotation::Named(n) if n == "i128" || n == "u128"))
+        {
+            return Err(format!(
+                "JS backend does not support 128-bit integers; `{name}` is declared with a 128-bit type and a JS number cannot hold it exactly. Use i64/u64 (exact up to 2^53) or a #js helper"
+            ));
+        }
+        Ok(())
     }
 
     fn is_string_type(&self, annotation: &TypeAnnotation) -> bool {

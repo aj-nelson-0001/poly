@@ -133,6 +133,14 @@ const CASES: &[Case] = &[
         "/* leading\n   multi-line */\nfn main()\n    /* inline */ var n i32 := 3\n    put n\nend fn\n",
         Expect::All,
     ),
+    // Async: a Rust-target feature (Tokio). C, asm, and JS reject async
+    // functions with guidance pointing at foreign blocks (POLY_TUTORIAL.md
+    // Part 7, POLY_V2_SUPPORT_MATRIX.md).
+    Case::accepted(
+        "async fn with await and spawn on rust",
+        "async fn compute(x: i32): i32\n    delay(10).await\n    return x * x\nend fn\n\nasync fn main()\n    var a := compute(3).await\n    spawn compute(5)\nend fn\n",
+        Expect::RustOnly,
+    ),
     // File I/O: redirects and file input are Rust-target features; C, asm,
     // and JS reject them with guidance.
     Case::accepted(
@@ -166,6 +174,29 @@ fn zero_step_rejection_names_the_limitation() {
         assert!(
             err.to_lowercase().contains("zero"),
             "target `{target}`: zero-step error should mention \"zero\", got: {err}"
+        );
+    }
+}
+
+#[test]
+fn async_rejection_names_the_foreign_block_escape_hatch() {
+    // C, asm, and JS must refuse async functions with guidance pointing at
+    // a foreign block (POLY_TUTORIAL.md Part 7); rust must accept them.
+    let transpiler = poly_transpiler::Transpiler::new();
+    let source = "async fn compute(x: i32): i32\n    delay(10).await\n    return x * x\nend fn\n\nfn main()\n    var a := compute(3).await\nend fn\n";
+    assert!(
+        transpiler.transpile_target(source, "rust").is_ok(),
+        "async fn should compile on the rust target"
+    );
+    for (target, block) in [("c", "#c"), ("asm", "#asm"), ("js", "#js")] {
+        let err = match transpiler.transpile_target(source, target) {
+            Err(err) => err,
+            Ok(_) => panic!("async fn unexpectedly compiled on `{target}`"),
+        };
+        let message = err.to_lowercase();
+        assert!(
+            message.contains("async") && message.contains(block),
+            "target `{target}`: async rejection should mention async and {block}, got: {err}"
         );
     }
 }

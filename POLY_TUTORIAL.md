@@ -325,7 +325,72 @@ end match
 
 ---
 
-## Part 4: Complete Example
+## Part 4: Match Expressions and Enum Payloads
+
+### Match as an Expression
+
+`match` is not just a statement — it produces a value. Each arm's expression
+becomes the result, and arms may group alternatives with a comma-separated
+pattern list. A match **expression** must include a wildcard `_` arm so every
+possible scrutinee value has a result:
+
+~~~poly
+fn main()
+    var level i32 := 2
+    # The whole match evaluates to the matched arm's expression
+    var label := match level
+        0, "off"        # alternatives can share an arm: 0 or 1
+        1, "low"
+        _, "high"       # required: the wildcard covers everything else
+    end match
+    put label           # high
+end fn
+~~~
+
+Omitting the wildcard is a compile error — the compiler reports the
+unmatched values (for example `non-exhaustive patterns`).
+
+### Enums with Tuple Payloads
+
+Enum variants can carry data as tuple payloads. Declare the payload types in
+the variant, construct with `Enum::Variant(values)`, and match binds each
+payload position to a name:
+
+~~~poly
+# Variants carry tuple payloads: one f64, or two f64s
+enum Shape
+    Circle(f64)
+    Rect(f64, f64)
+end enum
+
+fn main()
+    # Construct a variant with :: and its payload values
+    var s := Shape::Rect(3.0, 4.0)
+
+    # Each arm binds the payload fields positionally
+    match s
+        Circle(r), put "circle radius " + r.to_string()
+        Rect(w, h), put "area " + (w * h).to_string()
+        _, put "unknown shape"
+    end match
+end fn
+~~~
+
+### Which Match Form to Use
+
+- **Statement form** (Part 3): arms run statements, and guarded arms
+  (`x if x > 5,`) are available. No wildcard is required when earlier arms
+  cover every case you care about.
+- **Expression form**: arms are single expressions and a `_` arm is
+  mandatory. Use it wherever a value is expected — declarations,
+  arguments, returns.
+- Variants with **named** payload fields (like `TooShort(min: i32)` from
+  Part 3) are matched through `Result` error arms; for a plain enum match,
+  prefer tuple payloads as shown above.
+
+---
+
+## Part 5: Complete Example
 
 ~~~poly
 # User Registration Form
@@ -377,7 +442,7 @@ end fn
 
 ---
 
-## Part 5: Loop Ranges (SuperBASIC-inspired)
+## Part 6: Loop Ranges (SuperBASIC-inspired)
 
 ### Basic Ranges
 
@@ -470,7 +535,7 @@ end fn
 
 ---
 
-## Part 6: Structs and Methods
+## Part 7: Structs and Methods
 
 ### Defining a Struct
 
@@ -529,7 +594,7 @@ For generics, traits, or default field values, put the definition in a
 
 ---
 
-## Part 7: Async and `spawn`
+## Part 8: Async and `spawn`
 
 ### Await a Future
 
@@ -586,6 +651,8 @@ Complete async programs live in `examples/async_await.poly` and
 - **Error Propagation**: Use `try` to propagate errors
 - **Loop Ranges**: Use `loop` with ranges, multiple values, and steps
 - **Comments**: Use `#` for line comments; `//` and `/* ... */` also work
+- **Match Expressions**: `match` yields a value; expressions need a `_` arm
+- **Enum Payloads**: Tuple payloads bind positionally in match arms
 - **Structs**: Define data with `struct`, attach methods with `impl`
 - **Methods**: Mutating methods take and return `self`; write `c := c.bump()`
 - **Async**: Declare `async fn`, run with `.await`; `spawn` for fire-and-forget

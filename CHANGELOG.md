@@ -4,6 +4,8 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.15] - 2026-09-21
+
 ### Added
 
 - **Release binaries are smoke-tested on their native platform.** Each
@@ -76,6 +78,36 @@ All notable changes to the Poly language compiler will be documented in this fil
   sign-extended 32-bit immediate range (e.g. `0 - 2147483648`) now emit
   `movabsq` (register) or a `pushq`/`popq` scratch sequence (stack) and
   loop-step induction takes the 64-bit path.
+
+### Documentation
+
+- **POLY_TUTORIAL.md is now current documentation.** The stale
+  historical-tutorial banner was replaced with a current-for-preview.14
+  note and the documentation index moved the tutorial out of its
+  historical list. Every complete example was verified end-to-end against
+  the compiler (18 probe programs covering nested fn/Result, Poly-side
+  error enums with payload matching, all `get` flags, file redirects,
+  comment styles, and typed input); the typed-input example was aligned
+  to the canonical `get --as i32` form.
+- **The tutorial, quick reference, and cheatsheet explain their examples
+  with inline comments**: declaration forms (var/let/const, colon rules,
+  i32 inference for untyped consts), output severity prefixes and
+  truncate/append semantics, each `get` flag's effect, inclusive loop
+  endpoints and steps, foreign-block opacity, and CLI flag purposes. The
+  tutorial gained a "Using Comments" section and the quick reference a
+  Comments section, both documenting `#`, `//`, and `/* ... */` plus the
+  `#rust`/`#c`/`#asm`/`#js` foreign-block exception.
+- **The tutorial grew three parts**: structs and methods (struct literals,
+  dot access, take-and-return `self`, the reassignment gotcha), match
+  expressions and enum payloads (match-as-value with the mandatory
+  wildcard arm, tuple payload binding, statement-vs-expression guidance),
+  and async (async fn, .await, delay, fire-and-forget spawn, with the
+  Rust-target-only caveat verified per backend).
+- **Documentation claims pinned by tests**: `doc_claim_guards.rs` now
+  proves `#`, `//`, and `/* */` comments are accepted by all four backends
+  with surrounding code intact, that async compiles on rust and is
+  rejected by C/asm/js with foreign-block guidance, and that the
+  literal-zero-step loop error is a clear compile-time refusal everywhere.
 
 ## [2.0.0-preview.14] - 2026-09-20
 

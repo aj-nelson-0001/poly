@@ -1,10 +1,43 @@
 # Poly Language Tutorial: I/O and Error Handling
 
-> **Historical tutorial:** This tutorial targets the v1 syntax. It is retained for migration context and is not normative for Poly 2.0.0-preview.14.
+> This tutorial is current for Poly 2.0.0-preview.14. Every complete example
+> parses, type-checks, and compiles with the v2 compiler.
 
 ## Introduction
 
 This tutorial covers the fundamental I/O operations and error handling in Poly. By the end, you'll be able to read input, display output, and handle errors gracefully.
+
+---
+
+## Using Comments
+
+Comments are ignored by the compiler and exist for the human reader. Poly
+supports three comment styles:
+
+~~~poly
+# A hash comment runs from `#` to the end of the line.
+# This is the conventional Poly comment style.
+
+// A C++-style line comment also runs to the end of the line.
+
+/* A block comment can span
+   several lines. */
+~~~
+
+A comment may sit on its own line or trail a line of code:
+
+~~~poly
+fn main()
+    var attempts i32 := 0    # Track how many times we have asked
+    # TODO: cap the number of retries
+    put attempts
+end fn
+~~~
+
+Note that `#` only starts a comment when it does not name a foreign code block:
+a line beginning `#rust` or `#c` opens a foreign block instead.
+
+The rest of this tutorial uses `#` comments to explain what each example does.
 
 ---
 
@@ -16,10 +49,10 @@ The `put` command outputs text to the console with a newline character:
 
 ~~~poly
 fn main()
-    put "Hello, World!"           # Output with newline
-    put 42                         # Output number
-    put 3.14159                    # Output float
-    put true                       # Output boolean
+    put "Hello, World!"   # Strings print as written
+    put 42                # Integers print in decimal
+    put 3.14159           # Floats keep their decimal point
+    put true              # Booleans print as true / false
 end fn
 ~~~
 
@@ -29,8 +62,8 @@ Use `put` to print to the console. Each `put` adds a newline:
 
 ~~~poly
 fn main()
-    put "Hello, World!"
-    put 42
+    put "Hello, World!"   # Writes the text, then a newline
+    put 42                # Numbers are formatted automatically
 end fn
 ~~~
 
@@ -46,8 +79,10 @@ Write to files using redirection operators:
 
 ~~~poly
 fn main()
-    put "Line 1" to "output.txt"    # Write (truncate)
-    put "Line 2" to "output.txt" -append   # Append
+    # `to` creates the file if needed and overwrites its contents
+    put "Line 1" to "output.txt"
+    # `-append` keeps existing contents and adds to the end
+    put "Line 2" to "output.txt" -append
 end fn
 ~~~
 
@@ -57,9 +92,10 @@ Use `error`, `warn`, and `info` for different output levels:
 
 ~~~poly
 fn main()
-    error "Something went wrong"   # Error message (stderr)
-    warn "Deprecated feature"      # Warning message (stderr)
-    info "Debug information"       # Debug info (stderr)
+    # All three write to stderr; pick the one matching the severity
+    error "Something went wrong"   # Failures the user must see
+    warn "Deprecated feature"      # Suspicious but non-fatal conditions
+    info "Debug information"       # Diagnostics for developers
 end fn
 ~~~
 
@@ -73,20 +109,20 @@ Read a line from the user:
 
 ~~~poly
 fn main()
-    put "Enter your name: "
-    var name ustring := get
+    put "Enter your name: "       # Prompt the user (put adds the newline)
+    var name ustring := get       # get reads one line from stdin
     put "Hello, " + name + "!"
 end fn
 ~~~
 
 ### Typed Input
 
-Poly automatically parses input based on the variable type:
+Use `--as` to parse the input line as a specific type:
 
 ~~~poly
 fn main()
     put "Enter your age: "
-    var age i32 := get
+    var age i32 := get --as i32   # Parse the line as an integer
     put "In 10 years you will be: " + (age + 10)
 end fn
 ~~~
@@ -98,6 +134,7 @@ Use `--default` for optional input:
 ~~~poly
 fn main()
     put "Enter color (or press Enter for default): "
+    # --default kicks in when the user presses Enter on an empty line
     var color ustring := get --default unicode "blue"
     put "Color: " + color
 end fn
@@ -111,6 +148,7 @@ and the read falls back to plain input elsewhere:
 ~~~poly
 fn main()
     put "Enter password: "
+    # --mask echoes the given character instead of the typed keys
     var password ustring := get --mask unicode "*"
     put "Password length: " + password.len()
 end fn
@@ -122,10 +160,11 @@ Use `--timeout` to prevent hanging:
 
 ~~~poly
 fn main()
+    # --timeout gives up after 3000 ms; match on the possible outcomes
     match get --timeout 3000
-        Ok(input), put "You typed: " + input
-        Timeout, warn "Too slow!"
-        Error(e), error "Error: " + e
+        Ok(input), put "You typed: " + input   # Input arrived in time
+        Timeout, warn "Too slow!"              # No input before the deadline
+        Error(e), error "Error: " + e          # The read itself failed
     end match
 end fn
 ~~~
@@ -141,13 +180,13 @@ fn main()
     put "Enter age: "
     var done bool := false
     var age i32 := 0
-    while not done
+    while not done                 # Keep asking until the input is valid
         var input i32 := get --as i32
         if input >= 1 and input <= 150
-            age := input
+            age := input           # Accept: record it and stop looping
             done := true
         else
-            put "Age must be between 1 and 150"
+            put "Age must be between 1 and 150"   # Reject: explain, then retry
         end if
     end while
 end fn
@@ -161,6 +200,7 @@ excluded from the result), so `--until unicode ","` on `apple,banana` yields `ap
 ~~~poly
 fn main()
     put "Enter CSV line: "
+    # --until stops at the delimiter; the delimiter itself is not returned
     var line ustring := get --until unicode ","
     put "First field: " + line
 end fn
@@ -175,6 +215,8 @@ end fn
 Poly uses `Result<T, E>` for operations that can fail:
 
 ~~~poly fragment
+# A Result has two variants: Ok carries the success value,
+# Error carries a description of what went wrong.
 enum Result<T, E>
     Ok(T)
     Error(E)
@@ -186,12 +228,14 @@ end enum
 ~~~poly
 fn main()
     fn divide(a: f64, b: f64): Result<f64, ustring>
+        # Guard clause: reject the bad case instead of dividing by zero
         if b = 0.0,
             return Error(unicode "Division by zero")
         end if
-        return Ok(a / b)
+        return Ok(a / b)           # Ok wraps the successful value
     end fn
 
+    # match handles both variants of the Result
     match divide(10.0, 2.0)
         Ok(result), put "Result: " + result.to_string()
         Error(e), error "Error: " + e
@@ -204,6 +248,7 @@ end fn
 Define specific error types for better error handling:
 
 ~~~poly
+# A dedicated error enum makes every failure mode explicit
 enum FileError
     NotFound
     PermissionDenied
@@ -212,6 +257,7 @@ end enum
 
 fn read_file(path: ustring): Result<ustring, FileError>
     if path.len() = 0,
+        # Return an Error variant to fail, Ok(...) to succeed
         return Error(FileError::NotFound)
     end if
     return Ok(unicode "File content")
@@ -224,7 +270,9 @@ Use `try` to propagate errors up the call stack:
 
 ~~~poly fragment
 fn process_file(): Result<ustring, FileError>
-    var content := try read_file(unicode "config.txt")  # Propagates error
+    # If read_file fails, `try` returns the Error from process_file
+    # immediately; otherwise content holds the unwrapped Ok value.
+    var content := try read_file(unicode "config.txt")
     return Ok(content)
 end fn
 ~~~
@@ -234,6 +282,7 @@ end fn
 Extract data from error variants:
 
 ~~~poly
+# Variants can carry data, which match arms can bind to names
 enum ValidationError
     EmptyInput
     TooShort(min: i32)
@@ -245,17 +294,19 @@ fn validate_name(name: ustring): Result<ustring, ValidationError>
         return Error(ValidationError::EmptyInput)
     end if
     if name.len() < 2,
+        # Attach the offending limit to the error itself
         return Error(ValidationError::TooShort(2))
     end if
     return Ok(name)
 end fn
 
+# Each arm names a variant; payload fields bind as local names
 fn main()
 match validate_name(unicode "John")
     Ok(valid_name), put "Valid: " + valid_name
     Error(EmptyInput), error "Name cannot be empty"
-    Error(TooShort(min)), error "Name too short, minimum " + min.to_string()
-    Error(TooLong(max)), error "Name too long, maximum " + max.to_string()
+    Error(TooShort(min)), error "Name too short, minimum " + min.to_string()   # `min` comes from the variant
+    Error(TooLong(max)), error "Name too long, maximum " + max.to_string()     # `max` comes from the variant
 end match
 end fn
 ~~~
@@ -265,9 +316,10 @@ end fn
 Use `_` to catch any error:
 
 ~~~poly fragment
+# `_` matches anything without binding it — use it as the catch-all arm
 match validate_name(input)
     Ok(name), put "Valid: " + name
-    Error(_), error "Validation failed"  # Catches any error
+    Error(_), error "Validation failed"  # Catches any error variant
 end match
 ~~~
 
@@ -280,7 +332,7 @@ end match
 
 fn main()
     put "=== User Registration ==="
-    put ""
+    put ""                          # An empty string prints just the newline
 
     # Get name (validated with a loop)
     put "Enter your name (2+ characters): "
@@ -333,7 +385,7 @@ Poly's `loop` command supports flexible iteration inspired by Sinclair QL SuperB
 
 ~~~poly
 fn main()
-    # Simple range
+    # Simple range — both endpoints are included: prints 0 through 10
     loop i 0..10
         put i
     end loop
@@ -346,17 +398,17 @@ The real power comes from combining multiple ranges and specific values:
 
 ~~~poly
 fn main()
-    # Multiple ranges and specific values
+    # Ranges and single values mix freely in one loop header
     loop i 1..3, 7, 19..21
         put i  # Iterates: 1, 2, 3, 7, 19, 20, 21
     end loop
 
-    # Specific values only
+    # A plain value list needs no ranges at all
     loop i 1, 5, 10, 100
         put i  # Iterates: 1, 5, 10, 100
     end loop
 
-    # Complex mix
+    # Each step belongs to the range it follows
     loop i 1..5, 10, 20..25 step 2, 100
         put i  # Iterates: 1, 2, 3, 4, 5, 10, 20, 22, 24, 100
     end loop
@@ -369,12 +421,12 @@ Use `step` to control the increment:
 
 ~~~poly
 fn main()
-    # Positive step
+    # Positive step counts upward through the range
     loop i 0..10 step 2
         put i  # Iterates: 0, 2, 4, 6, 8, 10
     end loop
 
-    # Negative step (counting down)
+    # Negative step counts down; start must be past the end
     loop i 10..1 step -1
         put i  # Iterates: 10, 9, 8, ..., 1
     end loop
@@ -387,13 +439,13 @@ Iterate over collections and with indices:
 
 ~~~poly
 fn main()
-    # Iterate over collection
+    # `loop x in collection` yields each element in order
     var fruits Vec<ustring> := [unicode "apple", unicode "banana", unicode "cherry"]
     loop fruit in fruits
         put fruit
     end loop
 
-    # Iterate with index
+    # .enumerate() yields (position, element) pairs, starting at 0
     loop (index, fruit) in fruits.enumerate()
         put index.to_string() + ": " + fruit
     end loop
@@ -404,14 +456,14 @@ end fn
 
 ~~~poly
 fn main()
-    # Multiplication table
+    # Multiplication table: outer loop picks the row, inner loop the column
     put "Multiplication Table (1..5)"
     loop i 1..5
-        var row ustring := ""
+        var row ustring := ""       # Build each row as one string
         loop j 1..5
-            row := row + (i * j).to_string().pad_left(4)
+            row := row + (i * j).to_string().pad_left(4)   # Align cells to 4 chars
         end loop
-        put row
+        put row                     # Print the finished row
     end loop
 end fn
 ~~~
@@ -428,5 +480,6 @@ end fn
 - **Pattern Matching**: Use `match` to handle different cases
 - **Error Propagation**: Use `try` to propagate errors
 - **Loop Ranges**: Use `loop` with ranges, multiple values, and steps
+- **Comments**: Use `#` for line comments; `//` and `/* ... */` also work
 
 Practice these concepts by building small programs that read user input, validate it, and handle errors gracefully.

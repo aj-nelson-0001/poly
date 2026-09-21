@@ -6,21 +6,21 @@ This page describes the maintained v2 preview contract. The [documentation index
 
 ~~~poly
 fn main()
-    var count i32 := 0
-    let greeting: ustring := unicode "Hello"
-    const limit := 3
+    var count i32 := 0                        # mutable; the type is written without a colon
+    let greeting: ustring := unicode "Hello"  # immutable; a let type uses a colon
+    const limit := 3                          # untyped consts infer i32
 
-    loop i 0..limit
-        count := count + 1
+    loop i 0..limit               # endpoints inclusive: runs limit + 1 times
+        count := count + 1        # := assigns; = compares
     end loop
 
-    if count = 4
+    if count = 4                  # equality uses a single =
         put greeting
     else
         warn unicode "Unexpected count"
     end if
 
-    put "count = " + count
+    put "count = " + count        # + concatenates when one side is a string
 end fn
 ~~~
 
@@ -30,12 +30,12 @@ Declarations and assignments use `:=`. Equality uses `=`. The legacy `==` spelli
 
 ~~~poly
 fn main()
-    put unicode "stdout"
-    error unicode "error message"
-    warn unicode "warning message"
-    info unicode "diagnostic message"
-    put unicode "replace" to "output.txt"
-    put unicode "append" to "output.txt" -append
+    put unicode "stdout"                       # stdout, always with a trailing newline
+    error unicode "error message"              # [ERROR] prefix, stderr
+    warn unicode "warning message"             # [WARN] prefix, stderr
+    info unicode "diagnostic message"          # [INFO] prefix, stderr
+    put unicode "replace" to "output.txt"      # write (truncate)
+    put unicode "append" to "output.txt" -append   # keep contents, add to the end
 end fn
 ~~~
 
@@ -45,13 +45,13 @@ end fn
 
 ~~~poly
 fn main()
-    var line ustring := get
-    var prompted ustring := get unicode "Name: "
-    var number i32 := get --as i32
-    var defaulted ustring := get --default unicode "anonymous"
-    var password ustring := get --mask unicode "*"
-    var field ustring := get --until unicode ","
-    var header bytes := get from "data.bin" --bytes 8
+    var line ustring := get                        # reads one line from stdin
+    var prompted ustring := get unicode "Name: "    # inline prompt
+    var number i32 := get --as i32                 # parse the line as an integer
+    var defaulted ustring := get --default unicode "anonymous"   # used on empty input
+    var password ustring := get --mask unicode "*"   # echo * instead of typed keys
+    var field ustring := get --until unicode ","   # stop at the delimiter (excluded)
+    var header bytes := get from "data.bin" --bytes 8   # read 8 bytes from a file
 end fn
 ~~~
 
@@ -61,20 +61,20 @@ end fn
 
 ~~~poly
 fn main()
-    loop i 0..5
+    loop i 0..5                    # endpoints inclusive: 0 through 5
         put i
     end loop
 
-    loop i 10..1 step -1
+    loop i 10..1 step -1           # negative step counts down
         put i
     end loop
 
     var values := [10, 20, 30]
-    loop value in values
+    loop value in values           # yields each element in order
         put value
     end loop
 
-    loop (index, value) in values.enumerate()
+    loop (index, value) in values.enumerate()   # (position, element) pairs from 0
         put index
         put value
     end loop
@@ -123,8 +123,11 @@ fn double_value(value: i32) -> i32 {
 }
 #endrust
 
+# Foreign blocks are opaque to Poly and emitted verbatim
+# for the selected target.
+
 fn main()
-    var result i32 := double_value(21)
+    var result i32 := double_value(21)   # call into the foreign definition
     put result
 end fn
 ~~~
@@ -135,7 +138,7 @@ int double_value(int value) { return value * 2; }
 #endc
 
 fn main()
-    var result i32 := double_value(21)
+    var result i32 := double_value(21)   # requires --target c
     put result
 end fn
 ~~~
@@ -145,7 +148,7 @@ Foreign blocks are emitted to the selected target at file scope. The target comp
 ## External Crates
 
 ~~~poly fragment
-dep minifb = "0.27"
+dep minifb = "0.27"   # program-scope Cargo crates for the Rust target
 dep alsa = "0.9"
 ~~~
 
@@ -191,10 +194,10 @@ lowers to concatenation on every target (C formats through `printf`).
 ## Targets
 
 ~~~bash
-poly --target rust --check program.poly
+poly --target rust --check program.poly    # parse, check, transpile, compile
 poly --target c --check program.poly
-poly --emit-rust program.poly
-poly --target c --emit-c program.poly
+poly --emit-rust program.poly              # print the generated Rust source
+poly --target c --emit-c program.poly      # print the generated C source
 ~~~
 
 Rust is the default target. The C target is a C11 orchestration subset and supports scalar declarations, calls to foreign C helpers, numeric control flow, plain stdin `get` with an optional prompt, tuples, struct literals, simple `match` patterns, and stdout/stderr output. Unsupported C features fail with a diagnostic instead of being silently rewritten.

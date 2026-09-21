@@ -6,16 +6,16 @@ This is a current v2 reference. Historical syntax belongs in the migration docum
 
 ~~~poly
 fn main()
-    var count i32 := 0
-    var name ustring := unicode "Poly"
-    let label: ustring := unicode "current"
-    const limit := 3
-    count := count + 1
+    var count i32 := 0                        # mutable; the type is written without a colon
+    var name ustring := unicode "Poly"        # inference form: var name := value
+    let label: ustring := unicode "current"   # let is immutable; its type uses a colon
+    const limit := 3                          # untyped consts infer i32
+    count := count + 1                        # := assigns; = compares
 
     if count = limit
         put name
     else
-        warn unicode "not finished"
+        warn unicode "not finished"           # writes a [WARN] line to stderr
     end if
 end fn
 ~~~
@@ -26,12 +26,12 @@ Use `:=` for initialization and assignment. Use `=` for equality. `==` is reject
 
 ~~~poly
 fn main()
-    put unicode "stdout"
-    error unicode "error"
-    warn unicode "warning"
-    info unicode "diagnostic"
-    put unicode "replace" to "output.txt"
-    put unicode "append" to "output.txt" -append
+    put unicode "stdout"                       # stdout, always with a trailing newline
+    error unicode "error"                      # [ERROR] prefix, stderr
+    warn unicode "warning"                     # [WARN] prefix, stderr
+    info unicode "diagnostic"                  # [INFO] prefix, stderr
+    put unicode "replace" to "output.txt"      # write (truncate)
+    put unicode "append" to "output.txt" -append   # keep contents, add to the end
 end fn
 ~~~
 
@@ -41,13 +41,13 @@ end fn
 
 ~~~poly
 fn main()
-    var line ustring := get
-    var prompted ustring := get unicode "Name: "
-    var number i32 := get --as i32
-    var fallback ustring := get --default unicode "anonymous"
-    var hidden ustring := get --mask unicode "*"
-    var field ustring := get --until unicode ","
-    var header bytes := get from "input.bin" --bytes 8
+    var line ustring := get                        # reads one line from stdin
+    var prompted ustring := get unicode "Name: "    # inline prompt
+    var number i32 := get --as i32                 # parse the line as an integer
+    var fallback ustring := get --default unicode "anonymous"   # used on empty input
+    var hidden ustring := get --mask unicode "*"   # echo * instead of typed keys
+    var field ustring := get --until unicode ","   # stop at the delimiter (excluded)
+    var header bytes := get from "input.bin" --bytes 8   # read 8 bytes from a file
 end fn
 ~~~
 
@@ -57,16 +57,16 @@ end fn
 
 ~~~poly
 fn main()
-    loop i 0..5
+    loop i 0..5                    # endpoints inclusive: 0 through 5
         put i
     end loop
 
-    loop i 10..1 step -1
+    loop i 10..1 step -1           # negative step counts down
         put i
     end loop
 
     var values := [10, 20, 30]
-    loop value in values
+    loop value in values           # yields each element in order
         put value
     end loop
 end fn
@@ -89,8 +89,11 @@ s := s.bump()          # methods take and return self; reassign the result
 fn double_value(value: i32) -> i32 { value * 2 }
 #endrust
 
+# Foreign blocks are opaque to Poly and emitted verbatim
+# for the selected target.
+
 fn main()
-    var result i32 := double_value(21)
+    var result i32 := double_value(21)   # call into the foreign definition
     put result
 end fn
 ~~~
@@ -101,7 +104,7 @@ int double_value(int value) { return value * 2; }
 #endc
 
 fn main()
-    var result i32 := double_value(21)
+    var result i32 := double_value(21)   # requires --target c
     put result
 end fn
 ~~~
@@ -111,12 +114,12 @@ Foreign blocks must be at program scope and are emitted verbatim for the selecte
 ## CLI
 
 ~~~bash
-poly --target rust --check program.poly
+poly --target rust --check program.poly    # parse, check, transpile, compile
 poly --target c --check program.poly
-poly --emit-rust program.poly
-poly --target c --emit-c program.poly
-poly --tokens program.poly
-poly --ast program.poly
+poly --emit-rust program.poly              # print the generated Rust source
+poly --target c --emit-c program.poly      # print the generated C source
+poly --tokens program.poly                 # show lexer tokens
+poly --ast program.poly                    # show the parsed AST
 ~~~
 
 Rust is the default target. `--check` runs parsing, semantic checking, transpilation, and native compilation for the selected target.
@@ -127,3 +130,4 @@ Rust is the default target. `--check` runs parsing, semantic checking, transpila
 - Keep `#rust` and `#c` blocks at top level.
 - Use `put value to "file" -append`, not legacy redirection operators.
 - Move unsupported target-specific work into a foreign helper and call it from Poly.
+- Annotate Poly code with `#` comments; `//` and `/* ... */` are also accepted.

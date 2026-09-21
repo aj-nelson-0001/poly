@@ -13,6 +13,7 @@ Poly 2.0.0-preview.14 is the current implementation baseline. The files below ar
 | [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md) | C11 backend scope and `#c` block behavior |
 | [POLY_JS_BLOCKS.md](POLY_JS_BLOCKS.md) | JavaScript backend scope and `#js` block behavior |
 | [POLY_API_REFERENCE.md](POLY_API_REFERENCE.md) | Current I/O, builtin, and runtime API reference |
+| [POLY_TUTORIAL.md](POLY_TUTORIAL.md) | Beginner tutorial covering I/O, error handling, and loop ranges |
 | [POLY_QUICK_REFERENCE.md](POLY_QUICK_REFERENCE.md) | Current syntax and I/O quick reference |
 | [POLY_CHEATSHEET.md](POLY_CHEATSHEET.md) | Compact v2 syntax and target cheat sheet |
 | [POLY_TROUBLESHOOTING_GUIDE.md](POLY_TROUBLESHOOTING_GUIDE.md) | Current error, input/output, and target troubleshooting |
@@ -51,7 +52,6 @@ Historical documents include:
 - `POLY_LANGUAGE_SPECIFICATION_EXPANDED.md`
 - `THE_POLY_PROGRAMMING_LANGUAGE.md`
 - `POLY_COMPREHENSIVE_GUIDE.md`
-- `POLY_TUTORIAL.md`
 - `POLY_BEST_PRACTICES.md`
 - `POLY_PERFORMANCE_GUIDE.md`
 - `POLY_SECURITY_GUIDE.md`

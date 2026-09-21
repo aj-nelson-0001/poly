@@ -1,6 +1,6 @@
 # Poly JavaScript Backend
 
-**Status:** Current for Poly 2.0.0-preview.12
+**Status:** Current for Poly 2.0.0-preview.14
 
 This document describes the implemented JavaScript target. It is not a proposal for a future general-purpose JS translator.
 

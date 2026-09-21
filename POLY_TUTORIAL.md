@@ -1,6 +1,6 @@
 # Poly Language Tutorial: I/O and Error Handling
 
-> **Historical tutorial:** This tutorial targets the v1 syntax. It is retained for migration context and is not normative for Poly 2.0.0-preview.12.
+> **Historical tutorial:** This tutorial targets the v1 syntax. It is retained for migration context and is not normative for Poly 2.0.0-preview.14.
 
 ## Introduction
 

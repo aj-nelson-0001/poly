@@ -1,6 +1,6 @@
 # Poly Language Profiling Guide
 
-> **Historical guide:** Profiling examples target earlier compiler workflows and are not normative for Poly 2.0.0-preview.12.
+> **Historical guide:** Profiling examples target earlier compiler workflows and are not normative for Poly 2.0.0-preview.14.
 
 ## Overview
 

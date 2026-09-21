@@ -1,6 +1,6 @@
 # Poly Language Grammar v2 Preview
 
-**Status:** Current preview grammar for Poly 2.0.0-preview.12
+**Status:** Current preview grammar for Poly 2.0.0-preview.14
 
 This document describes the syntax accepted by the current lexer and parser. It is intentionally a compact grammar, not a promise that every parsed construct is supported by every target backend.
 

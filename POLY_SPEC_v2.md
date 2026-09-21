@@ -6,14 +6,14 @@
 
 ## 1. Philosophy
 
-Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with an assembly-inspired syntax. For everything else — generics, async, closures, traits, pattern matching — users provide definitions in foreign language blocks (`#rust`, `#c`, `#cpp`, etc.).
+Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with an assembly-inspired syntax. For everything else — generics, async, closures, traits, pattern matching — users provide definitions in foreign language blocks (`#rust`, `#c`, `#asm`, `#js`).
 
 **Core principles:**
 1. Poly provides the orchestration. Foreign blocks provide the definitions.
 2. One Poly source file produces one complete source file in the target language.
 3. No runtime. Poly adds zero overhead — it's just syntax sugar.
 4. Explicit is better than implicit.
-5. Language-agnostic: Poly can target Rust, C, C++, or others.
+5. Language-agnostic: Poly currently targets Rust, C, assembly, and JavaScript; other backends (such as C++) are reserved for future design.
 
 ---
 
@@ -78,7 +78,11 @@ struct Config {
 - Multiple blocks for the selected language are allowed; they are emitted in order.
 - `#rust` is selected by `--target rust`; `#c` is selected by `--target c`.
 - `#cpp` is reserved for a future backend; any source containing a `#cpp` block is rejected with an explicit unsupported-backend diagnostic.
-- `extern rust fn ...` and `extern c fn ...` declarations are optional top-level interface contracts for foreign calls. They are checked by Poly and are not emitted.
+- `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, and
+  `extern js fn ...` declarations are optional top-level interface contracts
+  for foreign calls. They are checked by Poly and are not emitted.
+- `dep name = "version"` declarations are program-scope Cargo crate
+  dependencies for the Rust target (see below).
 
 ### External crate dependencies
 
@@ -220,7 +224,7 @@ and suggests the explicit `name := name + value` form.
 | `i16` / `u16` | `i16` / `u16` | 16-bit integer |
 | `i32` / `u32` | `i32` / `u32` | 32-bit integer |
 | `i64` / `u64` | `i64` / `u64` | 64-bit integer |
-| `i128` / `u128` | `i128` / `u128` | 128-bit integer |
+| `i128` / `u128` | `i128` / `u128` | 128-bit integer (Rust target only) |
 | `f32` | `f32` | 32-bit float |
 | `f64` | `f64` | 64-bit float |
 | `isize` / `usize` | `isize` / `usize` | Platform integer |

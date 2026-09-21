@@ -55,22 +55,20 @@ the emission was simply wrong.
 constant exceeds i32; loop-step induction arithmetic takes the same 64-bit
 path. Pinned by `out_of_range_immediates_use_movabs`.
 
-### 14. ⚠️ KNOWN-OPEN — Integer overflow semantics are target-defined
+### 14. ✅ RESOLVED — Integer overflow semantics are now defined per-target
 
-Poly has no overflow-checked semantics; each backend inherits its host:
+The language decision was made: default-width (`i32`) arithmetic is
+two's-complement wrap on all four backends — `100000 * 100000` is
+`1410065408` everywhere. Division and modulo by `-1` is guarded on both
+widths (`INT_MIN / -1` is `INT_MIN`, mod is `0`; no SIGFPE on asm).
+Declared-`i64` arithmetic stays exact 64-bit on rust/C/asm; JS is exact
+to its documented 2^53 double limit. Big integer literals (outside i32)
+are i64-class on every target.
 
-| program | rust (debug) | c | js | asm |
-|---|---|---|---|---|
-| `100000 * 100000` | compile error (deny) | 1410065408 (wrap) | 10000000000 (double) | 10000000000 (i64) |
-| `2147483647 + 1` | compile error | -2147483648 | 2147483648 | 2147483648 |
-
-This needs a language decision: define Poly overflow (wrap? panic? i64
-arithmetic?) and enforce it in every backend. Until then the fuzzer
-bounds multiplication to keep programs in defined territory, and
-`cargo build` (debug) rejects constant-folded overflows — note the
-**check-to-emit gap**: `poly --check` can pass a program whose optimized
-emission then fails rustc's `arithmetic_overflow` deny (observed on
-fuzz seed 88: `v1 * v1` folded to `196599 * 196599`).
+The fuzzer now exercises overflow paths directly (previously it bounded
+operands to stay in defined territory). The `poly --check` to `rustc`
+emission gap is closed: the optimizer uses `checked_*` and refuses to fold
+overflowing constants, so `--check` and `--emit-rust` agree.
 
 ### 15. ✅ verified clean — areas probed with no divergence
 

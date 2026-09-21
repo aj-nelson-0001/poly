@@ -4,6 +4,28 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- **Release binaries are smoke-tested on their native platform.** Each
+  release build compiles and runs a generated Rust program and checks
+  its output before the artifact can be published.
+- **The playground wasm transpiler ships as a release asset.**
+  `release.yml` builds and smoke-tests `playground/poly.wasm` and
+  publishes it as `poly-playground-<version>.wasm`, checksummed alongside
+  the binaries.
+- **Defined integer-overflow semantics on every target.** Default-width
+  (`i32`) arithmetic is now two's-complement wrap on all four backends —
+  `100000 * 100000` is `1410065408` everywhere — and division/modulo by
+  `-1` is guarded on both widths (`INT_MIN / -1` is `INT_MIN`, mod is `0`;
+  the asm target previously died of SIGFPE). Declared-`i64` arithmetic
+  stays exact 64-bit on rust/C/asm; the JS target is exact to its
+  documented 2^53 double limit. Big integer literals (outside i32) are
+  i64-class on every target.
+- **`scripts/fuzz_backends.py`** — a seed-driven differential fuzzer that
+  generates random Poly programs (call DAGs, same-fn calls in one
+  expression, bounded arithmetic) and runs them through all four targets,
+  failing on any output divergence.
+
 ### Changed
 
 - **Clearer diagnostic for a nested `if` directly after `else`.**
@@ -13,6 +35,47 @@ All notable changes to the Poly language compiler will be documented in this fil
   outermost level, the parser now reports it at the stray terminator
   with a suggestion to merge the condition into the chain, instead of a
   confusing "Expected Fn/While, got If" error at the next construct.
+- **Rust target: inference-agnostic wrap lowering.** Wrapping method calls
+  (`wrapping_add`, …) are emitted only when both operands are concretely
+  integer in the emitted Rust (i32 literals, registered narrow-int
+  variables); inferred-numeric sites (loop variables, match pattern
+  bindings, untyped closures) keep plain operators, which rustc resolves
+  contextually — including `f64` enum-payload arithmetic.
+- **C target: 64-bit values print through `<inttypes.h>`.** Generated C
+  now includes `<inttypes.h>` and emits `%` `PRId64` / `%` `PRIu64` for
+  `i64`/`u64` puts, casts 64-bit literals to `(int64_t)`, and widens
+  64-bit arithmetic with `(int64_t)` casts instead of `long long`. A
+  hardcoded `%lld`/`%llu` mismatched the actual `int64_t`/`uint64_t` type
+  on LP64 platforms (Linux/macOS, where it is `long int`), so `put` of
+  any 64-bit value failed `--check` under `-Werror=format`.
+
+### Fixed
+
+- **C target: guarded `mod` executed division.** The INT_MIN guard's
+  non-trap branch hardcoded `/`, so any guarded `mod` whose dividend was
+  negative computed the quotient instead of the remainder
+  (`(0-7) mod 2` printed `-3`). The operator is now interpolated for both
+  `div` and `mod`.
+- **asm target: 32-bit shift register class.** Narrow shifts emitted
+  `sall/sarl` with the 64-bit register name, failing to assemble.
+- **asm target: declared-`i64` variables keep 64-bit arithmetic.** The
+  backend never recorded `i64` declarations, so loop-heavy i64 code
+  (e.g. `tests/stress_loops.poly`) silently truncated to 32 bits.
+- **JS target: booleans print as `true`/`false` again.** The 32-bit
+  masking initially applied to comparison operators, turning `a != b`
+  into the number 0/1.
+- **Rust target: assigned parameters now lower to `mut` bindings.**
+  Poly parameters have value semantics, but the Rust signature kept them
+  immutable, so `x := x + 1` in a parameter failed with rustc E0384 while
+  C/JS/asm accepted it.
+- **asm target: call results use a fresh temporary slot per call.**
+  Two calls to the same function in one expression (`f(1) + f(2)`,
+  recursive `fib`) shared one name-keyed slot, so the second call
+  clobbered the first's value.
+- **asm target: large integer constants assemble.** Constants outside the
+  sign-extended 32-bit immediate range (e.g. `0 - 2147483648`) now emit
+  `movabsq` (register) or a `pushq`/`popq` scratch sequence (stack) and
+  loop-step induction takes the 64-bit path.
 
 ## [2.0.0-preview.14] - 2026-09-20
 
@@ -73,94 +136,6 @@ All notable changes to the Poly language compiler will be documented in this fil
   contract rows and the troubleshooting guide, and the stale v1.5
   `compiler/grammar/poly.bnf` draft is marked historical pointing at
   POLY_GRAMMAR.md.
-
-## [Unreleased]
-
-### Added
-
-- **Release binaries are smoke-tested on their native platform.** Each
-  release build compiles and runs a generated Rust program and checks
-  its output before the artifact can be published.
-- **The playground wasm transpiler ships as a release asset.**
-  `release.yml` builds and smoke-tests `playground/poly.wasm` and
-  publishes it as `poly-playground-<version>.wasm`, checksummed alongside
-  the binaries.
-
-### Added
-
-- **Defined integer-overflow semantics on every target.** Default-width
-  (`i32`) arithmetic is now two's-complement wrap on all four backends —
-  `100000 * 100000` is `1410065408` everywhere — and division/modulo by
-  `-1` is guarded on both widths (`INT_MIN / -1` is `INT_MIN`, mod is `0`;
-  the asm target previously died of SIGFPE). Declared-`i64` arithmetic
-  stays exact 64-bit on rust/C/asm; the JS target is exact to its
-  documented 2^53 double limit. Big integer literals (outside i32) are
-  i64-class on every target.
-- **`scripts/fuzz_backends.py`** — a seed-driven differential fuzzer that
-  generates random Poly programs (call DAGs, same-fn calls in one
-  expression, bounded arithmetic) and runs them through all four targets,
-  failing on any output divergence.
-
-### Changed
-
-- **Rust target: inference-agnostic wrap lowering.** Wrapping method calls
-  (`wrapping_add`, …) are emitted only when both operands are concretely
-  integer in the emitted Rust (i32 literals, registered narrow-int
-  variables); inferred-numeric sites (loop variables, match pattern
-  bindings, untyped closures) keep plain operators, which rustc resolves
-  contextually — including `f64` enum-payload arithmetic.
-
-### Fixed
-
-- **C target: guarded `mod` executed division.** The INT_MIN guard's
-  non-trap branch hardcoded `/`, so any guarded `mod` whose dividend was
-  negative computed the quotient instead of the remainder
-  (`(0-7) mod 2` printed `-3`). The operator is now interpolated for both
-  `div` and `mod`.
-- **asm target: 32-bit shift register class.** Narrow shifts emitted
-  `sall/sarl` with the 64-bit register name, failing to assemble.
-- **asm target: declared-`i64` variables keep 64-bit arithmetic.** The
-  backend never recorded `i64` declarations, so loop-heavy i64 code
-  (e.g. `tests/stress_loops.poly`) silently truncated to 32 bits.
-- **JS target: booleans print as `true`/`false` again.** The 32-bit
-  masking initially applied to comparison operators, turning `a != b`
-  into the number 0/1.
-- **Rust target: assigned parameters now lower to `mut` bindings.**
-  Poly parameters have value semantics, but the Rust signature kept them
-  immutable, so `x := x + 1` in a parameter failed with rustc E0384 while
-  C/JS/asm accepted it.
-- **asm target: call results use a fresh temporary slot per call.**
-  Two calls to the same function in one expression (`f(1) + f(2)`,
-  recursive `fib`) shared one name-keyed slot, so the second call
-  clobbered the first's value.
-- **asm target: large integer constants assemble.** Constants outside the
-  sign-extended 32-bit immediate range (e.g. `0 - 2147483648`) now emit
-  `movabsq` (register) or a `pushq`/`popq` scratch sequence (stack) and
-  loop-step induction takes the 64-bit path.
-- **C target: prompt-less `get` compiles.** The generated C called
-  `__poly_get_line()` with zero arguments against a one-argument helper,
-  so `var line := get` failed at C compile time; the call now passes an
-  explicit empty string literal (the helper already treats an empty
-  prompt as "no prompt").
-
-### Documentation
-
-- **Backend-claim audit.** Every disputed documentation claim was verified
-  empirically (probes compiled through rust/c/asm/js) and corrected:
-  the C backend supports plain stdin `get` with an optional prompt;
-  the JS backend supports structs and tuples; string interpolation works
-  on all four targets; a literal zero `step` is a compile-time error
-  (only runtime zero steps terminate); `..=` inclusive range loops are
-  part of the grammar; retired `+=`/`-=` were removed from the SPEC
-  operator table. Stale version stamps and status headers were refreshed
-  to preview.12, the documentation index gained the missing `--target js`
-  contract rows and the troubleshooting guide, and the stale v1.5
-  `compiler/grammar/poly.bnf` draft is marked historical pointing at
-  POLY_GRAMMAR.md.
-- **`doc_claim_guards.rs`** — new transpiler integration test that pins
-  each corrected per-backend claim (input, structs, tuples, enums,
-  closures, vectors, file I/O, loops) end-to-end across all four targets,
-  so the support-matrix contract cannot drift silently again.
 
 ## [2.0.0-preview.12] - 2026-09-19
 

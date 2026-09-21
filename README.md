@@ -50,7 +50,12 @@ put result
 
 Foreign blocks provide target-language definitions at file scope. Poly does not parse their bodies; the selected native compiler validates them. Poly owns the generated entry point (`fn main()` for Rust or `int main(void)` for C).
 
-This model currently supports `#rust` for Rust, `#c` for C, and `#asm` for Linux x86-64 assembly. Optional `extern rust fn ...`, `extern c fn ...`, and `extern asm fn ...` declarations add Poly-side interface checks for foreign calls. `#cpp` syntax is reserved and rejected until a C++ backend is designed.
+This model currently supports `#rust` for Rust, `#c` for C, `#asm` for
+Linux x86-64 assembly, and `#js` for JavaScript. Optional
+`extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, and
+`extern js fn ...` declarations add Poly-side interface checks for foreign
+calls. `#cpp` syntax is reserved and rejected until a C++ backend is
+designed.
 
 See [POLY_SPEC_v2.md](POLY_SPEC_v2.md) for the full specification, [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the frozen target contract, and [POLY_ROADMAP_v2.md](POLY_ROADMAP_v2.md) for the implementation plan.
 
@@ -402,6 +407,8 @@ contract.
 - **Closures**: `|params| expr` or `|params| ... end`
 - **Function types**: `fn apply(f: |x: i32| i32, v: i32): i32` — closures as
   typed parameters; `fn make_adder(n: i32): |x: i32| i32` returns a closure
+  that captures locals (closures in return position automatically capture with `move` semantics)
+- **Visibility**: `pub` is accepted before any declaration but currently has no effect — all declarations are visible within the file
 - **Rust-oriented higher-order methods**: vector iterator chains are supported by the Rust backend; use `#c` helpers for C-specific collection algorithms
 - **If/Else**: `if cond ... else ... end if`
 - **While**: `while cond ... end while`
@@ -444,6 +451,8 @@ Poly/
 ├── POLY_DOCUMENTATION_STYLE_GUIDE.md  # Documentation and example conventions
 ├── POLY_GRAMMAR.md                    # Compact v2 grammar accepted by the parser
 ├── POLY_SPEC_v2.md                    # Current v2 language contract
+├── POLY_V2_SUPPORT_MATRIX.md          # Frozen per-target feature contract
+├── POLY_V2_PREVIEW_RELEASE_NOTES.md   # Release notes for preview series
 ├── examples/
 │   ├── prime_numbers.poly             # Loop ranges, basic functions
 │   ├── interactive_menu.poly          # Menus, match, get flags
@@ -453,24 +462,31 @@ Poly/
 ├── tests/
 │   ├── output_tests.poly              # put command tests
 │   ├── input_tests.poly               # get command tests
-│   └── comprehensive_io_tests.poly    # Combined I/O tests
+│   ├── comprehensive_io_tests.poly    # Combined I/O tests
+│   ├── c_target_tests.poly            # C backend tests
+│   ├── asm_target_tests.poly          # Assembly backend tests
+│   ├── js_target_tests.poly           # JavaScript backend tests
+│   ├── diff_*.poly                    # Differential cross-target tests
+│   └── stress_*.poly                  # Stress/edge-case tests
+├── benches/                           # Performance benchmarks
+├── scripts/                           # Build/CI helper scripts
 ├── vscode/                            # VS Code extension (grammar + LSP client)
-└── compiler/                          # Rust transpiler (in progress)
+├── playground/                        # Browser-based transpiler (WASM)
+├── tetris/                            # Tetris example project
+└── compiler/                          # Rust transpiler workspace
     ├── Cargo.toml                     # Workspace root
-    ├── crates/
-    │   ├── poly-lexer/                # Tokenizer
-    │   ├── poly-parser/               # AST builder with source spans
-    │   ├── poly-types/                # Type system
-    │   ├── poly-intermediate-representation/  # Intermediate representation + optimizer
-    │   ├── poly-transpiler/           # Rust code generator (routes through the shared IR pipeline)
-│   ├── poly-wasm/                 # WebAssembly bindings for the playground
-│   ├── poly-lsp/                  # Dependency-free JSON-RPC language server
-│   ├── poly-c-codegen/            # C11 backend (`--target c`)
-│   ├── poly-asm-codegen/          # x86-64 assembly backend (`--target asm`)
-│   ├── poly-js-codegen/           # JavaScript backend (`--target js`)
-│   └── poly-cli/                  # Command-line interface
-    └── grammar/
-        └── poly.bnf                   # Historical v1.5 BNF draft (see POLY_GRAMMAR.md)
+    └── crates/
+        ├── poly-lexer/                # Tokenizer
+        ├── poly-parser/               # AST builder with source spans
+        ├── poly-types/                # Reusable type system core
+        ├── poly-intermediate-representation/  # IR + optimizer + Rust codegen
+        ├── poly-transpiler/           # Semantic checker + target dispatch
+        ├── poly-c-codegen/            # C11 backend (--target c)
+        ├── poly-asm-codegen/          # x86-64 assembly backend (--target asm)
+        ├── poly-js-codegen/           # JavaScript backend (--target js)
+        ├── poly-wasm/                 # WebAssembly bindings for the playground
+        ├── poly-lsp/                  # Dependency-free JSON-RPC language server
+        └── poly-cli/                  # Command-line interface
 ~~~
 
 ---
@@ -654,11 +670,23 @@ Use `poly --emit-rust file.poly` when you want the generated Rust on stdout. Fla
 
 ## Contributing
 
+### Getting Started
+
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Clone your fork: `git clone https://github.com/aj-nelson-0001/poly.git && cd poly`
+3. Create a feature branch: `git checkout -b feature/amazing-feature`
+4. Build and test: `cd compiler && cargo test`
+5. Commit your changes
+6. Push to the branch: `git push origin feature/amazing-feature`
+7. Open a Pull Request
+
+### Development Conventions
+
+- **Testing:** Every new language construct or backend change should include tests. Parser tests go in `poly-parser/src/parser.rs` (unit tests at bottom of file). Cross-target correctness is verified by differential tests in `tests/diff_*.poly` — if a change affects code generation, add or update a differential test that runs through all four targets (rust/c/asm/js).
+- **Backends:** The Rust target (`--target rust`) is the reference implementation. When adding a feature, implement it for Rust first, then C/asm/JS. Each backend lives in its own crate (`poly-c-codegen`, `poly-asm-codegen`, `poly-js-codegen`).
+- **Checker:** The semantic checker in `poly-transpiler/src/checker/` (module split across `mod.rs`, `type_checker.rs`, and `helpers.rs`) validates types, scoping, and foreign-call contracts. New builtins or method calls need checker support before codegen.
+- **Documentation:** Documentation examples in `*.md` files are audited by CI (`scripts/check_poly_examples.py`). If you change syntax or semantics, update the relevant guides and ensure the fenced Poly blocks still parse and type-check.
+- **Style:** Follow existing code patterns. The codebase uses `thiserror` for error types and avoids external dependencies beyond the workspace crates.
 
 ---
 

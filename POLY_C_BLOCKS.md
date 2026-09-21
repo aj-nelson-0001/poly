@@ -1,6 +1,6 @@
 # Poly C11 Backend
 
-**Status:** Current for Poly 2.0.0-preview.12
+**Status:** Current for Poly 2.0.0-preview.14
 
 This document describes the implemented C target. It is not a proposal for a future general-purpose C translator.
 
@@ -59,7 +59,7 @@ A C target source must keep unsupported operations in a `#c` helper and call tha
 | `bool` | `bool` |
 | `i8`/`u8` | `int8_t`/`uint8_t` |
 | `i16`/`u16` | `int16_t`/`uint16_t` |
-| `i32`/`u32` | `int32_t` |
+| `i32`/`u32` | `int32_t`/`uint32_t` |
 | `i64`/`u64` | `int64_t`/`uint64_t` |
 | `f32`/`f64` | `float`/`double` |
 | `char`/`uchar` | `char` |

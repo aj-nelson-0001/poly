@@ -477,7 +477,9 @@ corollaries worth knowing:
 `spawn` and `step` are reserved words and cannot be used as identifiers or
 method names (`spawn expr` launches `expr` as an async task — a Tokio task on
 the Rust target — and `step` introduces the loop-range step clause). Rename
-such methods (for example `spawn_piece`).
+such methods (for example `spawn_piece`). `validate` is likewise reserved for
+the parser-only `with validate` compatibility clause and cannot name
+variables, functions, or methods.
 
 ---
 

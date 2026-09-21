@@ -173,7 +173,9 @@ end fn
 
 > **Note:** The `with validate` clause is a parser-only compatibility form and
 > is not part of the maintained runnable v2 API — the closure is never executed
-> at runtime (see the v2 spec). Validate input with a loop instead:
+> at runtime (see the v2 spec). The word `validate` is reserved for it and
+> cannot name variables, functions, or methods. Validate input with a loop
+> instead:
 
 ~~~poly
 fn main()
@@ -384,9 +386,10 @@ end fn
 - **Expression form**: arms are single expressions and a `_` arm is
   mandatory. Use it wherever a value is expected — declarations,
   arguments, returns.
-- Variants with **named** payload fields (like `TooShort(min: i32)` from
-  Part 3) are matched through `Result` error arms; for a plain enum match,
-  prefer tuple payloads as shown above.
+- Payloads bind **positionally in declaration order**, whatever the payload
+  style: tuple payloads (`Rect(w, h)`), named fields (`Level(n: i32)`, as in
+  Part 3's error variants), or `Result`'s `Ok(v)` / `Error(e)` arms. The
+  binder name is yours — `Level(x)` binds the declared field `n` to `x`.
 
 ---
 

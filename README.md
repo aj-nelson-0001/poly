@@ -84,6 +84,20 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.15
+
+**Documentation that teaches, claims that hold:** POLY_TUTORIAL.md is now
+current documentation — every complete example verified end-to-end against
+the compiler, with inline comments throughout the tutorial, quick
+reference, and cheatsheet explaining declarations, I/O flags, loops,
+foreign blocks, and CLI usage. The tutorial grew structs/methods, match
+expressions/enum payloads, and async parts. One real compiler fix landed:
+named-field enum payloads (`TooShort(min: i32)`) failed every match with
+rustc E0164; struct-variant patterns now emit correctly on rust and asm.
+New `doc_claim_guards` cases pin comment styles across all four backends,
+the async surface (rust-only, with per-target rejection wording), and the
+payload fix.
+
 ### What's New in 2.0.0-preview.14
 
 **Releases you can verify, on every platform:** the release workflow now

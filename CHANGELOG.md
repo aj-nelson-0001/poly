@@ -53,6 +53,16 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Fixed
 
+- **Rust target: named-field enum payloads failed every match.** A variant
+  declared with named fields (`TooShort(min: i32)`) compiled as a Rust
+  struct variant, but match arms rendered tuple patterns, so any `match`
+  touching the variant failed rustc with E0164 ("expected tuple struct or
+  tuple variant, found struct variant"). Match emission now renders
+  `{ field: binding }` patterns for struct variants, in both unqualified
+  (`Error(TooShort(min))`) and qualified (`Enum::Variant(x)`) arm forms;
+  payload fields bind positionally in declaration order with a
+  binder-chosen name. Pinned by regression cases in `doc_claim_guards.rs`
+  (rust/asm accept; C and JS keep their existing payload rejections).
 - **C target: guarded `mod` executed division.** The INT_MIN guard's
   non-trap branch hardcoded `/`, so any guarded `mod` whose dividend was
   negative computed the quotient instead of the remainder

@@ -141,6 +141,23 @@ const CASES: &[Case] = &[
         "async fn compute(x: i32): i32\n    delay(10).await\n    return x * x\nend fn\n\nasync fn main()\n    var a := compute(3).await\n    spawn compute(5)\nend fn\n",
         Expect::RustOnly,
     ),
+    // --- named-field enum payload matching (regression: E0164) ------------
+    // Variants declared with named fields compile as Rust struct variants,
+    // but matches used to render tuple patterns, failing rustc with E0164
+    // ("expected tuple struct or tuple variant, found struct variant").
+    // Both unqualified and qualified arms must emit `{ field: binding }`.
+    Case::with_output(
+        "named-field payload match, unqualified arm",
+        "enum Badge\n    Level(n: i32)\n    Stars(count: i32)\nend enum\n\nfn main()\n    var b := Badge::Level(3)\n    match b\n        Level(n), put \"level \" + n.to_string()\n        Stars(count), put \"stars \" + count.to_string()\n        _, put \"none\"\n    end match\nend fn\n",
+        Expect::RustAsm,
+        ("rust", "Badge::Level { n: n }"),
+    ),
+    Case::with_output(
+        "named-field payload match, qualified arm",
+        "enum Badge\n    Level(n: i32)\n    None\nend enum\n\nfn main()\n    var b := Badge::Level(3)\n    match b\n        Badge::Level(n), put \"level \" + n.to_string()\n        _, put \"none\"\n    end match\nend fn\n",
+        Expect::RustAsm,
+        ("rust", "Badge::Level { n: n }"),
+    ),
     // File I/O: redirects and file input are Rust-target features; C, asm,
     // and JS reject them with guidance.
     Case::accepted(

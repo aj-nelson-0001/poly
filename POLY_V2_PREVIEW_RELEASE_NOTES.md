@@ -2,7 +2,21 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.14 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.15 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.15
+
+- **A tutorial that is true and teaches:** POLY_TUTORIAL.md is current
+  documentation — every complete example verified against the compiler,
+  inline comments throughout, and new parts covering structs and methods,
+  match expressions and enum payloads, and async.
+- **Named-field enum payloads match again:** variants declared with named
+  fields previously failed every match with rustc E0164 on the Rust
+  target; struct-variant patterns now emit correctly (rust and asm).
+- **Docs and backends stay pinned together:** `doc_claim_guards` now
+  covers `#`/`//`/`/* */` comment styles on all four backends, the
+  rust-only async surface with per-target rejection wording, and the
+  payload-matching fix.
 
 ## What's New in 2.0.0-preview.14
 

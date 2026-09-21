@@ -3447,29 +3447,56 @@ impl IntermediateRepresentationCodeGen {
         };
         let mut patterns = Vec::new();
         let mut guards = Vec::new();
+        // Struct-field variants match with `{ field: pattern }` syntax; a
+        // tuple-pattern rendering there would fail rustc with E0164.
+        let struct_fields = resolved_enum.as_ref().and_then(|name| {
+            self.enum_struct_fields
+                .get(&(name.clone(), variant.clone()))
+                .cloned()
+        });
         for (index, child) in inner.iter().enumerate() {
             let recursive = resolved_enum.as_ref().is_some_and(|name| {
                 self.recursive_enum_fields
                     .contains(&(name.clone(), variant.clone(), index))
             });
-            if recursive
+            let rendered = if recursive
                 && matches!(
                     child,
                     Pattern::Enum { .. } | Pattern::Literal(_) | Pattern::NamedFields { .. }
-                )
-            {
+                ) {
                 let binding = format!("__poly_box_{}", index);
-                patterns.push(binding.clone());
                 guards.push(format!(
                     "matches!(&*{}, {})",
                     binding,
                     self.gen_guard_pattern(child)
                 ));
+                Some(binding)
             } else {
-                patterns.push(self.gen_pattern(child));
+                None
+            };
+            if let Some(struct_fields) = &struct_fields {
+                // Match the declared field name to this payload position.
+                let field = struct_fields
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| format!("__poly_field_{}", index));
+                patterns.push(format!(
+                    "{}: {}",
+                    field,
+                    rendered.unwrap_or_else(|| self.gen_pattern(child))
+                ));
+            } else {
+                patterns.push(rendered.unwrap_or_else(|| self.gen_pattern(child)));
             }
         }
-        (format!("{}({})", qualified, patterns.join(", ")), guards)
+        if struct_fields.is_some() {
+            (
+                format!("{} {{ {} }}", qualified, patterns.join(", ")),
+                guards,
+            )
+        } else {
+            (format!("{}({})", qualified, patterns.join(", ")), guards)
+        }
     }
 
     /// Render a pattern for use inside a `matches!` guard on a boxed field.

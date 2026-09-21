@@ -1,7 +1,53 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-20.
+Last updated: 2026-09-21.
+
+## Doc-and-code audit round: C 64-bit printf fix, JS i128 rejection, checker module split (2026-09-21)
+
+Full review of the maintained docs plus a working-tree dead-code cleanup and
+the `checker.rs` → `checker/` module split. Three real defects found and
+fixed, plus a batch of documentation corrections:
+
+- **C backend: every 64-bit `put` failed `--check` on LP64 platforms**
+  (Linux/macOS). `printf_parts` emitted a hardcoded `%lld`/`%llu` for
+  `i64`/`u64` values, but on LP64 `int64_t`/`uint64_t` are `long int`/`unsigned
+  long`, so `-Werror=format` rejected the generated C (e.g. the nightly
+  `stress_loops.poly` pattern: `put acc` on an i64 accumulator).
+  Generated C now includes `<inttypes.h>` and emits `%" PRId64`/`%" PRIu64`,
+  big integer literals render as `(int64_t)(…LL)`, and 64-bit arithmetic plus
+  the I64_MIN div/mod guard cast through `(int64_t)` instead of `long long` so
+  the operand type always matches the spelled format macro. 7 C snapshots
+  regenerated (one added include line each).
+- **JS backend: `i128`/`u128` silently miscompiled.** A declared 128-bit
+  variable emitted a plain JS number (silent precision loss past 2^53), and a
+  128-bit function parameter compiled with no complaint — violating the
+  "reject rather than miscompile" contract the asm backend follows. Variables,
+  `let`, and fn parameters with 128-bit types are now rejected with guidance
+  (`Use i64/u64 … or a #js helper`).
+- **`as_bool` optimizer tightening** (working-tree change verified): integer
+  literals other than 0/1 no longer coerce to booleans during constant
+  folding; `not 1` and `true and 1` remain checker errors, `2 = 2` still folds
+  to `true`.
+- **Documentation corrections**: CHANGELOG had two `## [Unreleased]` sections
+  (a mid-file orphan duplicating released preview.13 entries — merged into the
+  canonical top section); POLY_C_BLOCKS type table said `u32` → `int32_t` but
+  the backend maps `uint32_t`; README's foreign-block paragraph omitted
+  `#js`/`extern js fn` and Contributing pointed at the deleted `checker.rs`;
+  SPEC's philosophy section still advertised `#cpp` as a target and its
+  foreign-block rules omitted `extern asm/js fn` and `dep`; stale
+  `preview.12` status stamps refreshed to preview.14 across the four
+  maintained references and four historical banners.
+- **Verification**: 528 workspace tests green (single-threaded, CI's mode),
+  clippy `-D warnings` clean, fmt clean, markdown check 55 files, doc audit 52
+  blocks / 0 unmarked failures, all 6 differential suites byte-identical
+  across rust/c/asm/js, nightly stress suite (i64-heavy `stress_loops.poly`)
+  agrees on all four targets, C project generation runs and prints correct
+  64-bit values.
+- Note for future audits: `TokenKind::Error`'s Display is intentionally
+  `<error>` (not the source spelling) so diagnostics like
+  "Unexpected token: <error>" don't read as the English word or a foreign
+  type name; the exception is now documented at the Display impl.
 
 ## Release pipeline automated; preview.14 cut through it end-to-end (2026-09-20)
 

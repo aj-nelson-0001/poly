@@ -395,7 +395,15 @@ fn fold_bool(value: bool, expr: &mut Expr) -> bool {
 fn as_bool(expr: &Expr) -> Option<bool> {
     match expr {
         Expr::Literal(Literal::Bool(value)) => Some(*value),
-        Expr::Literal(Literal::Int(value)) => value.parse().ok(),
+        // Only integer literals 0 and 1 are treated as booleans; other
+        // integers are not semantically boolean even though they are
+        // numerically coercible — folding `2 == 2` to `true` would silently
+        // change the type of the result from `i32` to `bool`.
+        Expr::Literal(Literal::Int(value)) => match value.as_str() {
+            "0" => Some(false),
+            "1" => Some(true),
+            _ => None,
+        },
         _ => None,
     }
 }

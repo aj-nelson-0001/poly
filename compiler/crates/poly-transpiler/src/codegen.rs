@@ -14,7 +14,6 @@ use crate::source_map::SourceMap;
 /// The Poly-to-Rust transpiler.
 pub struct Transpiler {
     /// Source map for debugging
-    #[allow(dead_code)]
     source_map: Option<SourceMap>,
 }
 

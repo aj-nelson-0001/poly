@@ -8,20 +8,17 @@ use crate::token::{Span, Token, TokenKind};
 /// The Poly language lexer.
 ///
 /// Converts source code into a stream of tokens.
-pub struct Lexer<'a> {
-    #[allow(dead_code)]
-    source: &'a str,
+pub struct Lexer {
     chars: Vec<char>,
     pos: usize,
     tokens: Vec<Token>,
     errors: Vec<LexerError>,
 }
 
-impl<'a> Lexer<'a> {
+impl Lexer {
     /// Create a new lexer for the given source code.
-    pub fn new(source: &'a str) -> Self {
+    pub fn new(source: &str) -> Self {
         Self {
-            source,
             chars: source.chars().collect(),
             pos: 0,
             tokens: Vec::new(),
@@ -30,7 +27,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Lex the entire source code and return tokens and errors.
-    pub fn lex(source: &'a str) -> (Vec<Token>, Vec<LexerError>) {
+    pub fn lex(source: &str) -> (Vec<Token>, Vec<LexerError>) {
         let mut lexer = Lexer::new(source);
         lexer.tokenize();
         (lexer.tokens, lexer.errors)
@@ -69,10 +66,6 @@ impl<'a> Lexer<'a> {
         } else {
             self.chars[self.pos]
         }
-    }
-
-    fn peek(&self) -> char {
-        self.current()
     }
 
     fn peek_next(&self) -> char {
@@ -211,7 +204,7 @@ impl<'a> Lexer<'a> {
             '"' => self.scan_string(start),
             '\'' => self.scan_unicode_char(start),
             'u' => {
-                if self.peek() == '"' {
+                if self.current() == '"' {
                     self.advance(); // consume the legacy prefix quote
                     self.scan_unicode_string(start);
                 } else {
@@ -221,11 +214,11 @@ impl<'a> Lexer<'a> {
 
             // Numbers
             '0' => {
-                if self.peek() == 'x' || self.peek() == 'X' {
+                if self.current() == 'x' || self.current() == 'X' {
                     self.scan_hex_number(start);
-                } else if self.peek() == 'b' || self.peek() == 'B' {
+                } else if self.current() == 'b' || self.current() == 'B' {
                     self.scan_binary_number(start);
-                } else if self.peek() == 'o' || self.peek() == 'O' {
+                } else if self.current() == 'o' || self.current() == 'O' {
                     self.scan_octal_number(start);
                 } else {
                     self.scan_number(start);
@@ -511,7 +504,7 @@ impl<'a> Lexer<'a> {
                     while !self.is_at_end() && self.current() != '\'' && self.current() != '\n' {
                         self.advance();
                     }
-                    if self.peek() == '\'' {
+                    if self.current() == '\'' {
                         self.advance();
                     }
                     return;
@@ -521,11 +514,11 @@ impl<'a> Lexer<'a> {
             self.advance()
         };
 
-        if self.peek() != '\'' {
+        if self.current() != '\'' {
             while !self.is_at_end() && self.current() != '\'' && self.current() != '\n' {
                 self.advance();
             }
-            if self.peek() == '\'' {
+            if self.current() == '\'' {
                 self.advance();
             }
             self.errors.push(LexerError::new(
@@ -597,16 +590,16 @@ impl<'a> Lexer<'a> {
         let after_dot = matches!(self.tokens.last().map(|t| &t.kind), Some(TokenKind::Dot));
 
         // Look for decimal point
-        if !after_dot && self.peek() == '.' && self.peek_next().is_ascii_digit() {
+        if !after_dot && self.current() == '.' && self.peek_next().is_ascii_digit() {
             self.advance(); // consume '.'
             while !self.is_at_end() && self.current().is_ascii_digit() {
                 self.advance();
             }
 
             // Look for exponent
-            if self.peek() == 'e' || self.peek() == 'E' {
+            if self.current() == 'e' || self.current() == 'E' {
                 self.advance();
-                if self.peek() == '+' || self.peek() == '-' {
+                if self.current() == '+' || self.current() == '-' {
                     self.advance();
                 }
                 let exponent_start = self.pos;
@@ -624,7 +617,7 @@ impl<'a> Lexer<'a> {
 
             // A second decimal point followed by digits cannot begin a new
             // token; report the complete input as one malformed number.
-            if self.peek() == '.' && self.peek_next().is_ascii_digit() {
+            if self.current() == '.' && self.peek_next().is_ascii_digit() {
                 while !self.is_at_end()
                     && (self.current().is_ascii_digit()
                         || self.current() == '.'

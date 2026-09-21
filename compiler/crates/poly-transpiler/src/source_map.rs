@@ -36,12 +36,6 @@ pub struct SourceMap {
     target: String,
     /// Mappings from target to source
     mappings: Vec<SourceMapping>,
-    /// Source line to offset mapping (line number -> byte offset)
-    #[allow(dead_code)]
-    source_line_offsets: Vec<usize>,
-    /// Target line to offset mapping (line number -> byte offset)
-    #[allow(dead_code)]
-    target_line_offsets: Vec<usize>,
     /// Symbol name to source location mapping
     symbols: HashMap<String, SourceLocation>,
 }
@@ -61,31 +55,12 @@ impl SourceMap {
     /// Create a new source map from source and target code. Line offsets are
     /// precomputed once because editor diagnostics may query many positions.
     pub fn new(source: &str, target: &str) -> Self {
-        let source_line_offsets = Self::compute_line_offsets(source);
-        let target_line_offsets = Self::compute_line_offsets(target);
-
         Self {
             source: source.to_string(),
             target: target.to_string(),
             mappings: Vec::new(),
-            source_line_offsets,
-            target_line_offsets,
             symbols: HashMap::new(),
         }
-    }
-
-    /// Compute byte offsets for each line in the text.
-    ///
-    /// Offsets are cached so future position lookups can avoid rescanning the
-    /// complete source or generated output for every diagnostic.
-    fn compute_line_offsets(text: &str) -> Vec<usize> {
-        let mut offsets = vec![0];
-        for (i, _) in text.bytes().enumerate() {
-            if text.as_bytes()[i] == b'\n' {
-                offsets.push(i + 1);
-            }
-        }
-        offsets
     }
 
     /// Add a coarse line mapping. Code generation uses this fast path for
@@ -382,8 +357,6 @@ mod tests {
 
         let source_map = SourceMap::new(source, target);
         assert!(source_map.mappings.is_empty());
-        assert!(source_map.source_line_offsets.len() > 1);
-        assert!(source_map.target_line_offsets.len() > 1);
     }
 
     #[test]

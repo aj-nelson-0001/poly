@@ -35,6 +35,17 @@ use poly_parser::ast::{
     self, BinaryOp, Expression, FunctionDecl, Statement, TypeAnnotation, UnaryOp,
 };
 
+/// printf format specifiers for 64-bit stdint types, emitted as string
+/// literals spelling the `<inttypes.h>` macro names. The generated source
+/// includes `<inttypes.h>` and splices these as `%` PRId64, so the macro
+/// expands to the platform-correct length modifier (`l` on LP64 Linux/macOS
+/// where int64_t is `long int`, `ll` on LLP64 Windows where it is `long
+/// long int`); a hardcoded `%lld` fails `-Werror=format` on LP64 targets.
+#[allow(non_upper_case_globals)]
+const PRId64: &str = "%\" PRId64 \"";
+#[allow(non_upper_case_globals)]
+const PRIu64: &str = "%\" PRIu64 \"";
+
 /// Generate a complete C translation unit from Poly source.
 pub fn transpile(program: &ast::Program) -> Result<String, String> {
     let mut generator = CGenerator::new();
@@ -202,6 +213,11 @@ impl CGenerator {
             .push_str("/* Generated from Poly source code. */\n");
         self.output.push_str("#include <stdbool.h>\n");
         self.output.push_str("#include <stdint.h>\n");
+        // PRId64/PRIu64 expand to the correct printf length modifier for
+        // 64-bit stdint types on every platform ("l" on LP64 Linux/macOS,
+        // "ll" on LLP64 Windows), where hardcoded %lld/%llu are -Wformat
+        // errors under -Werror (int64_t is `long int` on LP64).
+        self.output.push_str("#include <inttypes.h>\n");
         self.output.push_str("#include <stdio.h>\n");
         self.output.push_str("#include <stdlib.h>\n");
         self.output.push_str("#include <string.h>\n\n");
@@ -945,16 +961,16 @@ impl CGenerator {
     /// unsupported variants as errors prevents silently incorrect C programs.
     fn expr(&self, expression: &Expression) -> Result<String, String> {
         match expression {
-            // Literals outside the i32 range render with the LL suffix so the
-            // C type is `long long`: matches the i64-typed Rust lowering and
-            // prints with %lld (see printf_parts).
+            // Literals outside the i32 range render with the LL suffix so
+            // the C type is at least 64-bit: matches the i64-typed Rust
+            // lowering and prints through PRId64 (see printf_parts).
             Expression::IntLiteral(value) => {
                 let is_big = match value.parse::<i64>() {
                     Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
                     Err(_) => true,
                 };
                 if is_big {
-                    Ok(format!("{value}LL"))
+                    Ok(format!("(int64_t)({value}LL)"))
                 } else {
                     Ok(value.clone())
                 }
@@ -1011,14 +1027,17 @@ impl CGenerator {
                     // min-as-i64 value divided by -1 must divide normally).
                     if self.is_i64_valued(left) {
                         let op_str = self.binary_op(op);
+                        // Cast both operands to `int64_t` (not `long long`):
+                        // the result then has exactly the type PRId64 spells,
+                        // keeping printf -Wformat-clean on LP64 platforms.
                         return Ok(format!(
-                            "(((({}) == (-9223372036854775807LL - 1LL)) && (({}) == -1LL)) ? (({})) : ((((long long)({})) {} (long long)({}))))",
+                            "(((({}) == (INT64_MIN)) && (({}) == -1LL)) ? (({})) : ((((int64_t)({})) {} (int64_t)({}))))",
                             left_str,
                             right_str,
                             if matches!(op, BinaryOp::Div) {
-                                "(-9223372036854775807LL - 1LL)"
+                                "INT64_MIN"
                             } else {
-                                "0LL"
+                                "0"
                             },
                             left_str,
                             op_str,
@@ -1041,10 +1060,13 @@ impl CGenerator {
                     ));
                 }
                 if self.is_i64_valued(left) {
-                    // 64-bit arithmetic: keep long long throughout.
+                    // 64-bit arithmetic: cast to the 64-bit stdint type
+                    // (not `long long`) throughout. The result then has
+                    // exactly the type PRId64/PRIu64 spell, so printf stays
+                    // -Wformat-clean on LP64 where int64_t is `long int`.
                     let op_str = self.binary_op(op);
                     return Ok(format!(
-                        "((long long)({}) {} (long long)({}))",
+                        "((int64_t)({}) {} (int64_t)({}))",
                         left_str, op_str, right_str
                     ));
                 }
@@ -1345,7 +1367,7 @@ impl CGenerator {
             }
             Expression::BinaryOp { .. } => {
                 let format = if self.is_i64_valued(expression) {
-                    "%lld".to_string()
+                    PRId64.to_string()
                 } else {
                     self.format_for_expression(expression)
                 };
@@ -1367,13 +1389,21 @@ impl CGenerator {
                 } else if self.is_bool_valued(expression) {
                     self.ensure_bool_str_helper();
                     "%s".to_string()
-                } else if let Expression::Identifier(name) = expression {
-                    // A 64-bit variable must print %lld: %d reads an int,
+                } else if self.is_i64_valued(expression) {
+                    // A 64-bit value (declared i64/u64 variable or a literal
+                    // outside the i32 range, rendered with the LL suffix)
+                    // must print through the 64-bit format: %d reads an int,
                     // truncating and (varargs UB) misreading the argument.
-                    match self.var_widths.borrow().get(name).map(String::as_str) {
-                        Some("int64_t") => "%lld".to_string(),
-                        Some("uint64_t") => "%llu".to_string(),
-                        _ => self.format_for_expression(expression),
+                    if let Expression::Identifier(name) = expression {
+                        if self.var_widths.borrow().get(name).map(String::as_str)
+                            == Some("uint64_t")
+                        {
+                            PRIu64.to_string()
+                        } else {
+                            PRId64.to_string()
+                        }
+                    } else {
+                        PRId64.to_string()
                     }
                 } else {
                     self.format_for_expression(expression)

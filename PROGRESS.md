@@ -3,6 +3,43 @@
 Working log of improvements made to the Poly compiler, playground, and tooling.
 Last updated: 2026-09-21.
 
+## Tutorial promoted to v2; comment coverage across the docs; comment-style and async claims verified (2026-09-21)
+
+Documentation round that closed out the tutorial's stale v1 banner and spread
+inline comment coverage to the maintained references, with every new doc claim
+backed by a compiler check or a pinned test:
+
+- **POLY_TUTORIAL.md is now current documentation.** Every complete example
+  was extracted and run through `poly --check` (18 probe programs covering
+  nested fn/Result, Poly-side error enums with payload matching, all `get`
+  flags, file redirects, comment styles, `pad_left`/`repeat`, and typed
+  input); all parse, type-check, and compile. The historical-tutorial banner
+  was replaced with a current-for-preview.14 note, the doc index moved the
+  tutorial out of the historical list, and the typed-input example was
+  aligned to the canonical `get --as i32` form used by the other references.
+- **Inline comments added throughout the tutorial, quick reference, and
+  cheatsheet**: declaration forms (var/let/const, colon rules, i32-inference
+  for untyped consts), output severity prefixes and truncate/append
+  semantics, each `get` flag's effect, inclusive loop endpoints and steps,
+  foreign-block opacity, and CLI flag purposes. The tutorial gained a
+  "Using Comments" section and the quick reference a Comments section,
+  both documenting `#`, `//`, and `/* ... */` plus the `#rust`/`#c`/`#asm`/
+  `#js` foreign-block exception.
+- **Comment-style claims pinned by tests**: three new rows in
+  `doc_claim_guards.rs` prove `#`, `//`, and `/* */` comments (leading,
+  trailing, standalone, inline, multi-line) are accepted by all four
+  backends with surrounding code intact — matching the lexer's
+  strip-before-parse behavior.
+- **Tutorial extended with structs and async parts**: Part 6 covers struct
+  literals, dot access, and the take-and-return `self` method pattern with
+  the reassignment gotcha; Part 7 covers `async fn`, `.await`, `delay(ms)`,
+  and fire-and-forget `spawn`, with the Rust-target-only caveat (C/asm/js
+  reject async with foreign-block guidance — verified per target). Both
+  probe-compiled before landing in the doc.
+- **Verification**: all 29 `examples/*.poly` pass `--check`; tutorial doc
+  audit 28 blocks / 0 unmarked failures; fmt clean; full workspace suite
+  green (single-threaded, CI's mode).
+
 ## Doc-and-code audit round: C 64-bit printf fix, JS i128 rejection, checker module split (2026-09-21)
 
 Full review of the maintained docs plus a working-tree dead-code cleanup and

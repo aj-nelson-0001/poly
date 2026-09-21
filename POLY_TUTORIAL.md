@@ -529,6 +529,52 @@ For generics, traits, or default field values, put the definition in a
 
 ---
 
+## Part 7: Async and `spawn`
+
+### Await a Future
+
+An `async fn` returns a future; attach `.await` to suspend until it completes.
+Only async functions can use `.await`, and an async entry point is declared
+with `async fn main()`:
+
+~~~poly
+# Async functions return futures; attach .await to run them.
+async fn compute(x: i32): i32
+    delay(10).await          # suspend this task for 10 ms
+    return x * x
+end fn
+
+async fn main()              # an async entry point can .await
+    # Sequential: each .await suspends until that future completes
+    var a := compute(3).await
+    var b := compute(4).await
+    put a + b                # 25
+
+    # spawn launches a task without waiting for it (fire-and-forget)
+    spawn compute(5)
+end fn
+~~~
+
+### Spawning Independent Tasks
+
+`spawn expr` launches `expr` as a background task (a Tokio task on the Rust
+target) and moves on immediately. Nothing in the language consumes the task's
+result, so spawn is for side-effecting work, not for values you need later.
+`spawn` is a reserved word and cannot name variables or methods.
+
+### Notes and Limits
+
+- Async is a Rust-target feature. The C, assembly, and JS backends reject
+  async functions with a diagnostic that points at foreign blocks.
+- `delay(ms)` is the builtin sleep; `.await` it inside an async function.
+- Awaiting in a loop runs the futures one at a time; to run work in
+  parallel, `spawn` it and `.await` nothing.
+
+Complete async programs live in `examples/async_await.poly` and
+`examples/async_demo.poly`.
+
+---
+
 ## Summary
 
 - **Output**: Use `put` for console output (always adds a newline)
@@ -542,5 +588,7 @@ For generics, traits, or default field values, put the definition in a
 - **Comments**: Use `#` for line comments; `//` and `/* ... */` also work
 - **Structs**: Define data with `struct`, attach methods with `impl`
 - **Methods**: Mutating methods take and return `self`; write `c := c.bump()`
+- **Async**: Declare `async fn`, run with `.await`; `spawn` for fire-and-forget
+  tasks (Rust target only)
 
 Practice these concepts by building small programs that read user input, validate it, and handle errors gracefully.

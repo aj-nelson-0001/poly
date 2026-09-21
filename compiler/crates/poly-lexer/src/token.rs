@@ -237,6 +237,12 @@ pub enum TokenKind {
 impl fmt::Display for TokenKind {
     // Display is intentionally source-like: diagnostics can show the token
     // without exposing the Rust enum's internal variant names.
+    //
+    // Deliberate exception: `Error` renders as `<error>` rather than the
+    // source spelling. The bare word reads as the English word (or as a
+    // foreign-language type name) in diagnostics like
+    // "Unexpected token: error"; the bracketed form unambiguously names the
+    // `error` statement keyword itself.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             // Literals
@@ -318,7 +324,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Put => write!(f, "put"),
 
             TokenKind::Get => write!(f, "get"),
-            TokenKind::Error => write!(f, "error"),
+            TokenKind::Error => write!(f, "<error>"),
             TokenKind::Warn => write!(f, "warn"),
             TokenKind::Info => write!(f, "info"),
             TokenKind::With => write!(f, "with"),

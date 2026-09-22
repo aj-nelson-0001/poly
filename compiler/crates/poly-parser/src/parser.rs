@@ -1203,18 +1203,25 @@ impl<'a> Parser<'a> {
 
     /// Parse a statement in a nested position (function, module, block, or
     /// match-arm bodies). Only the file's top-level statement list may host
-    /// `extern fn` declarations, so this enforces at parse time the invariant
-    /// that IR lowering relies on instead of panicking later.
+    /// `extern fn` declarations or foreign `#lang` blocks, so this enforces
+    /// at parse time the invariants that IR lowering and codegen rely on
+    /// instead of failing later. Contexts that bump `block_depth` are also
+    /// caught inside `parse_extern_function_declaration` and the foreign-block
+    /// arm; this wrapper backstops the contexts that never do (match-arm and
+    /// macro bodies).
     fn parse_nested_statement(&mut self) -> Result<Statement, ParseError> {
         let span = self.current().span;
-        let statement = self.parse_statement()?;
-        if matches!(statement, Statement::ExternFunctionDeclaration(_)) {
-            return Err(ParseError::new(
+        match self.parse_statement()? {
+            Statement::ExternFunctionDeclaration(_) => Err(ParseError::new(
                 "`extern fn` declarations are only allowed at the top level of the source file",
                 span,
-            ));
+            )),
+            Statement::ForeignBlock { .. } => Err(ParseError::new(
+                "Foreign language blocks must appear at program scope",
+                span,
+            )),
+            statement => Ok(statement),
         }
-        Ok(statement)
     }
 
     fn parse_module_declaration(&mut self) -> Result<ModuleDecl, ParseError> {
@@ -5393,23 +5400,48 @@ end fn"#;
     }
 
     #[test]
-    fn nested_extern_declarations_are_rejected() -> Result<(), Box<dyn std::error::Error>> {
-        // Two layers guard this: the `block_depth` program-scope check inside
-        // `parse_extern_function_declaration` (fn/if/module bodies) and
+    fn program_scope_only_statements_are_rejected_in_nested_positions(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // The parser guards program-scope-only statements in two layers:
+        // `block_depth` checks inside `parse_extern_function_declaration` and
+        // the foreign-block arm (contexts that bump depth), and
         // `parse_nested_statement` (match-arm and macro bodies, which never
-        // bump `block_depth`).
-        let sources = [
-            "fn main()\n    extern c fn sneaky(value: i32): i32\nend fn",
-            "fn main()\n    match 1\n        1,\n        extern c fn sneaky(value: i32): i32\n    end match\nend fn",
+        // do). This matrix keeps every nested context covered if a new parse
+        // path is added or one of the guards is removed.
+        let items = [
+            ("extern", "    extern c fn sneaky(value: i32): i32"),
+            (
+                "foreign block",
+                "    #c\n    int helper(void) { return 1; }\n    #endc",
+            ),
         ];
-        for source in sources {
-            let Err(error) = parse_source(source) else {
-                panic!("nested extern must be rejected at parse time: {source}");
-            };
-            assert!(
-                error.message.contains("top level") || error.message.contains("program scope"),
-                "unexpected error: {error:?}"
-            );
+        let contexts = [
+            ("fn body", "fn main()\n{item}\nend fn"),
+            (
+                "if body",
+                "fn main()\n    if true\n{item}\n    end if\nend fn",
+            ),
+            (
+                "while body",
+                "fn main()\n    while false\n{item}\n    end while\nend fn",
+            ),
+            (
+                "match arm",
+                "fn main()\n    match 1\n        1,\n{item}\n    end match\nend fn",
+            ),
+            ("module body", "module m\n{item}\nend module"),
+        ];
+        for (item_name, item) in items {
+            for (context_name, template) in contexts {
+                let source = template.replace("{item}", item);
+                let Err(error) = parse_source(&source) else {
+                    panic!("accepted {item_name} in {context_name}: {source}");
+                };
+                assert!(
+                    error.message.contains("program scope") || error.message.contains("top level"),
+                    "{item_name} in {context_name}: unexpected error: {error:?}"
+                );
+            }
         }
         Ok(())
     }

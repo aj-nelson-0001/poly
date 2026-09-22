@@ -15,7 +15,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2.0.0-preview.16"
+version = "2.0.0-preview.17"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/aj-nelson-0001/poly"

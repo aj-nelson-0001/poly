@@ -2,7 +2,23 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.16 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.17 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.17
+
+- Expression and type nesting is capped at 32 levels, so parenthesized or
+  type-heavy hostile input cannot exhaust the parser stack either. The cap
+  is sized from measurement (~45 KiB per debug precedence-chain level, so
+  the worst case peaks near 1.6 MiB inside the 2 MiB default test-thread
+  budget), and a chain of `if`s still reports its own, more specific
+  depth limit when both budgets run out together.
+- Differential coverage deepened for the depth limits: a new
+  `tests/diff_deep_nesting` fixture drives deep parens, nested ifs, and
+  nested whiles through all four backends, and the fuzz generator wraps
+  expressions in grouping parens so random seeds parse near the cap.
+- The Linux CI stack-floor guard recentred to 1952 KiB after the parser
+  changes moved the healthy floor, keeping the frame-per-level regression
+  detector precise.
 
 ## What's New in 2.0.0-preview.16
 

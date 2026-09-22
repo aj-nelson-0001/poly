@@ -1,6 +1,6 @@
 # Poly Language Grammar v2 Preview
 
-**Status:** Current preview grammar for Poly 2.0.0-preview.14
+**Status:** Current preview grammar for Poly 2.0.0-preview.17
 
 This document describes the syntax accepted by the current lexer and parser. It is intentionally a compact grammar, not a promise that every parsed construct is supported by every target backend.
 
@@ -190,7 +190,7 @@ while_statement ::= "while" expression { statement } "end" "while"
 
 loop_statement ::= "loop" "end" "loop"
                  | "loop" identifier loop_source { statement } "end" "loop"
-                 | "loop" number loop_source { statement } "end" "loop"
+                 | "loop" expression loop_source { statement } "end" "loop"
                  | "loop" "(" identifiers ")" "in" expression { statement } "end" "loop"
 
 loop_source   ::= "in" expression | range_list
@@ -202,7 +202,9 @@ range_part    ::= expression ".." expression [ "step" expression ]
 match_expression ::= "match" expression { pattern "," expression } "end" "match"
 ~~~
 
-Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected — a literal zero step at parse/check time, a runtime zero step by yielding zero iterations. The range start may be any expression (a constant, index, or call as well as a literal); a literal in the loop-variable position names a var-less counted loop whose counter is discarded (`loop 0..10`). An infinite loop whose first statement begins with an identifier (an assignment or a call) is still parsed as infinite, not as a range loop.
+Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected — a literal zero step at parse/check time, a runtime zero step by yielding zero iterations. The range start may be any expression (a constant, index, or call as well as a literal); the var-less alternative accepts any start expression (`loop 0..10`, `loop 0 - 5..2`), a literal in the loop-variable position names a var-less counted loop whose counter is discarded, and an infinite loop whose first statement begins with an identifier (an assignment or a call) is still parsed as infinite, not as a range loop.
+
+Parsing is depth-bounded: statement nesting is capped at 128 levels, expression/type nesting at 32, and chained `if`s at 32 (see the depth-limits note in [POLY_SPEC_v2.md](POLY_SPEC_v2.md)). Exceeding a cap is a parse error naming the limit, not silent acceptance.
 
 ## I/O
 

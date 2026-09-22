@@ -1,6 +1,6 @@
 # Poly v2 Preview Release Checklist
 
-**Target release:** Poly `2.0.0-preview.2`
+**Applies to:** any `2.0.0-preview.N` release (the checklist is version-agnostic; the verification evidence inside may be dated)
 
 This checklist describes release readiness for the current preview. It does not create a release or tag one automatically.
 

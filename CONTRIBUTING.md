@@ -97,13 +97,16 @@ Use descriptive branch names:
 ### Commit Messages
 
 Write clear, concise commit messages:
-- Use imperative mood ("Add feature" not "Added feature")
+- Prefix with the conventional type this repository uses: `feat:`, `fix:`,
+  `refactor:`, `docs:`, `ci:`, `test:`, `chore:`, or `chore(release):` for
+  release preparation
+- Use imperative mood after the prefix ("add feature", not "added feature")
 - Keep the first line under 72 characters
 - Reference issues when applicable
 
 Example:
 ~~~
-Add pattern matching support
+feat: add pattern matching support
 
 - Implement match expression parsing
 - Add transpilation to Rust match

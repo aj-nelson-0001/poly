@@ -120,7 +120,7 @@ end fn
 
 ## Foreign Blocks
 
-Foreign blocks are selected by target and emitted at target-language scope. Keep them at program scope: the parser rejects foreign blocks (and `extern fn` declarations) in every nested context — function/if/loop/macro bodies and modules via the block-depth check, match-arm bodies via a statement-level check.
+Foreign blocks are selected by target and emitted at target-language scope. Keep them at program scope: the parser rejects foreign blocks (and `extern fn` declarations) in every nested context, in two layers — a depth counter covers function/if/loop/macro bodies and modules, and a statement-level check covers match-arm bodies, the one nested context without a counter. Either way the failure is an ordinary parse error, never a later crash.
 
 ~~~poly
 #rust
@@ -159,6 +159,8 @@ poly --target rust --check program.poly
 poly --target c --check program.poly
 poly --emit-rust program.poly
 poly --target c --emit-c program.poly
+poly --target asm --emit-asm program.poly
+poly --target js --emit-js program.poly
 poly --tokens program.poly
 poly --ast program.poly
 poly --intermediate-representation program.poly

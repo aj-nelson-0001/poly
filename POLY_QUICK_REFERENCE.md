@@ -118,6 +118,8 @@ poly --target rust --check program.poly    # parse, check, transpile, compile
 poly --target c --check program.poly
 poly --emit-rust program.poly              # print the generated Rust source
 poly --target c --emit-c program.poly      # print the generated C source
+poly --target asm --emit-asm program.poly  # print the generated x86-64 assembly
+poly --target js --emit-js program.poly    # print the generated JavaScript
 poly --tokens program.poly                 # show lexer tokens
 poly --ast program.poly                    # show the parsed AST
 ~~~

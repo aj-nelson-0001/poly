@@ -1,6 +1,6 @@
 # Poly Language Specification - Expanded Draft
 
-> **Historical draft:** This document describes an earlier v1 design and is not normative for Poly 2.0.0-preview.14. Use [POLY_SPEC_v2.md](POLY_SPEC_v2.md) and [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md) for current behavior.
+> **Historical draft:** This document describes an earlier v1 design and is not normative for Poly 2.0.0-preview.17. Use [POLY_SPEC_v2.md](POLY_SPEC_v2.md) and [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md) for current behavior.
 ## Version: 1.5 Draft (Work in Progress)
 
 - **Target Backend:** Rust (Cargo Workspace)

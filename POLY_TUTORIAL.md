@@ -1,6 +1,6 @@
 # Poly Language Tutorial: I/O and Error Handling
 
-> This tutorial is current for Poly 2.0.0-preview.14. Every complete example
+> This tutorial is current for Poly 2.0.0-preview.17. Every complete example
 > parses, type-checks, and compiles with the v2 compiler.
 
 ## Introduction

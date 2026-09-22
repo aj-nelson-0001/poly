@@ -170,7 +170,7 @@ Strip Poly down to only what an assembly-like syntax layer needs. Remove feature
 | Keep | Purpose |
 |------|---------|
 | `README.md` | Quick start + overview |
-| `POLY_SPEC.md` | Complete language specification |
+| `POLY_SPEC_v2.md` | Complete language specification |
 | `CHANGELOG.md` | Version history |
 | `CONTRIBUTING.md` | How to contribute |
 | `examples/` | Self-documenting examples |
@@ -178,6 +178,11 @@ Strip Poly down to only what an assembly-like syntax layer needs. Remove feature
 ### Remove
 
 All 20+ `POLY_*_GUIDE.md` files. The language is simple enough that the spec + examples are sufficient.
+
+**Outcome:** the historical guides were kept instead of deleted — they are
+listed in `POLY_DOCUMENTATION_INDEX.md` as non-normative historical
+material, each with a banner pointing readers at the current documents,
+and the specification shipped as `POLY_SPEC_v2.md`.
 
 ---
 

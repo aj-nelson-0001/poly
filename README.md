@@ -63,7 +63,8 @@ See [POLY_SPEC_v2.md](POLY_SPEC_v2.md) for the full specification, [POLY_V2_SUPP
 
 ## What's New in v2.0 Preview
 
-Poly 2.0 adds target selection with `--target rust` and `--target c`. Rust and C
+Poly 2.0 adds target selection with `--target rust`, `--target c`,
+`--target asm`, and `--target js`. Rust and C
 foreign blocks are selected by the target, emitted at file scope, and kept
 opaque to Poly's type checker; the native target compiler validates them.
 
@@ -83,6 +84,31 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 `extern <target> fn ...` declaration — opaque calls are allowed by default
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
+
+### What's New in 2.0.0-preview.17
+
+**Hostile input can't exhaust the parser.** Two new caps bound parser
+stack use for any input: statement nesting stops at 128 levels and
+expression/type nesting at 32, each failing with a named parse error
+instead of a crash, while chained `if`s keep their own 32-limit and
+report it preferentially when both budgets run out together. The limits
+are sized from measured stack cost so a full-depth debug parse fits a
+default test thread; a new `tests/diff_deep_nesting` fixture drives
+every cap's neighborhood through all four backends, the fuzz generator
+wraps expressions in grouping parens so seeds parse near the cap, and
+CI's stack-floor guard recentred to the newly measured floor.
+
+### What's New in 2.0.0-preview.16
+
+**Error handling without panics.** `unwrap()` and `expect()` are banned
+workspace-wide — denied by clippy gates that fail CI on any regression —
+and reachable compiler panics now return diagnostics or errors: the
+codegen precondition arms, the checker's higher-order-method fallback,
+and the IR generator's nested-`extern` path all propagate `Result`
+instead of panicking, and generated code reports runtime failures with
+context. Program-scope enforcement was closed for match-arm bodies and
+pinned by a guard matrix covering every nested context, and
+CONTRIBUTING.md documents the policy.
 
 ### What's New in 2.0.0-preview.15
 

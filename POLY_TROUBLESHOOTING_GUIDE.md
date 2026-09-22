@@ -55,6 +55,24 @@ end fn
 
 The parser can recover from several errors, but a missing `end` often causes later statements to be reported in the wrong context. Fix the first diagnostic first.
 
+### Depth-limit errors
+
+Three parse caps keep deeply nested — usually generated — input from
+exhausting the parser's stack:
+
+~~~text
+Maximum nested statement depth (128) exceeded
+Maximum nested expression depth (32) exceeded
+Maximum nested if depth (32) exceeded
+~~~
+
+They all mean the same thing: flatten the structure. Split nested blocks
+into separate functions, remove grouping parens, simplify prefix chains or
+nested tuple types, and break a long `if`/`else if` chain into separate
+statements or a `match` — chained `else if` arms count toward the `if`
+limit, so re-chaining alone does not help. Hand-written code sits far
+below these caps; hitting one usually means the source was generated.
+
 ## Output Problems
 
 `put` always writes one newline. The `-n` flag and output capture syntax are not part of the maintained v2 contract.

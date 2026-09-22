@@ -194,7 +194,7 @@ python3 scripts/check_markdown.py
 python3 scripts/check_poly_examples.py --poly-bin compiler/target/release/poly
 ~~~
 
-The full-repository documentation audit covers 579 example blocks with 0
+The full-repository documentation audit covers 587 example blocks with 0
 unmarked failures; the Tetris example regenerates, builds, and passes its
 headless self-test with the release compiler.
 

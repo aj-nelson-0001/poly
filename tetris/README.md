@@ -115,14 +115,14 @@ Other constraints encoded here that future edits should respect:
 - The framebuffer is a fresh `Vec<i32>` per frame (`make_fb`), converted to
   `Vec<u32>` only inside `win_present`.
 
-## Status (2026-09-17, compiler v2.0.0-preview.10)
+## Status (2026-09-22, compiler v2.0.0-preview.17)
 
-- `tetris.poly --check` green against preview.10 (68 statements; deps resolve
+- `tetris.poly --check` green against preview.17 (68 statements; deps resolve
   through Cargo).
-- Regenerated `rust_output/tetris` from source with `--project` and confirmed
-  it is byte-identical to the committed project (including a freshly resolved
-  `Cargo.lock`); the `.poly-generated` marker records the source relative to
-  the output dir, so the guard reproduces on any machine.
+- Every CI push regenerates `rust_output/tetris` from source with `--project`
+  and diffs it byte-for-byte against the committed project (including a freshly
+  resolved `Cargo.lock`); the `.poly-generated` marker records the source
+  relative to the output dir, so the guard reproduces on any machine.
 - Release build is warning-free (match-expression initializer for the gravity
   table, non-deprecated `set_target_fps(60)`).
 - A line-by-line parity audit against the original JS

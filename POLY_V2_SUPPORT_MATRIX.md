@@ -1,6 +1,6 @@
 # Poly v2 Support Matrix
 
-**Status:** Frozen preview contract, current through `2.0.0-preview.14`
+**Status:** Frozen preview contract, current through `2.0.0-preview.17`
 
 This matrix is the implementation contract for the current Rust, C, assembly, and JavaScript targets. A construct marked `Parsed` may exist in the parser and AST without being runnable on every backend.
 

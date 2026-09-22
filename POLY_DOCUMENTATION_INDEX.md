@@ -70,7 +70,8 @@ Run the same checks used by the v2 CI workflow:
 
 ~~~bash
 python3 scripts/check_markdown.py
-python3 scripts/check_poly_examples.py README.md POLY_SPEC_v2.md POLY_ROADMAP_v2.md POLY_C_BLOCKS.md POLY_JS_BLOCKS.md POLY_V2_AUDIT.md POLY_MIGRATION_GUIDE_v2.md POLY_V2_SUPPORT_MATRIX.md POLY_PREVIEW_RELEASE_CHECKLIST.md POLY_V2_PREVIEW_RELEASE_NOTES.md
+python3 scripts/check_poly_examples.py --poly-bin compiler/target/release/poly  # every markdown file, as CI runs it
+python3 scripts/check_generated_paths.py
 python3 scripts/check_backends.py
 cd compiler
 cargo fmt --all -- --check

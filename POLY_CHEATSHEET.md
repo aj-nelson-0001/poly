@@ -198,6 +198,8 @@ poly --target rust --check program.poly    # parse, check, transpile, compile
 poly --target c --check program.poly
 poly --emit-rust program.poly              # print the generated Rust source
 poly --target c --emit-c program.poly      # print the generated C source
+poly --target asm --emit-asm program.poly  # print the generated x86-64 assembly
+poly --target js --emit-js program.poly    # print the generated JavaScript
 ~~~
 
 Rust is the default target. The C target is a C11 orchestration subset and supports scalar declarations, calls to foreign C helpers, numeric control flow, plain stdin `get` with an optional prompt, tuples, struct literals, simple `match` patterns, and stdout/stderr output. Unsupported C features fail with a diagnostic instead of being silently rewritten.
@@ -207,5 +209,6 @@ Rust is the default target. The C target is a C11 orchestration subset and suppo
 - Use `:=` to initialize or assign; use `=` to compare.
 - Close blocks with their matching form, such as `end if`, `end loop`, or `end fn`.
 - Put foreign blocks at program scope.
+- Depth-limit messages (`Maximum nested ... depth`) mean generated-style nesting; flatten the structure instead of re-chaining `else if` arms.
 - Use `put value to "file" -append` for Rust file append output.
 - Use a target-language helper in `#rust` or `#c` when the Poly subset does not express the operation.

@@ -90,6 +90,25 @@ struct Config {
 - `dep name = "version"` declarations are program-scope Cargo crate
   dependencies for the Rust target (see below).
 
+### Depth limits
+
+Parsing is recursive, so three caps turn machine-generated or hostile
+input into an ordinary parse error instead of a stack overflow. Each
+diagnostic names the cap that was hit:
+
+- `Maximum nested statement depth (128) exceeded` — blocks, match arms,
+  macro bodies, and `pub` chains all re-enter one guarded statement entry.
+- `Maximum nested expression depth (32) exceeded` — grouping parens, call
+  and array arguments, prefix chains, and tuple/reference/array types
+  share one budget.
+- `Maximum nested if depth (32) exceeded` — `if` statements and chained
+  `else if` arms recurse through their own counter. When an `if` chain and
+  the expression budget run out at the same nesting level, the if-specific
+  diagnostic wins because it names the construct to split.
+
+Hand-written programs sit far below all three limits; CI pins the parser's
+stack floor so the margins stay measured rather than assumed.
+
 ### External crate dependencies
 
 `dep name = "version"` declares a Cargo crate the program's foreign blocks
@@ -547,18 +566,15 @@ multiplication in a loop.
 ### Comparison
 `=` `!=` `<` `>` `<=` `>=`
 
+### Strict same-type checking
+
 Equality (`=` / `!=`) and ordering comparisons are strictly same-type: the
 checker rejects mixed integer or numeric comparisons (`u64 = i64`, `f64 =
-i64`) with `equality comparison: expected <T>, got <U>`. Convert explicitly
-with `as`:
-
-### Arithmetic
-
-Arithmetic is also strictly same-class: the checker rejects mixed
-integer/float arithmetic (`1 + 0.5`, `count + total_f64`) with a diagnostic
-telling you to cast one operand with `as`. This keeps every backend honest —
-without the rule the rust target rejected the program outright while c and js
-silently accepted it with different results.
+i64`) with `equality comparison: expected <T>, got <U>`. Arithmetic is the
+same: mixing integer and float operands (`1 + 0.5`, `count + total_f64`) is
+rejected with a diagnostic telling you to cast one operand with `as`. This
+keeps every backend honest — without the rule the rust target rejected the
+program outright while c and js silently accepted it with different results.
 
 ~~~poly fragment
 const FONT_A := 240            # untyped consts infer i32
@@ -622,39 +638,50 @@ source.poly
 ### Example Transpilation
 
 **Input:**
-~~~poly fragment
+~~~poly
 #rust
 fn rust_multiply(x: i32, y: i32) -> i32 {
     x * y
 }
 #endrust
 
-var count i32 := 0
-loop i 0..5
-    count := count + 1
-end loop
-put "Count: " + count
-put "Rust says: " + rust_multiply(count, 2)
+fn main()
+    var count i32 := 0
+    loop i 0..5
+        count := count + 1
+    end loop
+    put "Count: " + count
+    put "Rust says: " + rust_multiply(count, 2)
+end fn
 ~~~
 
-**Output:**
+**Output** (verbatim `--emit-rust`; the foreign block lands after
+`fn main`, and `put` of a concatenated string lowers to `format!`):
 ~~~rust
 // Generated from Poly source code
-#![allow(unused_variables, unused_mut, unused_imports, dead_code)]
+#![allow(
+    unused_variables,
+    unused_mut,
+    unused_imports,
+    dead_code,
+    unused_parens,
+    unreachable_patterns
+)]
 
-// --- Declarations from #rust blocks ---
-fn rust_multiply(x: i32, y: i32) -> i32 {
-    x * y
-}
-
-// --- Generated from Poly ---
 fn main() {
     let mut count: i32 = 0;
     for i in 0..=5 {
-        count += 1;
+        count = (count).wrapping_add(1_i32);
     }
-    println!("{}", format!("Count: {}", count));
-    println!("{}", format!("Rust says: {}", rust_multiply(count, 2)));
+    println!("{}", format!("{}{}", String::from("Count: "), count));
+    println!(
+        "{}",
+        format!("{}{}", String::from("Rust says: "), rust_multiply(count, 2))
+    );
+}
+
+fn rust_multiply(x: i32, y: i32) -> i32 {
+    x * y
 }
 ~~~
 

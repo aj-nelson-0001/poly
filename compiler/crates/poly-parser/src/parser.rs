@@ -29,7 +29,26 @@ pub struct Parser<'a> {
     // bounds parser stack use for any input: nested blocks, match arms,
     // macro expansions, and `pub` chains alike.
     stmt_depth: usize,
+    // Shared expression/type nesting budget, checked at `parse_unary` and
+    // `parse_type` (see MAX_EXPRESSION_DEPTH).
+    expr_depth: usize,
 }
+
+/// Cap on expression and type nesting depth. Checked at `parse_unary` —
+/// the precedence chain's bottom, so every expression level (grouping
+/// parens, call/array/struct arguments, ranges, closure bodies, statement
+/// inits) funnels into it, and prefix chains recurse within it — and at
+/// `parse_type`, whose tuple/reference/array recursion never touches
+/// `parse_unary`. Sized from measurement: one debug precedence-chain level
+/// costs ~45 KiB of stack, so the worst case (32 levels in flight) peaks
+/// near 1.6 MiB — inside the 2 MiB default test-thread budget with margin.
+const MAX_EXPRESSION_DEPTH: usize = 32;
+
+/// Cap on chained `if` conditionals, checked inside the if parser and
+/// consulted by the expression/type guards (each if-statement leaves its
+/// precedence chain live, so both budgets run out at the same nesting level
+/// and the more specific limit must win the diagnostic).
+const MAX_IF_DEPTH: usize = 32;
 
 impl<'a> Parser<'a> {
     /// Create a new parser for the given token stream.
@@ -43,6 +62,7 @@ impl<'a> Parser<'a> {
             stop_at_double_minus: false,
             block_depth: 0,
             stmt_depth: 0,
+            expr_depth: 0,
         }
     }
 
@@ -230,9 +250,10 @@ impl<'a> Parser<'a> {
     /// synchronization point (statement boundary).
     fn synchronize(&mut self) {
         // Recovery abandons whatever nesting `?` unwound through (early
-        // returns skip the depth decrement), so the statement-depth counter
-        // restarts at top level here.
+        // returns skip the depth decrement), so the statement- and
+        // expression-depth counters restart at top level here.
         self.stmt_depth = 0;
+        self.expr_depth = 0;
         while !self.is_at_end() {
             match self.peek() {
                 // Statement boundary tokens
@@ -1435,7 +1456,23 @@ impl<'a> Parser<'a> {
     // Type parsing is recursive because containers and function signatures nest
     // other annotations inside delimiters such as `<...>` and `(...)`.
     fn parse_type(&mut self) -> Result<TypeAnnotation, ParseError> {
-        match self.peek().clone() {
+        // Frame-neutral on purpose, like the `parse_unary` guard; tuple,
+        // reference, and array types recurse here without touching it.
+        if self.expr_depth >= MAX_EXPRESSION_DEPTH {
+            // When a chain of `if`s exhausts both budgets at this level (its
+            // statements leave precedence chains live), name the more
+            // specific limit — the if parser's own check runs deeper in the
+            // descent, so this guard would otherwise win every time.
+            if self.if_depth >= MAX_IF_DEPTH {
+                return Err(self.if_depth_error());
+            }
+            return Err(ParseError::new(
+                format!("Maximum nested expression depth ({MAX_EXPRESSION_DEPTH}) exceeded"),
+                self.current().span,
+            ));
+        }
+        self.expr_depth += 1;
+        let result = match self.peek().clone() {
             TokenKind::I8 => {
                 self.advance();
                 Ok(TypeAnnotation::Named("i8".into()))
@@ -1645,7 +1682,9 @@ impl<'a> Parser<'a> {
                 format!("Expected type, got {:?}", self.peek()),
                 self.current().span,
             )),
-        }
+        };
+        self.expr_depth -= 1;
+        result
     }
 
     // === Expression parsing ===
@@ -2013,9 +2052,25 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary(&mut self) -> Result<Expression, ParseError> {
-        // Prefix operators recurse into unary parsing so chains such as `!!x`
-        // and `*ptr` bind tighter than every binary operator.
-        match self.peek() {
+        // Frame-neutral on purpose (locals only — a helper call per level
+        // adds a frame and tips the deep-nesting stack floor).
+        if self.expr_depth >= MAX_EXPRESSION_DEPTH {
+            // When a chain of `if`s exhausts both budgets at this level (its
+            // statements leave precedence chains live), name the more
+            // specific limit — the if parser's own check runs deeper in the
+            // descent, so this guard would otherwise win every time.
+            if self.if_depth >= MAX_IF_DEPTH {
+                return Err(self.if_depth_error());
+            }
+            return Err(ParseError::new(
+                format!("Maximum nested expression depth ({MAX_EXPRESSION_DEPTH}) exceeded"),
+                self.current().span,
+            ));
+        }
+        self.expr_depth += 1;
+        let result = match self.peek() {
+            // Prefix operators recurse into unary parsing so chains such as `!!x`
+            // and `*ptr` bind tighter than every binary operator.
             TokenKind::Minus => {
                 if matches!(self.tokens.get(self.pos + 1).map(|token| &token.kind), Some(TokenKind::Identifier(name)) if name == "u")
                     && matches!(
@@ -2102,7 +2157,9 @@ impl<'a> Parser<'a> {
                 }
             }
             _ => self.parse_postfix(),
-        }
+        };
+        self.expr_depth -= 1;
+        result
     }
 
     fn parse_closure(&mut self) -> Result<Expression, ParseError> {
@@ -2912,6 +2969,16 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// The shared diagnostic for a chain of `if`s past `MAX_IF_DEPTH`, used
+    /// by the if parser itself and by the expression/type guards when both
+    /// depth budgets are exhausted at the same nesting level.
+    fn if_depth_error(&self) -> ParseError {
+        ParseError::new(
+            format!("Maximum nested if depth ({MAX_IF_DEPTH}) exceeded"),
+            self.current().span,
+        )
+    }
+
     /// Parse an if expression while optionally consuming its shared `end if`.
     /// Chained `else if` branches share one terminator, owned by the outermost
     /// if expression. A finite limit keeps malformed or machine-generated input
@@ -2920,12 +2987,8 @@ impl<'a> Parser<'a> {
         &mut self,
         consume_terminator: bool,
     ) -> Result<Expression, ParseError> {
-        const MAX_IF_DEPTH: usize = 32;
         if self.if_depth >= MAX_IF_DEPTH {
-            return Err(ParseError::new(
-                format!("Maximum nested if depth ({MAX_IF_DEPTH}) exceeded"),
-                self.current().span,
-            ));
+            return Err(self.if_depth_error());
         }
 
         self.if_depth += 1;
@@ -5566,5 +5629,52 @@ end fn"#;
             Parser::new(&tokens).parse().is_ok(),
             "130 assignments must parse without hitting the depth cap"
         );
+    }
+
+    /// Grouping parens, prefix chains, and tuple types share one depth
+    /// budget: the deepest allowed forms parse, and going past the cap fails
+    /// with the expression-depth diagnostic instead of risking the stack —
+    /// the expression-side counterpart of the statement-depth guard.
+    #[test]
+    fn expression_nesting_depth_is_capped() {
+        const LIMIT: usize = 32;
+        let under = LIMIT - 8;
+        let over = LIMIT + 8;
+
+        // Grouping parens: every level re-enters through `parse_unary`.
+        let parens_ok = format!("var x := {}1{}\n", "(".repeat(under), ")".repeat(under));
+        let (tokens, _errors) = Lexer::lex(&parens_ok);
+        assert!(
+            Parser::new(&tokens).parse().is_ok(),
+            "parens under the cap must parse"
+        );
+
+        for (label, source) in [
+            (
+                "parens",
+                format!("var x := {}1{}\n", "(".repeat(over), ")".repeat(over)),
+            ),
+            // Prefix chains recurse within `parse_unary` itself.
+            ("unary chain", format!("var y := {}1\n", "- ".repeat(over))),
+            // Tuple types recurse through `parse_type`, never touching unary.
+            (
+                "tuple type",
+                format!(
+                    "fn f(a: {}i32{})\nend fn\n",
+                    "(".repeat(over),
+                    ")".repeat(over)
+                ),
+            ),
+        ] {
+            let (tokens, _errors) = Lexer::lex(&source);
+            let message = match Parser::new(&tokens).parse() {
+                Ok(_) => "<parsed successfully>".to_string(),
+                Err(e) => e.to_string(),
+            };
+            assert!(
+                message.contains("Maximum nested expression depth"),
+                "{label}: expected the expression-depth diagnostic, got: {message}"
+            );
+        }
     }
 }

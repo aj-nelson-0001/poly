@@ -42,8 +42,15 @@ def gen_expr(rng: random.Random, vars: list[str], depth: int, calls: list | None
     calls = calls if calls is not None else []
     if depth <= 0 or rng.random() < 0.3:
         if vars and rng.random() < 0.6:
-            return rng.choice(vars)
-        return str(rng.choice(CONSTS))
+            leaf = rng.choice(vars)
+        else:
+            leaf = str(rng.choice(CONSTS))
+        # Grouping-heavy leaves: most seeds then parse with expression
+        # nesting in the tens, near the parser's depth cap of 32, so a
+        # cap regression turns into a clean parse error the differential
+        # surfaces. Parens are semantically transparent on every target.
+        wraps = rng.randint(1, 10) if rng.random() < 0.25 else 0
+        return f"{'(' * wraps}{leaf}{')' * wraps}"
     # Calls to earlier-defined functions (DAG: they never call forward or
     # self, so termination holds even with nested call args). This is the
     # shape class that caught the asm shared call-result slot: two calls in

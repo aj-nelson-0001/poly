@@ -86,15 +86,16 @@ jobs:
         # parse_statement, so a stray stack frame per nesting level
         # overflows small-stack targets (macOS CI caught exactly that).
         # The whole suite runs under the cap so any test that regresses
-        # frame usage is caught, not only the deep-nesting one. 1972 KiB
-        # sits between the healthy full-suite floor (1960 KiB) and the
-        # frame-per-level regression floor (1984 KiB), measured with
-        # RUST_MIN_STACK on both revisions of this test.
+        # frame usage is caught, not only the deep-nesting one. 1952 KiB
+        # sits between the healthy full-suite floor (1936 KiB) and the
+        # frame-per-level regression floor (~1968 KiB = healthy plus one
+        # extra frame across the 32 live if levels); the cap is
+        # recentred whenever parser frames move the floor.
         if: runner.os == 'Linux'
         shell: bash
         run: |
           bin=$(ls compiler/target/debug/deps/error_handling_edge_cases-* | grep -v '\.d$' | head -1)
-          RUST_MIN_STACK=$((1972 * 1024)) "$bin"
+          RUST_MIN_STACK=$((1952 * 1024)) "$bin"
 
       - name: Check Rust examples
         shell: bash

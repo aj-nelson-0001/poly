@@ -74,7 +74,11 @@ impl Buffer {
 
 /// Allocate `len` raw bytes and return the pointer (0 on failure).
 fn raw_allocate(len: usize) -> *mut u8 {
-    let layout = Layout::from_size_align(len.max(1), 1).expect("valid layout");
+    // An oversized `len` is the only failure mode with `align = 1`; honor the
+    // documented contract by signaling failure with a null pointer, not a panic.
+    let Ok(layout) = Layout::from_size_align(len.max(1), 1) else {
+        return std::ptr::null_mut();
+    };
     unsafe { raw_alloc(layout) }
 }
 
@@ -236,7 +240,11 @@ pub unsafe extern "C" fn poly_free(ptr: *mut u8, len: usize) {
     if ptr.is_null() {
         return;
     }
-    let layout = Layout::from_size_align(len.max(1), 1).expect("valid layout");
+    // A layout error means `len` violates the `poly_alloc` contract (only
+    // possible past `isize::MAX`); there is nothing valid to free.
+    let Ok(layout) = Layout::from_size_align(len.max(1), 1) else {
+        return;
+    };
     unsafe { dealloc(ptr, layout) };
 }
 
@@ -308,35 +316,36 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_generates_rust() {
-        let (output, is_error) = round_trip("fn main()\n    put \"Hello, wasm!\"\nend fn").unwrap();
+    fn round_trip_generates_rust() -> Result<(), Box<dyn std::error::Error>> {
+        let (output, is_error) = round_trip("fn main()\n    put \"Hello, wasm!\"\nend fn")?;
         let text = String::from_utf8_lossy(&output);
         assert!(!is_error, "unexpected error: {text}");
         assert!(text.contains("println!"), "missing Rust output: {text}");
+        Ok(())
     }
 
     #[test]
-    fn round_trip_reports_type_errors() {
-        let (output, is_error) =
-            round_trip("fn main()\n    var x i32 := \"oops\"\nend fn").unwrap();
+    fn round_trip_reports_type_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let (output, is_error) = round_trip("fn main()\n    var x i32 := \"oops\"\nend fn")?;
         assert!(is_error, "type mismatch should be reported as an error");
         assert!(String::from_utf8_lossy(&output).contains("expected i32"));
+        Ok(())
     }
 
     #[test]
-    fn round_trip_handles_unicode_source() {
-        let (output, is_error) =
-            round_trip("fn main()\n    put unicode \"héllo wörld\"\nend fn").unwrap();
+    fn round_trip_handles_unicode_source() -> Result<(), Box<dyn std::error::Error>> {
+        let (output, is_error) = round_trip("fn main()\n    put unicode \"héllo wörld\"\nend fn")?;
         assert!(!is_error);
         let text = String::from_utf8_lossy(&output);
         assert!(text.contains("héllo wörld"), "unicode round trip: {text}");
+        Ok(())
     }
 
     #[test]
-    fn round_trip_targets_c_and_js() {
+    fn round_trip_targets_c_and_js() -> Result<(), Box<dyn std::error::Error>> {
         for (target, marker) in [("c", "int main"), ("js", "function main")] {
             let (output, is_error) =
-                round_trip_for_target("fn main()\n    put 42\nend fn", target).unwrap();
+                round_trip_for_target("fn main()\n    put 42\nend fn", target)?;
             assert!(!is_error, "{target}: unexpected error");
             let text = String::from_utf8_lossy(&output);
             assert!(
@@ -344,12 +353,14 @@ mod tests {
                 "{target}: missing `{marker}` in: {text}"
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn round_trip_reports_unknown_target() {
-        let (output, is_error) = round_trip_for_target("put 42", "cpp").unwrap();
+    fn round_trip_reports_unknown_target() -> Result<(), Box<dyn std::error::Error>> {
+        let (output, is_error) = round_trip_for_target("put 42", "cpp")?;
         assert!(is_error, "unknown targets should be reported as errors");
         assert!(String::from_utf8_lossy(&output).contains("Unknown target"));
+        Ok(())
     }
 }

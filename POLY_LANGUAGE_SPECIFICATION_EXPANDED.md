@@ -837,7 +837,7 @@ end match
 |-------------|-------------|
 | `try expr` | `expr?` |
 | `panic(msg)` | `panic!("{}", msg)` |
-| `val.unwrap()` | `val.unwrap()` |
+| `val.unwrap()` | `val.expect("Poly unwrap() called on None or Err value")` |
 | `val.expect(msg)` | `val.expect(&msg)` |
 
 ---
@@ -1733,8 +1733,8 @@ var output ustring := capture put unicode "Computed: " + (2 + 2)
 | `error expr` | `eprintln!("[ERROR] {}", expr);` |
 | `warn expr` | `eprintln!("[WARN] {}", expr);` |
 | `info expr` | `eprintln!("[INFO] {}", expr);` |
-| `put expr to "file"` | `std::fs::write("file", format!("{}\n", expr)).unwrap();` |
-| `put expr to "file" -append` | `use std::io::Write; let mut f = std::fs::OpenOptions::new().append(true).open("file").unwrap(); writeln!(f, "{}", expr).unwrap();` |
+| `put expr to "file"` | `std::fs::write("file", format!("{}\n", expr)).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) });` |
+| `put expr to "file" -append` | `use std::io::Write; let mut f = std::fs::OpenOptions::new().append(true).open("file").unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); writeln!(f, "{}", expr).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) });` |
 
 **Note:** The `error`, `warn`, and `info` commands automatically prepend level indicators (`[ERROR]`, `[WARN]`, `[INFO]`) to the output. This helps with log filtering and debugging.
 
@@ -2447,11 +2447,11 @@ var end ustring := get with validate |d| d.len() = 10 && d[4] = unicode '-' && d
 
 | Poly Syntax | Rust Output |
 |-------------|-------------|
-| `var x := get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
-| `var x i32 := get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); let x: i32 = input.trim().parse().unwrap();` |
-| `var x := get unicode "prompt"` | `print!("prompt"); std::io::stdout().flush().unwrap(); let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
-| `var x := get from "file"` | `let x = std::fs::read_to_string("file").unwrap();` |
-| `var x bytes := get from "file"` | `let x = std::fs::read("file").unwrap();` |
+| `var x := get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); x = x.trim().to_string();` |
+| `var x i32 := get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); let x: i32 = input.trim().parse().unwrap_or_default();` |
+| `var x := get unicode "prompt"` | `print!("prompt"); std::io::stdout().flush().unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); x = x.trim().to_string();` |
+| `var x := get from "file"` | `let x = std::fs::read_to_string("file").unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) });` |
+| `var x bytes := get from "file"` | `let x = std::fs::read("file").unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) });` |
 | `get --timeout 5000` | `// Uses std::thread::spawn with timer and channel to implement timeout. See standard library.` |
 | `get --default unicode "val"` | `// If input empty, returns default value. See standard library.` |
 | `get --mask unicode "*"` | `// Uses terminal raw mode to mask input characters. See standard library.` |
@@ -2899,7 +2899,7 @@ my_poly_project/
 | `error expr` | `eprintln!("[ERROR] {}", expr);` |
 | `warn expr` | `eprintln!("[WARN] {}", expr);` |
 | `info expr` | `eprintln!("[INFO] {}", expr);` |
-| `put expr to "file"` | `std::fs::write("file", expr.to_string()).unwrap();` |
+| `put expr to "file"` | `std::fs::write("file", expr.to_string()).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) });` |
 | `put expr to "file"` | Append to file with writeln |
 | `put "{x}"` | `println!("{}", x);` |
 | `put "{x:.2f}"` | `println!("{:.2f}", x);` |
@@ -2910,11 +2910,11 @@ my_poly_project/
 
 | Poly Syntax | Rust Output |
 |-------------|-------------|
-| `var x := get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
-| `var x i32 := get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap(); let x: i32 = input.trim().parse().unwrap();` |
-| `var x := get unicode "prompt"` | `print!("prompt"); std::io::stdout().flush().unwrap(); let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap(); x = x.trim().to_string();` |
-| `var x := get from "file"` | `let x = std::fs::read_to_string("file").unwrap();` |
-| `var x bytes := get from "file"` | `let x = std::fs::read("file").unwrap();` |
+| `var x := get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); x = x.trim().to_string();` |
+| `var x i32 := get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); let x: i32 = input.trim().parse().unwrap_or_default();` |
+| `var x := get unicode "prompt"` | `print!("prompt"); std::io::stdout().flush().unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); x = x.trim().to_string();` |
+| `var x := get from "file"` | `let x = std::fs::read_to_string("file").unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) });` |
+| `var x bytes := get from "file"` | `let x = std::fs::read("file").unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) });` |
 | `get --timeout 5000` | `// Uses std::thread::spawn with timer and channel to implement timeout. See standard library.` |
 | `get --default unicode "val"` | `// If input empty, returns default value. See standard library.` |
 | `get --mask unicode "*"` | `// Uses terminal raw mode to mask input characters. See standard library.` |

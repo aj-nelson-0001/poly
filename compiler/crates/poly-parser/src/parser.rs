@@ -2689,11 +2689,14 @@ impl<'a> Parser<'a> {
                 self.parse_interpolated_string(value, true)
             }
             TokenKind::UnicodeCharLiteral(value) => {
+                let span = self.current().span;
                 self.advance();
-                let character = value
-                    .chars()
-                    .next()
-                    .expect("lexer guarantees one Unicode character");
+                let Some(character) = value.chars().next() else {
+                    return Err(ParseError::new(
+                        "lexer guarantees one Unicode character",
+                        span,
+                    ));
+                };
                 Ok(Expression::UnicodeCharLiteral(character))
             }
             _ => Err(ParseError::with_suggestion(
@@ -2773,7 +2776,9 @@ impl<'a> Parser<'a> {
 
         // Fold `[a, b, c]` into `((a + b) + c)`.
         let mut iter = parts.into_iter();
-        let mut result = iter.next().expect("non-empty parts");
+        let Some(mut result) = iter.next() else {
+            return Err(ParseError::new("non-empty parts", self.current().span));
+        };
         for part in iter {
             result = Expression::BinaryOp {
                 op: BinaryOp::Add,
@@ -3858,7 +3863,8 @@ fn substitute_expression(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn negative_start_swallowed_range_parses_as_range_loop() {
+    fn negative_start_swallowed_range_parses_as_range_loop(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Regression: `TOTAL - -4..TOTAL - 1` shells the range under the
         // unary minus — `Sub(TOTAL, Neg(Range(4..TOTAL-1)))` — which used
         // to defeat extract_range and classify the loop as an infinite
@@ -3876,7 +3882,7 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().unwrap();
+        let program = parser.parse()?;
         let debug = format!("{program:?}");
         assert!(
             !debug.contains("InfiniteLoop"),
@@ -3886,10 +3892,12 @@ mod tests {
             debug.contains("LoopRange"),
             "expected a LoopRange expression: {debug}"
         );
+        Ok(())
     }
 
     #[test]
-    fn plain_swallowed_range_still_parses_as_range_loop() {
+    fn plain_swallowed_range_still_parses_as_range_loop() -> Result<(), Box<dyn std::error::Error>>
+    {
         // The original `TOTAL - 4..TOTAL - 1` shape must keep working.
         let source = concat!(
             "const TOTAL := 10\n",
@@ -3904,14 +3912,15 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().unwrap();
+        let program = parser.parse()?;
         let debug = format!("{program:?}");
         assert!(!debug.contains("InfiniteLoop"));
         assert!(debug.contains("LoopRange"));
+        Ok(())
     }
 
     #[test]
-    fn parse_dependency_declarations() {
+    fn parse_dependency_declarations() -> Result<(), Box<dyn std::error::Error>> {
         let source = concat!(
             "dep minifb = \"0.27\"\n",
             "dep alsa = \"0.9\"\n",
@@ -3920,7 +3929,7 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().unwrap();
+        let program = parser.parse()?;
         let deps: Vec<(String, String)> = program
             .statements
             .iter()
@@ -3938,15 +3947,17 @@ mod tests {
                 ("alsa".to_string(), "0.9".to_string())
             ]
         );
+        Ok(())
     }
 
     #[test]
-    fn dependency_declaration_requires_version_string() {
+    fn dependency_declaration_requires_version_string() -> Result<(), Box<dyn std::error::Error>> {
         let source = "dep minifb = 0.27\n";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
         assert!(parser.parse().is_err());
+        Ok(())
     }
 
     use super::*;
@@ -3959,26 +3970,29 @@ mod tests {
     }
 
     #[test]
-    fn foreign_blocks_parse_with_language_tags() {
-        let prog =
-            parse_source("#c\nint answer(void) { return 42; }\n#endc\nput answer()").unwrap();
+    fn foreign_blocks_parse_with_language_tags() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("#c\nint answer(void) { return 42; }\n#endc\nput answer()")?;
         assert!(matches!(
             &prog.statements[0].node,
             Statement::ForeignBlock { language, content }
                 if language == "c" && content.contains("answer")
         ));
+        Ok(())
     }
 
     #[test]
-    fn foreign_blocks_are_rejected_inside_poly_functions() {
+    fn foreign_blocks_are_rejected_inside_poly_functions() -> Result<(), Box<dyn std::error::Error>>
+    {
         let source = "fn outer()\n    #c\n    int answer(void) { return 42; }\n    #endc\nend fn";
         assert!(parse_source(source).is_err());
+        Ok(())
     }
 
     #[test]
-    fn extern_function_declarations_parse_with_target_and_signature() {
+    fn extern_function_declarations_parse_with_target_and_signature(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let source = "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc\nput double(21)";
-        let program = parse_source(source).unwrap();
+        let program = parse_source(source)?;
         match &program.statements[0].node {
             Statement::ExternFunctionDeclaration(declaration) => {
                 assert_eq!(declaration.target, "c");
@@ -3988,16 +4002,19 @@ mod tests {
             }
             other => panic!("expected extern declaration, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn extern_function_declarations_are_rejected_inside_poly_functions() {
+    fn extern_function_declarations_are_rejected_inside_poly_functions(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn outer()\n    extern c fn helper(value: i32): i32\nend fn";
         assert!(parse_source(source).is_err());
+        Ok(())
     }
 
     #[test]
-    fn statement_spans_cover_exact_source_ranges() {
+    fn statement_spans_cover_exact_source_ranges() -> Result<(), Box<dyn std::error::Error>> {
         let source =
             "var x i32 := 42\nfn sum(a: i32, b: i32): i32\n    return a + b\nend fn\nput x";
         let (tokens, errors) = Lexer::lex(source);
@@ -4020,12 +4037,12 @@ mod tests {
 
         let put = &program.statements[2];
         assert_eq!(&source[put.span.start..put.span.end], "put x");
+        Ok(())
     }
 
     #[test]
-    fn test_parse_generic_type_annotations() {
-        let prog =
-            parse_source("var scores Map<ustring, i32> := []\nvar seen Set<i32> := []").unwrap();
+    fn test_parse_generic_type_annotations() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("var scores Map<ustring, i32> := []\nvar seen Set<i32> := []")?;
         assert_eq!(prog.statements.len(), 2);
         match &prog.statements[0].node {
             Statement::VarDeclaration { ty: Some(ty), .. } => match ty {
@@ -4037,15 +4054,15 @@ mod tests {
             },
             other => panic!("expected var declaration, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_generic_function_and_struct() {
+    fn test_parse_generic_function_and_struct() -> Result<(), Box<dyn std::error::Error>> {
         let prog = parse_source(
             "fn identity<T>(value: T): T\n    return value\nend fn\n\
              struct Pair<T>\n    var first: T\n    var second: T\nend struct",
-        )
-        .unwrap();
+        )?;
         match &prog.statements[0].node {
             Statement::FunctionDeclaration(function) => {
                 assert_eq!(function.generics.len(), 1);
@@ -4060,13 +4077,13 @@ mod tests {
             }
             other => panic!("expected struct declaration, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_generic_function_with_trait_bound() {
+    fn test_parse_generic_function_with_trait_bound() -> Result<(), Box<dyn std::error::Error>> {
         let prog =
-            parse_source("fn process<T: DataFetcher>(fetcher: T)\n    put unicode \"ok\"\nend fn")
-                .unwrap();
+            parse_source("fn process<T: DataFetcher>(fetcher: T)\n    put unicode \"ok\"\nend fn")?;
         match &prog.statements[0].node {
             Statement::FunctionDeclaration(function) => {
                 assert_eq!(function.generics.len(), 1);
@@ -4075,15 +4092,15 @@ mod tests {
             }
             other => panic!("expected function declaration, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_macro_expansion() {
+    fn test_parse_macro_expansion() -> Result<(), Box<dyn std::error::Error>> {
         let prog = parse_source(
             "macro swap_values(a, b)\n    var temp := a\n    a := b\n    b := temp\nend macro\n\
              var x i32 := 1\nvar y i32 := 2\nswap_values(x, y)",
-        )
-        .unwrap();
+        )?;
         // The macro declaration is consumed; only the variables and the
         // expanded call remain.
         assert_eq!(prog.statements.len(), 3);
@@ -4097,15 +4114,16 @@ mod tests {
             }
             other => panic!("expected expanded block, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_macro_inside_expansion_binds_arguments() {
+    fn test_parse_macro_inside_expansion_binds_arguments() -> Result<(), Box<dyn std::error::Error>>
+    {
         let prog = parse_source(
             "macro double(value)\n    var result := value + value\n    put result\nend macro\n\
              double(21)",
-        )
-        .unwrap();
+        )?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::Block(statements) => match &statements[0].node {
@@ -4126,11 +4144,12 @@ mod tests {
             },
             other => panic!("expected expanded block, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_var_declaration() {
-        let prog = parse_source("var x i32 := 42").unwrap();
+    fn test_parse_var_declaration() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("var x i32 := 42")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::VarDeclaration { name, ty, value } => {
@@ -4140,24 +4159,31 @@ mod tests {
             }
             _ => panic!("Expected VarDeclaration"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_strict_var_syntax_and_prompt_errors() {
+    fn test_parse_strict_var_syntax_and_prompt_errors() -> Result<(), Box<dyn std::error::Error>> {
         assert!(parse_source("var inferred := 42").is_ok());
         assert!(parse_source("var typed i32 := 42").is_ok());
 
-        let colon_error = parse_source("var typed: i32 := 42").unwrap_err();
+        let Err(colon_error) = parse_source("var typed: i32 := 42") else {
+            panic!("expected an Err result")
+        };
         assert!(colon_error.message.contains("no longer use"));
         assert!(colon_error
             .suggestion
-            .unwrap()
+            .ok_or("expected a suggestion")?
             .contains("var typed type := value"));
 
-        let equals_error = parse_source("var typed = 42").unwrap_err();
+        let Err(equals_error) = parse_source("var typed = 42") else {
+            panic!("expected an Err result")
+        };
         assert!(equals_error.message.contains("must use `:=`"));
 
-        let prompt_error = parse_source(r#"var name := get "Prompt: ""#).unwrap_err();
+        let Err(prompt_error) = parse_source(r#"var name := get "Prompt: ""#) else {
+            panic!("expected an Err result")
+        };
         assert!(prompt_error.message.contains("get unicode"));
         assert!(parse_source(r#"var name := get unicode "Prompt: ""#).is_ok());
         assert!(parse_source(r#"var name := get -u "Prompt: ""#).is_err());
@@ -4174,17 +4200,20 @@ end match"#
         .is_ok());
 
         let legacy_source = format!("var greeting := {}{}{}{}", "u", '"', "Hello", '"');
-        let legacy_unicode_error = parse_source(&legacy_source).unwrap_err();
+        let Err(legacy_unicode_error) = parse_source(&legacy_source) else {
+            panic!("expected an Err result")
+        };
         assert!(legacy_unicode_error.message.contains("no longer accepted"));
         assert!(legacy_unicode_error
             .suggestion
-            .unwrap()
+            .ok_or("expected a suggestion")?
             .contains("unicode \"...\""));
+        Ok(())
     }
 
     #[test]
-    fn test_parse_function() {
-        let prog = parse_source("fn sum(a: i32, b: i32): i32").unwrap();
+    fn test_parse_function() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("fn sum(a: i32, b: i32): i32")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::FunctionDeclaration(decl) => {
@@ -4194,11 +4223,12 @@ end match"#
             }
             _ => panic!("Expected FunctionDeclaration"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_equality_and_assignment() {
-        let equality = parse_source("var same := x = 1").unwrap();
+    fn test_parse_equality_and_assignment() -> Result<(), Box<dyn std::error::Error>> {
+        let equality = parse_source("var same := x = 1")?;
         assert!(matches!(
             equality.statements.first().map(|s| &s.node),
             Some(Statement::VarDeclaration {
@@ -4211,31 +4241,39 @@ end match"#
         ));
         assert!(parse_source("var x := 0\nx := x + 1").is_ok());
         assert!(parse_source("var x := 0\nx := 1").is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_parse_assignment_target_shapes() {
+    fn test_parse_assignment_target_shapes() -> Result<(), Box<dyn std::error::Error>> {
         assert!(parse_source("total := 10").is_ok());
         assert!(parse_source("item.value := 10").is_ok());
         assert!(parse_source("items[0] := 10").is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_parse_rejects_legacy_equality() {
-        let error = parse_source("var x := a == b").unwrap_err();
+    fn test_parse_rejects_legacy_equality() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(error) = parse_source("var x := a == b") else {
+            panic!("expected an Err result")
+        };
         assert!(error.message.contains("legacy equality syntax"));
-        assert!(error.suggestion.unwrap().contains("Use `=`"));
+        assert!(error
+            .suggestion
+            .ok_or("expected a suggestion")?
+            .contains("Use `=`"));
         assert!(parse_source("var x := 0\nx := 1").is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_parse_operator_keywords() {
+    fn test_parse_operator_keywords() -> Result<(), Box<dyn std::error::Error>> {
         // Keyword operators produce the same AST variants the retired symbol
         // spellings did, so the checker, optimizer, and backends are unchanged.
         let prog = parse_source(
             "var a := x and y\nvar b := x or y\nvar c := x xor y\nvar d := x mod y\nvar e := x bitand y\nvar f := x bitor y\nvar g := x shift left 2\nvar h := x shift right 2\nvar i := not x\nvar j := bitnot x",
         )
-        .unwrap();
+        ?;
         let expected_ops = [
             BinaryOp::And,
             BinaryOp::Or,
@@ -4267,10 +4305,11 @@ end match"#
         }
         // `left` and `right` stay usable as ordinary identifiers.
         assert!(parse_source("var right := 1\nvar left := right").is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_parse_rejects_retired_operator_symbols() {
+    fn test_parse_rejects_retired_operator_symbols() -> Result<(), Box<dyn std::error::Error>> {
         let cases = [
             ("var x := a && b", "legacy and syntax", "Use `and`"),
             ("var x := a || b", "legacy or syntax", "Use `or`"),
@@ -4282,13 +4321,15 @@ end match"#
             ("var x := !a", "legacy not syntax", "Use `not`"),
         ];
         for (source, message_part, suggestion_part) in cases {
-            let error = parse_source(source).unwrap_err();
+            let Err(error) = parse_source(source) else {
+                panic!("expected an Err result")
+            };
             assert!(
                 error.message.contains(message_part),
                 "{source}: got {:?}",
                 error.message
             );
-            let suggestion = error.suggestion.unwrap();
+            let suggestion = error.suggestion.ok_or("expected a suggestion")?;
             assert!(
                 suggestion.contains(suggestion_part),
                 "{source}: got {suggestion:?}"
@@ -4296,20 +4337,24 @@ end match"#
         }
         // Shift symbols remain valid alternative syntax.
         assert!(parse_source("var x := a << 2\nvar y := a >> 2").is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_shift_requires_direction_word() {
-        let error = parse_source("var x := a shift 2").unwrap_err();
+    fn test_shift_requires_direction_word() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(error) = parse_source("var x := a shift 2") else {
+            panic!("expected an Err result")
+        };
         assert!(error
             .message
             .contains("`shift` must be followed by `left` or `right`"));
         assert!(parse_source("var x := a shift left 2\nvar y := a shift right 2").is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_parse_binary_expression() {
-        let prog = parse_source("var x := a + b * 2").unwrap();
+    fn test_parse_binary_expression() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("var x := a + b * 2")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::VarDeclaration {
@@ -4325,11 +4370,12 @@ end match"#
             }
             _ => panic!("Expected VarDeclaration"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_put_statement() {
-        let prog = parse_source(r#"put "Hello""#).unwrap();
+    fn test_parse_put_statement() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source(r#"put "Hello""#)?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::PutStatement { expr, .. } => match expr {
@@ -4338,20 +4384,22 @@ end match"#
             },
             _ => panic!("Expected PutStatement"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_putl_is_now_an_identifier() {
+    fn test_putl_is_now_an_identifier() -> Result<(), Box<dyn std::error::Error>> {
         // `putl` was removed from the language; it now parses as a plain identifier.
-        let prog = parse_source(r#"var putl := 42"#).unwrap();
+        let prog = parse_source(r#"var putl := 42"#)?;
         assert_eq!(prog.statements.len(), 1);
+        Ok(())
     }
 
     #[test]
-    fn test_parse_unicode_string_and_character_literals() {
+    fn test_parse_unicode_string_and_character_literals() -> Result<(), Box<dyn std::error::Error>>
+    {
         let program =
-            parse_source("var greeting := unicode \"Hello, 世界\"\nvar marker := unicode '✓'")
-                .unwrap();
+            parse_source("var greeting := unicode \"Hello, 世界\"\nvar marker := unicode '✓'")?;
         assert_eq!(program.statements.len(), 2);
         match &program.statements[0].node {
             Statement::VarDeclaration {
@@ -4371,28 +4419,34 @@ end match"#
             }
             _ => panic!("Expected Unicode character literal"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_reject_legacy_put_no_newline_flag() {
-        let err = parse_source(r#"put -n "Hello""#).unwrap_err();
+    fn test_reject_legacy_put_no_newline_flag() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(err) = parse_source(r#"put -n "Hello""#) else {
+            panic!("expected an Err result")
+        };
         assert!(err.message.contains("no longer accepts") || err.message.contains("Expected"));
+        Ok(())
     }
 
     #[test]
-    fn test_reject_legacy_unicode_string_literal() {
-        let error = parse_source(r#"var greeting := u"Hello""#).unwrap_err();
+    fn test_reject_legacy_unicode_string_literal() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(error) = parse_source(r#"var greeting := u"Hello""#) else {
+            panic!("expected an Err result")
+        };
         assert!(error.message.contains("no longer accepted"));
         assert!(error
             .suggestion
             .as_deref()
             .is_some_and(|suggestion| suggestion.contains("unicode")));
+        Ok(())
     }
 
     #[test]
-    fn test_parse_struct() {
-        let prog =
-            parse_source("struct Point\n    var x: f32\n    var y: f32\nend struct").unwrap();
+    fn test_parse_struct() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("struct Point\n    var x: f32\n    var y: f32\nend struct")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::StructDeclaration(decl) => {
@@ -4401,11 +4455,12 @@ end match"#
             }
             _ => panic!("Expected StructDeclaration"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_enum() {
-        let prog = parse_source("enum Direction\n    North\n    South\nend enum").unwrap();
+    fn test_parse_enum() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("enum Direction\n    North\n    South\nend enum")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::EnumDeclaration(decl) => {
@@ -4414,23 +4469,25 @@ end match"#
             }
             _ => panic!("Expected EnumDeclaration"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_if_expression() {
-        let prog = parse_source("if x > 0,\n    put x\nend if").unwrap();
+    fn test_parse_if_expression() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("if x > 0,\n    put x\nend if")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression { .. }) => {}
             _ => panic!("Expected IfExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_while_parses_to_dedicated_node() {
+    fn test_while_parses_to_dedicated_node() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: `while` used to be encoded as an if-without-else, so
         // every backend had to guess a loop from the missing else block.
-        let prog = parse_source("while i < 3\n    put i\nend while").unwrap();
+        let prog = parse_source("while i < 3\n    put i\nend while")?;
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::WhileLoop { condition, body }) => {
                 assert!(matches!(condition.as_ref(), Expression::BinaryOp { .. }));
@@ -4440,18 +4497,19 @@ end match"#
         }
         // A real if-without-else must stay an IfExpression with an explicit
         // empty else block.
-        let prog = parse_source("if i < 3\n    put i\nend if").unwrap();
+        let prog = parse_source("if i < 3\n    put i\nend if")?;
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression { else_block, .. }) => {
                 assert!(else_block.is_some());
             }
             _ => panic!("Expected IfExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_closure() {
-        let prog = parse_source("var square := |x: i32| x * x").unwrap();
+    fn test_parse_closure() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("var square := |x: i32| x * x")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::VarDeclaration {
@@ -4462,13 +4520,13 @@ end match"#
             }
             _ => panic!("Expected closure"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_closure_type_annotation() {
+    fn test_parse_closure_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
         // Closure types may appear in parameter positions: `|x: i32| i32`.
-        let prog = parse_source("fn apply(f: |x: i32| i32, v: i32): i32\n    return f(v)\nend fn")
-            .unwrap();
+        let prog = parse_source("fn apply(f: |x: i32| i32, v: i32): i32\n    return f(v)\nend fn")?;
         match &prog.statements[0].node {
             Statement::FunctionDeclaration(function) => {
                 assert_eq!(function.params.len(), 2);
@@ -4483,13 +4541,13 @@ end match"#
             }
             _ => panic!("Expected function declaration"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_bare_closure_type_annotation() {
+    fn test_parse_bare_closure_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
         // Parameter names are optional inside closure types: `|i32| i32`.
-        let prog =
-            parse_source("fn twice(f: |i32| i32, v: i32): i32\n    return f(v)\nend fn").unwrap();
+        let prog = parse_source("fn twice(f: |i32| i32, v: i32): i32\n    return f(v)\nend fn")?;
         match &prog.statements[0].node {
             Statement::FunctionDeclaration(function) => match &function.params[0].ty {
                 TypeAnnotation::Function { params, ret } => {
@@ -4501,11 +4559,12 @@ end match"#
             },
             _ => panic!("Expected function declaration"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_range() {
-        let prog = parse_source("var r := 0..10").unwrap();
+    fn test_parse_range() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("var r := 0..10")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::VarDeclaration {
@@ -4516,11 +4575,12 @@ end match"#
             }
             _ => panic!("Expected range"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_loop_range() {
-        let prog = parse_source("loop i 0..10\n    put i\nend loop").unwrap();
+    fn test_parse_loop_range() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("loop i 0..10\n    put i\nend loop")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange {
@@ -4534,11 +4594,12 @@ end match"#
             }
             _ => panic!("Expected LoopRange"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_multi_range_loop() {
-        let prog = parse_source("loop value 1..3, 7, 19..21\n    put value\nend loop").unwrap();
+    fn test_parse_multi_range_loop() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("loop value 1..3, 7, 19..21\n    put value\nend loop")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange {
@@ -4549,11 +4610,12 @@ end match"#
             }
             _ => panic!("Expected LoopRange with 3 parts"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_step_range() {
-        let prog = parse_source("loop n 0..10 step 2\n    put n\nend loop").unwrap();
+    fn test_parse_step_range() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("loop n 0..10 step 2\n    put n\nend loop")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange { ranges, .. }) => {
@@ -4574,17 +4636,20 @@ end match"#
             }
             _ => panic!("Expected LoopRange"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_loop_range_expression_start() {
+    fn test_parse_loop_range_expression_start() -> Result<(), Box<dyn std::error::Error>> {
         // A range start that is itself an expression: `TOTAL - 4..TOTAL - 1`
         // parses with the intended bounds, not `TOTAL - (4..TOTAL - 1)`.
         let src =
             "const TOTAL := 5\nfn main()\nloop i TOTAL - 4..TOTAL - 1\nput i\nend loop\nend fn";
-        let prog = parse_source(src).unwrap();
-        let fn_body = match &prog.statements.last().unwrap().node {
-            Statement::FunctionDeclaration(decl) => decl.body.as_ref().unwrap(),
+        let prog = parse_source(src)?;
+        let fn_body = match &prog.statements.last().ok_or("expected a statement")?.node {
+            Statement::FunctionDeclaration(decl) => {
+                decl.body.as_ref().ok_or("expected a function body")?
+            }
             other => panic!("Expected fn declaration, got {:?}", other),
         };
         let loops: Vec<_> = fn_body
@@ -4616,12 +4681,14 @@ end match"#
             }
             other => panic!("Expected range part, got {:?}", other),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_loop_range_requires_explicit_variable() {
+    fn test_parse_loop_range_requires_explicit_variable() -> Result<(), Box<dyn std::error::Error>>
+    {
         // `loop 0..10` is valid: the counter is discarded (bound to `_`).
-        let prog = parse_source("loop 0..10\n    put 0\nend loop").unwrap();
+        let prog = parse_source("loop 0..10\n    put 0\nend loop")?;
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange { variable, .. }) => {
                 assert_eq!(variable, "_");
@@ -4630,19 +4697,20 @@ end match"#
         }
         // A bare `loop` followed by a block without a variable is an infinite loop
         assert!(parse_source("loop\n    put 1\nend loop").is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_parse_loop_range_identifier_start() {
+    fn test_parse_loop_range_identifier_start() -> Result<(), Box<dyn std::error::Error>> {
         // The range start may be any expression: a const (`BUF..TOTAL - 1`),
         // an index (`xs[0]..n`), or a call (`first()..last()`).
         for src in [
             "const TOTAL := 5\nconst BUF := 2\nfn main()\nloop i BUF..TOTAL - 1\nput i\nend loop\nend fn",
             "fn main()\nvar xs := [1, 2, 3]\nloop i xs[0]..2\nput i\nend loop\nend fn",
         ] {
-            let prog = parse_source(src).unwrap();
-            let fn_body = match &prog.statements.last().unwrap().node {
-                Statement::FunctionDeclaration(decl) => decl.body.as_ref().unwrap(),
+            let prog = parse_source(src)?;
+            let fn_body = match &prog.statements.last().ok_or("expected a statement")?.node {
+                Statement::FunctionDeclaration(decl) => decl.body.as_ref().ok_or("expected a function body")?,
                 other => panic!("Expected fn declaration, got {:?}", other),
             };
             assert!(fn_body.iter().any(|s| {
@@ -4652,19 +4720,23 @@ end match"#
                 )
             }));
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_infinite_loop_body_starting_with_identifier() {
+    fn test_parse_infinite_loop_body_starting_with_identifier(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // `loop` whose body's first statement begins with an identifier is an
         // infinite loop, not a range loop — assignment and call forms.
         for src in [
             "fn main()\nvar acc i32 := 0\nloop\nacc := acc + 1\nbreak\nend loop\nend fn",
             "fn main()\nloop\ntick()\nbreak\nend loop\nend fn",
         ] {
-            let prog = parse_source(src).unwrap();
-            let fn_body = match &prog.statements.last().unwrap().node {
-                Statement::FunctionDeclaration(decl) => decl.body.as_ref().unwrap(),
+            let prog = parse_source(src)?;
+            let fn_body = match &prog.statements.last().ok_or("expected a statement")?.node {
+                Statement::FunctionDeclaration(decl) => {
+                    decl.body.as_ref().ok_or("expected a function body")?
+                }
                 other => panic!("Expected fn declaration, got {:?}", other),
             };
             assert!(fn_body.iter().any(|s| {
@@ -4674,11 +4746,12 @@ end match"#
                 )
             }));
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_infinite_loop_keeps_body() {
-        let prog = parse_source("loop\n    put 1\n    break\nend loop").unwrap();
+    fn test_parse_infinite_loop_keeps_body() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("loop\n    put 1\n    break\nend loop")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::InfiniteLoop(body)) => {
@@ -4686,12 +4759,12 @@ end match"#
             }
             _ => panic!("Expected InfiniteLoop with body"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_multiple_get_flags() {
-        let prog =
-            parse_source("var x ustring := get --timeout 5000 --default unicode \"0\"").unwrap();
+    fn test_parse_multiple_get_flags() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("var x ustring := get --timeout 5000 --default unicode \"0\"")?;
         match &prog.statements[0].node {
             Statement::VarDeclaration { value, .. } => match value {
                 Some(Expression::GetExpression(get)) => {
@@ -4701,14 +4774,14 @@ end match"#
             },
             _ => panic!("Expected VarDeclaration"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_tuple_destructuring_loop() {
+    fn test_parse_tuple_destructuring_loop() -> Result<(), Box<dyn std::error::Error>> {
         let prog = parse_source(
             "loop (index, fruit) in fruits.enumerate()\n    put index\n    put fruit\nend loop",
-        )
-        .unwrap();
+        )?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::LoopRange {
@@ -4723,14 +4796,14 @@ end match"#
             }
             _ => panic!("Expected LoopRange with tuple binding"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_match_with_block_body() {
+    fn test_parse_match_with_block_body() -> Result<(), Box<dyn std::error::Error>> {
         let prog = parse_source(
             "match x\n    1,\n        put \"one\"\n        x + 1\n    _, 0\nend match",
-        )
-        .unwrap();
+        )?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
@@ -4745,13 +4818,14 @@ end match"#
             }
             _ => panic!("Expected MatchExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_variant_pattern_without_colons() {
-        let prog =
-            parse_source("match x\n    Ok(content), put content\n    Error(e), error e\nend match")
-                .unwrap();
+    fn test_parse_variant_pattern_without_colons() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source(
+            "match x\n    Ok(content), put content\n    Error(e), error e\nend match",
+        )?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
@@ -4759,16 +4833,18 @@ end match"#
             }
             _ => panic!("Expected MatchExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_match_rejects_fat_arrow() {
+    fn test_parse_match_rejects_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
         assert!(parse_source("match x\n    1 => put \"one\"\nend match").is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_parse_match_with_comma_separator_and_guard() {
-        let prog = parse_source("match x\n    n if n > 0, put n\n    _, put 0\nend match").unwrap();
+    fn test_parse_match_with_comma_separator_and_guard() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("match x\n    n if n > 0, put n\n    _, put 0\nend match")?;
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
                 assert_eq!(arms.len(), 2);
@@ -4776,11 +4852,12 @@ end match"#
             }
             _ => panic!("Expected MatchExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_named_enum_variant() {
-        let prog = parse_source("enum Error\n    NotFound(message: ustring)\nend enum").unwrap();
+    fn test_parse_named_enum_variant() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("enum Error\n    NotFound(message: ustring)\nend enum")?;
         match &prog.statements[0].node {
             Statement::EnumDeclaration(decl) => {
                 assert_eq!(decl.variants.len(), 1);
@@ -4794,11 +4871,12 @@ end match"#
             }
             _ => panic!("Expected EnumDeclaration"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_if_else_if() {
-        let prog = parse_source("if x > 0,\n    put x\nelse if x < 0,\n    put \"negative\"\nelse,\n    put \"zero\"\nend if").unwrap();
+    fn test_parse_if_else_if() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("if x > 0,\n    put x\nelse if x < 0,\n    put \"negative\"\nelse,\n    put \"zero\"\nend if")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression {
@@ -4808,16 +4886,17 @@ end match"#
             }) => {
                 assert_eq!(then_block.len(), 1);
                 assert!(else_block.is_some());
-                let else_block = else_block.as_ref().unwrap();
+                let else_block = else_block.as_ref().ok_or("expected an else block")?;
                 assert_eq!(else_block.len(), 1); // else if is wrapped as single expression
             }
             _ => panic!("Expected IfExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_inline_if() {
-        let prog = parse_source("var y := if x > 0, x else -x end if").unwrap();
+    fn test_parse_inline_if() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("var y := if x > 0, x else -x end if")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::VarDeclaration {
@@ -4826,14 +4905,14 @@ end match"#
             } => {}
             _ => panic!("Expected VarDeclaration with IfExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_nested_if() {
+    fn test_parse_nested_if() -> Result<(), Box<dyn std::error::Error>> {
         let prog = parse_source(
             "if x > 0,\n    if y > 0,\n        put \"both positive\"\n    end if\nend if",
-        )
-        .unwrap();
+        )?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression { then_block, .. }) => {
@@ -4842,11 +4921,12 @@ end match"#
             }
             _ => panic!("Expected IfExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_if_without_else() {
-        let prog = parse_source("if x > 0\n    put x\nend if").unwrap();
+    fn test_parse_if_without_else() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("if x > 0\n    put x\nend if")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression {
@@ -4857,16 +4937,19 @@ end match"#
                 assert_eq!(then_block.len(), 1);
                 // else_block should be Some with empty vec when there's no else
                 assert!(else_block.is_some());
-                assert!(else_block.as_ref().unwrap().is_empty());
+                assert!(else_block
+                    .as_ref()
+                    .ok_or("expected an else block")?
+                    .is_empty());
             }
             _ => panic!("Expected IfExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_if_else_only() {
-        let prog =
-            parse_source("if x > 0,\n    put x\nelse,\n    put \"negative\"\nend if").unwrap();
+    fn test_parse_if_else_only() -> Result<(), Box<dyn std::error::Error>> {
+        let prog = parse_source("if x > 0,\n    put x\nelse,\n    put \"negative\"\nend if")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression {
@@ -4876,17 +4959,18 @@ end match"#
             }) => {
                 assert_eq!(then_block.len(), 1);
                 assert!(else_block.is_some());
-                let else_block = else_block.as_ref().unwrap();
+                let else_block = else_block.as_ref().ok_or("expected an else block")?;
                 assert_eq!(else_block.len(), 1); // else block has one statement
             }
             _ => panic!("Expected IfExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_multiple_else_if() {
+    fn test_parse_multiple_else_if() -> Result<(), Box<dyn std::error::Error>> {
         let source = "if x > 10,\n    put \"high\"\nelse if x > 5,\n    put \"medium\"\nelse if x > 0,\n    put \"low\"\nelse,\n    put \"zero\"\nend if";
-        let prog = parse_source(source).unwrap();
+        let prog = parse_source(source)?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression {
@@ -4897,40 +4981,42 @@ end match"#
                 assert_eq!(then_block.len(), 1);
                 assert!(else_block.is_some());
                 // The else block should contain a nested if-else-if chain
-                let else_block = else_block.as_ref().unwrap();
+                let else_block = else_block.as_ref().ok_or("expected an else block")?;
                 assert_eq!(else_block.len(), 1);
             }
             _ => panic!("Expected IfExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_reject_nested_if_statement_after_else() {
+    fn test_reject_nested_if_statement_after_else() -> Result<(), Box<dyn std::error::Error>> {
         // `else if` chains share one `end if`, so an `if` statement nested
         // directly inside an `else` is not part of the language: the chain
         // consumes the single terminator and the outer `end if` is left
         // stranded, which the parser reports with a targeted suggestion
         // instead of a confusing error at the next construct.
-        let error = parse_source(
+        let Err(error) = parse_source(
             "if x > 0\n    put \"pos\"\nelse\n    if x < 0\n        put \"neg\"\n    end if\nend if",
         )
-        .unwrap_err();
+        else { panic!("expected an Err result") };
         assert!(error.message.contains("nested"));
         assert!(error
             .suggestion
             .as_deref()
             .is_some_and(|text| text.contains("else if")));
+        Ok(())
     }
 
     #[test]
-    fn test_parse_else_if_chain_inside_then_block() {
+    fn test_parse_else_if_chain_inside_then_block() -> Result<(), Box<dyn std::error::Error>> {
         // A same-line `else if` arm nested inside another if's then-block
         // still shares the chain terminator: the innermost arm consumes the
         // single `end if` and the outer if is left with none to consume.
         let prog = parse_source(
             "if x > 0\n    if a\n        put \"A\"\n    else if b\n        put \"B\"\n    end if\nend if",
         )
-        .unwrap();
+        ?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression { then_block, .. }) => {
@@ -4939,7 +5025,7 @@ end match"#
                     Statement::ExpressionStatement(Expression::IfExpression {
                         else_block, ..
                     }) => {
-                        let else_block = else_block.as_ref().unwrap();
+                        let else_block = else_block.as_ref().ok_or("expected an else block")?;
                         assert_eq!(else_block.len(), 1);
                     }
                     _ => panic!("Expected inner IfExpression"),
@@ -4947,10 +5033,12 @@ end match"#
             }
             _ => panic!("Expected IfExpression"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_string_interpolation_splits_into_concatenation() {
+    fn test_string_interpolation_splits_into_concatenation(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // `"Name: {name}, Age: {age}"` must parse into a left-folded chain
         // of `+` with the literal parts and the embedded identifiers.
         let source = r#"fn main()
@@ -4958,11 +5046,11 @@ end match"#
     var age i32 := 30
     put "Name: {name}, Age: {age}"
 end fn"#;
-        let prog = parse_source(source).unwrap();
+        let prog = parse_source(source)?;
         let mut found = false;
         for spanned in &prog.statements {
             if let Statement::FunctionDeclaration(function) = &spanned.node {
-                for body_statement in function.body.as_ref().unwrap() {
+                for body_statement in function.body.as_ref().ok_or("expected a function body")? {
                     if let Statement::PutStatement { expr, .. } = &body_statement.node {
                         if matches!(
                             expr,
@@ -4978,28 +5066,33 @@ end fn"#;
             }
         }
         assert!(found, "interpolated string should parse as an Add chain");
+        Ok(())
     }
 
     #[test]
-    fn test_string_without_braces_stays_literal() {
+    fn test_string_without_braces_stays_literal() -> Result<(), Box<dyn std::error::Error>> {
         let source = r#"fn main()
     put "plain text"
 end fn"#;
-        let prog = parse_source(source).unwrap();
+        let prog = parse_source(source)?;
         let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
             panic!("expected a function declaration");
         };
-        let Statement::PutStatement { expr, .. } = &function.body.as_ref().unwrap()[0].node else {
+        let Statement::PutStatement { expr, .. } =
+            &function.body.as_ref().ok_or("expected a function body")?[0].node
+        else {
             panic!("expected a put statement");
         };
         match expr {
             Expression::StringLiteral(value) => assert_eq!(value, "plain text"),
             other => panic!("expected plain string literal, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_interpolation_keeps_unparseable_braces_literal() {
+    fn test_interpolation_keeps_unparseable_braces_literal(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // A `{` that does not form a valid expression (JSON-like text) stays
         // literal text rather than breaking the parse.
         let source = r#"fn main()
@@ -5007,21 +5100,22 @@ end fn"#;
     put json
 end fn"#;
         assert!(parse_source(source).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_parse_for_loop_tuple_destructuring() {
+    fn test_parse_for_loop_tuple_destructuring() -> Result<(), Box<dyn std::error::Error>> {
         // `for (idx, val) in collection` stores the tuple pattern in the loop
         // variable exactly like `loop: (a, b) in collection`.
         let source = "fn main()\n    var items := [5, 6]\n    for (idx, val) in items.enumerate()\n        put idx\n        put val\n    end for\nend fn";
-        let prog = parse_source(source).unwrap();
+        let prog = parse_source(source)?;
         let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
             panic!("expected a function declaration");
         };
         let statements: Vec<&Statement> = function
             .body
             .as_ref()
-            .unwrap()
+            .ok_or("expected a function body")?
             .iter()
             .map(|s| &s.node)
             .collect();
@@ -5030,22 +5124,23 @@ end fn"#;
             panic!("expected a ForLoop expression statement");
         };
         assert_eq!(variable, "(idx, val)");
+        Ok(())
     }
 
     #[test]
-    fn test_parse_tuple_element_assignment() {
+    fn test_parse_tuple_element_assignment() -> Result<(), Box<dyn std::error::Error>> {
         // `pair.0 := 99` and `pair.1 := false` must parse as assignments
         // whose target is a TupleIndex.
         let source =
             "fn main()\n    var pair := (10, true)\n    pair.0 := 99\n    pair.1 := false\nend fn";
-        let prog = parse_source(source).unwrap();
+        let prog = parse_source(source)?;
         let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
             panic!("expected a function declaration");
         };
         let statements: Vec<&Statement> = function
             .body
             .as_ref()
-            .unwrap()
+            .ok_or("expected a function body")?
             .iter()
             .map(|s| &s.node)
             .collect();
@@ -5069,14 +5164,15 @@ end fn"#;
             Expression::TupleIndex { index, .. } => assert_eq!(*index, 1),
             other => panic!("expected TupleIndex target, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_tuple_index_access() {
+    fn test_parse_tuple_index_access() -> Result<(), Box<dyn std::error::Error>> {
         // `pair.0` and chained `nested.1.0` must parse as TupleIndex nodes.
         let source =
             "fn main()\n    var pair := (10, true)\n    put pair.0\n    put nested.1.0\nend fn";
-        let prog = parse_source(source).unwrap();
+        let prog = parse_source(source)?;
         let function = &prog.statements[0].node;
         let Statement::FunctionDeclaration(function) = function else {
             panic!("expected a function declaration");
@@ -5084,7 +5180,7 @@ end fn"#;
         let statements: Vec<&Statement> = function
             .body
             .as_ref()
-            .unwrap()
+            .ok_or("expected a function body")?
             .iter()
             .map(|s| &s.node)
             .collect();
@@ -5125,42 +5221,58 @@ end fn"#;
             }
             other => panic!("expected outer TupleIndex, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn retired_set_statement_carries_migration_suggestion() {
-        let error = parse_source("set x to 2").unwrap_err();
+    fn retired_set_statement_carries_migration_suggestion() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let Err(error) = parse_source("set x to 2") else {
+            panic!("expected an Err result")
+        };
         assert!(error.message.contains("removed"), "got: {}", error.message);
         assert_eq!(
             error.suggestion.as_deref(),
             Some("Use `x := y` instead of `set x to y`")
         );
+        Ok(())
     }
     #[test]
-    fn retired_add_statement_carries_migration_suggestion() {
-        let error = parse_source("add x, 5").unwrap_err();
+    fn retired_add_statement_carries_migration_suggestion() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let Err(error) = parse_source("add x, 5") else {
+            panic!("expected an Err result")
+        };
         assert!(error.message.contains("removed"), "got: {}", error.message);
         assert_eq!(
             error.suggestion.as_deref(),
             Some("Use `x := x + n` instead of `add x n`")
         );
+        Ok(())
     }
 
     #[test]
-    fn retired_inc_and_dec_statements_carry_migration_suggestions() {
+    fn retired_inc_and_dec_statements_carry_migration_suggestions(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         for (source, expected) in [
             ("inc x", "Use `x := x + 1` instead of `inc x`"),
             ("dec x", "Use `x := x - 1` instead of `dec x`"),
         ] {
-            let error = parse_source(source).unwrap_err();
+            let Err(error) = parse_source(source) else {
+                panic!("expected an Err result")
+            };
             assert!(error.message.contains("removed"), "got: {}", error.message);
             assert_eq!(error.suggestion.as_deref(), Some(expected));
         }
+        Ok(())
     }
 
     #[test]
-    fn compound_assignments_are_rejected_with_migration_suggestions() {
-        let plus = parse_source("var x i32 := 1\nx += 2").unwrap_err();
+    fn compound_assignments_are_rejected_with_migration_suggestions(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let Err(plus) = parse_source("var x i32 := 1\nx += 2") else {
+            panic!("expected an Err result")
+        };
         assert!(
             plus.message.contains("compound assignment is retired"),
             "got: {}",
@@ -5171,35 +5283,39 @@ end fn"#;
             Some("Use `x := x + value` instead")
         );
 
-        let minus = parse_source("var x i32 := 1\nx -= 2").unwrap_err();
+        let Err(minus) = parse_source("var x i32 := 1\nx -= 2") else {
+            panic!("expected an Err result")
+        };
         assert_eq!(
             minus.suggestion.as_deref(),
             Some("Use `x := x - value` instead")
         );
+        Ok(())
     }
 
     #[test]
-    fn assignments_to_variables_named_like_retired_forms_are_accepted() {
+    fn assignments_to_variables_named_like_retired_forms_are_accepted(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // `add := 5` assigns a variable named `add`; `inc(counter)` is a call.
         // Neither has the retired statement shape, so neither is flagged.
-        let prog = parse_source("var add i32 := 0\nadd := 5\nvar counter i32 := 0\nreset(counter)")
-            .unwrap();
+        let prog =
+            parse_source("var add i32 := 0\nadd := 5\nvar counter i32 := 0\nreset(counter)")?;
         assert_eq!(prog.statements.len(), 4);
+        Ok(())
     }
 
     #[test]
-    fn macros_expand_in_value_position() {
+    fn macros_expand_in_value_position() -> Result<(), Box<dyn std::error::Error>> {
         let prog = parse_source(
             "macro double(x)\n    return x * 2\nend macro\n\
              fn main()\n    var y i32 := double(21)\n    put y\nend fn",
-        )
-        .unwrap();
+        )?;
         // The macro declaration is consumed; only main remains.
         assert_eq!(prog.statements.len(), 1);
         let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
             panic!("expected function declaration");
         };
-        let body = function.body.as_ref().expect("main has a body");
+        let body = function.body.as_ref().ok_or("main has a body")?;
         let Statement::VarDeclaration {
             value: Some(value), ..
         } = &body[0].node
@@ -5218,41 +5334,45 @@ end fn"#;
             }
             other => panic!("expected substituted macro body, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn macros_in_value_position_keep_arity_errors() {
-        let error = parse_source(
+    fn macros_in_value_position_keep_arity_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(error) = parse_source(
             "macro double(x)\n    return x * 2\nend macro\n\
              var y i32 := double(1, 2)",
-        )
-        .unwrap_err();
+        ) else {
+            panic!("expected an Err result")
+        };
         assert!(
             error.message.contains("expects 1 arguments, got 2"),
             "got: {}",
             error.message
         );
+        Ok(())
     }
 
     #[test]
-    fn statement_position_macros_still_expand_multi_statement_bodies() {
+    fn statement_position_macros_still_expand_multi_statement_bodies(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Regression guard: the value-position hook in `parse_postfix` must
         // leave non-value macro calls untouched so the statement-level path
         // expands the full body.
         let prog = parse_source(
             "macro showit(x)\n    put x\nend macro\n\
              fn main()\n    showit(42)\nend fn",
-        )
-        .unwrap();
+        )?;
         let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
             panic!("expected function declaration");
         };
-        let body = function.body.as_ref().expect("main has a body");
+        let body = function.body.as_ref().ok_or("main has a body")?;
         match &body[0].node {
             Statement::Block(statements) => {
                 assert!(matches!(statements[0].node, Statement::PutStatement { .. }));
             }
             other => panic!("expected expanded macro block, got {other:?}"),
         }
+        Ok(())
     }
 }

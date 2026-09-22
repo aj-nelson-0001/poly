@@ -434,7 +434,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn round_trip_objects() {
+    fn round_trip_objects() -> Result<(), Box<dyn std::error::Error>> {
         let value = Json::obj(vec![
             ("jsonrpc", Json::str("2.0")),
             ("id", Json::num(1)),
@@ -446,64 +446,68 @@ mod tests {
         ]);
         let text = value.serialize();
         assert!(text.contains("\"jsonrpc\":\"2.0\""));
-        let parsed = parse(&text).unwrap();
+        let parsed = parse(&text)?;
         assert_eq!(parsed, value);
+        Ok(())
     }
 
     #[test]
-    fn parse_scalars() {
-        assert_eq!(parse("null").unwrap(), Json::Null);
-        assert_eq!(parse("true").unwrap(), Json::Bool(true));
-        assert_eq!(parse("42").unwrap(), Json::Number(42.0));
-        assert_eq!(parse("-1.5e2").unwrap(), Json::Number(-150.0));
+    fn parse_scalars() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse("null")?, Json::Null);
+        assert_eq!(parse("true")?, Json::Bool(true));
+        assert_eq!(parse("42")?, Json::Number(42.0));
+        assert_eq!(parse("-1.5e2")?, Json::Number(-150.0));
+        assert_eq!(parse("\"hi\\n\\\"there\\\"\"")?, Json::str("hi\n\"there\""));
         assert_eq!(
-            parse("\"hi\\n\\\"there\\\"\"").unwrap(),
-            Json::str("hi\n\"there\"")
-        );
-        assert_eq!(
-            parse("[1, 2, 3]").unwrap(),
+            parse("[1, 2, 3]")?,
             Json::Array(vec![
                 Json::Number(1.0),
                 Json::Number(2.0),
                 Json::Number(3.0),
             ])
         );
+        Ok(())
     }
 
     #[test]
-    fn parse_unicode_escape() {
-        assert_eq!(parse("\"\\u0041\"").unwrap(), Json::str("A"));
-        assert_eq!(parse("\"\\u00e9\"").unwrap(), Json::str("é"));
+    fn parse_unicode_escape() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse("\"\\u0041\"")?, Json::str("A"));
+        assert_eq!(parse("\"\\u00e9\"")?, Json::str("é"));
+        Ok(())
     }
 
     #[test]
-    fn parse_surrogate_pair_escape() {
+    fn parse_surrogate_pair_escape() -> Result<(), Box<dyn std::error::Error>> {
         // 😀 = U+1F600 = \uD83D\uDE00 as a surrogate pair.
-        assert_eq!(parse("\"\\uD83D\\uDE00\"").unwrap(), Json::str("😀"));
-        assert_eq!(parse("\"a\\uD83D\\uDE00b\"").unwrap(), Json::str("a😀b"));
+        assert_eq!(parse("\"\\uD83D\\uDE00\"")?, Json::str("😀"));
+        assert_eq!(parse("\"a\\uD83D\\uDE00b\"")?, Json::str("a😀b"));
+        Ok(())
     }
 
     #[test]
-    fn reject_lone_surrogates() {
+    fn reject_lone_surrogates() -> Result<(), Box<dyn std::error::Error>> {
         // A lone high surrogate without a following low surrogate, and a lone
         // low surrogate, are invalid JSON escapes.
         assert!(parse("\"\\uD83D\"").is_err());
         assert!(parse("\"\\uDE00\"").is_err());
         assert!(parse("\"\\uD83Dx\"").is_err());
+        Ok(())
     }
 
     #[test]
-    fn reject_malformed() {
+    fn reject_malformed() -> Result<(), Box<dyn std::error::Error>> {
         assert!(parse("{").is_err());
         assert!(parse("[1,]").is_err());
         assert!(parse("\"unterminated").is_err());
         assert!(parse("tru").is_err());
         assert!(parse("").is_err());
+        Ok(())
     }
 
     #[test]
-    fn number_integer_rendering() {
+    fn number_integer_rendering() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(Json::Number(7.0).serialize(), "7");
         assert_eq!(Json::Number(0.5).serialize(), "0.5");
+        Ok(())
     }
 }

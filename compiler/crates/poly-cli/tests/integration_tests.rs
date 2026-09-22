@@ -10,8 +10,8 @@ fn examples_dir() -> std::path::PathBuf {
 }
 
 #[test]
-fn test_transpile_prime_numbers() {
-    let source = std::fs::read_to_string(examples_dir().join("prime_numbers.poly")).unwrap();
+fn test_transpile_prime_numbers() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string(examples_dir().join("prime_numbers.poly"))?;
     let t = Transpiler::new();
     let result = t.transpile(&source);
     assert!(
@@ -20,15 +20,16 @@ fn test_transpile_prime_numbers() {
         result.err()
     );
 
-    let rust_code = result.unwrap();
+    let rust_code = result?;
     assert!(rust_code.contains("fn is_prime"));
     assert!(rust_code.contains("while"));
     assert!(rust_code.contains("return"));
+    Ok(())
 }
 
 #[test]
-fn test_transpile_file_processing() {
-    let source = std::fs::read_to_string(examples_dir().join("file_processing.poly")).unwrap();
+fn test_transpile_file_processing() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string(examples_dir().join("file_processing.poly"))?;
     let t = Transpiler::new();
     let result = t.transpile(&source);
     assert!(
@@ -36,11 +37,12 @@ fn test_transpile_file_processing() {
         "Failed to transpile file_processing.poly: {:?}",
         result.err()
     );
+    Ok(())
 }
 
 #[test]
-fn test_transpile_error_handling() {
-    let source = std::fs::read_to_string(examples_dir().join("error_handling.poly")).unwrap();
+fn test_transpile_error_handling() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string(examples_dir().join("error_handling.poly"))?;
     let t = Transpiler::new();
     let result = t.transpile(&source);
     assert!(
@@ -49,14 +51,15 @@ fn test_transpile_error_handling() {
         result.err()
     );
 
-    let rust_code = result.unwrap();
+    let rust_code = result?;
     assert!(rust_code.contains("enum FileError"));
     assert!(rust_code.contains("enum ValidationError"));
+    Ok(())
 }
 
 #[test]
-fn test_transpile_interactive_menu() {
-    let source = std::fs::read_to_string(examples_dir().join("interactive_menu.poly")).unwrap();
+fn test_transpile_interactive_menu() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string(examples_dir().join("interactive_menu.poly"))?;
     let t = Transpiler::new();
     let result = t.transpile(&source);
     assert!(
@@ -65,15 +68,16 @@ fn test_transpile_interactive_menu() {
         result.err()
     );
 
-    let rust_code = result.unwrap();
+    let rust_code = result?;
     assert!(rust_code.contains("fn main"));
     assert!(rust_code.contains("fn greet_user"));
     assert!(rust_code.contains("fn calculator"));
+    Ok(())
 }
 
 #[test]
-fn test_transpile_loop_ranges() {
-    let source = std::fs::read_to_string(examples_dir().join("loop_ranges.poly")).unwrap();
+fn test_transpile_loop_ranges() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string(examples_dir().join("loop_ranges.poly"))?;
     let t = Transpiler::new();
     let result = t.transpile(&source);
     assert!(
@@ -82,29 +86,29 @@ fn test_transpile_loop_ranges() {
         result.err()
     );
 
-    let rust_code = result.unwrap();
+    let rust_code = result?;
     assert!(rust_code.contains("fn main"));
     assert!(rust_code.contains("fn is_prime"));
+    Ok(())
 }
 
 #[test]
-fn test_loop_ranges_include_all_endpoints_at_runtime() {
+fn test_loop_ranges_include_all_endpoints_at_runtime() -> Result<(), Box<dyn std::error::Error>> {
     let source =
         "fn main()\n    loop value 1..3, 7, 19..20\n        put value\n    end loop\nend fn";
-    let rust_code = Transpiler::new().transpile(source).unwrap();
+    let rust_code = Transpiler::new().transpile(source)?;
     let unique = format!(
         "poly_loop_runtime_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     );
     let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::create_dir_all(&directory)?;
     let source_path = directory.join("main.rs");
     let binary_path = directory.join("loop_program");
-    std::fs::write(&source_path, rust_code).unwrap();
+    std::fs::write(&source_path, rust_code)?;
 
     let compile = std::process::Command::new("rustc")
         .arg("--edition")
@@ -112,26 +116,26 @@ fn test_loop_ranges_include_all_endpoints_at_runtime() {
         .arg(&source_path)
         .arg("-o")
         .arg(&binary_path)
-        .output()
-        .unwrap();
+        .output()?;
     assert!(
         compile.status.success(),
         "generated loop program failed to compile: {}",
         String::from_utf8_lossy(&compile.stderr)
     );
 
-    let run = std::process::Command::new(&binary_path).output().unwrap();
+    let run = std::process::Command::new(&binary_path).output()?;
     assert!(
         run.status.success(),
         "generated loop program failed to run: {}",
         String::from_utf8_lossy(&run.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&run.stdout), "1\n2\n3\n7\n19\n20\n");
-    std::fs::remove_dir_all(directory).unwrap();
+    std::fs::remove_dir_all(directory)?;
+    Ok(())
 }
 
 #[test]
-fn test_all_examples_transpile() {
+fn test_all_examples_transpile() -> Result<(), Box<dyn std::error::Error>> {
     let t = Transpiler::new();
 
     let mut transpiled = 0;
@@ -146,7 +150,7 @@ fn test_all_examples_transpile() {
                 .unwrap_or(false)
             {
                 let name = entry.file_name().to_string_lossy().to_string();
-                let source = std::fs::read_to_string(entry.path()).unwrap();
+                let source = std::fs::read_to_string(entry.path())?;
                 match t.transpile(&source) {
                     Ok(_) => transpiled += 1,
                     Err(e) => failed.push((name, e)),
@@ -161,10 +165,11 @@ fn test_all_examples_transpile() {
         "Expected at least 5 examples to transpile, got {}",
         transpiled
     );
+    Ok(())
 }
 
 #[test]
-fn test_transpile_basic_programs() {
+fn test_transpile_basic_programs() -> Result<(), Box<dyn std::error::Error>> {
     let test_cases = vec![
         (
             "fn main()\n    var x i32 := 42\nend fn",
@@ -185,7 +190,7 @@ fn test_transpile_basic_programs() {
     for (input, expected) in test_cases {
         let result = t.transpile(input);
         assert!(result.is_ok(), "Failed to transpile: {}", input);
-        let rust_code = result.unwrap();
+        let rust_code = result?;
         assert!(
             rust_code.contains(expected),
             "Expected '{}' in output for input '{}'",
@@ -193,10 +198,11 @@ fn test_transpile_basic_programs() {
             input
         );
     }
+    Ok(())
 }
 
 #[test]
-fn test_parse_and_transpile_roundtrip() {
+fn test_parse_and_transpile_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn greet(name: ustring): ustring
     return "Hello, " + name
@@ -215,21 +221,23 @@ end fn
         result.err()
     );
 
-    let rust_code = result.unwrap();
+    let rust_code = result?;
     assert!(rust_code.contains("fn greet"));
     assert!(rust_code.contains("Hello, "));
+    Ok(())
 }
 
 #[test]
-fn test_if_else_chains_compiles_to_valid_rust() {
-    let source = std::fs::read_to_string(examples_dir().join("if_else_chains.poly")).unwrap();
-    let rust_code = Transpiler::new().transpile(&source).unwrap();
+fn test_if_else_chains_compiles_to_valid_rust() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string(examples_dir().join("if_else_chains.poly"))?;
+    let rust_code = Transpiler::new().transpile(&source)?;
     verify_rust_compiles(&rust_code)
         .unwrap_or_else(|error| panic!("if_else_chains.poly generated invalid Rust: {error}"));
+    Ok(())
 }
 
 #[test]
-fn test_string_match_compiles_to_valid_rust() {
+fn test_string_match_compiles_to_valid_rust() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
     var value := "hello"
@@ -239,30 +247,33 @@ fn main()
     end match
 end fn
 "#;
-    let rust_code = Transpiler::new().transpile(source).unwrap();
+    let rust_code = Transpiler::new().transpile(source)?;
     verify_rust_compiles(&rust_code)
         .unwrap_or_else(|error| panic!("string match generated invalid Rust: {error}"));
+    Ok(())
 }
 
 #[test]
-fn test_representative_generated_rust_codegen_compiles() {
+fn test_representative_generated_rust_codegen_compiles() -> Result<(), Box<dyn std::error::Error>> {
     let source = "fn sum(a: i32, b: i32): i32\n    return a + b\nend fn";
-    let rust_code = Transpiler::new().transpile(source).unwrap();
+    let rust_code = Transpiler::new().transpile(source)?;
     verify_rust_codegen_compiles(&rust_code)
         .unwrap_or_else(|error| panic!("representative generated Rust failed codegen: {error}"));
+    Ok(())
 }
 
 #[test]
-fn test_returned_closure_binding_compiles() {
+fn test_returned_closure_binding_compiles() -> Result<(), Box<dyn std::error::Error>> {
     let source =
         "fn make_adder(n: i32): |x: i32| i32\n    var f := |x| x + n\n    return f\nend fn";
-    let rust_code = Transpiler::new().transpile(source).unwrap();
+    let rust_code = Transpiler::new().transpile(source)?;
     verify_rust_compiles(&rust_code)
         .unwrap_or_else(|error| panic!("returned closure binding generated invalid Rust: {error}"));
+    Ok(())
 }
 
 #[test]
-fn test_all_examples_compile_to_valid_rust() {
+fn test_all_examples_compile_to_valid_rust() -> Result<(), Box<dyn std::error::Error>> {
     let t = poly_transpiler::Transpiler::new();
     let examples_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../examples");
 
@@ -278,7 +289,7 @@ fn test_all_examples_compile_to_valid_rust() {
                 .unwrap_or(false)
             {
                 let name = entry.file_name().to_string_lossy().to_string();
-                let source = std::fs::read_to_string(entry.path()).unwrap();
+                let source = std::fs::read_to_string(entry.path())?;
 
                 tested += 1;
 
@@ -320,6 +331,7 @@ fn test_all_examples_compile_to_valid_rust() {
         tested,
         failures
     );
+    Ok(())
 }
 
 /// Normalize platform text-mode line endings so behavioral assertions are
@@ -331,21 +343,21 @@ fn normalize_newlines(text: &str) -> String {
 /// Compile a Poly program to Rust, build it with rustc, run it (optionally
 /// feeding `stdin`), and return its stdout. Panics on any failure so each
 /// test's assertion stays focused on behavior.
-fn compile_and_run(source: &str, stdin: Option<&str>) -> String {
-    let rust_code = Transpiler::new().transpile(source).unwrap();
+fn compile_and_run(source: &str, stdin: Option<&str>) -> Result<String, String> {
+    let rust_code = Transpiler::new().transpile(source)?;
     let unique = format!(
         "poly_runtime_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .map_err(|e| e.to_string())?
             .as_nanos()
     );
     let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     let source_path = directory.join("main.rs");
     let binary_path = directory.join("program");
-    std::fs::write(&source_path, rust_code).unwrap();
+    std::fs::write(&source_path, rust_code).map_err(|e| e.to_string())?;
 
     let compile = std::process::Command::new("rustc")
         .arg("--edition")
@@ -354,7 +366,7 @@ fn compile_and_run(source: &str, stdin: Option<&str>) -> String {
         .arg("-o")
         .arg(&binary_path)
         .output()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
     assert!(
         compile.status.success(),
         "generated program failed to compile: {}",
@@ -363,7 +375,7 @@ fn compile_and_run(source: &str, stdin: Option<&str>) -> String {
 
     let mut command = std::process::Command::new(&binary_path);
     command.current_dir(&directory);
-    if let Some(input) = stdin {
+    Ok(if let Some(input) = stdin {
         use std::io::Write;
         use std::process::Stdio;
         let mut child = command
@@ -371,37 +383,37 @@ fn compile_and_run(source: &str, stdin: Option<&str>) -> String {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .unwrap();
+            .map_err(|e| e.to_string())?;
         child
             .stdin
             .as_mut()
-            .unwrap()
+            .ok_or("child stdin should be piped")?
             .write_all(input.as_bytes())
-            .unwrap();
-        let output = child.wait_with_output().unwrap();
+            .map_err(|e| e.to_string())?;
+        let output = child.wait_with_output().map_err(|e| e.to_string())?;
         assert!(
             output.status.success(),
             "generated program failed to run: {}",
             String::from_utf8_lossy(&output.stderr)
         );
         let stdout = normalize_newlines(&String::from_utf8_lossy(&output.stdout));
-        std::fs::remove_dir_all(directory).unwrap();
+        std::fs::remove_dir_all(directory).map_err(|e| e.to_string())?;
         stdout
     } else {
-        let run = command.output().unwrap();
+        let run = command.output().map_err(|e| e.to_string())?;
         assert!(
             run.status.success(),
             "generated program failed to run: {}",
             String::from_utf8_lossy(&run.stderr)
         );
         let stdout = normalize_newlines(&String::from_utf8_lossy(&run.stdout));
-        std::fs::remove_dir_all(directory).unwrap();
+        std::fs::remove_dir_all(directory).map_err(|e| e.to_string())?;
         stdout
-    }
+    })
 }
 
 #[test]
-fn test_runtime_file_reading_line_by_line() {
+fn test_runtime_file_reading_line_by_line() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
     var file := open("data.txt")
@@ -416,26 +428,24 @@ end fn
         "poly_file_fixture_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     );
     let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory).unwrap();
-    std::fs::write(directory.join("data.txt"), "hello\nworld\n").unwrap();
+    std::fs::create_dir_all(&directory)?;
+    std::fs::write(directory.join("data.txt"), "hello\nworld\n")?;
 
-    let rust_code = Transpiler::new().transpile(source).unwrap();
+    let rust_code = Transpiler::new().transpile(source)?;
     let source_path = directory.join("main.rs");
     let binary_path = directory.join("program");
-    std::fs::write(&source_path, rust_code).unwrap();
+    std::fs::write(&source_path, rust_code)?;
     let compile = std::process::Command::new("rustc")
         .arg("--edition")
         .arg("2021")
         .arg(&source_path)
         .arg("-o")
         .arg(&binary_path)
-        .output()
-        .unwrap();
+        .output()?;
     assert!(
         compile.status.success(),
         "generated file program failed to compile: {}",
@@ -443,19 +453,19 @@ end fn
     );
     let run = std::process::Command::new(&binary_path)
         .current_dir(&directory)
-        .output()
-        .unwrap();
+        .output()?;
     assert!(
         run.status.success(),
         "generated file program failed to run: {}",
         String::from_utf8_lossy(&run.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&run.stdout), "hello\nworld\n");
-    std::fs::remove_dir_all(directory).unwrap();
+    std::fs::remove_dir_all(directory)?;
+    Ok(())
 }
 
 #[test]
-fn test_runtime_negative_loop_step_magnitude() {
+fn test_runtime_negative_loop_step_magnitude() -> Result<(), Box<dyn std::error::Error>> {
     // `10..1 step -2` must visit 10, 8, 6, 4, 2 — the magnitude of the step
     // drives `step_by`, not its sign (which selects `.rev()`).
     let source = r#"
@@ -465,11 +475,12 @@ fn main()
     end loop
 end fn
 "#;
-    assert_eq!(compile_and_run(source, None), "10\n8\n6\n4\n2\n");
+    assert_eq!(compile_and_run(source, None)?, "10\n8\n6\n4\n2\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_get_trims_input() {
+fn test_runtime_get_trims_input() -> Result<(), Box<dyn std::error::Error>> {
     // `read_line` keeps the trailing newline; plain `get` must strip it so
     // concatenation and comparisons see exactly what the user typed.
     let source = r#"
@@ -478,11 +489,12 @@ fn main()
     put name + unicode "!"
 end fn
 "#;
-    assert_eq!(compile_and_run(source, Some("Alice\n")), "Alice!\n");
+    assert_eq!(compile_and_run(source, Some("Alice\n"))?, "Alice!\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_get_as_parses_typed_input() {
+fn test_runtime_get_as_parses_typed_input() -> Result<(), Box<dyn std::error::Error>> {
     // `--as i32` must parse the trimmed input; an untrimmed "21\n" fails
     // `str::parse` and would silently become 0.
     let source = r#"
@@ -491,11 +503,12 @@ fn main()
     put (n * 2).to_string()
 end fn
 "#;
-    assert_eq!(compile_and_run(source, Some("21\n")), "42\n");
+    assert_eq!(compile_and_run(source, Some("21\n"))?, "42\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_map_roundtrip() {
+fn test_runtime_map_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
     var m Map<ustring, i32> := []
@@ -508,28 +521,29 @@ fn main()
 end fn
 "#;
     assert_eq!(
-        compile_and_run(source, None),
+        compile_and_run(source, None)?,
         "Some(1)\nSome(2)\nfalse\n2\n"
     );
+    Ok(())
 }
 
 /// Compile and run an async Poly program through a temporary Cargo project
 /// (async output needs the tokio dependency that a bare `rustc` lacks).
 /// Returns the program's stdout.
-fn compile_and_run_async(source: &str) -> String {
-    let rust_code = Transpiler::new().transpile(source).unwrap();
+fn compile_and_run_async(source: &str) -> Result<String, String> {
+    let rust_code = Transpiler::new().transpile(source)?;
     let unique = format!(
         "poly_async_runtime_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .map_err(|e| e.to_string())?
             .as_nanos()
     );
     let directory = std::env::temp_dir().join(unique);
     let src_dir = directory.join("src");
-    std::fs::create_dir_all(&src_dir).unwrap();
-    std::fs::write(src_dir.join("main.rs"), &rust_code).unwrap();
+    std::fs::create_dir_all(&src_dir).map_err(|e| e.to_string())?;
+    std::fs::write(src_dir.join("main.rs"), &rust_code).map_err(|e| e.to_string())?;
     let rusqlite = if rust_code.contains("rusqlite::") {
         "rusqlite = { version = \"0.31\", features = [\"bundled\"] }\n"
     } else {
@@ -538,14 +552,14 @@ fn compile_and_run_async(source: &str) -> String {
     let manifest = format!(
         "[package]\nname = \"poly_async_runtime\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\", \"net\", \"io-util\"] }}\n{rusqlite}[workspace]\n"
     );
-    std::fs::write(directory.join("Cargo.toml"), manifest).unwrap();
+    std::fs::write(directory.join("Cargo.toml"), manifest).map_err(|e| e.to_string())?;
 
     let build = std::process::Command::new("cargo")
         .arg("build")
         .arg("--quiet")
         .current_dir(&directory)
         .output()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
     assert!(
         build.status.success(),
         "generated async program failed to build: {}",
@@ -554,19 +568,19 @@ fn compile_and_run_async(source: &str) -> String {
 
     let run = std::process::Command::new(directory.join("target/debug/poly_async_runtime"))
         .output()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
     assert!(
         run.status.success(),
         "generated async program failed to run: {}",
         String::from_utf8_lossy(&run.stderr)
     );
     let stdout = String::from_utf8_lossy(&run.stdout).to_string();
-    std::fs::remove_dir_all(directory).unwrap();
-    stdout
+    std::fs::remove_dir_all(directory).map_err(|e| e.to_string())?;
+    Ok(stdout)
 }
 
 #[test]
-fn test_runtime_spawn_runs_background_task() {
+fn test_runtime_spawn_runs_background_task() -> Result<(), Box<dyn std::error::Error>> {
     // `spawn background()` lowers to `tokio::spawn(...)`: the spawned task
     // must actually run (interleaved with main's own awaits), not silently
     // never execute as the old stub did.
@@ -583,19 +597,20 @@ async fn main()
     put unicode "main done"
 end fn
 "#;
-    let output = compile_and_run_async(source);
+    let output = compile_and_run_async(source)?;
     assert!(output.contains("main continues"));
     assert!(output.contains("background done"));
     assert!(output.contains("main done"));
     // The spawned task runs concurrently: background completes before main's
     // longer delay finishes, so it appears between the two main lines.
-    let main_continues = output.find("main continues").unwrap();
-    let background_done = output.find("background done").unwrap();
-    let main_done = output.find("main done").unwrap();
+    let main_continues = output.find("main continues").ok_or("expected marker")?;
+    let background_done = output.find("background done").ok_or("expected marker")?;
+    let main_done = output.find("main done").ok_or("expected marker")?;
     assert!(
         main_continues < background_done && background_done < main_done,
         "spawned task did not run concurrently: {output:?}"
     );
+    Ok(())
 }
 
 /// Verify generated Rust without running LLVM code generation.
@@ -661,18 +676,19 @@ fn verify_rust_compiles_with_emit(code: &str, emit: &str) -> Result<(), String> 
 }
 
 #[test]
-fn test_runtime_get_until_reads_up_to_delimiter() {
+fn test_runtime_get_until_reads_up_to_delimiter() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
     var field ustring := get --until unicode ","
     put field
 end fn
 "#;
-    assert_eq!(compile_and_run(source, Some("apple,banana\n")), "apple\n");
+    assert_eq!(compile_and_run(source, Some("apple,banana\n"))?, "apple\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_get_mask_falls_back_without_terminal() {
+fn test_runtime_get_mask_falls_back_without_terminal() -> Result<(), Box<dyn std::error::Error>> {
     // With piped stdin there is no terminal, so `--mask` must behave like a
     // plain read (the `stty` subprocess fails silently and the input still
     // arrives).
@@ -682,11 +698,12 @@ fn main()
     put "got: " + pw
 end fn
 "#;
-    assert_eq!(compile_and_run(source, Some("secret\n")), "got: secret\n");
+    assert_eq!(compile_and_run(source, Some("secret\n"))?, "got: secret\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_string_interpolation() {
+fn test_runtime_string_interpolation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
     var name ustring := "Alice"
@@ -694,11 +711,12 @@ fn main()
     put "Name: {name}, Age: {age}"
 end fn
 "#;
-    assert_eq!(compile_and_run(source, None), "Name: Alice, Age: 30\n");
+    assert_eq!(compile_and_run(source, None)?, "Name: Alice, Age: 30\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_string_repeat_and_vec_join() {
+fn test_runtime_string_repeat_and_vec_join() -> Result<(), Box<dyn std::error::Error>> {
     let source = r##"
 fn main()
     put "#".repeat(5)
@@ -707,11 +725,12 @@ fn main()
     put "-".repeat(3)
 end fn
 "##;
-    assert_eq!(compile_and_run(source, None), "#####\na, b, c\n---\n");
+    assert_eq!(compile_and_run(source, None)?, "#####\na, b, c\n---\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_string_append_mutation() {
+fn test_runtime_string_append_mutation() -> Result<(), Box<dyn std::error::Error>> {
     // `add`/`+=` on a String appends (lowered to `String += &str`).
     let source = r#"
 fn main()
@@ -726,11 +745,12 @@ fn main()
     put n
 end fn
 "#;
-    assert_eq!(compile_and_run(source, None), "abcdef3\n6\n");
+    assert_eq!(compile_and_run(source, None)?, "abcdef3\n6\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_checked_index_returns_option() {
+fn test_runtime_checked_index_returns_option() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
     var xs Vec<i32> := [1, 2, 3]
@@ -739,11 +759,12 @@ fn main()
     put "abc".get(1)
 end fn
 "#;
-    assert_eq!(compile_and_run(source, None), "Some(1)\nNone\nSome('b')\n");
+    assert_eq!(compile_and_run(source, None)?, "Some(1)\nNone\nSome('b')\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_assert_and_pass_helpers() {
+fn test_runtime_assert_and_pass_helpers() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
     var age i32 := 30
@@ -751,46 +772,46 @@ fn main()
     pass("all good")
 end fn
 "#;
-    assert_eq!(compile_and_run(source, None), "[PASS] all good\n");
+    assert_eq!(compile_and_run(source, None)?, "[PASS] all good\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_fail_exits_nonzero() {
+fn test_runtime_fail_exits_nonzero() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
     fail("boom")
 end fn
 "#;
-    let rust_code = Transpiler::new().transpile(source).unwrap();
+    let rust_code = Transpiler::new().transpile(source)?;
     let unique = format!(
         "poly_runtime_fail_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     );
     let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::create_dir_all(&directory)?;
     let source_path = directory.join("main.rs");
     let binary_path = directory.join("program");
-    std::fs::write(&source_path, rust_code).unwrap();
+    std::fs::write(&source_path, rust_code)?;
     let compile = std::process::Command::new("rustc")
         .arg("--edition")
         .arg("2021")
         .arg(&source_path)
         .arg("-o")
         .arg(&binary_path)
-        .output()
-        .unwrap();
+        .output()?;
     assert!(compile.status.success());
-    let output = std::process::Command::new(&binary_path).output().unwrap();
+    let output = std::process::Command::new(&binary_path).output()?;
     assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stdout).contains("[FAIL] boom"));
+    Ok(())
 }
 
 #[test]
-fn test_runtime_db_execute_runs_sqlite() {
+fn test_runtime_db_execute_runs_sqlite() -> Result<(), Box<dyn std::error::Error>> {
     // `db_execute` runs SQL against a shared in-memory SQLite database:
     // CREATE TABLE, INSERT, then SELECT must all see the same connection.
     let source = r#"
@@ -802,15 +823,16 @@ async fn main()
     put rows
 end fn
 "#;
-    let output = compile_and_run_async(source);
+    let output = compile_and_run_async(source)?;
     assert_eq!(
         output,
         "[\"Integer(1) | Text(\\\"alice\\\")\", \"Integer(2) | Text(\\\"bob\\\")\"]\n"
     );
+    Ok(())
 }
 
 #[test]
-fn test_runtime_tuple_index_access() {
+fn test_runtime_tuple_index_access() -> Result<(), Box<dyn std::error::Error>> {
     // Tuple index access `t.0` and chained `t.1.0` must compile and run,
     // yielding the element at that position.
     let source = r#"
@@ -824,12 +846,13 @@ fn main()
     put ("a", 42, 3.5).1
 end fn
 "#;
-    let output = compile_and_run(source, None);
+    let output = compile_and_run(source, None)?;
     assert_eq!(output, "10\ntrue\n2\n3\n42\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_for_loop_tuple_destructuring() {
+fn test_runtime_for_loop_tuple_destructuring() -> Result<(), Box<dyn std::error::Error>> {
     // `for (idx, val) in items.enumerate()` must compile, borrow the
     // collection (usable afterwards), and bind the destructured names.
     let source = r#"
@@ -842,12 +865,13 @@ fn main()
     put items.len()
 end fn
 "#;
-    let output = compile_and_run(source, None);
+    let output = compile_and_run(source, None)?;
     assert_eq!(output, "0\n5\n1\n6\n2\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_vec_clear_reserve_and_iter_chains() {
+fn test_runtime_vec_clear_reserve_and_iter_chains() -> Result<(), Box<dyn std::error::Error>> {
     // `.clear()`/`.reserve(n)` mutate in place; `.iter()` chains map, filter,
     // sum, collect, and loops all bind owned elements while the collection
     // stays usable.
@@ -873,12 +897,14 @@ fn main()
     put list.len()
 end fn
 "#;
-    let output = compile_and_run(source, None);
+    let output = compile_and_run(source, None)?;
     assert_eq!(output, "10\n[2, 4, 6, 8]\n[2, 4]\n90\n10\n0\n");
+    Ok(())
 }
 
 #[test]
-fn test_runtime_string_append_in_loop_and_vec_put_in_loop() {
+fn test_runtime_string_append_in_loop_and_vec_put_in_loop() -> Result<(), Box<dyn std::error::Error>>
+{
     // Variables declared inside loop bodies must register their string/vec
     // kinds: `add row, ...` borrows the amount and `put buf` uses {:?}.
     let source = r#"
@@ -895,29 +921,30 @@ fn main()
     put rows
 end fn
 "#;
-    let output = compile_and_run(source, None);
+    let output = compile_and_run(source, None)?;
     assert_eq!(output, "[1]\n[2]\n12\n");
+    Ok(())
 }
 
-fn compile_and_run_c(source: &str) -> String {
-    compile_and_run_c_capture(source).0
+fn compile_and_run_c(source: &str) -> Result<String, String> {
+    Ok(compile_and_run_c_capture(source)?.0)
 }
 
-fn compile_and_run_c_capture(source: &str) -> (String, String) {
-    let c_code = Transpiler::new().transpile_c_checked(source).unwrap();
+fn compile_and_run_c_capture(source: &str) -> Result<(String, String), String> {
+    let c_code = Transpiler::new().transpile_c_checked(source)?;
     let unique = format!(
         "poly_c_runtime_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .map_err(|e| e.to_string())?
             .as_nanos()
     );
     let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     let source_path = directory.join("main.c");
     let binary_path = directory.join(format!("program{}", std::env::consts::EXE_SUFFIX));
-    std::fs::write(&source_path, c_code).unwrap();
+    std::fs::write(&source_path, c_code).map_err(|e| e.to_string())?;
 
     let compiler = std::env::var("POLY_CC").unwrap_or_else(|_| {
         if cfg!(windows) {
@@ -934,13 +961,15 @@ fn compile_and_run_c_capture(source: &str) -> (String, String) {
         .arg("-o")
         .arg(&binary_path)
         .output()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
     assert!(
         compile.status.success(),
         "generated C failed to compile: {}",
         String::from_utf8_lossy(&compile.stderr)
     );
-    let run = std::process::Command::new(&binary_path).output().unwrap();
+    let run = std::process::Command::new(&binary_path)
+        .output()
+        .map_err(|e| e.to_string())?;
     assert!(
         run.status.success(),
         "generated C failed to run: {}",
@@ -948,12 +977,13 @@ fn compile_and_run_c_capture(source: &str) -> (String, String) {
     );
     let stdout = normalize_newlines(&String::from_utf8_lossy(&run.stdout));
     let stderr = normalize_newlines(&String::from_utf8_lossy(&run.stderr));
-    std::fs::remove_dir_all(directory).unwrap();
-    (stdout, stderr)
+    std::fs::remove_dir_all(directory).map_err(|e| e.to_string())?;
+    Ok((stdout, stderr))
 }
 
 #[test]
-fn test_c_backend_runtime_control_flow_and_foreign_calls() {
+fn test_c_backend_runtime_control_flow_and_foreign_calls() -> Result<(), Box<dyn std::error::Error>>
+{
     let source = r#"
 #c
 int double_value(int x) { return x * 2; }
@@ -985,13 +1015,14 @@ fn main()
 end fn
 "#;
     assert_eq!(
-        compile_and_run_c(source),
+        compile_and_run_c(source)?,
         "total=30\npositive\n1\n5\n3\n1\n100% complete\n"
     );
+    Ok(())
 }
 
 #[test]
-fn test_c_backend_diagnostic_streams() {
+fn test_c_backend_diagnostic_streams() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
     error "failure"
@@ -1000,13 +1031,14 @@ fn main()
     put "done"
 end fn
 "#;
-    let (stdout, stderr) = compile_and_run_c_capture(source);
+    let (stdout, stderr) = compile_and_run_c_capture(source)?;
     assert_eq!(stdout, "done\n");
     assert_eq!(stderr, "[ERROR] failure\n[WARN] warning\n[INFO] details\n");
+    Ok(())
 }
 
 #[test]
-fn test_c_backend_explicit_extern_signature_executes() {
+fn test_c_backend_explicit_extern_signature_executes() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 extern c fn double_value(value: i32): i32
 
@@ -1021,14 +1053,17 @@ fn main()
     put result
 end fn
 "#;
-    assert_eq!(compile_and_run_c(source), "42\n");
+    assert_eq!(compile_and_run_c(source)?, "42\n");
+    Ok(())
 }
 
 #[test]
-fn test_c_backend_reports_unsupported_features() {
-    let redirect_error = Transpiler::new()
-        .transpile_c_checked("fn main()\n    put 1 to \"output.txt\"\nend fn")
-        .unwrap_err();
+fn test_c_backend_reports_unsupported_features() -> Result<(), Box<dyn std::error::Error>> {
+    let Err(redirect_error) =
+        Transpiler::new().transpile_c_checked("fn main()\n    put 1 to \"output.txt\"\nend fn")
+    else {
+        panic!("expected an Err result")
+    };
     assert!(redirect_error.contains("file redirects are not implemented"));
 
     // Tuples used to be rejected outright; they now compile to anonymous
@@ -1036,14 +1071,17 @@ fn test_c_backend_reports_unsupported_features() {
     // Non-capturing closures likewise now lower to a static function plus a
     // function pointer. What must still be rejected is environment capture,
     // which has no C representation in this subset.
-    let closure_error = Transpiler::new()
+    let Err(closure_error) = Transpiler::new()
         .transpile_c_checked("fn main()\n    var n i32 := 10\n    var f := |x: i32| x + n\nend fn")
-        .unwrap_err();
+    else {
+        panic!("expected an Err result")
+    };
     assert!(closure_error.contains("non-capturing closures only"));
+    Ok(())
 }
 
 #[test]
-fn test_runtime_tuple_element_assignment() {
+fn test_runtime_tuple_element_assignment() -> Result<(), Box<dyn std::error::Error>> {
     // `set pair.0 to value` and `pair.1 = value` must mutate the element in
     // place, and `add nums.1` must apply the mutation to an element.
     let source = r#"
@@ -1058,6 +1096,7 @@ fn main()
     put nums.1
 end fn
 "#;
-    let output = compile_and_run(source, None);
+    let output = compile_and_run(source, None)?;
     assert_eq!(output, "99\nfalse\n3\n");
+    Ok(())
 }

@@ -86,44 +86,53 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "lexer errors: {errors:?}");
         let mut parser = Parser::new(&tokens);
-        parser.parse().expect("parse error")
+        parser
+            .parse()
+            .unwrap_or_else(|e| panic!("parse error: {e}"))
     }
 
     #[test]
-    fn accepts_explicit_main() {
+    fn accepts_explicit_main() -> Result<(), Box<dyn std::error::Error>> {
         let program = parse("fn main()\n    put \"hi\"\nend fn\n");
         assert!(require_explicit_main(&program).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn accepts_declarations_without_executable_statements() {
+    fn accepts_declarations_without_executable_statements() -> Result<(), Box<dyn std::error::Error>>
+    {
         let source = "const N := 5\nfn helper(): i32\n    return N\nend fn\n";
         let program = parse(source);
         assert!(require_explicit_main(&program).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn rejects_top_level_put() {
+    fn rejects_top_level_put() -> Result<(), Box<dyn std::error::Error>> {
         let program = parse("put \"hello\"\n");
         assert!(require_explicit_main(&program).is_err());
+        Ok(())
     }
 
     #[test]
-    fn rejects_top_level_var() {
+    fn rejects_top_level_var() -> Result<(), Box<dyn std::error::Error>> {
         let program = parse("var x i32 := 1\n");
         assert!(require_explicit_main(&program).is_err());
+        Ok(())
     }
 
     #[test]
-    fn rejects_program_with_functions_but_no_main() {
+    fn rejects_program_with_functions_but_no_main() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn helper(): i32\n    return 1\nend fn\nput helper()\n";
         let program = parse(source);
         assert!(require_explicit_main(&program).is_err());
+        Ok(())
     }
 
     #[test]
-    fn accepts_async_main() {
+    fn accepts_async_main() -> Result<(), Box<dyn std::error::Error>> {
         let program = parse("async fn main()\n    put \"hi\"\nend fn\n");
         assert!(require_explicit_main(&program).is_ok());
+        Ok(())
     }
 }

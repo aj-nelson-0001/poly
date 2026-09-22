@@ -390,59 +390,67 @@ mod tests {
     use poly_parser::ast::TypeAnnotation;
 
     #[test]
-    fn is_numeric_classifies_types() {
+    fn is_numeric_classifies_types() -> Result<(), Box<dyn std::error::Error>> {
         assert!(is_numeric(&PolyType::I32));
         assert!(is_numeric(&PolyType::F64));
         assert!(!is_numeric(&PolyType::Bool));
         assert!(!is_numeric(&PolyType::String));
+        Ok(())
     }
 
     #[test]
-    fn is_integer_excludes_floats() {
+    fn is_integer_excludes_floats() -> Result<(), Box<dyn std::error::Error>> {
         assert!(is_integer(&PolyType::I32));
         assert!(is_integer(&PolyType::U64));
         assert!(!is_integer(&PolyType::F32));
         assert!(!is_integer(&PolyType::Bool));
+        Ok(())
     }
 
     #[test]
-    fn numeric_join_widens() {
+    fn numeric_join_widens() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(numeric_join(&PolyType::I32, &PolyType::I64), PolyType::I64);
         assert_eq!(numeric_join(&PolyType::F64, &PolyType::I32), PolyType::F64);
         assert_eq!(numeric_join(&PolyType::I32, &PolyType::I32), PolyType::I32);
+        Ok(())
     }
 
     #[test]
-    fn compatible_uses_unknown_as_wildcard() {
+    fn compatible_uses_unknown_as_wildcard() -> Result<(), Box<dyn std::error::Error>> {
         assert!(compatible(&PolyType::Unknown, &PolyType::I32));
         assert!(compatible(&PolyType::I32, &PolyType::Unknown));
+        Ok(())
     }
 
     #[test]
-    fn compatible_allows_numeric_widening() {
+    fn compatible_allows_numeric_widening() -> Result<(), Box<dyn std::error::Error>> {
         // Wider actual type is NOT compatible with narrower expected type.
         assert!(!compatible(&PolyType::I64, &PolyType::I32));
         // Narrower actual type IS compatible with wider expected type.
         assert!(compatible(&PolyType::I32, &PolyType::I64));
+        Ok(())
     }
 
     #[test]
-    fn split_loop_binding_single_name() {
+    fn split_loop_binding_single_name() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(split_loop_binding("x"), vec!["x"]);
+        Ok(())
     }
 
     #[test]
-    fn split_loop_binding_tuple() {
+    fn split_loop_binding_tuple() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(split_loop_binding("(a, b)"), vec!["a", "b"]);
+        Ok(())
     }
 
     #[test]
-    fn split_loop_binding_tuple_with_spaces() {
+    fn split_loop_binding_tuple_with_spaces() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(split_loop_binding("  ( a , b )  "), vec!["a", "b"]);
+        Ok(())
     }
 
     #[test]
-    fn annotation_type_primitives() {
+    fn annotation_type_primitives() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
             annotation_type(&TypeAnnotation::Named("i32".into())),
             PolyType::I32
@@ -455,10 +463,11 @@ mod tests {
             annotation_type(&TypeAnnotation::Named("string".into())),
             PolyType::String
         );
+        Ok(())
     }
 
     #[test]
-    fn annotation_type_containers() {
+    fn annotation_type_containers() -> Result<(), Box<dyn std::error::Error>> {
         let vec_i32 = TypeAnnotation::Vec(Box::new(TypeAnnotation::Named("i32".into())));
         assert_eq!(
             annotation_type(&vec_i32),
@@ -470,10 +479,11 @@ mod tests {
             annotation_type(&opt),
             PolyType::Option(Box::new(PolyType::I32))
         );
+        Ok(())
     }
 
     #[test]
-    fn annotation_type_generic_map() {
+    fn annotation_type_generic_map() -> Result<(), Box<dyn std::error::Error>> {
         let map = TypeAnnotation::Generic {
             name: "Map".into(),
             args: vec![
@@ -485,5 +495,6 @@ mod tests {
             annotation_type(&map),
             PolyType::Map(Box::new(PolyType::String), Box::new(PolyType::I32))
         );
+        Ok(())
     }
 }

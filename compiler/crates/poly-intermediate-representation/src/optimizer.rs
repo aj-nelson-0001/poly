@@ -1069,32 +1069,37 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "lexer errors: {errors:?}");
         let mut parser = Parser::new(&tokens);
-        let ast = parser.parse().expect("source should parse");
+        let ast = parser
+            .parse()
+            .unwrap_or_else(|e| panic!("source should parse: {e}"));
         crate::generator::generate(&ast)
     }
 
-    fn int_value(expr: &Expr) -> i64 {
-        match expr {
-            Expr::Literal(Literal::Int(value)) => value.parse().unwrap(),
+    fn int_value(expr: &Expr) -> Result<i64, String> {
+        Ok(match expr {
+            Expr::Literal(Literal::Int(value)) => {
+                value.parse::<i64>().map_err(|e| e.to_string())?
+            }
             other => panic!("expected int literal, got {other:?}"),
-        }
+        })
     }
 
     #[test]
-    fn folds_constant_arithmetic() {
+    fn folds_constant_arithmetic() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir("var x := 2 + 3 * 4");
         ConstantFolding.run(&mut program);
 
         match &program.main_body[0] {
             Statement::VarDecl {
                 value: Some(value), ..
-            } => assert_eq!(int_value(value), 14),
+            } => assert_eq!(int_value(value)?, 14),
             other => panic!("expected var decl, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn folds_boolean_logic() {
+    fn folds_boolean_logic() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir("var x := true and false");
         ConstantFolding.run(&mut program);
 
@@ -1105,20 +1110,22 @@ mod tests {
             } => {}
             other => panic!("expected folded false, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn removes_dead_code_after_return() {
+    fn removes_dead_code_after_return() -> Result<(), Box<dyn std::error::Error>> {
         let mut program =
             parse_to_ir("fn f(): i32\n    return 1\n    var x := 99\n    put x\nend fn");
         DeadCodeElimination.run(&mut program);
 
         assert_eq!(program.functions[0].body.len(), 1);
         assert!(matches!(program.functions[0].body[0], Statement::Return(_)));
+        Ok(())
     }
 
     #[test]
-    fn simplifies_redundant_step() {
+    fn simplifies_redundant_step() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir("loop i 0..10 step 1\n    put i\nend loop");
         LoopOptimizations.run(&mut program);
 
@@ -1129,19 +1136,21 @@ mod tests {
             },
             other => panic!("expected loop range, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn removes_empty_loops() {
+    fn removes_empty_loops() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir("loop i 0..10\nend loop\nput 42");
         LoopOptimizations.run(&mut program);
 
         assert_eq!(program.main_body.len(), 1);
         assert!(matches!(&program.main_body[0], Statement::Put { .. }));
+        Ok(())
     }
 
     #[test]
-    fn inlines_small_functions() {
+    fn inlines_small_functions() -> Result<(), Box<dyn std::error::Error>> {
         let mut program =
             parse_to_ir("fn double(x: i32): i32\n    return x * 2\nend fn\nvar y := double(21)");
         Inlining.run(&mut program);
@@ -1157,15 +1166,16 @@ mod tests {
                     }),
                 ..
             } => {
-                assert_eq!(int_value(left), 21);
-                assert_eq!(int_value(right), 2);
+                assert_eq!(int_value(left)?, 21);
+                assert_eq!(int_value(right)?, 2);
             }
             other => panic!("expected inlined multiplication, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn inlining_then_folding_produces_a_constant() {
+    fn inlining_then_folding_produces_a_constant() -> Result<(), Box<dyn std::error::Error>> {
         let mut program =
             parse_to_ir("fn double(x: i32): i32\n    return x * 2\nend fn\nvar y := double(21)");
         Inlining.run(&mut program);
@@ -1174,13 +1184,14 @@ mod tests {
         match &program.main_body[0] {
             Statement::VarDecl {
                 value: Some(value), ..
-            } => assert_eq!(int_value(value), 42),
+            } => assert_eq!(int_value(value)?, 42),
             other => panic!("expected var decl, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn full_pipeline_folds_end_to_end() {
+    fn full_pipeline_folds_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir(
             "fn double(x: i32): i32\n    return x * 2\nend fn\nvar y := double(20) + 2",
         );
@@ -1190,13 +1201,14 @@ mod tests {
         match &program.main_body[0] {
             Statement::VarDecl {
                 value: Some(value), ..
-            } => assert_eq!(int_value(value), 42),
+            } => assert_eq!(int_value(value)?, 42),
             other => panic!("expected var decl, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn comparison_folds_to_boolean_literal() {
+    fn comparison_folds_to_boolean_literal() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir("var flag bool := 1 < 2");
         ConstantFolding.run(&mut program);
 
@@ -1207,10 +1219,11 @@ mod tests {
             } => {}
             other => panic!("expected folded boolean, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn equality_folds_to_boolean_literal() {
+    fn equality_folds_to_boolean_literal() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir("var flag bool := 2 = 3");
         ConstantFolding.run(&mut program);
 
@@ -1221,10 +1234,11 @@ mod tests {
             } => {}
             other => panic!("expected folded boolean, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn logical_not_folds_only_booleans() {
+    fn logical_not_folds_only_booleans() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir("var flag bool := not true");
         ConstantFolding.run(&mut program);
 
@@ -1235,23 +1249,25 @@ mod tests {
             } => {}
             other => panic!("expected folded boolean, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn bitwise_not_folds_integers() {
+    fn bitwise_not_folds_integers() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir("var x := bitnot 0");
         ConstantFolding.run(&mut program);
 
         match &program.main_body[0] {
             Statement::VarDecl {
                 value: Some(value), ..
-            } => assert_eq!(int_value(value), -1),
+            } => assert_eq!(int_value(value)?, -1),
             other => panic!("expected var decl, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn closure_returning_function_is_not_inlined() {
+    fn closure_returning_function_is_not_inlined() -> Result<(), Box<dyn std::error::Error>> {
         let mut program = parse_to_ir(
             "fn make_adder(n: i32): |x: i32| i32\n    return |x| x + n\nend fn\nvar add5 := make_adder(5)",
         );
@@ -1264,10 +1280,11 @@ mod tests {
             } => {}
             other => panic!("expected the call to be left intact, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn closure_typed_return_function_is_not_inlined() {
+    fn closure_typed_return_function_is_not_inlined() -> Result<(), Box<dyn std::error::Error>> {
         // Same as above, but the closure is returned through a variable; the
         // declared function-typed return must also block inlining.
         let mut program = parse_to_ir(
@@ -1282,10 +1299,11 @@ mod tests {
             } => {}
             other => panic!("expected the call to be left intact, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn function_with_index_body_is_not_inlined() {
+    fn function_with_index_body_is_not_inlined() -> Result<(), Box<dyn std::error::Error>> {
         // `return xs[0]` reads the parameter outside the substituter's
         // arithmetic-only reach. Inlining used to emit `xs[0]` at the call
         // site with no `xs` binding — invalid Rust. The call must be left
@@ -1301,12 +1319,12 @@ mod tests {
             .functions
             .iter()
             .find(|f| f.name == "main")
-            .expect("main should be a function");
+            .ok_or("main should be a function")?;
         match main_fn
             .body
             .iter()
             .find(|statement| matches!(statement, Statement::Put { .. }))
-            .expect("main should put the call result")
+            .ok_or("main should put the call result")?
         {
             Statement::Put { expr, .. } => {
                 assert!(
@@ -1316,10 +1334,11 @@ mod tests {
             }
             other => panic!("expected a put statement, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn shift_overflow_is_not_folded() {
+    fn shift_overflow_is_not_folded() -> Result<(), Box<dyn std::error::Error>> {
         // `1 << 100` used to panic the optimizer with "attempt to shift left
         // with overflow". Shifts of >= 64 are target-dependent, so the
         // expression must be preserved verbatim.
@@ -1336,10 +1355,11 @@ mod tests {
             } => {}
             other => panic!("expected the shift to survive unfused, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn mul_overflow_is_not_folded() {
+    fn mul_overflow_is_not_folded() -> Result<(), Box<dyn std::error::Error>> {
         // `i64::MAX * 2` overflows. The checked fold refuses to wrap (or
         // panic), so the expression survives as an unfused Mul and the
         // target language keeps its own overflow semantics.
@@ -1363,10 +1383,11 @@ mod tests {
             "expected the overflowing multiplication to survive, got {:?}",
             program.main_body[0]
         );
+        Ok(())
     }
 
     #[test]
-    fn string_identity_is_not_folded() {
+    fn string_identity_is_not_folded() -> Result<(), Box<dyn std::error::Error>> {
         // `x + 0` folds, but `s + ""` must not: the zero/one rewrites are
         // guarded to integer literals so string/float identities keep their
         // target semantics.
@@ -1383,5 +1404,6 @@ mod tests {
             } => {}
             other => panic!("expected the string concatenation to survive, got {other:?}"),
         }
+        Ok(())
     }
 }

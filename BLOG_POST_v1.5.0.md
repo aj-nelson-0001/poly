@@ -62,8 +62,8 @@ end fn
 Generates:
 
 ~~~rust
-std::fs::write("output.txt", format!("{}", "Hello, World!")).unwrap();
-{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open("output.txt").unwrap(); writeln!(f, "{}", "More content").unwrap(); }
+std::fs::write("output.txt", format!("{}", "Hello, World!")).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) });
+{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open("output.txt").unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); writeln!(f, "{}", "More content").unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); }
 ~~~
 
 ### Match Expressions

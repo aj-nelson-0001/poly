@@ -78,7 +78,7 @@ impl Session {
 }
 
 /// Run the interactive REPL.
-pub fn run() {
+pub fn run() -> std::io::Result<()> {
     let mut session = Session::new();
     let history_path = dirs_and_history_path();
     let history = load_history(&history_path);
@@ -112,15 +112,15 @@ pub fn run() {
         } else {
             print!("  {}...{} ", YELLOW, RESET);
         }
-        io::stdout().flush().unwrap();
+        io::stdout().flush()?;
 
         let line = if let Some(editor) = raw_editor.as_mut() {
-            let (_line, action) = editor.read_line_with_completion(&session);
+            let (_line, action) = editor.read_line_with_completion(&session)?;
             match action {
                 EditorAction::Quit => {
                     save_history(&history_path, &history);
                     println!("{}Goodbye!{}", GREEN, RESET);
-                    return;
+                    return Ok(());
                 }
                 EditorAction::Submit(line) => line,
                 EditorAction::Clear => {
@@ -157,7 +157,7 @@ pub fn run() {
                 CommandAction::Quit => {
                     save_history(&history_path, &history);
                     println!("{}Goodbye!{}", GREEN, RESET);
-                    return;
+                    return Ok(());
                 }
                 CommandAction::Continue => continue,
             }
@@ -184,6 +184,7 @@ pub fn run() {
 
     save_history(&history_path, &history);
     println!("{}Goodbye!{}", GREEN, RESET);
+    Ok(())
 }
 
 /// Build a history list with `line` appended (deduplicated against the tail).
@@ -649,7 +650,10 @@ impl RawEditor {
 
     /// Read one line, handling editing keys.  Returns the submitted line and
     /// whether it should replace history handling.
-    fn read_line_with_completion(&mut self, session: &Session) -> (String, EditorAction) {
+    fn read_line_with_completion(
+        &mut self,
+        session: &Session,
+    ) -> io::Result<(String, EditorAction)> {
         let stdin = io::stdin();
         let mut reader = stdin.lock();
         let mut pending: Vec<u8> = Vec::new();
@@ -658,7 +662,7 @@ impl RawEditor {
             if pending.is_empty() {
                 let mut byte = [0u8; 1];
                 if reader.read(&mut byte).unwrap_or(0) == 0 {
-                    return (String::new(), EditorAction::Quit);
+                    return Ok((String::new(), EditorAction::Quit));
                 }
                 pending.push(byte[0]);
             }
@@ -675,27 +679,27 @@ impl RawEditor {
                     self.history_index = None;
                     self.line.clear();
                     self.cursor = 0;
-                    return (submitted.clone(), EditorAction::Submit(submitted));
+                    return Ok((submitted.clone(), EditorAction::Submit(submitted)));
                 }
                 0x03 => {
                     // Ctrl+C: clear the current line.
                     self.line.clear();
                     self.cursor = 0;
                     println!("^C");
-                    return (String::new(), EditorAction::Clear);
+                    return Ok((String::new(), EditorAction::Clear));
                 }
                 0x04 => {
                     // Ctrl+D: quit if the line is empty.
                     if self.line.is_empty() {
-                        return (String::new(), EditorAction::Quit);
+                        return Ok((String::new(), EditorAction::Quit));
                     }
                 }
-                0x7F | 0x08 => self.backspace(),
-                b'\t' => self.complete(session),
+                0x7F | 0x08 => self.backspace()?,
+                b'\t' => self.complete(session)?,
                 0x1B => {
                     // Escape sequence: arrows, home, end, delete.
                     if let Some(sequence) = self.read_escape_sequence(&mut reader) {
-                        self.handle_escape(&sequence);
+                        self.handle_escape(&sequence)?;
                     }
                 }
                 byte if byte < 0x20 => { /* ignore other control bytes */ }
@@ -717,14 +721,14 @@ impl RawEditor {
                             self.line.insert(self.cursor, character);
                             self.cursor += 1;
                         }
-                        self.redraw();
+                        self.redraw()?;
                     }
                 }
             }
         }
     }
 
-    fn redraw(&self) {
+    fn redraw(&self) -> io::Result<()> {
         let text: String = self.line.iter().collect();
         print!("\r{}{}poly>{} {}", GREEN, BOLD, RESET, text);
         // Move cursor back to the edit position.
@@ -732,15 +736,17 @@ impl RawEditor {
         if trailing > 0 {
             print!("\x1b[{}D", trailing);
         }
-        io::stdout().flush().unwrap();
+        io::stdout().flush()?;
+        Ok(())
     }
 
-    fn backspace(&mut self) {
+    fn backspace(&mut self) -> io::Result<()> {
         if self.cursor > 0 {
             self.cursor -= 1;
             self.line.remove(self.cursor);
-            self.redraw();
+            self.redraw()?;
         }
+        Ok(())
     }
 
     /// Read the rest of an escape sequence starting with ESC.
@@ -765,54 +771,56 @@ impl RawEditor {
         Some(sequence)
     }
 
-    fn handle_escape(&mut self, sequence: &[u8]) {
+    fn handle_escape(&mut self, sequence: &[u8]) -> io::Result<()> {
         match sequence {
-            [0x1B, b'[', b'A'] => self.history_up(),
-            [0x1B, b'[', b'B'] => self.history_down(),
+            [0x1B, b'[', b'A'] => self.history_up()?,
+            [0x1B, b'[', b'B'] => self.history_down()?,
             [0x1B, b'[', b'C'] => {
                 if self.cursor < self.line.len() {
                     self.cursor += 1;
                     print!("\x1b[1C");
-                    io::stdout().flush().unwrap();
+                    io::stdout().flush()?;
                 }
             }
             [0x1B, b'[', b'D'] => {
                 if self.cursor > 0 {
                     self.cursor -= 1;
                     print!("\x1b[1D");
-                    io::stdout().flush().unwrap();
+                    io::stdout().flush()?;
                 }
             }
             [0x1B, b'[', b'H'] | [0x1B, b'[', b'1', b'~'] => {
                 self.cursor = 0;
-                self.redraw();
+                self.redraw()?;
             }
             [0x1B, b'[', b'F'] | [0x1B, b'[', b'4', b'~'] => {
                 self.cursor = self.line.len();
-                self.redraw();
+                self.redraw()?;
             }
             [0x1B, b'[', b'3', b'~'] if self.cursor < self.line.len() => {
                 self.line.remove(self.cursor);
-                self.redraw();
+                self.redraw()?;
             }
             _ => {}
         }
+        Ok(())
     }
 
-    fn history_up(&mut self) {
+    fn history_up(&mut self) -> io::Result<()> {
         if self.history.is_empty() {
-            return;
+            return Ok(());
         }
         let current = self.history_index.unwrap_or(self.history.len());
         if current > 0 {
             self.history_index = Some(current - 1);
             self.line = self.history[current - 1].chars().collect();
             self.cursor = self.line.len();
-            self.redraw();
+            self.redraw()?;
         }
+        Ok(())
     }
 
-    fn history_down(&mut self) {
+    fn history_down(&mut self) -> io::Result<()> {
         if let Some(index) = self.history_index {
             let next = index + 1;
             if next < self.history.len() {
@@ -823,13 +831,14 @@ impl RawEditor {
                 self.line.clear();
             }
             self.cursor = self.line.len();
-            self.redraw();
+            self.redraw()?;
         }
+        Ok(())
     }
 
     /// Tab completion: replace the current word with its unique completion,
     /// or cycle through candidates when several match.
-    fn complete(&mut self, session: &Session) {
+    fn complete(&mut self, session: &Session) -> io::Result<()> {
         let text: String = self.line.iter().collect();
         let chars: Vec<char> = text.chars().take(self.cursor).collect();
         let word_start = chars
@@ -860,13 +869,14 @@ impl RawEditor {
                 .collect();
             self.line = replacement.chars().collect();
             self.cursor = self.line.len();
-            self.redraw();
+            self.redraw()?;
         } else if candidates.len() > 1 {
             // Show the options on a fresh line.
             println!();
             println!("{}  {}{}", DIM, candidates.join("  "), RESET);
-            self.redraw();
+            self.redraw()?;
         }
+        Ok(())
     }
 }
 
@@ -1030,14 +1040,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn single_line_statements_are_complete() {
+    fn single_line_statements_are_complete() -> Result<(), Box<dyn std::error::Error>> {
         assert!(input_is_complete("var x := 42", 1));
         assert!(input_is_complete("put \"hi\"", 1));
         assert!(input_is_complete("if x > 0, put x end if", 1));
+        Ok(())
     }
 
     #[test]
-    fn block_statements_buffer_until_terminator() {
+    fn block_statements_buffer_until_terminator() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!input_is_complete("fn add(a: i32): i32", 1));
         assert!(!input_is_complete("fn add(a: i32): i32\n    return a", 2));
         assert!(input_is_complete(
@@ -1049,12 +1060,14 @@ mod tests {
         assert!(input_is_complete("if x > 0,\n    put x\nend if", 3));
         assert!(!input_is_complete("loop i 0..5", 1));
         assert!(input_is_complete("loop i 0..5\n    put i\nend loop", 3));
+        Ok(())
     }
 
     #[test]
-    fn non_block_keywords_do_not_buffer() {
+    fn non_block_keywords_do_not_buffer() -> Result<(), Box<dyn std::error::Error>> {
         assert!(input_is_complete("loop_the_loop()", 1));
         assert!(input_is_complete("fnsnack := 3", 1));
         assert!(input_is_complete("var x := \"if only\"", 1));
+        Ok(())
     }
 }

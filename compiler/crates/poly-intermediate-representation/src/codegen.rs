@@ -193,7 +193,7 @@ impl IntermediateRepresentationCodeGen {
     }
 
     /// Generate Rust source for the intermediate representation program.
-    pub fn generate(&mut self, program: &Program) -> String {
+    pub fn generate(&mut self, program: &Program) -> Result<String, String> {
         self.collect_metadata(program);
 
         self.writeln("// Generated from Poly source code");
@@ -210,7 +210,7 @@ impl IntermediateRepresentationCodeGen {
         }
 
         for constant in &program.constants {
-            self.gen_constant(constant);
+            self.gen_constant(constant)?;
         }
         if !program.constants.is_empty() {
             self.writeln("");
@@ -219,30 +219,30 @@ impl IntermediateRepresentationCodeGen {
             self.writeln(&format!(
                 "type {} = {};",
                 alias.name,
-                self.gen_type(&alias.ty)
+                self.gen_type(&alias.ty)?
             ));
         }
         if !program.type_aliases.is_empty() {
             self.writeln("");
         }
         for structure in &program.structs {
-            self.gen_struct(structure);
+            self.gen_struct(structure)?;
             self.writeln("");
         }
         for enumeration in &program.enums {
-            self.gen_enum(enumeration);
+            self.gen_enum(enumeration)?;
             self.writeln("");
         }
         for trait_decl in &program.traits {
-            self.gen_trait(trait_decl);
+            self.gen_trait(trait_decl)?;
             self.writeln("");
         }
         for implementation in &program.impls {
-            self.gen_impl(implementation);
+            self.gen_impl(implementation)?;
             self.writeln("");
         }
         for function in &program.functions {
-            self.gen_function(function, false);
+            self.gen_function(function, false)?;
             self.writeln("");
         }
 
@@ -279,7 +279,7 @@ impl IntermediateRepresentationCodeGen {
                 .zip(program.main_body_locations.iter())
             {
                 self.active_statement_offset = location.map(|loc| loc.byte_offset);
-                self.gen_statement(statement);
+                self.gen_statement(statement)?;
             }
             self.active_statement_offset = None;
             self.exit_scope();
@@ -303,7 +303,7 @@ impl IntermediateRepresentationCodeGen {
                 "\nstatic __POLY_DB: std::sync::OnceLock<std::sync::Mutex<rusqlite::Connection>> = std::sync::OnceLock::new();\n",
             );
         }
-        result
+        Ok(result)
     }
 
     fn collect_metadata(&mut self, program: &Program) {
@@ -397,7 +397,7 @@ impl IntermediateRepresentationCodeGen {
         }
     }
 
-    fn gen_constant(&mut self, constant: &Constant) {
+    fn gen_constant(&mut self, constant: &Constant) -> Result<(), String> {
         match &constant.value {
             Expr::Literal(Literal::String(value))
             | Expr::Literal(Literal::UnicodeString(value)) => {
@@ -424,19 +424,20 @@ impl IntermediateRepresentationCodeGen {
                         "const {}: {} = {};",
                         constant.name,
                         ty,
-                        self.gen_expr(value)
+                        self.gen_expr(value)?
                     )),
                     None => self.writeln(&format!(
                         "const {} = {};",
                         constant.name,
-                        self.gen_expr(value)
+                        self.gen_expr(value)?
                     )),
                 }
             }
         }
+        Ok(())
     }
 
-    fn gen_function(&mut self, function: &Function, is_method: bool) {
+    fn gen_function(&mut self, function: &Function, is_method: bool) -> Result<(), String> {
         self.enter_scope();
         self.returned_closure_names
             .borrow_mut()
@@ -451,8 +452,8 @@ impl IntermediateRepresentationCodeGen {
             .params
             .iter()
             .map(|p| {
-                let ty = self.gen_type(&p.ty);
-                if p.name == "self" && is_method {
+                let ty = self.gen_type(&p.ty)?;
+                Ok(if p.name == "self" && is_method {
                     "mut self".to_string()
                 } else if p.name == "self" {
                     "self".to_string()
@@ -460,21 +461,24 @@ impl IntermediateRepresentationCodeGen {
                     format!("mut {}: {}", p.name, ty)
                 } else {
                     format!("{}: {}", p.name, ty)
-                }
+                })
             })
-            .collect();
+            .collect::<Result<Vec<String>, String>>()?;
         // A function-typed return annotation lowers to `impl Fn` so the body
         // can return closure literals (which capture) as well as fn pointers.
         let ret = match &function.return_type {
             Some(Type::Function { params, ret }) => {
-                let rendered: Vec<String> = params.iter().map(|t| self.gen_type(t)).collect();
+                let rendered: Vec<String> = params
+                    .iter()
+                    .map(|t| self.gen_type(t))
+                    .collect::<Result<Vec<String>, String>>()?;
                 format!(
                     " -> impl Fn({}) -> {}",
                     rendered.join(", "),
-                    self.gen_type(ret)
+                    self.gen_type(ret)?
                 )
             }
-            Some(ty) => format!(" -> {}", self.gen_type(ty)),
+            Some(ty) => format!(" -> {}", self.gen_type(ty)?),
             None => String::new(),
         };
         // Big integer literals in a `u64` context (declared-`u64` return,
@@ -513,11 +517,11 @@ impl IntermediateRepresentationCodeGen {
             generics,
             params.join(", "),
             ret
-        ));
+        ))?;
         self.indent += 1;
         for (statement, location) in function.body.iter().zip(function.body_locations.iter()) {
             self.active_statement_offset = location.map(|loc| loc.byte_offset);
-            self.gen_statement(statement);
+            self.gen_statement(statement)?;
         }
         self.active_statement_offset = None;
         self.indent -= 1;
@@ -525,6 +529,7 @@ impl IntermediateRepresentationCodeGen {
         self.returned_closure_names.borrow_mut().pop();
         self.u64_context.set(previous_u64);
         self.exit_scope();
+        Ok(())
     }
 
     fn gen_generics(&self, generics: &[GenericParam]) -> String {
@@ -544,87 +549,92 @@ impl IntermediateRepresentationCodeGen {
         format!("<{}>", rendered.join(", "))
     }
 
-    fn gen_struct(&mut self, structure: &Struct) {
+    fn gen_struct(&mut self, structure: &Struct) -> Result<(), String> {
         let generics = self.gen_generics(&structure.generics);
-        self.writeln_fmt(format_args!("struct {}{} {{", structure.name, generics));
+        self.writeln_fmt(format_args!("struct {}{} {{", structure.name, generics))?;
         self.indent += 1;
         for field in &structure.fields {
             self.writeln_fmt(format_args!(
                 "{}: {},",
                 field.name,
-                self.gen_type(&field.ty)
-            ));
+                self.gen_type(&field.ty)?
+            ))?;
         }
         self.indent -= 1;
         self.writeln("}");
 
         if !structure.methods.is_empty() {
-            self.writeln_fmt(format_args!("impl{generics} {} {{", structure.name));
+            self.writeln_fmt(format_args!("impl{generics} {} {{", structure.name))?;
             self.indent += 1;
             for method in &structure.methods {
-                self.gen_function(method, true);
+                self.gen_function(method, true)?;
             }
             self.indent -= 1;
             self.writeln("}");
         }
+        Ok(())
     }
 
-    fn gen_enum(&mut self, enumeration: &Enum) {
+    fn gen_enum(&mut self, enumeration: &Enum) -> Result<(), String> {
         self.writeln("#[derive(Debug, Clone)]");
-        self.writeln_fmt(format_args!("enum {} {{", enumeration.name));
+        self.writeln_fmt(format_args!("enum {} {{", enumeration.name))?;
         self.indent += 1;
         for variant in &enumeration.variants {
             if variant.is_struct {
-                self.writeln_fmt(format_args!("{} {{", variant.name));
+                self.writeln_fmt(format_args!("{} {{", variant.name))?;
                 self.indent += 1;
                 for field in &variant.fields {
                     let ty = if matches!(&field.ty, Type::Named(name) if name == &enumeration.name)
                     {
-                        format!("Box<{}>", self.gen_type(&field.ty))
+                        format!("Box<{}>", self.gen_type(&field.ty)?)
                     } else {
-                        self.gen_type(&field.ty)
+                        self.gen_type(&field.ty)?
                     };
-                    self.writeln_fmt(format_args!("{}: {},", field.name, ty));
+                    self.writeln_fmt(format_args!("{}: {},", field.name, ty))?;
                 }
                 self.indent -= 1;
                 self.writeln("},");
             } else if variant.fields.is_empty() {
-                self.writeln_fmt(format_args!("{},", variant.name));
+                self.writeln_fmt(format_args!("{},", variant.name))?;
             } else {
                 let types: Vec<String> = variant
                     .fields
                     .iter()
                     .enumerate()
                     .map(|(index, field)| {
-                        if self.recursive_enum_fields.contains(&(
-                            enumeration.name.clone(),
-                            variant.name.clone(),
-                            index,
-                        )) {
-                            format!("Box<{}>", self.gen_type(&field.ty))
-                        } else {
-                            self.gen_type(&field.ty)
-                        }
+                        let ty = self.gen_type(&field.ty)?;
+                        Ok(
+                            if self.recursive_enum_fields.contains(&(
+                                enumeration.name.clone(),
+                                variant.name.clone(),
+                                index,
+                            )) {
+                                format!("Box<{ty}>")
+                            } else {
+                                ty
+                            },
+                        )
                     })
-                    .collect();
-                self.writeln_fmt(format_args!("{}({}),", variant.name, types.join(", ")));
+                    .collect::<Result<Vec<String>, String>>()?;
+                self.writeln_fmt(format_args!("{}({}),", variant.name, types.join(", ")))?;
             }
         }
         self.indent -= 1;
         self.writeln("}");
 
         if !enumeration.methods.is_empty() {
-            self.writeln_fmt(format_args!("impl {} {{", enumeration.name));
+            self.writeln_fmt(format_args!("impl {} {{", enumeration.name))?;
             self.indent += 1;
             for method in &enumeration.methods {
-                self.gen_function(method, true);
+                self.gen_function(method, true)?;
             }
             self.indent -= 1;
             self.writeln("}");
         }
+        Ok(())
     }
 
-    fn gen_trait(&mut self, trait_decl: &Trait) {
+    fn gen_trait(&mut self, trait_decl: &Trait) -> Result<(), String> {
         self.writeln(&format!("trait {} {{", trait_decl.name));
         self.indent += 1;
         for method in &trait_decl.methods {
@@ -632,17 +642,19 @@ impl IntermediateRepresentationCodeGen {
                 .params
                 .iter()
                 .map(|p| {
-                    if p.name == "self" {
+                    Ok(if p.name == "self" {
                         "self".to_string()
                     } else {
-                        format!("{}: {}", p.name, self.gen_type(&p.ty))
-                    }
+                        format!("{}: {}", p.name, self.gen_type(&p.ty)?)
+                    })
                 })
-                .collect();
+                .collect::<Result<Vec<String>, String>>()?;
             let ret = method
                 .return_type
                 .as_ref()
-                .map(|ty| format!(" -> {}", self.gen_type(ty)))
+                .map(|ty| self.gen_type(ty))
+                .transpose()?
+                .map(|rust_ty| format!(" -> {}", rust_ty))
                 .unwrap_or_default();
             let async_prefix = if method.is_async { "async " } else { "" };
             self.writeln(&format!(
@@ -655,9 +667,10 @@ impl IntermediateRepresentationCodeGen {
         }
         self.indent -= 1;
         self.writeln("}");
+        Ok(())
     }
 
-    fn gen_impl(&mut self, implementation: &Impl) {
+    fn gen_impl(&mut self, implementation: &Impl) -> Result<(), String> {
         if let Some(trait_name) = &implementation.trait_name {
             self.writeln(&format!(
                 "impl {} for {} {{",
@@ -668,13 +681,14 @@ impl IntermediateRepresentationCodeGen {
         }
         self.indent += 1;
         for method in &implementation.methods {
-            self.gen_function(method, true);
+            self.gen_function(method, true)?;
         }
         self.indent -= 1;
         self.writeln("}");
+        Ok(())
     }
 
-    fn gen_statement(&mut self, statement: &Statement) {
+    fn gen_statement(&mut self, statement: &Statement) -> Result<(), String> {
         match statement {
             Statement::VarDecl { name, ty, value } => {
                 if let Some(type_name) = ty.as_ref().and_then(named_type_name) {
@@ -708,7 +722,9 @@ impl IntermediateRepresentationCodeGen {
                 }
                 let element_type = ty
                     .as_ref()
-                    .and_then(|ty| self.vec_element_type_of_type(ty))
+                    .map(|ty| self.vec_element_type_of_type(ty))
+                    .transpose()?
+                    .flatten()
                     .or_else(|| {
                         value
                             .as_ref()
@@ -717,24 +733,28 @@ impl IntermediateRepresentationCodeGen {
                 if let Some(element) = element_type {
                     self.declare_vec_element(name.clone(), element);
                 }
-                let ty_str = ty.as_ref().map(|ty| self.gen_type(ty)).unwrap_or_default();
+                let ty_str = ty
+                    .as_ref()
+                    .map(|ty| self.gen_type(ty))
+                    .transpose()?
+                    .unwrap_or_default();
                 match value {
                     Some(value) => {
-                        let value_str = self.gen_decl_value(name, value, ty.as_ref());
+                        let value_str = self.gen_decl_value(name, value, ty.as_ref())?;
                         if ty.is_some() {
                             self.writeln_fmt(format_args!(
                                 "let mut {}: {} = {};",
                                 name, ty_str, value_str
-                            ));
+                            ))?;
                         } else {
-                            self.writeln_fmt(format_args!("let mut {} = {};", name, value_str));
+                            self.writeln_fmt(format_args!("let mut {} = {};", name, value_str))?;
                         }
                     }
                     None => {
                         if ty.is_some() {
-                            self.writeln_fmt(format_args!("let mut {}: {};", name, ty_str));
+                            self.writeln_fmt(format_args!("let mut {}: {};", name, ty_str))?;
                         } else {
-                            self.writeln_fmt(format_args!("let mut {};", name));
+                            self.writeln_fmt(format_args!("let mut {};", name))?;
                         }
                     }
                 }
@@ -757,17 +777,23 @@ impl IntermediateRepresentationCodeGen {
                 }
                 let element_type = ty
                     .as_ref()
-                    .and_then(|ty| self.vec_element_type_of_type(ty))
+                    .map(|ty| self.vec_element_type_of_type(ty))
+                    .transpose()?
+                    .flatten()
                     .or_else(|| self.array_element_type(value));
                 if let Some(element) = element_type {
                     self.declare_vec_element(name.clone(), element);
                 }
-                let ty_str = ty.as_ref().map(|ty| self.gen_type(ty)).unwrap_or_default();
-                let value_str = self.gen_decl_value(name, value, ty.as_ref());
+                let ty_str = ty
+                    .as_ref()
+                    .map(|ty| self.gen_type(ty))
+                    .transpose()?
+                    .unwrap_or_default();
+                let value_str = self.gen_decl_value(name, value, ty.as_ref())?;
                 if ty.is_some() {
-                    self.writeln_fmt(format_args!("let {}: {} = {};", name, ty_str, value_str));
+                    self.writeln_fmt(format_args!("let {}: {} = {};", name, ty_str, value_str))?;
                 } else {
-                    self.writeln_fmt(format_args!("let {} = {};", name, value_str));
+                    self.writeln_fmt(format_args!("let {} = {};", name, value_str))?;
                 }
             }
             Statement::Assignment { target, value } => {
@@ -775,14 +801,14 @@ impl IntermediateRepresentationCodeGen {
                 // (`HashMap` has no `IndexMut` for owned keys).
                 if let Expr::Index { object, index } = target {
                     if self.is_map_expr(object) {
-                        let object_str = self.gen_expr(object);
-                        let index_str = self.gen_expr(index);
-                        let value_str = self.gen_expr(value);
+                        let object_str = self.gen_expr(object)?;
+                        let index_str = self.gen_expr(index)?;
+                        let value_str = self.gen_expr(value)?;
                         self.writeln(&format!(
                             "{}.insert({}, {});",
                             object_str, index_str, value_str
                         ));
-                        return;
+                        return Ok(());
                     }
                 }
                 // String-builder pattern: `s := s + <string>` assigns the
@@ -795,18 +821,21 @@ impl IntermediateRepresentationCodeGen {
                 if let Expr::Identifier(name) = target {
                     if let Some(suffixes) = self.string_concat_suffix(value, name) {
                         for suffix in suffixes {
-                            let suffix_str = self.gen_expr(suffix);
-                            self.writeln_fmt(format_args!("{}.push_str(&({}));", name, suffix_str));
+                            let suffix_str = self.gen_expr(suffix)?;
+                            self.writeln_fmt(format_args!(
+                                "{}.push_str(&({}));",
+                                name, suffix_str
+                            ))?;
                         }
-                        return;
+                        return Ok(());
                     }
                 }
-                let target_str = self.gen_expr(target);
-                let value_str = self.gen_expr(value);
-                self.writeln_fmt(format_args!("{} = {};", target_str, value_str));
+                let target_str = self.gen_expr(target)?;
+                let value_str = self.gen_expr(value)?;
+                self.writeln_fmt(format_args!("{} = {};", target_str, value_str))?;
             }
             Statement::Mutation { target, op, value } => {
-                let target_str = self.gen_expr(target);
+                let target_str = self.gen_expr(target)?;
                 // String append lowers to `String += &str` (borrowed amount);
                 // declared-i64 and vector targets keep plain `+=`. A u64
                 // target wraps at 64 bits via `wrapping_*` with the amount
@@ -830,12 +859,13 @@ impl IntermediateRepresentationCodeGen {
                         let amount = value
                             .as_ref()
                             .map(|value| self.gen_u64_operand(value))
+                            .transpose()?
                             .unwrap_or_else(|| "1_u64".to_string());
                         self.writeln_fmt(format_args!(
                             "{} = ({}).{}({});",
                             target_str, target_str, operator, amount
-                        ));
-                        return;
+                        ))?;
+                        return Ok(());
                     }
                 }
                 if self.is_string_expr(target)
@@ -851,6 +881,7 @@ impl IntermediateRepresentationCodeGen {
                     let amount = value
                         .as_ref()
                         .map(|value| self.gen_expr(value))
+                        .transpose()?
                         .unwrap_or_else(|| "1".to_string());
                     let amount = if matches!(op, MutationOp::Add | MutationOp::Inc)
                         && self.is_string_expr(target)
@@ -859,12 +890,13 @@ impl IntermediateRepresentationCodeGen {
                     } else {
                         amount
                     };
-                    self.writeln_fmt(format_args!("{} {} {};", target_str, operator, amount));
-                    return;
+                    self.writeln_fmt(format_args!("{} {} {};", target_str, operator, amount))?;
+                    return Ok(());
                 }
                 let amount = value
                     .as_ref()
                     .map(|value| self.gen_expr(value))
+                    .transpose()?
                     .unwrap_or_else(|| "1".to_string());
                 self.writeln_fmt(format_args!(
                     "{} = ({}).{}({});",
@@ -875,33 +907,33 @@ impl IntermediateRepresentationCodeGen {
                         MutationOp::Sub | MutationOp::Dec => "wrapping_sub",
                     },
                     amount
-                ));
+                ))?;
             }
             Statement::Return(value) => match value {
                 Some(value) => {
                     // Closures in return position capture with `move` so the
                     // returned closure owns any locals it references.
                     *self.closure_move.borrow_mut() = true;
-                    let rendered = self.gen_expr(value);
+                    let rendered = self.gen_expr(value)?;
                     *self.closure_move.borrow_mut() = false;
-                    self.writeln_fmt(format_args!("return {};", rendered));
+                    self.writeln_fmt(format_args!("return {};", rendered))?;
                 }
                 None => self.writeln("return;"),
             },
             Statement::Break => self.writeln("break;"),
             Statement::Continue => self.writeln("continue;"),
-            Statement::Put { expr, redirect } => self.gen_put(expr, redirect.as_ref()),
+            Statement::Put { expr, redirect } => self.gen_put(expr, redirect.as_ref())?,
             Statement::Error(expr) => {
-                let expr_str = self.gen_expr(expr);
-                self.writeln_fmt(format_args!("eprintln!(\"[ERROR] {{}}\", {});", expr_str));
+                let expr_str = self.gen_expr(expr)?;
+                self.writeln_fmt(format_args!("eprintln!(\"[ERROR] {{}}\", {});", expr_str))?;
             }
             Statement::Warn(expr) => {
-                let expr_str = self.gen_expr(expr);
-                self.writeln_fmt(format_args!("eprintln!(\"[WARN] {{}}\", {});", expr_str));
+                let expr_str = self.gen_expr(expr)?;
+                self.writeln_fmt(format_args!("eprintln!(\"[WARN] {{}}\", {});", expr_str))?;
             }
             Statement::Info(expr) => {
-                let expr_str = self.gen_expr(expr);
-                self.writeln_fmt(format_args!("eprintln!(\"[INFO] {{}}\", {});", expr_str));
+                let expr_str = self.gen_expr(expr)?;
+                self.writeln_fmt(format_args!("eprintln!(\"[INFO] {{}}\", {});", expr_str))?;
             }
             Statement::Expression(expr) => {
                 // `>` and `>>` were legacy file-redirect spellings; redirects
@@ -911,19 +943,19 @@ impl IntermediateRepresentationCodeGen {
                 if let Expr::WhileLoop { condition, body } = expr {
                     // While loops are their own IR node; no more guessing a
                     // loop from an if-without-else.
-                    let cond = self.gen_expr(condition);
-                    self.writeln_fmt(format_args!("while {} {{", cond));
+                    let cond = self.gen_expr(condition)?;
+                    self.writeln_fmt(format_args!("while {} {{", cond))?;
                     self.indent += 1;
                     self.enter_scope();
                     for statement in body {
-                        self.gen_statement(statement);
+                        self.gen_statement(statement)?;
                     }
                     self.exit_scope();
                     self.indent -= 1;
                     self.writeln("}");
-                    return;
+                    return Ok(());
                 }
-                let expr_str = self.gen_expr(expr);
+                let expr_str = self.gen_expr(expr)?;
                 match expr {
                     Expr::If { .. }
                     | Expr::LoopRange { .. }
@@ -932,7 +964,7 @@ impl IntermediateRepresentationCodeGen {
                     | Expr::Match { .. } => {
                         self.writeln(&expr_str);
                     }
-                    _ => self.writeln_fmt(format_args!("{};", expr_str)),
+                    _ => self.writeln_fmt(format_args!("{};", expr_str))?,
                 }
             }
             Statement::If {
@@ -942,24 +974,24 @@ impl IntermediateRepresentationCodeGen {
                 is_while,
             } => {
                 if *is_while {
-                    let cond = self.gen_expr(condition);
-                    self.writeln_fmt(format_args!("while {} {{", cond));
+                    let cond = self.gen_expr(condition)?;
+                    self.writeln_fmt(format_args!("while {} {{", cond))?;
                     self.indent += 1;
                     self.enter_scope();
                     for statement in then_block {
-                        self.gen_statement(statement);
+                        self.gen_statement(statement)?;
                     }
                     self.exit_scope();
                     self.indent -= 1;
                     self.writeln("}");
-                    return;
+                    return Ok(());
                 }
-                let cond = self.gen_expr(condition);
-                self.writeln_fmt(format_args!("if {} {{", cond));
+                let cond = self.gen_expr(condition)?;
+                self.writeln_fmt(format_args!("if {} {{", cond))?;
                 self.indent += 1;
                 self.enter_scope();
                 for statement in then_block {
-                    self.gen_statement(statement);
+                    self.gen_statement(statement)?;
                 }
                 self.exit_scope();
                 self.indent -= 1;
@@ -969,7 +1001,7 @@ impl IntermediateRepresentationCodeGen {
                         self.indent += 1;
                         self.enter_scope();
                         for statement in else_block {
-                            self.gen_statement(statement);
+                            self.gen_statement(statement)?;
                         }
                         self.exit_scope();
                         self.indent -= 1;
@@ -979,16 +1011,17 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Statement::Match { scrutinee, arms } => {
-                let scrutinee_str = self.gen_expr(scrutinee);
+                let scrutinee_str = self.gen_expr(scrutinee)?;
                 let scrutinee_str = if self.is_string_expr(scrutinee) {
                     format!("({}).as_str()", scrutinee_str)
                 } else {
                     scrutinee_str
                 };
-                self.writeln_fmt(format_args!("match {} {{", scrutinee_str));
+                self.writeln_fmt(format_args!("match {} {{", scrutinee_str))?;
                 self.indent += 1;
                 for arm in arms {
-                    let (pattern_str, pattern_guards) = self.gen_pattern_with_guards(&arm.pattern);
+                    let (pattern_str, pattern_guards) =
+                        self.gen_pattern_with_guards(&arm.pattern)?;
                     let mut boxed_bindings = HashSet::new();
                     self.collect_boxed_pattern_bindings(&arm.pattern, &mut boxed_bindings);
                     self.boxed_bindings.borrow_mut().push(boxed_bindings);
@@ -996,7 +1029,7 @@ impl IntermediateRepresentationCodeGen {
                     self.collect_pattern_aliases(&arm.pattern, &mut aliases);
                     self.pattern_aliases.borrow_mut().push(aliases);
                     let body_str = match &arm.body {
-                        MatchArmBody::Expression(expr) => self.gen_expr(expr),
+                        MatchArmBody::Expression(expr) => self.gen_expr(expr)?,
                         MatchArmBody::Block(statements) => {
                             let mut block = String::from("{\n");
                             self.indent += 1;
@@ -1005,7 +1038,7 @@ impl IntermediateRepresentationCodeGen {
                                 let mut temp = String::new();
                                 std::mem::swap(&mut temp, &mut self.output);
                                 let saved = self.indent;
-                                let generated = self.gen_statement_str(statement);
+                                let generated = self.gen_statement_str(statement)?;
                                 self.indent = saved;
                                 self.output = temp;
                                 // Write indent directly to avoid String allocation
@@ -1027,7 +1060,7 @@ impl IntermediateRepresentationCodeGen {
                     let body_str = body_str.trim_end_matches(';').to_string();
                     let mut guards = pattern_guards;
                     if let Some(guard) = &arm.guard {
-                        guards.push(self.gen_expr(guard));
+                        guards.push(self.gen_expr(guard)?);
                     }
                     if guards.is_empty() {
                         self.writeln(&format!("    {} => {},", pattern_str, body_str));
@@ -1050,13 +1083,13 @@ impl IntermediateRepresentationCodeGen {
                 self.indent += 1;
                 self.enter_scope();
                 for statement in statements {
-                    self.gen_statement(statement);
+                    self.gen_statement(statement)?;
                 }
                 self.exit_scope();
                 self.indent -= 1;
                 self.writeln("}");
             }
-            Statement::NestedFunction(function) => self.gen_function(function, false),
+            Statement::NestedFunction(function) => self.gen_function(function, false)?,
             Statement::ForeignBlock { language, content } if language == "rust" => {
                 // Foreign blocks are normally hoisted to module scope. Keep
                 // nested Rust blocks opaque if one reaches this path.
@@ -1071,6 +1104,7 @@ impl IntermediateRepresentationCodeGen {
             }
             Statement::ForeignBlock { .. } => {}
         }
+        Ok(())
     }
 
     /// Collect the operands of a string-concatenation `+` chain into a
@@ -1078,7 +1112,11 @@ impl IntermediateRepresentationCodeGen {
     /// nested `format!` per `+` (which is quadratic in chain length).
     /// Non-string leaves (numbers, chars) are kept as-is; `format!` renders
     /// them with `Display`, matching the old nested behavior.
-    fn collect_string_concat_operands(&self, expr: &Expr, out: &mut Vec<String>) {
+    fn collect_string_concat_operands(
+        &self,
+        expr: &Expr,
+        out: &mut Vec<String>,
+    ) -> Result<(), String> {
         if let Expr::BinaryOp {
             op: BinaryOp::Add,
             left,
@@ -1086,12 +1124,13 @@ impl IntermediateRepresentationCodeGen {
         } = expr
         {
             if self.is_string_expr(left) || self.is_string_expr(right) {
-                self.collect_string_concat_operands(left, out);
-                self.collect_string_concat_operands(right, out);
-                return;
+                self.collect_string_concat_operands(left, out)?;
+                self.collect_string_concat_operands(right, out)?;
+                return Ok(());
             }
         }
-        out.push(self.gen_expr(expr));
+        out.push(self.gen_expr(expr)?);
+        Ok(())
     }
 
     /// For `s := s + ...` on a string variable, return every appended
@@ -1233,37 +1272,38 @@ impl IntermediateRepresentationCodeGen {
         }
     }
 
-    fn gen_put(&mut self, expr: &Expr, redirect: Option<&Redirect>) {
+    fn gen_put(&mut self, expr: &Expr, redirect: Option<&Redirect>) -> Result<(), String> {
         // Legacy `put x > "file"` / `put x >> "file"` handling was removed:
         // redirects are now only `put ... to "file"` (the Redirect field).
 
-        let expr_str = self.gen_expr(expr);
+        let expr_str = self.gen_expr(expr)?;
         let spec = self.put_format_spec(expr);
         match redirect {
             Some(Redirect::Write(path)) => {
-                let path_str = self.gen_expr(path);
+                let path_str = self.gen_expr(path)?;
                 *self.needs_io_write.borrow_mut() = true;
                 self.writeln_fmt(format_args!(
-                    "std::fs::write({}, format!(\"{}\\n\", {})).unwrap();",
+                    "std::fs::write({}, format!(\"{}\\n\", {})).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }});",
                     path_str, spec, expr_str
-                ));
+                ))?;
             }
             Some(Redirect::Append(path)) => {
-                let path_str = self.gen_expr(path);
+                let path_str = self.gen_expr(path)?;
                 *self.needs_io_write.borrow_mut() = true;
                 self.writeln_fmt(format_args!(
-                    "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap(); writeln!(f, \"{}\", {}).unwrap(); }}",
+                    "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); writeln!(f, \"{}\", {}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); }}",
                     path_str, spec, expr_str
-                ));
+                ))?;
             }
             None => {
-                self.writeln_fmt(format_args!("println!(\"{}\", {});", spec, expr_str));
+                self.writeln_fmt(format_args!("println!(\"{}\", {});", spec, expr_str))?;
             }
         }
+        Ok(())
     }
 
-    fn gen_expr(&self, expr: &Expr) -> String {
-        match expr {
+    fn gen_expr(&self, expr: &Expr) -> Result<String, String> {
+        Ok(match expr {
             Expr::Literal(Literal::Int(value)) => self.gen_int_literal(value),
             Expr::Literal(Literal::Float(value)) => value.clone(),
             Expr::Literal(Literal::String(value))
@@ -1305,8 +1345,8 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Expr::BinaryOp { op, left, right } => {
-                let l = self.gen_expr(left);
-                let r = self.gen_expr(right);
+                let l = self.gen_expr(left)?;
+                let r = self.gen_expr(right)?;
                 if matches!(op, BinaryOp::Add)
                     && (self.is_string_expr(left) || self.is_string_expr(right))
                 {
@@ -1316,7 +1356,7 @@ impl IntermediateRepresentationCodeGen {
                     // makes long concatenations quadratic; a single flattened
                     // call copies each operand exactly once.
                     let mut operands = Vec::new();
-                    self.collect_string_concat_operands(expr, &mut operands);
+                    self.collect_string_concat_operands(expr, &mut operands)?;
                     let specs = "{}".repeat(operands.len());
                     format!("format!(\"{}\", {})", specs, operands.join(", "))
                 } else if self.is_float_valued_expr(left) || self.is_float_valued_expr(right) {
@@ -1342,7 +1382,7 @@ impl IntermediateRepresentationCodeGen {
                             "(({}) {} ({} as u64))",
                             l,
                             op_str,
-                            self.gen_u64_operand(right)
+                            self.gen_u64_operand(right)?
                         )
                     }
                 } else if self.is_int64_expr(left) || self.is_int64_expr(right) {
@@ -1360,7 +1400,7 @@ impl IntermediateRepresentationCodeGen {
                         BinaryOp::Mod => "wrapping_rem",
                         _ => {
                             let op_str = self.gen_binary_op(op);
-                            return format!("((({}) as i64) {} ({} as i64))", l, op_str, r);
+                            return Ok(format!("((({}) as i64) {} ({} as i64))", l, op_str, r));
                         }
                     };
                     format!("((({}) as i64).{func}(({}) as i64))", l, r)
@@ -1399,7 +1439,7 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Expr::UnaryOp { op, expr } => {
-                let e = self.gen_expr(expr);
+                let e = self.gen_expr(expr)?;
                 let op_str = match op {
                     UnaryOp::Neg => "-",
                     UnaryOp::Not => "!",
@@ -1409,29 +1449,29 @@ impl IntermediateRepresentationCodeGen {
                 format!("({}{})", op_str, e)
             }
             Expr::Call { func, args } => {
-                let func_str = self.gen_expr(func);
+                let func_str = self.gen_expr(func)?;
                 let args_str: Vec<String> = args
                     .iter()
                     .map(|a| {
-                        let rendered = self.gen_expr(a);
+                        let rendered = self.gen_expr(a)?;
                         if let Expr::Identifier(name) = a {
                             if self.is_boxed_binding(name) {
-                                return format!("({}).clone()", rendered);
+                                return Ok(format!("({}).clone()", rendered));
                             }
                             if self.is_string_expr(a) {
-                                return format!("{}.clone()", rendered);
+                                return Ok(format!("{}.clone()", rendered));
                             }
                             if self.expression_type_name(a).is_some_and(|type_name| {
                                 self.enum_variants.values().any(|qualified| {
                                     qualified.starts_with(&format!("{}::", type_name))
                                 })
                             }) {
-                                return format!("{}.clone()", rendered);
+                                return Ok(format!("{}.clone()", rendered));
                             }
                         }
-                        rendered
+                        Ok(rendered)
                     })
-                    .collect();
+                    .collect::<Result<Vec<String>, String>>()?;
                 if let Expr::Identifier(name) = func.as_ref() {
                     if let Some(qualified) = self.enum_variants.get(name) {
                         let (enum_name, variant) = qualified
@@ -1462,9 +1502,9 @@ impl IntermediateRepresentationCodeGen {
                                 .zip(values.iter())
                                 .map(|(field, value)| format!("{}: {}", field, value))
                                 .collect::<Vec<_>>();
-                            return format!("{} {{ {} }}", qualified, rendered.join(", "));
+                            return Ok(format!("{} {{ {} }}", qualified, rendered.join(", ")));
                         }
-                        return format!("{}({})", qualified, values.join(", "));
+                        return Ok(format!("{}({})", qualified, values.join(", ")));
                     }
                 }
                 match func_str.as_str() {
@@ -1473,7 +1513,7 @@ impl IntermediateRepresentationCodeGen {
                         // be implemented on top of `BufRead`.
                         *self.needs_bufread.borrow_mut() = true;
                         format!(
-                            "std::io::BufReader::new(std::fs::File::open({}).unwrap())",
+                            "std::io::BufReader::new(std::fs::File::open({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}))",
                             args_str.join(", ")
                         )
                     }
@@ -1490,26 +1530,26 @@ impl IntermediateRepresentationCodeGen {
                     "max" if args.len() == 2 => {
                         format!(
                             "({}).max({})",
-                            self.gen_numeric_arg(&args[0]),
-                            self.gen_numeric_arg(&args[1])
+                            self.gen_numeric_arg(&args[0])?,
+                            self.gen_numeric_arg(&args[1])?
                         )
                     }
                     "min" if args.len() == 2 => {
                         format!(
                             "({}).min({})",
-                            self.gen_numeric_arg(&args[0]),
-                            self.gen_numeric_arg(&args[1])
+                            self.gen_numeric_arg(&args[0])?,
+                            self.gen_numeric_arg(&args[1])?
                         )
                     }
                     "abs" if args.len() == 1 => {
-                        format!("({}).abs()", self.gen_numeric_arg(&args[0]))
+                        format!("({}).abs()", self.gen_numeric_arg(&args[0])?)
                     }
                     "sqrt" if args.len() == 1 => {
-                        format!("({}).sqrt()", self.gen_numeric_arg(&args[0]))
+                        format!("({}).sqrt()", self.gen_numeric_arg(&args[0])?)
                     }
                     "pow" if args.len() == 2 => {
-                        let base = self.gen_numeric_arg(&args[0]);
-                        let exponent = self.gen_numeric_arg(&args[1]);
+                        let base = self.gen_numeric_arg(&args[0])?;
+                        let exponent = self.gen_numeric_arg(&args[1])?;
                         // Rust's integer `pow` takes a `u32` exponent and
                         // floats use `powf`, so adapt the Poly signature
                         // `pow(base, exponent)` to the matching method.
@@ -1580,11 +1620,14 @@ impl IntermediateRepresentationCodeGen {
                 args,
             } => {
                 if method == "await" {
-                    let object_str = self.gen_expr(object);
-                    return format!("{}.await", object_str);
+                    let object_str = self.gen_expr(object)?;
+                    return Ok(format!("{}.await", object_str));
                 }
-                let object_str = self.gen_expr(object);
-                let args_str: Vec<String> = args.iter().map(|a| self.gen_expr(a)).collect();
+                let object_str = self.gen_expr(object)?;
+                let args_str: Vec<String> = args
+                    .iter()
+                    .map(|a| self.gen_expr(a))
+                    .collect::<Result<Vec<String>, String>>()?;
                 match method.as_str() {
                     "eof" => {
                         // `BufRead::fill_buf` peeks without consuming; an empty
@@ -1598,7 +1641,7 @@ impl IntermediateRepresentationCodeGen {
                     "get_line" => {
                         *self.needs_bufread.borrow_mut() = true;
                         format!(
-                            "{{ let mut __poly_line = String::new(); let _ = {}.read_line(&mut __poly_line).unwrap(); __poly_line.trim_end().to_string() }}",
+                            "{{ let mut __poly_line = String::new(); let _ = {}.read_line(&mut __poly_line).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); __poly_line.trim_end().to_string() }}",
                             object_str
                         )
                     }
@@ -1696,7 +1739,7 @@ impl IntermediateRepresentationCodeGen {
                     }
                     "filter" if args.len() == 1 => {
                         if self.is_iterator_expr(object) {
-                            format!("{}.filter({})", object_str, self.gen_filter_callback(&args[0]))
+                            format!("{}.filter({})", object_str, self.gen_filter_callback(&args[0])?)
                         } else {
                             let iter = if self.is_string_expr(object) {
                                 "chars()"
@@ -1707,7 +1750,7 @@ impl IntermediateRepresentationCodeGen {
                                 "{}.{}.filter({}).collect::<Vec<_>>()",
                                 object_str,
                                 iter,
-                                self.gen_filter_callback(&args[0])
+                                self.gen_filter_callback(&args[0])?
                             )
                         }
                     }
@@ -1720,7 +1763,7 @@ impl IntermediateRepresentationCodeGen {
                     "sort_by" if args.len() == 1 => format!(
                         "{{ let mut v = {}.clone(); v.sort_by({}); v }}",
                         object_str,
-                        self.gen_sort_callback(&args[0])
+                        self.gen_sort_callback(&args[0])?
                     ),
                     // Map accessors borrow their keys: `HashMap::get(&key)`;
                     // Set `remove` borrows its element too. These must be
@@ -1746,7 +1789,7 @@ impl IntermediateRepresentationCodeGen {
                     // Result test-framework accessors.
                     "is_ok" if args.is_empty() => format!("{}.is_ok()", object_str),
                     "is_error" if args.is_empty() => format!("{}.is_err()", object_str),
-                    "unwrap" if args.is_empty() => format!("{}.clone().unwrap()", object_str),
+                    "unwrap" if args.is_empty() => format!("{}.clone().expect(\"Poly unwrap() called on None or Err value\")", object_str),
                     "unwrap_or" if args.len() == 1 => {
                         format!("{}.clone().unwrap_or({})", object_str, args_str[0])
                     }
@@ -1763,8 +1806,8 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Expr::Index { object, index } => {
-                let object_str = self.gen_expr(object);
-                let index_str = self.gen_expr(index);
+                let object_str = self.gen_expr(object)?;
+                let index_str = self.gen_expr(index)?;
                 if self.is_string_expr(object) {
                     format!(
                         "{}.chars().nth({} as usize).expect(\"string index out of bounds\")",
@@ -1780,12 +1823,12 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Expr::FieldAccess { object, field } => {
-                format!("{}.{}", self.gen_expr(object), field)
+                format!("{}.{}", self.gen_expr(object)?, field)
             }
             Expr::TupleIndex { object, index } => {
-                format!("{}.{}", self.gen_expr(object), index)
+                format!("{}.{}", self.gen_expr(object)?, index)
             }
-            Expr::Parenthesized(expr) => format!("({})", self.gen_expr(expr)),
+            Expr::Parenthesized(expr) => format!("({})", self.gen_expr(expr)?),
             Expr::If {
                 condition,
                 then_block,
@@ -1798,21 +1841,21 @@ impl IntermediateRepresentationCodeGen {
                 // emitted here too — otherwise the loop body would run once
                 // like a plain `if`.
                 if else_block.is_none() {
-                    let cond = self.gen_expr(condition);
+                    let cond = self.gen_expr(condition)?;
                     let mut result = format!("while {} {{\n", cond);
                     self.enter_scope();
                     for statement in then_block {
-                        result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                        result.push_str(&format!("    {}\n", self.gen_statement_str(statement)?));
                     }
                     self.exit_scope();
                     result.push_str("}\n");
-                    return result;
+                    return Ok(result);
                 }
-                let cond = self.gen_expr(condition);
+                let cond = self.gen_expr(condition)?;
                 let mut result = format!("if {} {{\n", cond);
                 self.enter_scope();
                 for (index, statement) in then_block.iter().enumerate() {
-                    let generated = self.gen_statement_str(statement);
+                    let generated = self.gen_statement_str(statement)?;
                     let generated = if index + 1 == then_block.len()
                         && !matches!(
                             statement,
@@ -1833,7 +1876,7 @@ impl IntermediateRepresentationCodeGen {
                         result.push_str("} else {\n");
                         self.enter_scope();
                         for (index, statement) in else_block.iter().enumerate() {
-                            let generated = self.gen_statement_str(statement);
+                            let generated = self.gen_statement_str(statement)?;
                             let generated = if index + 1 == else_block.len()
                                 && !matches!(
                                     statement,
@@ -1856,7 +1899,7 @@ impl IntermediateRepresentationCodeGen {
                 result
             }
             Expr::Match { scrutinee, arms } => {
-                let scrutinee_str = self.gen_expr(scrutinee);
+                let scrutinee_str = self.gen_expr(scrutinee)?;
                 let scrutinee_str = if self.is_string_expr(scrutinee) {
                     format!("({}).as_str()", scrutinee_str)
                 } else {
@@ -1864,7 +1907,8 @@ impl IntermediateRepresentationCodeGen {
                 };
                 let mut result = format!("match {} {{\n", scrutinee_str);
                 for arm in arms {
-                    let (pattern_str, pattern_guards) = self.gen_pattern_with_guards(&arm.pattern);
+                    let (pattern_str, pattern_guards) =
+                        self.gen_pattern_with_guards(&arm.pattern)?;
                     let mut boxed_bindings = HashSet::new();
                     self.collect_boxed_pattern_bindings(&arm.pattern, &mut boxed_bindings);
                     self.boxed_bindings.borrow_mut().push(boxed_bindings);
@@ -1872,12 +1916,12 @@ impl IntermediateRepresentationCodeGen {
                     self.collect_pattern_aliases(&arm.pattern, &mut aliases);
                     self.pattern_aliases.borrow_mut().push(aliases);
                     let body_str = match &arm.body {
-                        MatchArmBody::Expression(expr) => self.gen_expr(expr),
+                        MatchArmBody::Expression(expr) => self.gen_expr(expr)?,
                         MatchArmBody::Block(statements) => {
                             let mut block = String::from("{\n");
                             self.enter_scope();
                             for (index, statement) in statements.iter().enumerate() {
-                                let generated = self.gen_statement_str(statement);
+                                let generated = self.gen_statement_str(statement)?;
                                 let generated = if index + 1 == statements.len()
                                     && matches!(statement, Statement::Expression(_))
                                 {
@@ -1895,7 +1939,7 @@ impl IntermediateRepresentationCodeGen {
                     let body_str = body_str.trim_end_matches(';').to_string();
                     let mut guards = pattern_guards;
                     if let Some(guard) = &arm.guard {
-                        guards.push(self.gen_expr(guard));
+                        guards.push(self.gen_expr(guard)?);
                     }
                     if guards.is_empty() {
                         result.push_str(&format!("    {} => {},\n", pattern_str, body_str));
@@ -1914,24 +1958,25 @@ impl IntermediateRepresentationCodeGen {
                 result
             }
             Expr::Closure { params, body } => {
-                let untyped_params: Vec<String> = params
-                    .iter()
-                    .filter(|p| self.gen_type(&p.ty) == "_")
-                    .map(|p| p.name.clone())
-                    .collect();
+                let mut untyped_params: Vec<String> = Vec::new();
+                for p in params.iter() {
+                    if self.gen_type(&p.ty)? == "_" {
+                        untyped_params.push(p.name.clone());
+                    }
+                }
                 let params_str: Vec<String> = params
                     .iter()
                     .map(|p| {
-                        let ty = self.gen_type(&p.ty);
-                        if ty == "_" {
+                        let ty = self.gen_type(&p.ty)?;
+                        Ok(if ty == "_" {
                             p.name.clone()
                         } else if p.name == "self" {
                             format!("mut self: {}", ty)
                         } else {
                             format!("{}: {}", p.name, ty)
-                        }
+                        })
                     })
-                    .collect();
+                    .collect::<Result<Vec<String>, String>>()?;
                 let prefix = if *self.closure_move.borrow() {
                     "move "
                 } else {
@@ -1941,25 +1986,36 @@ impl IntermediateRepresentationCodeGen {
                 // wrapping_* method calls type-ambiguous (E0282). Anchor them
                 // to the default int width by casting reads of the parameter.
                 let body_str = if untyped_params.is_empty() {
-                    self.gen_expr(body)
+                    self.gen_expr(body)?
                 } else {
-                    self.with_untyped_param_casts(&untyped_params, |codegen| codegen.gen_expr(body))
+                    self.with_untyped_param_casts(&untyped_params, |codegen| {
+                        codegen.gen_expr(body)
+                    })?
                 };
                 format!("{}|{}| {}", prefix, params_str.join(", "), body_str)
             }
             Expr::Array(elements) => {
-                let elems: Vec<String> = elements.iter().map(|e| self.gen_expr(e)).collect();
+                let elems: Vec<String> = elements
+                    .iter()
+                    .map(|e| self.gen_expr(e))
+                    .collect::<Result<Vec<String>, String>>()?;
                 format!("vec![{}]", elems.join(", "))
             }
             Expr::Tuple(elements) => {
-                let elems: Vec<String> = elements.iter().map(|e| self.gen_expr(e)).collect();
+                let elems: Vec<String> = elements
+                    .iter()
+                    .map(|e| self.gen_expr(e))
+                    .collect::<Result<Vec<String>, String>>()?;
                 format!("({})", elems.join(", "))
             }
             Expr::Struct { name, fields } => {
                 let field_strs: Vec<String> = fields
                     .iter()
-                    .map(|(name, value)| format!("{}: {}", name, self.gen_expr(value)))
-                    .collect();
+                    .map(|(name, value)| {
+                        self.gen_expr(value)
+                            .map(|rendered| format!("{}: {}", name, rendered))
+                    })
+                    .collect::<Result<Vec<String>, String>>()?;
                 format!("{} {{ {} }}", name, field_strs.join(", "))
             }
             Expr::Enum {
@@ -1986,25 +2042,27 @@ impl IntermediateRepresentationCodeGen {
                             .iter()
                             .enumerate()
                             .map(|(index, arg)| {
-                                let value = self.gen_expr(arg);
+                                let value = self.gen_expr(arg)?;
                                 let resolved = if enum_name.is_empty() {
                                     qualified.split_once("::").map(|(name, _)| name.to_string())
                                 } else {
                                     Some(enum_name.clone())
                                 };
-                                if resolved.is_some_and(|name| {
-                                    self.recursive_enum_fields.contains(&(
-                                        name,
-                                        variant.clone(),
-                                        index,
-                                    ))
-                                }) {
-                                    format!("Box::new({})", value)
-                                } else {
-                                    value
-                                }
+                                Ok(
+                                    if resolved.is_some_and(|name| {
+                                        self.recursive_enum_fields.contains(&(
+                                            name,
+                                            variant.clone(),
+                                            index,
+                                        ))
+                                    }) {
+                                        format!("Box::new({})", value)
+                                    } else {
+                                        value
+                                    },
+                                )
                             })
-                            .collect();
+                            .collect::<Result<Vec<String>, String>>()?;
                         let resolved = if enum_name.is_empty() {
                             qualified.split_once("::").map(|(name, _)| name.to_string())
                         } else {
@@ -2020,7 +2078,7 @@ impl IntermediateRepresentationCodeGen {
                                     .zip(args_str.iter())
                                     .map(|(field, value)| format!("{}: {}", field, value))
                                     .collect::<Vec<_>>();
-                                return format!("{} {{ {} }}", qualified, values.join(", "));
+                                return Ok(format!("{} {{ {} }}", qualified, values.join(", ")));
                             }
                         }
                         format!("{}({})", qualified, args_str.join(", "))
@@ -2033,8 +2091,8 @@ impl IntermediateRepresentationCodeGen {
                 end,
                 inclusive,
             } => {
-                let s = self.gen_expr(start);
-                let e = self.gen_expr(end);
+                let s = self.gen_expr(start)?;
+                let e = self.gen_expr(end)?;
                 if *inclusive {
                     format!("{}..={}", s, e)
                 } else {
@@ -2045,42 +2103,42 @@ impl IntermediateRepresentationCodeGen {
                 variable,
                 ranges,
                 body,
-            } => self.gen_loop_range(variable, ranges, body),
+            } => self.gen_loop_range(variable, ranges, body)?,
             Expr::ForLoop {
                 variable,
                 iterable,
                 body,
-            } => self.gen_for_loop(variable, iterable, body),
+            } => self.gen_for_loop(variable, iterable, body)?,
             Expr::InfiniteLoop(body) => {
                 let mut result = "loop {\n".to_string();
                 for statement in body {
-                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)?));
                 }
                 result.push('}');
                 result
             }
             Expr::WhileLoop { condition, body } => {
-                let mut result = format!("while {} {{\n", self.gen_expr(condition));
+                let mut result = format!("while {} {{\n", self.gen_expr(condition)?);
                 for statement in body {
-                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)?));
                 }
                 result.push('}');
                 result
             }
-            Expr::Try(expr) => format!("{}?", self.gen_expr(expr)),
+            Expr::Try(expr) => format!("{}?", self.gen_expr(expr)?),
             Expr::As { expr, ty } => {
-                format!("{} as {}", self.gen_expr(expr), self.gen_type(ty))
+                format!("{} as {}", self.gen_expr(expr)?, self.gen_type(ty)?)
             }
-            Expr::Get(get) => self.gen_get(get),
+            Expr::Get(get) => self.gen_get(get)?,
             Expr::UnsafeBlock(statements) => {
                 let mut result = "unsafe {\n".to_string();
                 for statement in statements {
-                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)?));
                 }
                 result.push('}');
                 result
             }
-        }
+        })
     }
 
     /// Renders `expr` with reads of the given untyped closure parameters cast
@@ -2088,8 +2146,8 @@ impl IntermediateRepresentationCodeGen {
     fn with_untyped_param_casts(
         &self,
         params: &[String],
-        render: impl FnOnce(&Self) -> String,
-    ) -> String {
+        render: impl FnOnce(&Self) -> Result<String, String>,
+    ) -> Result<String, String> {
         self.untyped_closure_params
             .borrow_mut()
             .push(params.to_vec());
@@ -2166,23 +2224,23 @@ impl IntermediateRepresentationCodeGen {
     /// Render an expression anchoring bare integer literals to `i32` so an
     /// inferred-typed declaration (`var x := 10`) becomes concretely `i32`
     /// and can later take `wrapping_*` method calls (E0689).
-    fn render_anchored_int(&self, expr: &Expr) -> String {
-        match expr {
+    fn render_anchored_int(&self, expr: &Expr) -> Result<String, String> {
+        Ok(match expr {
             Expr::Literal(Literal::Int(v)) => format!("{v}_i32"),
-            Expr::Parenthesized(inner) => format!("({})", self.render_anchored_int(inner)),
+            Expr::Parenthesized(inner) => format!("({})", self.render_anchored_int(inner)?),
             Expr::UnaryOp {
                 op: UnaryOp::Neg,
                 expr,
             } => {
-                format!("(-{})", self.render_anchored_int(expr))
+                format!("(-{})", self.render_anchored_int(expr)?)
             }
             Expr::BinaryOp { op, left, right } => {
                 let op_str = self.gen_binary_op(op);
                 format!(
                     "({} {} {})",
-                    self.render_anchored_int(left),
+                    self.render_anchored_int(left)?,
                     op_str,
-                    self.render_anchored_int(right)
+                    self.render_anchored_int(right)?
                 )
             }
             // Tuple literals: anchor int-classified elements so element
@@ -2198,11 +2256,11 @@ impl IntermediateRepresentationCodeGen {
                             self.gen_expr(element)
                         }
                     })
-                    .collect();
+                    .collect::<Result<Vec<String>, String>>()?;
                 format!("({})", rendered.join(", "))
             }
-            other => self.gen_expr(other),
-        }
+            other => self.gen_expr(other)?,
+        })
     }
 
     /// Render an integer literal for expression position. Rust types unsuffixed
@@ -2269,13 +2327,13 @@ impl IntermediateRepresentationCodeGen {
     /// Bare literals keep their context-driven suffix (`1_u64`), so a plain
     /// `(1)` would still infer correctly — but the explicit cast keeps mixed
     /// expressions (u64 var with i32 variable) unambiguous.
-    fn gen_u64_operand(&self, expr: &Expr) -> String {
-        let rendered = self.gen_expr(expr);
-        if matches!(expr, Expr::Literal(Literal::Int(_))) {
+    fn gen_u64_operand(&self, expr: &Expr) -> Result<String, String> {
+        let rendered = self.gen_expr(expr)?;
+        Ok(if matches!(expr, Expr::Literal(Literal::Int(_))) {
             rendered // already suffixed `_u64` by the u64 context
         } else {
             format!("({}) as u64", rendered)
-        }
+        })
     }
 
     /// True when the expression is known to be a 64-bit value: a declared
@@ -2416,8 +2474,8 @@ impl IntermediateRepresentationCodeGen {
     /// literals are ambiguous in Rust (`(-42).abs()` is E0689), so annotate
     /// them with their inferred type; other expressions (variables, calls)
     /// already carry a concrete type.
-    fn gen_numeric_arg(&self, expr: &Expr) -> String {
-        match expr {
+    fn gen_numeric_arg(&self, expr: &Expr) -> Result<String, String> {
+        Ok(match expr {
             Expr::Literal(Literal::Int(value)) => format!("{value}_i32"),
             Expr::Literal(Literal::Float(value)) => format!("{value}_f64"),
             Expr::UnaryOp {
@@ -2426,30 +2484,35 @@ impl IntermediateRepresentationCodeGen {
             } => match expr.as_ref() {
                 Expr::Literal(Literal::Int(value)) => format!("-{value}_i32"),
                 Expr::Literal(Literal::Float(value)) => format!("-{value}_f64"),
-                _ => self.gen_expr(expr),
+                _ => self.gen_expr(expr)?,
             },
-            _ => self.gen_expr(expr),
-        }
+            _ => self.gen_expr(expr)?,
+        })
     }
 
     /// Absolute value of a loop step expression (`-2` -> `2`), used by the
     /// reversed-step iterator lowering.
-    fn gen_step_magnitude(&self, step: &Expr) -> String {
-        match step {
+    fn gen_step_magnitude(&self, step: &Expr) -> Result<String, String> {
+        Ok(match step {
             Expr::UnaryOp {
                 op: UnaryOp::Neg,
                 expr,
-            } => self.gen_expr(expr),
+            } => self.gen_expr(expr)?,
             Expr::Literal(Literal::Int(value)) => {
                 value.strip_prefix('-').unwrap_or(value).to_string()
             }
-            other => self.gen_expr(other),
-        }
+            other => self.gen_expr(other)?,
+        })
     }
 
     /// Render `for variable in iterable { body }` with the loop variable
     /// carrying the element type of the iterable.
-    fn gen_for_loop(&self, variable: &str, iterable: &Expr, body: &[Statement]) -> String {
+    fn gen_for_loop(
+        &self,
+        variable: &str,
+        iterable: &Expr,
+        body: &[Statement],
+    ) -> Result<String, String> {
         let mut result = String::new();
         // Iterate by value (`iter().cloned()`) so `for x in collection` binds
         // the element type `T` (matching the checker) while still borrowing
@@ -2459,17 +2522,17 @@ impl IntermediateRepresentationCodeGen {
         // lowering in `gen_loop_range`: strings iterate via `.chars()`, and
         // temporaries (array literals, method results) are consumed directly.
         let iterator = if self.is_string_expr(iterable) {
-            format!("{}.chars()", self.gen_expr(iterable))
+            format!("{}.chars()", self.gen_expr(iterable)?)
         } else {
             match iterable {
-                Expr::Range { .. } => self.gen_expr(iterable),
+                Expr::Range { .. } => self.gen_expr(iterable)?,
                 Expr::MethodCall {
                     object,
                     method,
                     args,
                     ..
                 } => {
-                    let object_str = self.gen_expr(object);
+                    let object_str = self.gen_expr(object)?;
                     if method == "enumerate" && args.is_empty() {
                         if self.is_string_expr(object) {
                             format!("{}.chars().enumerate()", object_str)
@@ -2481,22 +2544,22 @@ impl IntermediateRepresentationCodeGen {
                     } else {
                         // Method results (map/filter/split/...) are owned
                         // temporaries and can be consumed directly.
-                        self.gen_expr(iterable)
+                        self.gen_expr(iterable)?
                     }
                 }
-                Expr::Identifier(_) => format!("{}.iter().cloned()", self.gen_expr(iterable)),
-                Expr::Array(_) => self.gen_expr(iterable),
-                _ => format!("[{}]", self.gen_expr(iterable)),
+                Expr::Identifier(_) => format!("{}.iter().cloned()", self.gen_expr(iterable)?),
+                Expr::Array(_) => self.gen_expr(iterable)?,
+                _ => format!("[{}]", self.gen_expr(iterable)?),
             }
         };
         result.push_str(&format!("for {} in {} {{\n", variable, iterator));
         self.enter_scope();
         for statement in body {
-            result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+            result.push_str(&format!("    {}\n", self.gen_statement_str(statement)?));
         }
         self.exit_scope();
         result.push('}');
-        result
+        Ok(result)
     }
 
     fn gen_loop_range(
@@ -2504,7 +2567,7 @@ impl IntermediateRepresentationCodeGen {
         variable: &str,
         ranges: &[LoopRangePart],
         body: &[Statement],
-    ) -> String {
+    ) -> Result<String, String> {
         let mut result = String::with_capacity(128);
         if ranges.len() == 1 {
             match &ranges[0] {
@@ -2514,8 +2577,8 @@ impl IntermediateRepresentationCodeGen {
                     inclusive: _,
                     step,
                 } => {
-                    let s = self.gen_expr(start);
-                    let e = self.gen_expr(end);
+                    let s = self.gen_expr(start)?;
+                    let e = self.gen_expr(end)?;
                     // Poly loop ranges include both endpoints, unlike ordinary
                     // Poly/Rust range expressions.
                     let range = format!("{}..={}", s, e);
@@ -2540,10 +2603,10 @@ impl IntermediateRepresentationCodeGen {
                                 "({}..={}).rev().step_by({} as usize)",
                                 e,
                                 s,
-                                self.gen_step_magnitude(step)
+                                self.gen_step_magnitude(step)?
                             )
                         } else if is_literal {
-                            format!("({}).step_by({} as usize)", range, self.gen_expr(step))
+                            format!("({}).step_by({} as usize)", range, self.gen_expr(step)?)
                         } else {
                             // A runtime step may be negative, and since Poly
                             // ranges are inclusive the step's sign also picks
@@ -2553,7 +2616,7 @@ impl IntermediateRepresentationCodeGen {
                             // direction's sequence from each visited value. A
                             // zero step yields nothing, so the loop
                             // terminates.
-                            let step_str = self.gen_expr(step);
+                            let step_str = self.gen_expr(step)?;
                             format!(
                                 "{{ let __poly_st = ({step_str}); std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if __poly_st > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by(__poly_st as usize).skip(((__poly_sv - {s}) as usize) / (__poly_st as usize))) }} else if __poly_st < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-(__poly_st)) as usize).skip((({s} - __poly_sv) as usize) / ((-(__poly_st)) as usize))) }} else {{ Box::new(std::iter::empty()) }} }}) }}",
                                 s = s,
@@ -2565,7 +2628,8 @@ impl IntermediateRepresentationCodeGen {
                         range
                     };
                     use std::fmt::Write;
-                    writeln!(result, "for {} in {} {{", variable, iterator).unwrap();
+                    writeln!(result, "for {} in {} {{", variable, iterator)
+                        .map_err(|e| e.to_string())?;
                 }
                 LoopRangePart::Value(value) => {
                     // Collection loops iterate by value (`iter().cloned()`) so
@@ -2578,7 +2642,7 @@ impl IntermediateRepresentationCodeGen {
                     // (array literals, method results such as
                     // `map`/`filter`/`split`) can be consumed directly.
                     let iterator = if self.is_string_expr(value) {
-                        format!("{}.chars()", self.gen_expr(value))
+                        format!("{}.chars()", self.gen_expr(value)?)
                     } else if let Expr::MethodCall {
                         object,
                         method,
@@ -2586,7 +2650,7 @@ impl IntermediateRepresentationCodeGen {
                         ..
                     } = value.as_ref()
                     {
-                        let object_str = self.gen_expr(object);
+                        let object_str = self.gen_expr(object)?;
                         if method == "enumerate" && args.is_empty() {
                             if self.is_string_expr(object) {
                                 format!("{}.chars().enumerate()", object_str)
@@ -2596,17 +2660,18 @@ impl IntermediateRepresentationCodeGen {
                                 format!("{}.iter().cloned().enumerate()", object_str)
                             }
                         } else {
-                            self.gen_expr(value)
+                            self.gen_expr(value)?
                         }
                     } else if matches!(value.as_ref(), Expr::Identifier(_)) {
-                        format!("{}.iter().cloned()", self.gen_expr(value))
+                        format!("{}.iter().cloned()", self.gen_expr(value)?)
                     } else if matches!(value.as_ref(), Expr::Array(_)) {
-                        self.gen_expr(value)
+                        self.gen_expr(value)?
                     } else {
-                        format!("[{}]", self.gen_expr(value))
+                        format!("[{}]", self.gen_expr(value)?)
                     };
                     use std::fmt::Write;
-                    writeln!(result, "for {} in {} {{", variable, iterator).unwrap();
+                    writeln!(result, "for {} in {} {{", variable, iterator)
+                        .map_err(|e| e.to_string())?;
                 }
             }
         } else {
@@ -2619,8 +2684,8 @@ impl IntermediateRepresentationCodeGen {
                         inclusive: _,
                         step,
                     } => {
-                        let s = self.gen_expr(start);
-                        let e = self.gen_expr(end);
+                        let s = self.gen_expr(start)?;
+                        let e = self.gen_expr(end)?;
                         // Poly loop ranges include both endpoints.
                         let range = format!("{}..={}", s, e);
                         let iterator = if let Some(step) = step {
@@ -2647,14 +2712,14 @@ impl IntermediateRepresentationCodeGen {
                                     "({}..={}).rev().step_by({} as usize)",
                                     e,
                                     s,
-                                    self.gen_step_magnitude(step)
+                                    self.gen_step_magnitude(step)?
                                 )
                             } else if is_literal {
-                                format!("({}).step_by({} as usize)", range, self.gen_expr(step))
+                                format!("({}).step_by({} as usize)", range, self.gen_expr(step)?)
                             } else {
                                 // Same runtime-sign dispatch as the single-range
                                 // branch above; the step is snapshotted once.
-                                let step_str = self.gen_expr(step);
+                                let step_str = self.gen_expr(step)?;
                                 format!(
                                     "{{ let __poly_st = ({step_str}); std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if __poly_st > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by(__poly_st as usize).skip(((__poly_sv - {s}) as usize) / (__poly_st as usize))) }} else if __poly_st < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-(__poly_st)) as usize).skip((({s} - __poly_sv) as usize) / ((-(__poly_st)) as usize))) }} else {{ Box::new(std::iter::empty()) }} }}) }}",
                                     s = s,
@@ -2668,7 +2733,7 @@ impl IntermediateRepresentationCodeGen {
                         iterators.push(iterator);
                     }
                     LoopRangePart::Value(value) => {
-                        iterators.push(format!("std::iter::once({})", self.gen_expr(value)));
+                        iterators.push(format!("std::iter::once({})", self.gen_expr(value)?));
                     }
                 }
             }
@@ -2677,16 +2742,17 @@ impl IntermediateRepresentationCodeGen {
                 .reduce(|left, right| format!("{}.chain({})", left, right))
                 .unwrap_or_else(|| "std::iter::empty()".to_string());
             use std::fmt::Write;
-            writeln!(result, "for {} in {} {{", variable, chained).unwrap();
+            writeln!(result, "for {} in {} {{", variable, chained).map_err(|e| e.to_string())?;
         }
         self.enter_scope();
         for statement in body {
             use std::fmt::Write;
-            writeln!(result, "    {}", self.gen_statement_str(statement)).unwrap();
+            writeln!(result, "    {}", self.gen_statement_str(statement)?)
+                .map_err(|e| e.to_string())?;
         }
         self.exit_scope();
         result.push('}');
-        result
+        Ok(result)
     }
 
     /// Apply a `--as <type>` conversion to the input variable, or return the
@@ -2694,18 +2760,20 @@ impl IntermediateRepresentationCodeGen {
     ///
     /// `read_line` keeps the trailing newline; `str::parse` rejects
     /// surrounding whitespace, so the input is always trimmed first.
-    fn gen_get_as(&self, input_var: &str, as_type: Option<&Type>) -> String {
+    fn gen_get_as(&self, input_var: &str, as_type: Option<&Type>) -> Result<String, String> {
         let trimmed = format!("{input_var}.trim()");
         let Some(ty) = as_type else {
-            return format!("{trimmed}.to_string()");
+            return Ok(format!("{trimmed}.to_string()"));
         };
-        if matches!(ty, Type::Named(name) if matches!(name.as_str(), "string" | "ustring" | "String"))
-        {
-            format!("{trimmed}.to_string()")
-        } else {
-            let rust_ty = self.gen_type(ty);
-            format!("{trimmed}.parse::<{rust_ty}>().unwrap_or_default()")
-        }
+        Ok(
+            if matches!(ty, Type::Named(name) if matches!(name.as_str(), "string" | "ustring" | "String"))
+            {
+                format!("{trimmed}.to_string()")
+            } else {
+                let rust_ty = self.gen_type(ty)?;
+                format!("{trimmed}.parse::<{rust_ty}>().unwrap_or_default()")
+            },
+        )
     }
 
     /// Generate a real HTTP/1.1 GET over a tokio TCP connection.
@@ -2747,65 +2815,92 @@ impl IntermediateRepresentationCodeGen {
         )
     }
 
-    fn gen_get(&self, get: &GetExpr) -> String {
+    fn gen_get(&self, get: &GetExpr) -> Result<String, String> {
         // File reads and stdin reads share one intermediate representation node. Check redirection first
         // because file-specific byte flags change the generated return type.
         if let Some(source) = &get.source {
-            let path_str = self.gen_expr(source);
+            let path_str = self.gen_expr(source)?;
             for flag in &get.flags {
                 if let GetFlag::Bytes(count) = flag {
-                    let count_str = self.gen_expr(count);
-                    return format!(
-                        "{{ let bytes = std::fs::read({}).unwrap(); bytes.into_iter().take({} as usize).collect::<Vec<u8>>() }}",
+                    let count_str = self.gen_expr(count)?;
+                    return Ok(format!(
+                        "{{ let bytes = std::fs::read({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); bytes.into_iter().take({} as usize).collect::<Vec<u8>>() }}",
                         path_str, count_str
-                    );
+                    ));
                 }
             }
-            return format!("std::fs::read_to_string({}).unwrap()", path_str);
+            return Ok(format!("std::fs::read_to_string({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }})", path_str));
         }
 
         // No source: optionally display the explicit Unicode prompt, then read stdin.
         let prompt = get
             .prompt
             .as_ref()
-            .map(|prompt| {
+            .map(|prompt| self.gen_expr(prompt))
+            .transpose()?
+            .map(|target| {
                 format!(
-                    "print!(\"{{}}\", {}); std::io::Write::flush(&mut std::io::stdout()).unwrap(); ",
-                    self.gen_expr(prompt)
+                    "print!(\"{{}}\", {}); std::io::Write::flush(&mut std::io::stdout()).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); ",
+                    target
                 )
             })
             .unwrap_or_default();
-        let timeout = get.flags.iter().find_map(|flag| match flag {
-            GetFlag::Timeout(value) => Some(self.gen_expr(value)),
-            _ => None,
-        });
-        let default = get.flags.iter().find_map(|flag| match flag {
-            GetFlag::Default(value) => Some(self.gen_expr(value)),
-            _ => None,
-        });
-        let bytes = get.flags.iter().find_map(|flag| match flag {
-            GetFlag::Bytes(value) => Some(self.gen_expr(value)),
-            _ => None,
-        });
+        let timeout = get
+            .flags
+            .iter()
+            .find_map(|flag| match flag {
+                GetFlag::Timeout(value) => Some(value),
+                _ => None,
+            })
+            .map(|value| self.gen_expr(value))
+            .transpose()?;
+        let default = get
+            .flags
+            .iter()
+            .find_map(|flag| match flag {
+                GetFlag::Default(value) => Some(value),
+                _ => None,
+            })
+            .map(|value| self.gen_expr(value))
+            .transpose()?;
+        let bytes = get
+            .flags
+            .iter()
+            .find_map(|flag| match flag {
+                GetFlag::Bytes(value) => Some(value),
+                _ => None,
+            })
+            .map(|value| self.gen_expr(value))
+            .transpose()?;
         let as_type = get.flags.iter().find_map(|flag| match flag {
             GetFlag::As(ty) => Some(ty),
             _ => None,
         });
-        let until = get.flags.iter().find_map(|flag| match flag {
-            GetFlag::Until(value) => Some(self.gen_expr(value)),
-            _ => None,
-        });
-        let mask = get.flags.iter().find_map(|flag| match flag {
-            GetFlag::Mask(value) => Some(self.gen_expr(value)),
-            _ => None,
-        });
+        let until = get
+            .flags
+            .iter()
+            .find_map(|flag| match flag {
+                GetFlag::Until(value) => Some(value),
+                _ => None,
+            })
+            .map(|value| self.gen_expr(value))
+            .transpose()?;
+        let mask = get
+            .flags
+            .iter()
+            .find_map(|flag| match flag {
+                GetFlag::Mask(value) => Some(value),
+                _ => None,
+            })
+            .map(|value| self.gen_expr(value))
+            .transpose()?;
 
         // `get --bytes N` on stdin reads up to N raw bytes.
         if let Some(count) = bytes {
-            return format!(
-                "{{ {}let mut __poly_bytes: Vec<u8> = Vec::new(); let _ = std::io::Read::read_to_end(&mut std::io::Read::take(std::io::stdin(), {} as u64), &mut __poly_bytes).unwrap(); __poly_bytes }}",
+            return Ok(format!(
+                "{{ {}let mut __poly_bytes: Vec<u8> = Vec::new(); let _ = std::io::Read::read_to_end(&mut std::io::Read::take(std::io::stdin(), {} as u64), &mut __poly_bytes).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); __poly_bytes }}",
                 prompt, count
-            );
+            ));
         }
 
         // The stdin read expression: `--until` accumulates bytes until the
@@ -2819,21 +2914,24 @@ impl IntermediateRepresentationCodeGen {
         // timeout, otherwise the read returns `Err("timeout")` which matches
         // the documented `Timeout` arm.
         if let Some(ms) = timeout {
-            let on_ok = self.gen_get_as("input", as_type);
+            let on_ok = self.gen_get_as("input", as_type)?;
             let timeout_result = match default {
                 Some(default_expr) => {
                     format!("Ok::<String, String>({})", default_expr)
                 }
                 None => "Err::<String, String>(String::from(\"timeout\"))".to_string(),
             };
-            return format!(
+            return Ok(format!(
                 "{{ {}let (__poly_tx, __poly_rx) = std::sync::mpsc::channel(); std::thread::spawn(move || {{ let __poly_input = {}; let _ = __poly_tx.send(__poly_input.trim().to_string()); }}); match __poly_rx.recv_timeout(std::time::Duration::from_millis({} as u64)) {{ Ok(input) => Ok::<String, String>({}), Err(_) => {} }} }}",
                 prompt, read_expr, ms, on_ok, timeout_result
-            );
+            ));
         }
 
-        let finalized = self.gen_get_as("input", as_type);
-        format!("{{ {}let input = {}; {} }}", prompt, read_expr, finalized)
+        let finalized = self.gen_get_as("input", as_type)?;
+        Ok(format!(
+            "{{ {}let input = {}; {} }}",
+            prompt, read_expr, finalized
+        ))
     }
 
     /// Generate the stdin read expression, honoring `--until` (read until a
@@ -2852,47 +2950,50 @@ impl IntermediateRepresentationCodeGen {
             "{{ let __poly_tty = std::io::IsTerminal::is_terminal(&std::io::stdin()); if __poly_tty {{ let _ = std::process::Command::new(\"stty\").arg(\"-echo\").status(); }} let mut __poly_input = String::new(); let _ = std::io::stdin().read_line(&mut __poly_input); if __poly_tty {{ let _ = std::process::Command::new(\"stty\").arg(\"echo\").status(); }} __poly_input }}"
                 .to_string()
         } else {
-            "{ let mut __poly_input = String::new(); std::io::stdin().read_line(&mut __poly_input).unwrap(); __poly_input }"
+            "{ let mut __poly_input = String::new(); std::io::stdin().read_line(&mut __poly_input).unwrap_or_else(|e| { eprintln!(\"Poly runtime error: {e}\"); std::process::exit(1) }); __poly_input }"
                 .to_string()
         }
     }
 
     /// Render a nested function declaration as a string for statement-string
     /// contexts (e.g. inside match arms and if-expression blocks).
-    fn gen_function_str(&self, function: &Function) -> String {
+    fn gen_function_str(&self, function: &Function) -> Result<String, String> {
         let generics = self.gen_generics(&function.generics);
         let params: Vec<String> = function
             .params
             .iter()
-            .map(|p| format!("{}: {}", p.name, self.gen_type(&p.ty)))
-            .collect();
+            .map(|p| self.gen_type(&p.ty).map(|ty| format!("{}: {}", p.name, ty)))
+            .collect::<Result<Vec<String>, String>>()?;
         let ret = match &function.return_type {
             Some(Type::Function { params, ret }) => {
-                let rendered: Vec<String> = params.iter().map(|t| self.gen_type(t)).collect();
+                let rendered: Vec<String> = params
+                    .iter()
+                    .map(|t| self.gen_type(t))
+                    .collect::<Result<Vec<String>, String>>()?;
                 format!(
                     " -> impl Fn({}) -> {}",
                     rendered.join(", "),
-                    self.gen_type(ret)
+                    self.gen_type(ret)?
                 )
             }
-            Some(ty) => format!(" -> {}", self.gen_type(ty)),
+            Some(ty) => format!(" -> {}", self.gen_type(ty)?),
             None => String::new(),
         };
         let async_prefix = if function.is_async { "async " } else { "" };
-        format!(
+        Ok(format!(
             "{}fn {}{}({}){} {{\n    /* nested function body */\n}}",
             async_prefix,
             function.name,
             generics,
             params.join(", "),
             ret
-        )
+        ))
     }
 
-    fn gen_statement_str(&self, statement: &Statement) -> String {
-        match statement {
+    fn gen_statement_str(&self, statement: &Statement) -> Result<String, String> {
+        Ok(match statement {
             Statement::Expression(expr) => {
-                let generated = self.gen_expr(expr);
+                let generated = self.gen_expr(expr)?;
                 match expr {
                     Expr::If { .. }
                     | Expr::LoopRange { .. }
@@ -2903,7 +3004,7 @@ impl IntermediateRepresentationCodeGen {
             }
             Statement::Return(Some(expr)) => {
                 *self.closure_move.borrow_mut() = true;
-                let rendered = self.gen_expr(expr);
+                let rendered = self.gen_expr(expr)?;
                 *self.closure_move.borrow_mut() = false;
                 format!("return {};", rendered)
             }
@@ -2914,15 +3015,15 @@ impl IntermediateRepresentationCodeGen {
                 // Legacy `put x > "file"` / `put x >> "file"` handling was
                 // removed: redirects are now only `put ... to "file"` (the
                 // Redirect field).
-                let expr_str = self.gen_expr(expr);
+                let expr_str = self.gen_expr(expr)?;
                 match redirect {
                     Some(Redirect::Write(path)) => {
-                        let path_str = self.gen_expr(path);
+                        let path_str = self.gen_expr(path)?;
                         if self.is_bytes_expr(expr) {
-                            format!("std::fs::write({}, {}).unwrap();", path_str, expr_str)
+                            format!("std::fs::write({}, {}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }});", path_str, expr_str)
                         } else {
                             format!(
-                                "std::fs::write({}, format!(\"{}\\n\", {})).unwrap();",
+                                "std::fs::write({}, format!(\"{}\\n\", {})).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }});",
                                 path_str,
                                 self.put_format_spec(expr),
                                 expr_str
@@ -2930,10 +3031,10 @@ impl IntermediateRepresentationCodeGen {
                         }
                     }
                     Some(Redirect::Append(path)) => {
-                        let path_str = self.gen_expr(path);
+                        let path_str = self.gen_expr(path)?;
                         *self.needs_io_write.borrow_mut() = true;
                         format!(
-                            "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({0}).unwrap(); writeln!(f, \"{1}\", {2}).unwrap(); }}",
+                            "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({0}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); writeln!(f, \"{1}\", {2}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); }}",
                             path_str, self.put_format_spec(expr), expr_str
                         )
                     }
@@ -2947,17 +3048,21 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Statement::Error(expr) => {
-                format!("eprintln!(\"[ERROR] {{}}\", {});", self.gen_expr(expr))
+                format!("eprintln!(\"[ERROR] {{}}\", {});", self.gen_expr(expr)?)
             }
             Statement::Warn(expr) => {
-                format!("eprintln!(\"[WARN] {{}}\", {});", self.gen_expr(expr))
+                format!("eprintln!(\"[WARN] {{}}\", {});", self.gen_expr(expr)?)
             }
             Statement::Info(expr) => {
-                format!("eprintln!(\"[INFO] {{}}\", {});", self.gen_expr(expr))
+                format!("eprintln!(\"[INFO] {{}}\", {});", self.gen_expr(expr)?)
             }
             Statement::LetDecl { name, ty, value } => {
-                let ty_str = ty.as_ref().map(|ty| self.gen_type(ty)).unwrap_or_default();
-                let value_str = self.gen_decl_value(name, value, ty.as_ref());
+                let ty_str = ty
+                    .as_ref()
+                    .map(|ty| self.gen_type(ty))
+                    .transpose()?
+                    .unwrap_or_default();
+                let value_str = self.gen_decl_value(name, value, ty.as_ref())?;
                 if ty.is_some() {
                     format!("let {}: {} = {};", name, ty_str, value_str)
                 } else {
@@ -2996,7 +3101,9 @@ impl IntermediateRepresentationCodeGen {
                 }
                 let element_type = ty
                     .as_ref()
-                    .and_then(|ty| self.vec_element_type_of_type(ty))
+                    .map(|ty| self.vec_element_type_of_type(ty))
+                    .transpose()?
+                    .flatten()
                     .or_else(|| {
                         value
                             .as_ref()
@@ -3005,10 +3112,14 @@ impl IntermediateRepresentationCodeGen {
                 if let Some(element) = element_type {
                     self.declare_vec_element(name.clone(), element);
                 }
-                let ty_str = ty.as_ref().map(|ty| self.gen_type(ty)).unwrap_or_default();
+                let ty_str = ty
+                    .as_ref()
+                    .map(|ty| self.gen_type(ty))
+                    .transpose()?
+                    .unwrap_or_default();
                 match value {
                     Some(value) => {
-                        let value_str = self.gen_decl_value(name, value, ty.as_ref());
+                        let value_str = self.gen_decl_value(name, value, ty.as_ref())?;
                         if ty.is_some() {
                             format!("let mut {}: {} = {};", name, ty_str, value_str)
                         } else {
@@ -3033,31 +3144,32 @@ impl IntermediateRepresentationCodeGen {
                     if let Some(suffixes) = self.string_concat_suffix(value, name) {
                         let mut out = String::new();
                         for suffix in suffixes {
-                            let suffix_str = self.gen_expr(suffix);
+                            let suffix_str = self.gen_expr(suffix)?;
                             out.push_str(&format!("{}.push_str(&({}));", name, suffix_str));
                         }
-                        return out;
+                        return Ok(out);
                     }
                 }
-                format!("{} = {};", self.gen_expr(target), self.gen_expr(value))
+                format!("{} = {};", self.gen_expr(target)?, self.gen_expr(value)?)
             }
             Statement::Mutation { target, op, value } => {
-                let target_str = self.gen_expr(target);
+                let target_str = self.gen_expr(target)?;
                 let amount = value
                     .as_ref()
                     .map(|value| self.gen_expr(value))
+                    .transpose()?
                     .unwrap_or_else(|| "1".to_string());
                 // String append borrows the amount; declared-i64 targets keep
                 // exact 64-bit arithmetic; every other numeric target wraps.
                 if self.is_string_expr(target) {
-                    return format!("{} += ({});", target_str, amount);
+                    return Ok(format!("{} += ({});", target_str, amount));
                 }
                 if self.is_int64_expr(target) || self.is_vec_expr(target) {
                     let operator = match op {
                         MutationOp::Add | MutationOp::Inc => "+=",
                         MutationOp::Sub | MutationOp::Dec => "-=",
                     };
-                    return format!("{} {} {};", target_str, operator, amount);
+                    return Ok(format!("{} {} {};", target_str, operator, amount));
                 }
                 format!(
                     "{} = ({}).{}({});",
@@ -3077,21 +3189,21 @@ impl IntermediateRepresentationCodeGen {
                 is_while,
             } => {
                 if *is_while {
-                    let cond = self.gen_expr(condition);
+                    let cond = self.gen_expr(condition)?;
                     let mut result = format!("while {} {{\n", cond);
                     self.enter_scope();
                     for statement in then_block {
-                        result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                        result.push_str(&format!("    {}\n", self.gen_statement_str(statement)?));
                     }
                     self.exit_scope();
                     result.push_str("}\n");
-                    return result;
+                    return Ok(result);
                 }
-                let cond = self.gen_expr(condition);
+                let cond = self.gen_expr(condition)?;
                 let mut result = format!("if {} {{\n", cond);
                 self.enter_scope();
                 for (index, statement) in then_block.iter().enumerate() {
-                    let generated = self.gen_statement_str(statement);
+                    let generated = self.gen_statement_str(statement)?;
                     let generated = if index + 1 == then_block.len()
                         && !matches!(
                             statement,
@@ -3112,7 +3224,7 @@ impl IntermediateRepresentationCodeGen {
                         result.push_str("} else {\n");
                         self.enter_scope();
                         for (index, statement) in else_block.iter().enumerate() {
-                            let generated = self.gen_statement_str(statement);
+                            let generated = self.gen_statement_str(statement)?;
                             let generated = if index + 1 == else_block.len()
                                 && !matches!(
                                     statement,
@@ -3135,7 +3247,7 @@ impl IntermediateRepresentationCodeGen {
                 result
             }
             Statement::Match { scrutinee, arms } => {
-                let scrutinee_str = self.gen_expr(scrutinee);
+                let scrutinee_str = self.gen_expr(scrutinee)?;
                 let scrutinee_str = if self.is_string_expr(scrutinee) {
                     format!("({}).as_str()", scrutinee_str)
                 } else {
@@ -3143,7 +3255,8 @@ impl IntermediateRepresentationCodeGen {
                 };
                 let mut result = format!("match {} {{\n", scrutinee_str);
                 for arm in arms {
-                    let (pattern_str, pattern_guards) = self.gen_pattern_with_guards(&arm.pattern);
+                    let (pattern_str, pattern_guards) =
+                        self.gen_pattern_with_guards(&arm.pattern)?;
                     let mut boxed_bindings = HashSet::new();
                     self.collect_boxed_pattern_bindings(&arm.pattern, &mut boxed_bindings);
                     self.boxed_bindings.borrow_mut().push(boxed_bindings);
@@ -3151,12 +3264,12 @@ impl IntermediateRepresentationCodeGen {
                     self.collect_pattern_aliases(&arm.pattern, &mut aliases);
                     self.pattern_aliases.borrow_mut().push(aliases);
                     let body_str = match &arm.body {
-                        MatchArmBody::Expression(expr) => self.gen_expr(expr),
+                        MatchArmBody::Expression(expr) => self.gen_expr(expr)?,
                         MatchArmBody::Block(statements) => {
                             let mut block = String::from("{\n");
                             self.enter_scope();
                             for (index, statement) in statements.iter().enumerate() {
-                                let generated = self.gen_statement_str(statement);
+                                let generated = self.gen_statement_str(statement)?;
                                 let generated = if index + 1 == statements.len()
                                     && matches!(statement, Statement::Expression(_))
                                 {
@@ -3174,7 +3287,7 @@ impl IntermediateRepresentationCodeGen {
                     let body_str = body_str.trim_end_matches(';').to_string();
                     let mut guards = pattern_guards;
                     if let Some(guard) = &arm.guard {
-                        guards.push(self.gen_expr(guard));
+                        guards.push(self.gen_expr(guard)?);
                     }
                     if guards.is_empty() {
                         result.push_str(&format!("    {} => {},\n", pattern_str, body_str));
@@ -3196,13 +3309,13 @@ impl IntermediateRepresentationCodeGen {
                 let mut result = String::from("{\n");
                 self.enter_scope();
                 for statement in statements {
-                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)));
+                    result.push_str(&format!("    {}\n", self.gen_statement_str(statement)?));
                 }
                 self.exit_scope();
                 result.push('}');
                 result
             }
-            Statement::NestedFunction(function) => self.gen_function_str(function),
+            Statement::NestedFunction(function) => self.gen_function_str(function)?,
             Statement::ForeignBlock { language, content } if language == "rust" => {
                 let mut result = String::new();
                 for line in content.lines() {
@@ -3212,38 +3325,48 @@ impl IntermediateRepresentationCodeGen {
                 result
             }
             Statement::ForeignBlock { .. } => String::new(),
-        }
+        })
     }
 
     /// Generate a declaration initializer, forcing a closure binding to own
     /// its captures when that binding is returned from the current function.
-    fn gen_decl_value(&self, name: &str, value: &Expr, declared_type: Option<&Type>) -> String {
+    fn gen_decl_value(
+        &self,
+        name: &str,
+        value: &Expr,
+        declared_type: Option<&Type>,
+    ) -> Result<String, String> {
         let should_move = is_closure_expr(value)
             && self
                 .returned_closure_names
                 .borrow()
                 .last()
                 .is_some_and(|names| names.contains(name));
-        if should_move {
+        Ok(if should_move {
             let previous = *self.closure_move.borrow();
             *self.closure_move.borrow_mut() = true;
-            let rendered = self.gen_value_expr(name, value, declared_type);
+            let rendered = self.gen_value_expr(name, value, declared_type)?;
             *self.closure_move.borrow_mut() = previous;
             rendered
         } else {
-            self.gen_value_expr(name, value, declared_type)
-        }
+            self.gen_value_expr(name, value, declared_type)?
+        })
     }
 
-    fn gen_value_expr(&self, name: &str, value: &Expr, declared_type: Option<&Type>) -> String {
+    fn gen_value_expr(
+        &self,
+        name: &str,
+        value: &Expr,
+        declared_type: Option<&Type>,
+    ) -> Result<String, String> {
         // A declared-`u64` initializer renders inside a u64 context so big
         // literals in it suffix `_u64` (E0308, e.g. tetris glyph bitmaps).
         let previous_u64 = self
             .u64_context
             .replace(declared_type.is_some_and(|ty| matches!(ty, Type::Named(n) if n == "u64")));
-        let rendered = self.gen_value_expr_inner(name, value, declared_type);
+        let rendered = self.gen_value_expr_inner(name, value, declared_type)?;
         self.u64_context.set(previous_u64);
-        rendered
+        Ok(rendered)
     }
 
     fn gen_value_expr_inner(
@@ -3251,7 +3374,7 @@ impl IntermediateRepresentationCodeGen {
         name: &str,
         value: &Expr,
         declared_type: Option<&Type>,
-    ) -> String {
+    ) -> Result<String, String> {
         // Anchor inferred-typed integer declarations (`var x := 10`) to a
         // concrete `i32` so later wrapping method calls type-check (E0689).
         // Tuples are anchored per-element (mixed tuples keep their non-int
@@ -3283,8 +3406,8 @@ impl IntermediateRepresentationCodeGen {
             if let Some(Type::Named(name)) = declared_type {
                 if name == "bytes" {
                     if let Some(source) = &get.source {
-                        let path = self.gen_expr(source);
-                        return format!("std::fs::read({}).unwrap()", path);
+                        let path = self.gen_expr(source)?;
+                        return Ok(format!("std::fs::read({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }})", path));
                     }
                 }
             }
@@ -3296,13 +3419,13 @@ impl IntermediateRepresentationCodeGen {
             // infer a parse from the declared type when no flag was given.
             if requested_type.is_none() {
                 if let Some(ty) = declared_type {
-                    let rust_type = self.gen_type(ty);
+                    let rust_type = self.gen_type(ty)?;
                     if rust_type != "String" && rust_type != "Vec<u8>" {
-                        return format!(
+                        return Ok(format!(
                             "({}).parse::<{}>().expect(\"invalid input\")",
-                            self.gen_expr(value),
+                            self.gen_expr(value)?,
                             rust_type
-                        );
+                        ));
                     }
                 }
             }
@@ -3313,8 +3436,8 @@ impl IntermediateRepresentationCodeGen {
             if elements.is_empty() {
                 if let Some(Type::Generic { name, .. }) = declared_type {
                     match name.as_str() {
-                        "Map" => return "std::collections::HashMap::new()".to_string(),
-                        "Set" => return "std::collections::HashSet::new()".to_string(),
+                        "Map" => return Ok("std::collections::HashMap::new()".to_string()),
+                        "Set" => return Ok("std::collections::HashSet::new()".to_string()),
                         _ => {}
                     }
                 }
@@ -3323,15 +3446,15 @@ impl IntermediateRepresentationCodeGen {
         self.gen_expr(value)
     }
 
-    fn gen_pattern(&self, pattern: &Pattern) -> String {
-        match pattern {
+    fn gen_pattern(&self, pattern: &Pattern) -> Result<String, String> {
+        Ok(match pattern {
             Pattern::Wildcard => "_".to_string(),
             Pattern::Literal(expr) => match expr {
                 Expr::Literal(Literal::String(value))
                 | Expr::Literal(Literal::UnicodeString(value)) => {
                     format!("{:?}", value)
                 }
-                _ => self.gen_expr(expr),
+                _ => self.gen_expr(expr)?,
             },
             Pattern::Identifier(name) => match name.as_str() {
                 "Error" | "Timeout" => "Err(_)".to_string(),
@@ -3342,7 +3465,10 @@ impl IntermediateRepresentationCodeGen {
                     .unwrap_or_else(|| name.clone()),
             },
             Pattern::Tuple(patterns) => {
-                let inner: Vec<String> = patterns.iter().map(|p| self.gen_pattern(p)).collect();
+                let inner: Vec<String> = patterns
+                    .iter()
+                    .map(|p| self.gen_pattern(p))
+                    .collect::<Result<Vec<String>, String>>()?;
                 format!("({})", inner.join(", "))
             }
             Pattern::Enum {
@@ -3363,8 +3489,10 @@ impl IntermediateRepresentationCodeGen {
                 };
                 match inner {
                     Some(inner) => {
-                        let inner: Vec<String> =
-                            inner.iter().map(|p| self.gen_pattern(p)).collect();
+                        let inner: Vec<String> = inner
+                            .iter()
+                            .map(|p| self.gen_pattern(p))
+                            .collect::<Result<Vec<String>, String>>()?;
                         // Resolve the declaring enum for struct-field variants
                         // even when the pattern writes the variant
                         // unqualified, e.g. `Error(TooShort(min))`.
@@ -3395,8 +3523,11 @@ impl IntermediateRepresentationCodeGen {
             Pattern::NamedFields { name, fields } => {
                 let rendered: Vec<String> = fields
                     .iter()
-                    .map(|(field, pattern)| format!("{}: {}", field, self.gen_pattern(pattern)))
-                    .collect();
+                    .map(|(field, pattern)| {
+                        self.gen_pattern(pattern)
+                            .map(|rendered| format!("{}: {}", field, rendered))
+                    })
+                    .collect::<Result<Vec<String>, String>>()?;
                 format!("{} {{ {} }}", name, rendered.join(", "))
             }
             Pattern::Range {
@@ -3404,8 +3535,8 @@ impl IntermediateRepresentationCodeGen {
                 end,
                 inclusive,
             } => {
-                let s = self.gen_expr(start);
-                let e = self.gen_expr(end);
+                let s = self.gen_expr(start)?;
+                let e = self.gen_expr(end)?;
                 if *inclusive {
                     format!("{}..={}", s, e)
                 } else {
@@ -3413,22 +3544,22 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Pattern::Binding { name, pattern } => {
-                format!("{} @ {}", name, self.gen_pattern(pattern))
+                format!("{} @ {}", name, self.gen_pattern(pattern)?)
             }
-        }
+        })
     }
 
     /// Generate a pattern, rewriting nested patterns on boxed recursive fields
     /// into fresh bindings plus `matches!` guards (Rust cannot pattern-match a
     /// `Box<Expr>` against `Expr::Num(0)` directly).
-    fn gen_pattern_with_guards(&self, pattern: &Pattern) -> (String, Vec<String>) {
+    fn gen_pattern_with_guards(&self, pattern: &Pattern) -> Result<(String, Vec<String>), String> {
         let Pattern::Enum {
             enum_name,
             variant,
             inner: Some(inner),
         } = pattern
         else {
-            return (self.gen_pattern(pattern), Vec::new());
+            return Ok((self.gen_pattern(pattern)?, Vec::new()));
         };
 
         let qualified = if enum_name.is_empty() {
@@ -3468,7 +3599,7 @@ impl IntermediateRepresentationCodeGen {
                 guards.push(format!(
                     "matches!(&*{}, {})",
                     binding,
-                    self.gen_guard_pattern(child)
+                    self.gen_guard_pattern(child)?
                 ));
                 Some(binding)
             } else {
@@ -3480,41 +3611,45 @@ impl IntermediateRepresentationCodeGen {
                     .get(index)
                     .cloned()
                     .unwrap_or_else(|| format!("__poly_field_{}", index));
-                patterns.push(format!(
-                    "{}: {}",
-                    field,
-                    rendered.unwrap_or_else(|| self.gen_pattern(child))
-                ));
+                let fallback = match rendered {
+                    Some(pattern) => pattern,
+                    None => self.gen_pattern(child)?,
+                };
+                patterns.push(format!("{}: {}", field, fallback));
             } else {
-                patterns.push(rendered.unwrap_or_else(|| self.gen_pattern(child)));
+                let fallback = match rendered {
+                    Some(pattern) => pattern,
+                    None => self.gen_pattern(child)?,
+                };
+                patterns.push(fallback);
             }
         }
-        if struct_fields.is_some() {
+        Ok(if struct_fields.is_some() {
             (
                 format!("{} {{ {} }}", qualified, patterns.join(", ")),
                 guards,
             )
         } else {
             (format!("{}({})", qualified, patterns.join(", ")), guards)
-        }
+        })
     }
 
     /// Render a pattern for use inside a `matches!` guard on a boxed field.
-    fn gen_guard_pattern(&self, pattern: &Pattern) -> String {
-        match pattern {
+    fn gen_guard_pattern(&self, pattern: &Pattern) -> Result<String, String> {
+        Ok(match pattern {
             Pattern::Identifier(_) | Pattern::Wildcard => "_".to_string(),
             Pattern::Literal(Expr::Literal(Literal::Int(value)))
                 if value == "0" || value == "1" =>
             {
                 format!("{}.0", value)
             }
-            Pattern::Literal(_) => self.gen_pattern(pattern),
+            Pattern::Literal(_) => self.gen_pattern(pattern)?,
             Pattern::Tuple(patterns) => format!(
                 "({})",
                 patterns
                     .iter()
                     .map(|pattern| self.gen_guard_pattern(pattern))
-                    .collect::<Vec<_>>()
+                    .collect::<Result<Vec<_>, String>>()?
                     .join(", ")
             ),
             Pattern::Enum {
@@ -3536,9 +3671,10 @@ impl IntermediateRepresentationCodeGen {
                         patterns
                             .iter()
                             .map(|pattern| self.gen_guard_pattern(pattern))
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                            .collect::<Result<Vec<_>, String>>()
+                            .map(|rendered| rendered.join(", "))
                     })
+                    .transpose()?
                     .unwrap_or_default();
                 if inner.is_some() {
                     format!("{}({})", qualified, fields)
@@ -3546,8 +3682,8 @@ impl IntermediateRepresentationCodeGen {
                     qualified
                 }
             }
-            _ => self.gen_pattern(pattern),
-        }
+            _ => self.gen_pattern(pattern)?,
+        })
     }
 
     /// Collect names that bind to boxed recursive enum fields so references to
@@ -3680,8 +3816,8 @@ impl IntermediateRepresentationCodeGen {
             .any(|scope| scope.contains(name))
     }
 
-    fn gen_type(&self, ty: &Type) -> String {
-        match ty {
+    fn gen_type(&self, ty: &Type) -> Result<String, String> {
+        Ok(match ty {
             Type::Named(name) => match name.as_str() {
                 "ustring" | "string" => "String".to_string(),
                 "uchar" => "char".to_string(),
@@ -3690,32 +3826,41 @@ impl IntermediateRepresentationCodeGen {
                 _ => name.clone(),
             },
             Type::Array(inner, size) => {
-                format!("[{}; {}]", self.gen_type(inner), self.gen_expr(size))
+                format!("[{}; {}]", self.gen_type(inner)?, self.gen_expr(size)?)
             }
             Type::Tuple(types) => {
-                let rendered: Vec<String> = types.iter().map(|t| self.gen_type(t)).collect();
+                let rendered: Vec<String> = types
+                    .iter()
+                    .map(|t| self.gen_type(t))
+                    .collect::<Result<Vec<String>, String>>()?;
                 format!("({})", rendered.join(", "))
             }
-            Type::Vec(inner) => format!("Vec<{}>", self.gen_type(inner)),
-            Type::Option(inner) => format!("Option<{}>", self.gen_type(inner)),
+            Type::Vec(inner) => format!("Vec<{}>", self.gen_type(inner)?),
+            Type::Option(inner) => format!("Option<{}>", self.gen_type(inner)?),
             Type::Result(ok, err) => {
-                format!("Result<{}, {}>", self.gen_type(ok), self.gen_type(err))
+                format!("Result<{}, {}>", self.gen_type(ok)?, self.gen_type(err)?)
             }
             Type::Reference(mutable, inner) => {
                 if *mutable {
-                    format!("&mut {}", self.gen_type(inner))
+                    format!("&mut {}", self.gen_type(inner)?)
                 } else {
-                    format!("&{}", self.gen_type(inner))
+                    format!("&{}", self.gen_type(inner)?)
                 }
             }
-            Type::Pointer(inner) => format!("*const {}", self.gen_type(inner)),
-            Type::Nullable(inner) => format!("Option<{}>", self.gen_type(inner)),
+            Type::Pointer(inner) => format!("*const {}", self.gen_type(inner)?),
+            Type::Nullable(inner) => format!("Option<{}>", self.gen_type(inner)?),
             Type::Function { params, ret } => {
-                let rendered: Vec<String> = params.iter().map(|t| self.gen_type(t)).collect();
-                format!("fn({}) -> {}", rendered.join(", "), self.gen_type(ret))
+                let rendered: Vec<String> = params
+                    .iter()
+                    .map(|t| self.gen_type(t))
+                    .collect::<Result<Vec<String>, String>>()?;
+                format!("fn({}) -> {}", rendered.join(", "), self.gen_type(ret)?)
             }
             Type::Generic { name, args } => {
-                let inner: Vec<String> = args.iter().map(|t| self.gen_type(t)).collect();
+                let inner: Vec<String> =
+                    args.iter()
+                        .map(|t| self.gen_type(t))
+                        .collect::<Result<Vec<String>, String>>()?;
                 let inner_join = inner.join(", ");
                 match name.as_str() {
                     "Map" => format!("std::collections::HashMap<{}>", inner_join),
@@ -3726,7 +3871,7 @@ impl IntermediateRepresentationCodeGen {
                     _ => format!("{}<{}>", name, inner_join),
                 }
             }
-        }
+        })
     }
 
     /// Render the predicate for `filter`.
@@ -3735,17 +3880,17 @@ impl IntermediateRepresentationCodeGen {
     /// single-parameter closure literal is wrapped with a deref binding to
     /// keep the user's body (`|x| x % 2 == 0`) working on owned values. The
     /// parameter is left unannotated so Rust infers `&T` from the iterator.
-    fn gen_filter_callback(&self, arg: &Expr) -> String {
+    fn gen_filter_callback(&self, arg: &Expr) -> Result<String, String> {
         if let Expr::Closure { params, body } = arg {
             if params.len() == 1 {
                 let parameter = &params[0];
-                return format!(
+                return Ok(format!(
                     "|{}| {{ let {} = *{}; {} }}",
                     parameter.name,
                     parameter.name,
                     parameter.name,
-                    self.gen_expr(body)
-                );
+                    self.gen_expr(body)?
+                ));
             }
         }
         self.gen_expr(arg)
@@ -3757,12 +3902,12 @@ impl IntermediateRepresentationCodeGen {
     /// the references handed out by `sort_by` are deref'd and the boolean is
     /// translated into an `Ordering`. Parameters stay unannotated so Rust
     /// infers `&T` from the sort's signature.
-    fn gen_sort_callback(&self, arg: &Expr) -> String {
+    fn gen_sort_callback(&self, arg: &Expr) -> Result<String, String> {
         if let Expr::Closure { params, body } = arg {
             if params.len() == 2 {
                 let first = &params[0].name;
                 let second = &params[1].name;
-                return format!(
+                return Ok(format!(
                     "|{}, {}| {{ let {} = *{}; let {} = *{}; if {} {{ std::cmp::Ordering::Less }} else if ({} == {}) {{ std::cmp::Ordering::Equal }} else {{ std::cmp::Ordering::Greater }} }}",
                     first,
                     second,
@@ -3770,10 +3915,10 @@ impl IntermediateRepresentationCodeGen {
                     first,
                     second,
                     second,
-                    self.gen_expr(body),
+                    self.gen_expr(body)?,
                     first,
                     second
-                );
+                ));
             }
         }
         self.gen_expr(arg)
@@ -3984,14 +4129,14 @@ impl IntermediateRepresentationCodeGen {
     }
 
     /// Element type name of a vector type annotation (`Vec<T>`/`[T; n]`).
-    fn vec_element_type_of_type(&self, ty: &Type) -> Option<String> {
-        match ty {
-            Type::Vec(inner) | Type::Array(inner, _) => Some(self.gen_type(inner)),
+    fn vec_element_type_of_type(&self, ty: &Type) -> Result<Option<String>, String> {
+        Ok(match ty {
+            Type::Vec(inner) | Type::Array(inner, _) => Some(self.gen_type(inner)?),
             Type::Generic { name, args } if name == "Vec" => {
-                args.first().map(|inner| self.gen_type(inner))
+                args.first().map(|inner| self.gen_type(inner)).transpose()?
             }
             _ => None,
-        }
+        })
     }
 
     /// Element type name inferred from an array literal's first element.
@@ -4145,7 +4290,7 @@ impl IntermediateRepresentationCodeGen {
 
     /// Write a formatted line directly to the output buffer, avoiding the
     /// intermediate String allocation from `format!`.
-    fn writeln_fmt(&mut self, args: std::fmt::Arguments<'_>) {
+    fn writeln_fmt(&mut self, args: std::fmt::Arguments<'_>) -> Result<(), String> {
         if let Some(offset) = self.active_statement_offset.take() {
             self.statement_locations.push((self.current_line, offset));
         }
@@ -4153,9 +4298,10 @@ impl IntermediateRepresentationCodeGen {
             self.output.push_str("    ");
         }
         use std::fmt::Write;
-        self.output.write_fmt(args).unwrap();
+        self.output.write_fmt(args).map_err(|e| e.to_string())?;
         self.output.push('\n');
         self.current_line += 1;
+        Ok(())
     }
 
     /// Exact (target line, source byte offset) mappings recorded while
@@ -4375,11 +4521,11 @@ fn expr_contains_await(expr: &Expr) -> bool {
 mod tests {
     /// Transpile Poly source through the full intermediate representation pipeline.
     fn transpile(source: &str) -> String {
-        crate::transpile(source).expect("transpile should succeed")
+        crate::transpile(source).unwrap_or_else(|e| panic!("transpile should succeed: {e}"))
     }
 
     #[test]
-    fn while_nested_inside_if_emits_real_loop() {
+    fn while_nested_inside_if_emits_real_loop() -> Result<(), Box<dyn std::error::Error>> {
         // The parser encodes `while` as an if-expression without an else
         // block. When such a loop sits inside another conditional (or any
         // block rendered by the inline expression path), it must still be
@@ -4391,10 +4537,11 @@ mod tests {
             rust.contains("while (n < 4) {"),
             "nested while must emit a real loop: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn while_nested_inside_match_arm_emits_real_loop() {
+    fn while_nested_inside_match_arm_emits_real_loop() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var total i32 := 0\n    var n i32 := 0\n    var mode i32 := 1\n    match mode\n        1,\n            while n < 4\n                total := total + 3\n                n := n + 1\n            end while\n        _,\n            put 0\n    end match\n    put total\nend fn",
         );
@@ -4402,10 +4549,12 @@ mod tests {
             rust.contains("while (n < 4) {"),
             "while in match arm must emit a real loop: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn append_redirect_inside_loop_emits_io_write_import() {
+    fn append_redirect_inside_loop_emits_io_write_import() -> Result<(), Box<dyn std::error::Error>>
+    {
         // Append redirects inside a loop body go through the inline
         // statement generator, which must still request the `io::Write`
         // import that `writeln!` needs.
@@ -4416,10 +4565,11 @@ mod tests {
             rust.contains("use std::io::Write;"),
             "missing io::Write import: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn string_append_emits_in_place_push_str() {
+    fn string_append_emits_in_place_push_str() -> Result<(), Box<dyn std::error::Error>> {
         // `s := s + <string>` on a string variable lowers to in-place
         // `push_str` so repeated appends stay amortized-O(1) instead of
         // allocating a fresh `format!` String per assignment.
@@ -4434,10 +4584,11 @@ mod tests {
             rust.contains("output.push_str(&(String::from(\"def\")));"),
             "expected push_str lowering: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn string_append_chain_keeps_every_operand() {
+    fn string_append_chain_keeps_every_operand() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: `s := s + "b" + "c"` parses as `(s + "b") + "c"`; the
         // suffix collector used to return only the outermost operand,
         // silently dropping `"b"` and printing `ac` instead of `abc`.
@@ -4451,19 +4602,22 @@ mod tests {
             rust.contains("s.push_str(&(String::from(\"c\")));"),
             "outer operand lost: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn string_repeat_and_vec_join_codegen() {
+    fn string_repeat_and_vec_join_codegen() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    put \"#\".repeat(5)\n    var parts Vec<ustring> := [unicode \"a\"]\n    put parts.join(\", \")\nend fn",
         );
         assert!(rust.contains("String::from(\"#\").repeat(5 as usize)"));
         assert!(rust.contains("parts.join(String::from(\", \").as_str())"));
+        Ok(())
     }
 
     #[test]
-    fn empty_array_initializers_for_map_and_set_emit_collections() {
+    fn empty_array_initializers_for_map_and_set_emit_collections(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var m Map<string, i32> := []\n    var s Set<i32> := []\n    var v Vec<i32> := []\nend fn",
         );
@@ -4479,16 +4633,18 @@ mod tests {
             rust.contains("let mut v: Vec<i32> = vec![];"),
             "missing vec![]: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn non_empty_arrays_are_unchanged() {
+    fn non_empty_arrays_are_unchanged() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile("fn main()\n    var v Vec<i32> := [1, 2, 3]\nend fn");
         assert!(rust.contains("vec![1, 2, 3]"), "{rust}");
+        Ok(())
     }
 
     #[test]
-    fn string_append_inside_loop_body_pushes_in_place() {
+    fn string_append_inside_loop_body_pushes_in_place() -> Result<(), Box<dyn std::error::Error>> {
         // `row := row + ...` on a string declared inside a loop body (rendered
         // by `gen_statement_str`) lowers to in-place `push_str`, keeping the
         // append amortized-O(1) inside loops.
@@ -4499,10 +4655,12 @@ mod tests {
             rust.contains("row.push_str(&(format!(\"{:?}\", i)));"),
             "string append in loop body must push in place: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn put_vec_declared_in_loop_body_uses_debug_formatting() {
+    fn put_vec_declared_in_loop_body_uses_debug_formatting(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // A vector declared inside a loop body must register as a vector so
         // `put buf` lowers to `println!(\"{:?}\", buf)` instead of `{}`.
         let rust = transpile(
@@ -4512,10 +4670,12 @@ mod tests {
             rust.contains("println!(\"{:?}\", buf);"),
             "vector put in loop body must use debug formatting: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn function_returning_closure_emits_impl_fn_and_move() {
+    fn function_returning_closure_emits_impl_fn_and_move() -> Result<(), Box<dyn std::error::Error>>
+    {
         let rust = transpile("fn make_adder(n: i32): |x: i32| i32\n    return |x| x + n\nend fn");
         assert!(
             rust.contains("fn make_adder(n: i32) -> impl Fn(i32) -> i32 {"),
@@ -4525,10 +4685,12 @@ mod tests {
             rust.contains("return move |x| (x + n);"),
             "missing move closure: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn closure_binding_returned_from_function_emits_move() {
+    fn closure_binding_returned_from_function_emits_move() -> Result<(), Box<dyn std::error::Error>>
+    {
         let rust = transpile(
             "fn make_adder(n: i32): |x: i32| i32\n    var f := |x| x + n\n    return f\nend fn",
         );
@@ -4536,10 +4698,11 @@ mod tests {
             rust.contains("let mut f = move |x| (x + n);"),
             "returned closure binding must move captures: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn infinite_loop_emits_rust_loop() {
+    fn infinite_loop_emits_rust_loop() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var count i32 := 0\n    loop\n        count := count + 1\n        if count = 3,\n            break\n        end if\n    end loop\nend fn",
         );
@@ -4549,10 +4712,11 @@ mod tests {
             "missing body: {rust}"
         );
         assert!(rust.contains("break;"), "missing break: {rust}");
+        Ok(())
     }
 
     #[test]
-    fn multiple_get_flags_parse_and_lower() {
+    fn multiple_get_flags_parse_and_lower() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    match get --timeout 5000 --default unicode \"0\"\n        Ok(input), put input\n        Error(e), error e\n    end match\nend fn",
         );
@@ -4560,10 +4724,12 @@ mod tests {
             rust.contains("Ok::<String, String>"),
             "missing Result-returning get: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn collection_loops_borrow_and_destructure_enumerate() {
+    fn collection_loops_borrow_and_destructure_enumerate() -> Result<(), Box<dyn std::error::Error>>
+    {
         let rust = transpile(
             "fn main()\n    var fruits Vec<ustring> := []\n    loop fruit in fruits\n        put fruit\n    end loop\n    loop (index, fruit) in fruits.enumerate()\n        put index\n        put fruit\n    end loop\nend fn",
         );
@@ -4575,10 +4741,11 @@ mod tests {
             rust.contains("for (index, fruit) in fruits.iter().cloned().enumerate() {"),
             "enumerate loop must destructure and borrow: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn for_loop_enumerate_borrows_receiver() {
+    fn for_loop_enumerate_borrows_receiver() -> Result<(), Box<dyn std::error::Error>> {
         // `for (idx, val) in items.enumerate()` must lower to
         // `items.iter().enumerate()` (borrowing the receiver) rather than the
         // broken `items.enumerate().iter()`.
@@ -4593,19 +4760,21 @@ mod tests {
             !rust.contains("enumerate().iter()"),
             "must not call .iter() on the enumerate result: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn tuple_element_assignment_emits_rust_assignment() {
+    fn tuple_element_assignment_emits_rust_assignment() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var pair := (10, true)\n    pair.0 := 99\n    pair.1 := false\nend fn",
         );
         assert!(rust.contains("pair.0 = 99;"), "{rust}");
         assert!(rust.contains("pair.1 = false;"), "{rust}");
+        Ok(())
     }
 
     #[test]
-    fn assigned_parameters_lower_to_mut_bindings() {
+    fn assigned_parameters_lower_to_mut_bindings() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: Poly parameters have value semantics — assigning to
         // one rebinds the local copy (C/JS/asm all did). The Rust signature
         // must mark assigned parameters `mut`, or valid Poly fails with
@@ -4623,10 +4792,11 @@ mod tests {
             unassigned.contains("fn g(x: i32) -> i32"),
             "unassigned parameters must stay immutable: {unassigned}"
         );
+        Ok(())
     }
 
     #[test]
-    fn loop_range_uses_declared_variable() {
+    fn loop_range_uses_declared_variable() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    loop value 1..3, 7, 19..20\n        put value\n    end loop\nend fn",
         );
@@ -4639,10 +4809,11 @@ mod tests {
             !rust.contains("for i in"),
             "implicit loop variable leaked: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn vec_hof_methods_emit_iterator_chains() {
+    fn vec_hof_methods_emit_iterator_chains() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var xs := [1, 2, 3]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x mod 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\nend fn",
         );
@@ -4658,10 +4829,11 @@ mod tests {
             rust.contains("xs.iter().cloned().fold(0, |acc, x| (acc + x))"),
             "missing reduce lowering: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn put_of_vectors_uses_debug_formatting() {
+    fn put_of_vectors_uses_debug_formatting() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var xs := [1, 2, 3]\n    var typed Vec<i32> := [4, 5]\n    put xs\n    put typed\n    put [9, 8]\n    put xs.map(|x| x * 2)\nend fn",
         );
@@ -4683,10 +4855,11 @@ mod tests {
             ),
             "missing {{:?}} on map result: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn string_hof_methods_emit_chars() {
+    fn string_hof_methods_emit_chars() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    put \"hello\".map(|c| c)\n    put \"hello\".filter(|c| c != unicode 'l')\n    put \"hello\".reduce(0, |acc, c| acc + (c as i32))\nend fn",
         );
@@ -4702,10 +4875,11 @@ mod tests {
             rust.contains("String::from(\"hello\").chars().fold(0, |acc, c| (acc + (c as i32)))"),
             "missing string reduce: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn sort_by_emits_ordering_wrapper() {
+    fn sort_by_emits_ordering_wrapper() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var xs := [3, 1, 2]\n    put xs.sort_by(|a, b| a > b)\nend fn",
         );
@@ -4717,10 +4891,11 @@ mod tests {
             rust.contains("let mut v = xs.clone();"),
             "missing clone: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn map_methods_borrow_keys() {
+    fn map_methods_borrow_keys() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var m Map<ustring, i32> := []\n    m.insert(unicode \"key\", 42)\n    put m.get(unicode \"key\")\n    put m.contains_key(unicode \"key\")\n    m.remove(unicode \"key\")\n    m[unicode \"other\"] := 7\n    var v := m[unicode \"other\"]\n    put v\nend fn",
         );
@@ -4748,10 +4923,11 @@ mod tests {
             rust.contains("m.get(&String::from(\"other\")).map(|v| v.clone()).unwrap_or_default()"),
             "map index read must lower to get: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn set_methods_borrow_elements() {
+    fn set_methods_borrow_elements() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var s Set<i32> := []\n    s.insert(1)\n    put s.contains(1)\n    s.remove(1)\nend fn",
         );
@@ -4763,10 +4939,11 @@ mod tests {
             rust.contains("s.remove(&1)"),
             "set remove must borrow: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn negative_loop_steps_keep_magnitude() {
+    fn negative_loop_steps_keep_magnitude() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    loop i 10..1 step -2\n        put i\n    end loop\n    loop j 10..1 step 2\n        put j\n    end loop\nend fn",
         );
@@ -4778,10 +4955,11 @@ mod tests {
             rust.contains("for j in (10..=1).step_by(2 as usize)"),
             "descending positive step should be empty: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn runtime_loop_step_dispatches_on_sign() {
+    fn runtime_loop_step_dispatches_on_sign() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: a variable step lowered to `.step_by(s)` with a fixed
         // ascending sequence, so a runtime-negative `s` silently produced
         // zero iterations. Non-literal steps must lower to the sign-dispatch
@@ -4794,10 +4972,11 @@ mod tests {
             "runtime step must use the sign-dispatch iterator: {rust}"
         );
         assert!(rust.contains("std::iter::empty()"), "{rust}");
+        Ok(())
     }
 
     #[test]
-    fn literal_loop_steps_avoid_runtime_dispatch() {
+    fn literal_loop_steps_avoid_runtime_dispatch() -> Result<(), Box<dyn std::error::Error>> {
         let rust =
             transpile("fn main()\n    loop i 10..1 step -2\n        put i\n    end loop\nend fn");
         assert!(!rust.contains("flat_map"), "{rust}");
@@ -4805,10 +4984,11 @@ mod tests {
             rust.contains("(1..=10).rev().step_by(2 as usize)"),
             "{rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn get_timeout_emits_real_timeout() {
+    fn get_timeout_emits_real_timeout() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    match get --timeout 2000 --default unicode \"fallback\"\n        Ok(input), put input\n        Timeout, put unicode \"too slow\"\n    end match\nend fn",
         );
@@ -4824,16 +5004,17 @@ mod tests {
             rust.contains("Ok::<String, String>(String::from(\"fallback\"))"),
             "missing default on timeout: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn file_read_methods_use_buffered_reader() {
+    fn file_read_methods_use_buffered_reader() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
             "fn main()\n    var f := open(unicode \"data.txt\")\n    while not f.eof()\n        var line := f.get_line()\n        put line\n    end while\nend fn",
         );
         assert!(
             rust.contains(
-                "std::io::BufReader::new(std::fs::File::open(String::from(\"data.txt\")).unwrap())"
+                "std::io::BufReader::new(std::fs::File::open(String::from(\"data.txt\")).unwrap_or_else("
             ),
             "open must lower to a BufReader: {rust}"
         );
@@ -4842,17 +5023,18 @@ mod tests {
             "eof must use fill_buf: {rust}"
         );
         assert!(
-            rust.contains("f.read_line(&mut __poly_line).unwrap()"),
+            rust.contains("f.read_line(&mut __poly_line).unwrap_or_else("),
             "get_line must use read_line: {rust}"
         );
         assert!(
             rust.contains("use std::io::BufRead;"),
             "missing BufRead import: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn sleep_delay_and_exit_lower_to_real_calls() {
+    fn sleep_delay_and_exit_lower_to_real_calls() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile("fn main()\n    sleep(50)\n    exit(0)\nend fn");
         assert!(
             rust.contains("std::thread::sleep(std::time::Duration::from_millis(50 as u64))"),
@@ -4868,10 +5050,11 @@ mod tests {
             async_rust.contains("tokio::time::sleep(std::time::Duration::from_millis(50 as u64))"),
             "missing tokio sleep: {async_rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn const_declarations_infer_literal_types() {
+    fn const_declarations_infer_literal_types() -> Result<(), Box<dyn std::error::Error>> {
         // `const PI := 3.14159` must not emit `const PI: _ = ...` (Rust rejects
         // placeholders on item signatures); literals get an explicit type.
         let rust = transpile(
@@ -4884,10 +5067,11 @@ mod tests {
             !rust.contains(": _ ="),
             "placeholder const type leaked: {rust}"
         );
+        Ok(())
     }
 
     #[test]
-    fn numeric_builtins_annotate_literal_arguments() {
+    fn numeric_builtins_annotate_literal_arguments() -> Result<(), Box<dyn std::error::Error>> {
         // `abs(-42)` / `pow(3, 2)` must lower to type-annotated literals so
         // Rust can resolve the method instead of E0689, and float `pow` uses
         // `powf` (i32::pow takes u32, f64 uses powf).
@@ -4897,10 +5081,12 @@ mod tests {
         assert!(rust.contains("(-42_i32).abs()"), "{rust}");
         assert!(rust.contains("(3_i32).pow(2_i32 as u32)"), "{rust}");
         assert!(rust.contains("(2.0_f64).powf(3.0_f64)"), "{rust}");
+        Ok(())
     }
 
     #[test]
-    fn unqualified_struct_variant_pattern_renders_named_fields() {
+    fn unqualified_struct_variant_pattern_renders_named_fields(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // `Error(TooShort(min))` on an enum whose variant has named fields must
         // render `ValidationError::TooShort { min: min }`, not the tuple form
         // `TooShort(min)` (E0164).
@@ -4911,5 +5097,6 @@ mod tests {
             rust.contains("ValidationError::TooShort { min: min }"),
             "struct-variant pattern must render named fields: {rust}"
         );
+        Ok(())
     }
 }

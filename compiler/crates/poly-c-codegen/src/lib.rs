@@ -283,11 +283,12 @@ impl CGenerator {
             ));
         }
         let mut result = String::new();
-        writeln!(result, "typedef struct {} {{", structure.name).unwrap();
+        writeln!(result, "typedef struct {} {{", structure.name).map_err(|e| e.to_string())?;
         for field in &structure.fields {
-            writeln!(result, "    {} {};", self.ty(&field.ty)?, field.name).unwrap();
+            writeln!(result, "    {} {};", self.ty(&field.ty)?, field.name)
+                .map_err(|e| e.to_string())?;
         }
-        writeln!(result, "}} {};", structure.name).unwrap();
+        writeln!(result, "}} {};", structure.name).map_err(|e| e.to_string())?;
         Ok(result)
     }
 
@@ -296,7 +297,7 @@ impl CGenerator {
     /// C enums cannot carry payloads.
     fn enumeration(&self, declaration: &ast::EnumDecl) -> Result<String, String> {
         let mut result = String::new();
-        writeln!(result, "typedef enum {} {{", declaration.name).unwrap();
+        writeln!(result, "typedef enum {} {{", declaration.name).map_err(|e| e.to_string())?;
         for variant in &declaration.variants {
             match variant {
                 ast::EnumVariant::Unit(name) => {
@@ -307,7 +308,7 @@ impl CGenerator {
                         "    {},",
                         self.enum_variant_c_name(&declaration.name, name)
                     )
-                    .unwrap();
+                    .map_err(|e| e.to_string())?;
                 }
                 ast::EnumVariant::Tuple(name, types) => {
                     let _ = types;
@@ -325,7 +326,7 @@ impl CGenerator {
                 }
             }
         }
-        writeln!(result, "}} {};", declaration.name).unwrap();
+        writeln!(result, "}} {};", declaration.name).map_err(|e| e.to_string())?;
         Ok(result)
     }
 
@@ -412,11 +413,12 @@ impl CGenerator {
                     .insert(parameter.name.clone());
             }
         }
-        writeln!(result, "{} {}({}) {{", return_type, function.name, params).unwrap();
+        writeln!(result, "{} {}({}) {{", return_type, function.name, params)
+            .map_err(|e| e.to_string())?;
         for statement in function.body.as_deref().unwrap_or_default() {
             self.statement_into(&mut result, 1, &statement.node)?;
         }
-        writeln!(result, "}}").unwrap();
+        writeln!(result, "}}").map_err(|e| e.to_string())?;
         Ok(result)
     }
 
@@ -462,7 +464,7 @@ impl CGenerator {
                 param_list,
                 self.expr(&body)?
             )
-            .unwrap();
+            .map_err(|e| e.to_string())?;
             self.late_definitions.push(rendered_fn);
             let pointer_type = format!(
                 "{} (*PLACEHOLDER)({})",
@@ -541,7 +543,8 @@ impl CGenerator {
                     .map(|value| self.expr(value))
                     .transpose()?
                     .unwrap_or_else(|| "0".to_string());
-                writeln!(output, "{} {} = {};", type_name, name, value).unwrap();
+                writeln!(output, "{} {} = {};", type_name, name, value)
+                    .map_err(|e| e.to_string())?;
             }
             Statement::LetDeclaration { name, ty, value } => {
                 line_prefix(output);
@@ -558,7 +561,8 @@ impl CGenerator {
                 if type_name == "double" {
                     self.float_variables.borrow_mut().insert(name.clone());
                 }
-                writeln!(output, "{} {} = {};", type_name, name, self.expr(value)?).unwrap();
+                writeln!(output, "{} {} = {};", type_name, name, self.expr(value)?)
+                    .map_err(|e| e.to_string())?;
             }
             Statement::ConstDeclaration { name, value } => {
                 line_prefix(output);
@@ -569,11 +573,12 @@ impl CGenerator {
                     name,
                     self.expr(value)?
                 )
-                .unwrap();
+                .map_err(|e| e.to_string())?;
             }
             Statement::Assignment { target, value } => {
                 line_prefix(output);
-                writeln!(output, "{} = {};", self.expr(target)?, self.expr(value)?).unwrap();
+                writeln!(output, "{} = {};", self.expr(target)?, self.expr(value)?)
+                    .map_err(|e| e.to_string())?;
             }
             Statement::PutStatement { expr, redirect } => {
                 if redirect.is_some() {
@@ -584,7 +589,8 @@ impl CGenerator {
                 }
                 line_prefix(output);
                 let (format, args) = self.printf_parts(expr)?;
-                writeln!(output, "printf(\"{}\\n\"{});", format, args).unwrap();
+                writeln!(output, "printf(\"{}\\n\"{});", format, args)
+                    .map_err(|e| e.to_string())?;
             }
             Statement::ErrorStatement(expr)
             | Statement::WarnStatement(expr)
@@ -601,7 +607,7 @@ impl CGenerator {
                     "fprintf(stderr, \"{}{}\\n\"{});",
                     prefix, format, args
                 )
-                .unwrap();
+                .map_err(|e| e.to_string())?;
             }
             // The parser uses an `if` node without an else block for `while`;
             // the branch below preserves that compatibility representation while
@@ -609,7 +615,8 @@ impl CGenerator {
             Statement::ExpressionStatement(expr) => match expr {
                 Expression::WhileLoop { condition, body } => {
                     line_prefix(output);
-                    writeln!(output, "while {} {{", self.condition_expr(condition)?).unwrap();
+                    writeln!(output, "while {} {{", self.condition_expr(condition)?)
+                        .map_err(|e| e.to_string())?;
                     self.block_into(output, indent + 1, body)?;
                     line_prefix(output);
                     output.push_str("}\n");
@@ -620,7 +627,8 @@ impl CGenerator {
                     else_block: Some(else_block),
                 } => {
                     line_prefix(output);
-                    writeln!(output, "if {} {{", self.condition_expr(condition)?).unwrap();
+                    writeln!(output, "if {} {{", self.condition_expr(condition)?)
+                        .map_err(|e| e.to_string())?;
                     self.block_into(output, indent + 1, then_block)?;
                     line_prefix(output);
                     if else_block.is_empty() {
@@ -698,7 +706,7 @@ impl CGenerator {
                             self.expr(end)?,
                             update
                         )
-                        .unwrap();
+                        .map_err(|e| e.to_string())?;
                         self.block_into(output, indent + 1, body)?;
                         line_prefix(output);
                         output.push_str("}\n");
@@ -710,7 +718,7 @@ impl CGenerator {
                         output.push_str("{\n");
                         line_prefix_for(output, indent + 1);
                         writeln!(output, "int64_t __poly_step = (int64_t)({});", step_value)
-                            .unwrap();
+                            .map_err(|e| e.to_string())?;
                         line_prefix_for(output, indent + 1);
                         writeln!(
                             output,
@@ -725,7 +733,7 @@ impl CGenerator {
                             end_value,
                             variable
                         )
-                        .unwrap();
+                        .map_err(|e| e.to_string())?;
                         self.block_into(output, indent + 2, body)?;
                         line_prefix_for(output, indent + 1);
                         output.push_str("}\n");
@@ -745,9 +753,10 @@ impl CGenerator {
                         "for (size_t __i = 0; __i < sizeof({}) / sizeof(({})[0]); ++__i) {{",
                         iterable, iterable
                     )
-                    .unwrap();
+                    .map_err(|e| e.to_string())?;
                     line_prefix_for(output, indent + 1);
-                    writeln!(output, "int32_t {} = ({})[__i];", variable, iterable).unwrap();
+                    writeln!(output, "int32_t {} = ({})[__i];", variable, iterable)
+                        .map_err(|e| e.to_string())?;
                     self.block_into(output, indent + 1, body)?;
                     line_prefix(output);
                     output.push_str("}\n");
@@ -777,7 +786,7 @@ impl CGenerator {
                         match_var,
                         scrutinee_str
                     )
-                    .unwrap();
+                    .map_err(|e| e.to_string())?;
                     for (arm_index, arm) in arms.iter().enumerate() {
                         line_prefix_for(output, indent + 1);
                         let is_wildcard = matches!(arm.pattern, ast::Pattern::Wildcard);
@@ -792,9 +801,9 @@ impl CGenerator {
                             }
                         } else {
                             if arm_index == 0 {
-                                write!(output, "if ").unwrap();
+                                write!(output, "if ").map_err(|e| e.to_string())?;
                             } else {
-                                write!(output, "else if ").unwrap();
+                                write!(output, "else if ").map_err(|e| e.to_string())?;
                             }
                             match &arm.pattern {
                                 ast::Pattern::Literal(literal) => {
@@ -804,7 +813,7 @@ impl CGenerator {
                                         match_var,
                                         self.expr(literal)?
                                     )
-                                    .unwrap();
+                                    .map_err(|e| e.to_string())?;
                                 }
                                 ast::Pattern::Range {
                                     start,
@@ -823,7 +832,7 @@ impl CGenerator {
                                         upper,
                                         self.expr(end)?
                                     )
-                                    .unwrap();
+                                    .map_err(|e| e.to_string())?;
                                 }
                                 ast::Pattern::Identifier(name) => {
                                     // Enum-variant identifiers have no C
@@ -831,7 +840,7 @@ impl CGenerator {
                                     // binding matches everything and binds the
                                     // scrutinee.
                                     writeln!(output, "(1) {{ // binding `{name}` = {}", match_var)
-                                        .unwrap();
+                                        .map_err(|e| e.to_string())?;
                                 }
                                 ast::Pattern::Enum {
                                     enum_name,
@@ -850,7 +859,7 @@ impl CGenerator {
                                         match_var,
                                         self.enum_variant_c_name(enum_name, variant)
                                     )
-                                    .unwrap();
+                                    .map_err(|e| e.to_string())?;
                                 }
                                 other => {
                                     let _ = other;
@@ -878,7 +887,7 @@ impl CGenerator {
                                     "printf(\"%d\\n\", (int32_t)({}));",
                                     self.expr(expr)?
                                 )
-                                .unwrap();
+                                .map_err(|e| e.to_string())?;
                             }
                             ast::MatchArmBody::Block(statements) => {
                                 self.block_into(output, indent + 2, statements)?;
@@ -892,13 +901,13 @@ impl CGenerator {
                 }
                 _ => {
                     line_prefix(output);
-                    writeln!(output, "{};", self.expr(expr)?).unwrap();
+                    writeln!(output, "{};", self.expr(expr)?).map_err(|e| e.to_string())?;
                 }
             },
             Statement::ReturnStatement(value) => {
                 line_prefix(output);
                 if let Some(value) = value {
-                    writeln!(output, "return {};", self.expr(value)?).unwrap();
+                    writeln!(output, "return {};", self.expr(value)?).map_err(|e| e.to_string())?;
                 } else {
                     output.push_str("return;\n");
                 }
@@ -1647,7 +1656,7 @@ impl CGenerator {
             Some(Expression::BoolLiteral(_)) => "bool".to_string(),
             // `get` reads a line of text; its result is a heap-allocated C string.
             Some(Expression::GetExpression(_)) => "const char *".to_string(),
-            Some(Expression::TupleLiteral(_)) => self.tuple_inferred_type(value.unwrap()),
+            Some(value_expr @ Expression::TupleLiteral(_)) => self.tuple_inferred_type(value_expr),
             // Struct literals infer their own type: `var p := Point { ... }`.
             Some(Expression::StructLiteral { name, .. }) => name.clone(),
             // String-typed expressions infer `const char *` so `var s :=
@@ -1963,39 +1972,42 @@ mod tests {
     use poly_parser::Parser;
 
     #[test]
-    fn float_variables_print_with_f() {
+    fn float_variables_print_with_f() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: `put f` on an f64 variable emitted printf("%d\n", f);
         // a double passed to %d is undefined behavior and printed garbage.
-        let output = generate("fn main()\nvar f f64 := 0.1 + 0.2\nput f\nend fn");
+        let output = generate("fn main()\nvar f f64 := 0.1 + 0.2\nput f\nend fn")?;
         assert!(
             output.contains("printf(\"%f\\n\", f);"),
             "expected %f for f64 variable: {output}"
         );
+        Ok(())
     }
 
     #[test]
-    fn float_arithmetic_prints_with_f() {
-        let output = generate("fn main()\nvar g f64 := 2.5\nput g * 2.0\nend fn");
+    fn float_arithmetic_prints_with_f() -> Result<(), Box<dyn std::error::Error>> {
+        let output = generate("fn main()\nvar g f64 := 2.5\nput g * 2.0\nend fn")?;
         assert!(
             output.contains("printf(\"%f\\n\""),
             "expected %f for float-valued arithmetic: {output}"
         );
+        Ok(())
     }
 
     #[test]
-    fn descending_range_loop_negates_step() {
+    fn descending_range_loop_negates_step() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: the C backend emitted `i -= -((-2))`; keep verifying
         // the comparison flips and the step carries its sign.
-        let output = generate("fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn");
+        let output = generate("fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn")?;
         assert!(output.contains("for (int32_t i = 10; i >= 1; i -= -((-2))) {"));
+        Ok(())
     }
 
     #[test]
-    fn runtime_step_uses_sign_dispatch() {
+    fn runtime_step_uses_sign_dispatch() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: a non-literal step used to keep the statically-chosen
         // comparison, so a runtime-negative step yielded zero iterations.
         let output =
-            generate("fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn");
+            generate("fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn")?;
         assert!(
             output.contains("int64_t __poly_step = (int64_t)(s);"),
             "{output}"
@@ -2005,48 +2017,53 @@ mod tests {
             "{output}"
         );
         assert!(output.contains("i += (int32_t)__poly_step) {"), "{output}");
+        Ok(())
     }
 
     #[test]
-    fn negated_variable_step_goes_through_runtime_dispatch() {
+    fn negated_variable_step_goes_through_runtime_dispatch(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // `-(s)` is not a literal: its sign depends on `s` at runtime, so it
         // must not take the static descending path.
-        let output =
-            generate("fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn");
+        let output = generate(
+            "fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn",
+        )?;
         assert!(
             output.contains("int64_t __poly_step = (int64_t)"),
             "{output}"
         );
+        Ok(())
     }
 
     #[test]
-    fn emits_c_foreign_block_and_main() {
+    fn emits_c_foreign_block_and_main() -> Result<(), Box<dyn std::error::Error>> {
         let source = "#c\nint double_value(int x) { return x * 2; }\n#endc\nvar x i32 := double_value(21)\nput x";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().unwrap();
-        let output = transpile(&program).unwrap();
+        let program = parser.parse()?;
+        let output = transpile(&program)?;
         assert!(output.contains("double_value"));
         assert!(output.contains("int main(void)"));
+        Ok(())
     }
 
-    fn generate(source: &str) -> String {
+    fn generate(source: &str) -> Result<String, String> {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().unwrap();
-        transpile(&program).unwrap()
+        let program = parser.parse().map_err(|e| e.to_string())?;
+        transpile(&program)
     }
 
     #[test]
-    fn value_position_string_concat_uses_helper() {
+    fn value_position_string_concat_uses_helper() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: value-position concat used to error with "requires a
         // #c helper". Now it lowers to the emitted poly_concat runtime
         // helper (put position still flattens to printf pieces).
         let output = generate(
             "var s ustring := \"ab\"\nvar t ustring := s + \"cd\" + \"ef\"\nput t\nput \"x\" + s + \"!\"",
-        );
+        )?;
         assert!(
             output.contains("poly_concat("),
             "expected poly_concat call sites: {output}"
@@ -2059,21 +2076,23 @@ mod tests {
         // serves as the prototype.
         let def_pos = output
             .find("char *poly_concat(const char *a, const char *b) {")
-            .expect("helper definition");
-        let call_pos = output.find("poly_concat(s").expect("call site");
+            .ok_or("helper definition")?;
+        let call_pos = output.find("poly_concat(s").ok_or("call site")?;
         assert!(
             def_pos < call_pos,
             "helper definition must precede call sites"
         );
+        Ok(())
     }
 
     #[test]
-    fn string_len_uses_strlen() {
+    fn string_len_uses_strlen() -> Result<(), Box<dyn std::error::Error>> {
         // `.len()` on strings lowers to strlen with an int32_t cast; the
         // result must print through %d, never %s (an int passed to %s is
         // a printf segfault).
-        let output =
-            generate("var s ustring := \"hello\"\nput s.len()\nvar t := (s + \"!!\").len()\nput t");
+        let output = generate(
+            "var s ustring := \"hello\"\nput s.len()\nvar t := (s + \"!!\").len()\nput t",
+        )?;
         assert!(output.contains("((int32_t)strlen(s))"), "{output}");
         assert!(
             output.contains("strlen((poly_concat(s, \"!!\")))"),
@@ -2083,17 +2102,18 @@ mod tests {
             !output.contains("printf(\"%s\\n\", ((int32_t)strlen"),
             "strlen results must print as integers: {output}"
         );
+        Ok(())
     }
 
     #[test]
-    fn to_string_and_mixed_concat_infer_and_print() {
+    fn to_string_and_mixed_concat_infer_and_print() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: `var chain := "a" + n.to_string() + "b"` used to infer
         // int32_t (printing a pointer through %d) and put of the variable
         // printed %d for the same reason. Both paths now classify
         // to_string()-containing chains as string-valued.
         let output = generate(
             "var n i32 := 42\nvar chain := \"a\" + n.to_string() + \"b\"\nput chain\nvar pure ustring := \"ab\" + \"cd\"\nput pure",
-        );
+        )?;
         assert!(
             output.contains("const char * chain = poly_concat"),
             "chain must infer as const char *: {output}"
@@ -2110,72 +2130,83 @@ mod tests {
             output.contains("poly_concat(\"ab\", \"cd\")"),
             "literal concat still materializes: {output}"
         );
+        Ok(())
     }
 
     #[test]
-    fn supports_tuples_as_anonymous_structs() {
-        let output = generate("var pair (i32, i32) := (1, 2)\nput pair.0\nput pair.1");
+    fn supports_tuples_as_anonymous_structs() -> Result<(), Box<dyn std::error::Error>> {
+        let output = generate("var pair (i32, i32) := (1, 2)\nput pair.0\nput pair.1")?;
         // Tuple type and literal both compile to anonymous structs with _N
         // fields; index access lowerS to the matching field name.
         assert!(output.contains("struct { int32_t _0; int32_t _1; }"));
         assert!(output.contains(". _0 = 1, . _1 = 2"));
         assert!(output.contains("printf(\"%d\\n\", pair._0)"));
         assert!(output.contains("printf(\"%d\\n\", pair._1)"));
+        Ok(())
     }
 
     #[test]
-    fn supports_struct_literals_as_compound_literals() {
+    fn supports_struct_literals_as_compound_literals() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
             "struct Point\n    var x: i32\n    var y: i32\nend struct\nvar p := Point { x: 3, y: 4 }\nput p.x",
-        );
+        )?;
         // Struct literals lower to C99 compound literals against the emitted
         // typedef; field access is unchanged.
         assert!(output.contains("typedef struct Point {"));
         assert!(output.contains("Point p = (Point){ .x = 3, .y = 4 };"));
         assert!(output.contains("printf(\"%d\\n\", p.x)"));
+        Ok(())
     }
 
     #[test]
-    fn supports_enums_and_enum_variant_matching() {
+    fn supports_enums_and_enum_variant_matching() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
             "enum Color\n    Red\n    Green\nend enum\nvar c := Color::Green\nmatch c\n    Color::Red, put 1\n    Color::Green, put 2\n    _, put 0\nend match",
-        );
+        )?;
         // Enumerators are qualified (Color_Red) so variant references and
         // patterns share one C representation.
         assert!(output.contains("typedef enum Color {"));
         assert!(output.contains("Color_Red,"));
         assert!(output.contains("int32_t c = Color_Green;"));
         assert!(output.contains("__poly_match == Color_Green"));
+        Ok(())
     }
 
     #[test]
-    fn rejects_tuple_enum_variants_with_guidance() {
+    fn rejects_tuple_enum_variants_with_guidance() -> Result<(), Box<dyn std::error::Error>> {
         let error = std::panic::catch_unwind(|| {
-            generate("enum Shape\n    Circle(f64)\nend enum\nvar s := Shape::Circle(1.0)")
+            match generate("enum Shape\n    Circle(f64)\nend enum\nvar s := Shape::Circle(1.0)") {
+                Ok(_) => String::new(),
+                Err(message) => panic!("{message}"),
+            }
         });
         assert!(error.is_err());
+        Ok(())
     }
 
     #[test]
-    fn supports_get_stdin_with_prompt_and_runtime() {
-        let output = generate("var name := get unicode \"Who? \"\nput name");
+    fn supports_get_stdin_with_prompt_and_runtime() -> Result<(), Box<dyn std::error::Error>> {
+        let output = generate("var name := get unicode \"Who? \"\nput name")?;
         // The stdin runtime is emitted once, before main; the read result is a
         // C string so `put` uses the %s format.
         assert!(output.contains("static char *__poly_get_line(const char *prompt)"));
         assert!(output.contains("const char * name = __poly_get_line(\"Who? \");"));
         assert!(output.contains("printf(\"%s\\n\", name)"));
         // The helper must be defined before main uses it.
-        let helper = output.find("__poly_get_line(const char").unwrap();
-        let main = output.find("int main(void)").unwrap();
+        let helper = output
+            .find("__poly_get_line(const char")
+            .ok_or("helper must precede main")?;
+        let main = output.find("int main(void)").ok_or("expected main")?;
         assert!(helper < main);
+        Ok(())
     }
 
     #[test]
-    fn supports_get_stdin_without_prompt() {
+    fn supports_get_stdin_without_prompt() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: a prompt-less `get` emitted `__poly_get_line()` — zero
         // args to a one-arg helper — so the generated C failed to compile.
         // The empty-prompt form must pass an explicit empty string literal.
-        let output = generate("var line := get\nput line");
+        let output = generate("var line := get\nput line")?;
         assert!(
             output.contains("__poly_get_line(\"\")"),
             "expected __poly_get_line(\"\") call site: {output}"
@@ -2185,26 +2216,37 @@ mod tests {
             "prompt-less get must not emit a zero-argument call: {output}"
         );
         assert!(output.contains("printf(\"%s\\n\", line)"), "{output}");
+        Ok(())
     }
 
     #[test]
-    fn supports_non_capturing_closures_as_function_pointers() {
-        let output = generate("var twice := |x: i32| x * 2\nput twice(21)");
+    fn supports_non_capturing_closures_as_function_pointers(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let output = generate("var twice := |x: i32| x * 2\nput twice(21)")?;
         // Non-capturing closures become a static function plus a function
         // pointer variable with a matching signature.
         assert!(output.contains("static int32_t __poly_closure_0(int32_t x) { return ((x * 2)); }"));
         assert!(output.contains("int32_t (*twice)(int32_t) = __poly_closure_0;"));
         // The synthesized function must precede its use in main.
-        let function = output.find("__poly_closure_0(int32_t x)").unwrap();
-        let main = output.find("int main(void)").unwrap();
+        let function = output
+            .find("__poly_closure_0(int32_t x)")
+            .ok_or("expected closure fn")?;
+        let main = output.find("int main(void)").ok_or("expected main")?;
         assert!(function < main);
+        Ok(())
     }
 
     #[test]
-    fn rejects_capturing_closures_with_guidance() {
-        let result =
-            std::panic::catch_unwind(|| generate("var n i32 := 10\nvar addn := |x: i32| x + n"));
-        let payload = result.unwrap_err();
+    fn rejects_capturing_closures_with_guidance() -> Result<(), Box<dyn std::error::Error>> {
+        let result = std::panic::catch_unwind(|| {
+            match generate("var n i32 := 10\nvar addn := |x: i32| x + n") {
+                Ok(_) => String::new(),
+                Err(message) => panic!("{message}"),
+            }
+        });
+        let Err(payload) = result else {
+            panic!("expected generate to panic")
+        };
         let message = payload
             .downcast_ref::<String>()
             .cloned()
@@ -2213,19 +2255,21 @@ mod tests {
             message.contains("non-capturing closures only"),
             "unexpected error: {message}"
         );
+        Ok(())
     }
 
     #[test]
-    fn supports_match_with_literal_and_wildcard_arms() {
+    fn supports_match_with_literal_and_wildcard_arms() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
             "var x i32 := 3\nmatch x\n    1, put 10\n    3, put 30\n    _, put 99\nend match",
-        );
+        )?;
         // The if/else-if chain compares a match-scoped copy of the scrutinee.
         assert!(output.contains("const int32_t __poly_match = x;"));
         assert!(output.contains("if (__poly_match == 1) {"));
         assert!(output.contains("else if (__poly_match == 3) {"));
         // The wildcard arm is a plain else (always matches).
         assert!(output.contains("else {\n"));
+        Ok(())
     }
 
     // Note: there is deliberately no test for the structured-pattern

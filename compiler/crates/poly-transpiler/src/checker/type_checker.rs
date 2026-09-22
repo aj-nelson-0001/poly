@@ -2789,41 +2789,49 @@ mod tests {
         let (tokens, lexer_errors) = Lexer::lex(source);
         assert!(lexer_errors.is_empty(), "lexer errors: {lexer_errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().expect("source should parse");
+        let program = parser
+            .parse()
+            .unwrap_or_else(|e| panic!("source should parse: {e}"));
         TypeChecker::check(&program)
     }
 
     #[test]
-    fn value_return_without_declared_return_type_is_rejected() {
+    fn value_return_without_declared_return_type_is_rejected(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Regression: `return v * 2` in a fn with no declared return type
         // passed checking and only failed at rustc with E0308. The checker
         // must report it with a Poly-level diagnostic.
         let source = "fn double_val(v: i32)\n    return v * 2\nend fn\nfn main()\n    put double_val(21)\nend fn";
-        let errors = check(source).expect_err("value-return without return type must error");
+        let Err(errors) = check(source) else {
+            panic!("value-return without return type must error");
+        };
         assert!(
             errors
                 .iter()
                 .any(|e| e.message.contains("no declared return type")),
             "expected a no-declared-return-type diagnostic: {errors:?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn bare_return_without_value_is_still_fine() {
+    fn bare_return_without_value_is_still_fine() -> Result<(), Box<dyn std::error::Error>> {
         // An early `return` in a void function stays legal.
         let source = "fn maybe(x: i32)\n    if x > 0\n        return\n    end if\n    put x\nend fn\nfn main()\n    maybe(1)\nend fn";
         assert!(check(source).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn accepts_valid_typed_program() {
+    fn accepts_valid_typed_program() -> Result<(), Box<dyn std::error::Error>> {
         let source =
             "fn sum(a: i32, b: i32): i32\n    return a + b\nend fn\nvar result i32 := sum(2, 3)";
         assert!(check(source).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn module_functions_are_collected_once() {
+    fn module_functions_are_collected_once() -> Result<(), Box<dyn std::error::Error>> {
         // Module bodies were reachable through two collection paths, so a
         // function declared inside a `module` was registered twice and valid
         // programs failed with a bogus "duplicate function declaration".
@@ -2835,372 +2843,459 @@ mod tests {
                 .any(|e| e.message.contains("duplicate function declaration")),
             "module functions must not be reported as duplicates: {errors:?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn duplicate_functions_still_across_and_inside_modules() {
+    fn duplicate_functions_still_across_and_inside_modules(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // The regression above must not lose the real duplicate diagnostic:
         // two same-named functions inside one module are still an error.
         let source = "module math\n    fn helper(): i32\n        return 1\n    end fn\n    fn helper(): i32\n        return 2\n    end fn\nend module\nfn main()\n    put 1\nend fn";
-        let errors = check(source).expect_err("real duplicates must still error");
+        let Err(errors) = check(source) else {
+            panic!("real duplicates must still error");
+        };
         assert!(
             errors
                 .iter()
                 .any(|e| e.message.contains("duplicate function declaration")),
             "expected a duplicate-function error, got {errors:?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_iterator_chains() {
+    fn accepts_iterator_chains() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
             "fn main()\n    var xs := [1, 2, 3]\n    var s i32 := xs.iter().sum()\n    var d := xs.iter().map(|x| x * 2).collect()\n    var e := xs.iter().filter(|x| x mod 2 = 0).collect()\n    loop x in xs.iter()\n        put x\n    end loop\nend fn"
         )
         .is_ok());
+        Ok(())
     }
 
     #[test]
-    fn rejects_sum_over_non_numeric_iterator() {
-        let errors =
+    fn rejects_sum_over_non_numeric_iterator() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) =
             check("fn main()\n    var xs := [\"a\", \"b\"]\n    var s := xs.iter().sum()\nend fn")
-                .unwrap_err();
+        else {
+            panic!("expected an Err result")
+        };
         assert!(
             errors
                 .iter()
                 .any(|e| e.message.contains("sum` requires a numeric")),
             "expected numeric-sum error, got {errors:?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn rejects_iterator_map_with_non_function_argument() {
-        let errors = check(
+    fn rejects_iterator_map_with_non_function_argument() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check(
             "fn main()\n    var xs := [1, 2, 3]\n    var d := xs.iter().map(42).collect()\nend fn",
-        )
-        .unwrap_err();
+        ) else {
+            panic!("expected an Err result")
+        };
         assert!(
             errors
                 .iter()
                 .any(|e| e.message.contains("expects a function callback")),
             "expected callback error, got {errors:?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_clear_and_reserve_on_vectors() {
+    fn accepts_clear_and_reserve_on_vectors() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
             "fn main()\n    var list Vec<i32> := []\n    list.reserve(100)\n    list.clear()\nend fn"
         )
         .is_ok());
+        Ok(())
     }
 
     #[test]
-    fn accepts_explicit_loop_variable() {
+    fn accepts_explicit_loop_variable() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
             "fn main()\n    loop value 1..3, 7\n        put value\n    end loop\nend fn"
         )
         .is_ok());
+        Ok(())
     }
 
     #[test]
-    fn accepts_tuple_destructured_collection_loop() {
+    fn accepts_tuple_destructured_collection_loop() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
             "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop (index, fruit) in pairs.enumerate()\n        put index\n        put fruit\n    end loop\nend fn"
         )
         .is_ok());
+        Ok(())
     }
 
     #[test]
-    fn tuple_destructured_loop_declares_typed_bindings() {
+    fn tuple_destructured_loop_declares_typed_bindings() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
             "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop (index, fruit) in pairs\n        var n i32 := index\n        var s ustring := fruit\n    end loop\nend fn"
         )
         .is_ok());
+        Ok(())
     }
 
     #[test]
-    fn tuple_index_access_has_element_type() {
+    fn tuple_index_access_has_element_type() -> Result<(), Box<dyn std::error::Error>> {
         // `pair.1` must resolve to the tuple's element type, so assigning it
         // to a `String` fails while `pair.0` (an i32) is fine.
         let source = "fn main()\n    var pair := (10, true)\n    var n i32 := pair.0\n    var b bool := pair.1\nend fn";
         assert!(check(source).is_ok());
 
-        let errors =
+        let Err(errors) =
             check("fn main()\n    var pair := (10, true)\n    var s ustring := pair.1\nend fn")
-                .unwrap_err();
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected String, got bool")));
+        Ok(())
     }
 
     #[test]
-    fn for_loop_tuple_destructuring_declares_typed_bindings() {
+    fn for_loop_tuple_destructuring_declares_typed_bindings(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // `for (a, b) in vec_of_tuples` must declare `a`/`b` with the element
         // types so the body type-checks against them.
         let source = "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    for (num, label) in pairs\n        var n i32 := num\n        var s ustring := label\n    end for\nend fn";
         assert!(check(source).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn for_loop_enumerate_single_binding_type_checks() {
+    fn for_loop_enumerate_single_binding_type_checks() -> Result<(), Box<dyn std::error::Error>> {
         // `for pair in xs.enumerate()` binds a tuple; reading its elements
         // must type-check (the element type is Unknown, so reads are lenient).
         let source = "fn main()\n    var xs := [1, 2]\n    for pair in xs.enumerate()\n        put pair.0\n    end for\nend fn";
         assert!(check(source).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn tuple_element_assignment_checks_types() {
+    fn tuple_element_assignment_checks_types() -> Result<(), Box<dyn std::error::Error>> {
         // Assigning a compatible value to `pair.0` is fine; a wrong type is
         // rejected.
         let source =
             "fn main()\n    var pair := (10, true)\n    pair.0 := 99\n    pair.1 := false\nend fn";
         assert!(check(source).is_ok());
 
-        let errors =
+        let Err(errors) =
             check("fn main()\n    var pair := (10, true)\n    pair.0 := unicode \"oops\"\nend fn")
-                .unwrap_err();
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected i32")));
+        Ok(())
     }
 
     #[test]
-    fn rejects_out_of_bounds_and_non_tuple_index() {
-        let errors =
-            check("fn main()\n    var pair := (10, true)\n    put pair.2\nend fn").unwrap_err();
+    fn rejects_out_of_bounds_and_non_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check("fn main()\n    var pair := (10, true)\n    put pair.2\nend fn")
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("tuple index 2 out of bounds")));
 
-        let errors = check("fn main()\n    var x := 42\n    put x.0\nend fn").unwrap_err();
+        let Err(errors) = check("fn main()\n    var x := 42\n    put x.0\nend fn") else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("type i32 is not a tuple")));
+        Ok(())
     }
 
     #[test]
-    fn nested_tuple_index_access_type_checks() {
+    fn nested_tuple_index_access_type_checks() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var nested := (1, (2, 3))\n    var a i32 := nested.1.0\n    var b i32 := nested.1.1\nend fn";
         assert!(check(source).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn rejects_wrong_initializer_type() {
-        let errors = check("var value i32 := unicode \"wrong\"").unwrap_err();
+    fn rejects_wrong_initializer_type() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check("var value i32 := unicode \"wrong\"") else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected i32")));
+        Ok(())
     }
 
     #[test]
-    fn rejects_unknown_names_and_bad_calls() {
-        let errors =
-            check("fn consume(value: i32)\n    return missing(value)\nend fn").unwrap_err();
+    fn rejects_unknown_names_and_bad_calls() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check("fn consume(value: i32)\n    return missing(value)\nend fn") else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("unknown function `missing`")));
+        Ok(())
     }
 
     #[test]
-    fn rejects_non_boolean_conditions() {
-        let errors = check("var value i32 := 1\nif value\n    put 1\nend if").unwrap_err();
+    fn rejects_non_boolean_conditions() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check("var value i32 := 1\nif value\n    put 1\nend if") else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| format!("{error}").contains("if condition")));
+        Ok(())
     }
 
     #[test]
-    fn allows_string_append_mutation() {
+    fn allows_string_append_mutation() -> Result<(), Box<dyn std::error::Error>> {
         // String concatenation via `:=` works;
         assert!(check("var output ustring := \"\"\noutput := output + \"abc\"\n").is_ok());
+        Ok(())
     }
 
     #[test]
-    fn checks_struct_fields_and_methods() {
+    fn checks_struct_fields_and_methods() -> Result<(), Box<dyn std::error::Error>> {
         let source = "struct Point\n    var x: i32\n    var y: i32\n    fn length(self): i32\n        return self.x\n    end fn\nend struct\nvar point := Point { x: 1, y: 2 }\nvar value i32 := point.length()";
         assert!(check(source).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn rejects_invalid_enum_variant() {
-        let errors = check("enum Color\n    Red\nend enum\nvar color := Color::Blue").unwrap_err();
+    fn rejects_invalid_enum_variant() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check("enum Color\n    Red\nend enum\nvar color := Color::Blue") else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("has no variant `Blue`")));
+        Ok(())
     }
 
     #[test]
-    fn accepts_infinite_loop_with_break() {
+    fn accepts_infinite_loop_with_break() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
             "fn main()\n    var count i32 := 0\n    loop\n        count := count + 1\n        if count = 3,\n            break\n        end if\n    end loop\nend fn"
         )
         .is_ok());
+        Ok(())
     }
 
     #[test]
-    fn rejects_break_outside_a_loop() {
-        let errors = check("break\ncontinue").unwrap_err();
+    fn rejects_break_outside_a_loop() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check("break\ncontinue") else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("only valid inside a loop")));
+        Ok(())
     }
 
     #[test]
-    fn accepts_break_and_continue_inside_while_loops() {
+    fn accepts_break_and_continue_inside_while_loops() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var i i32 := 0\nwhile i < 3\n    break\n    i := i + 1\nend while\n\
                       while i < 5\n    if i = 1,\n        continue\n    end if\n    i := i + 1\nend while";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn accepts_nested_function_calls() {
+    fn accepts_nested_function_calls() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn outer(x: i32): i32\n    fn inner(y: i32): i32\n        return y * 2\n    end fn\n    return inner(x) + 1\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn accepts_option_some_none_values_and_patterns() {
+    fn accepts_option_some_none_values_and_patterns() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var maybe Option<i32> := Some(42)\n    var empty Option<i32> := None\n    match maybe\n        Some(v), put v\n        None, put 0\n    end match\n    match empty\n        Some(v), put v\n        None, put 0\n    end match\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn rejects_option_variant_matching_a_non_option() {
-        let errors =
+    fn rejects_option_variant_matching_a_non_option() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) =
             check("var x i32 := 5\nmatch x\n    Some(v), put v\n    None, put 0\nend match")
-                .unwrap_err();
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| format!("{error}").contains("enum match pattern")));
+        Ok(())
     }
 
     #[test]
-    fn accepts_closure_type_annotation_and_untyped_literal() {
+    fn accepts_closure_type_annotation_and_untyped_literal(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // The closure type annotation parses and an untyped closure literal
         // passed as the argument inherits the declared parameter types.
         let source = "fn apply(f: |x: i32| i32, v: i32): i32\n    return f(v)\nend fn\n\
                       fn main()\n    put apply(|x| x * 2, 21)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn accepts_multi_param_closure_type_with_untyped_literal() {
+    fn accepts_multi_param_closure_type_with_untyped_literal(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn combine(f: |a: i32, b: i32| i32, x: i32, y: i32): i32\n    return f(x, y)\nend fn\n\
                       fn main()\n    put combine(|a, b| a + b, 2, 3)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn accepts_typed_closure_variable_passed_to_function_param() {
+    fn accepts_typed_closure_variable_passed_to_function_param(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn apply(f: |x: i32| i32, v: i32): i32\n    return f(v)\nend fn\n\
                       fn main()\n    var double := |x: i32| x * 2\n    put apply(double, 21)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn rejects_closure_return_type_mismatch() {
-        let errors = check(
+    fn rejects_closure_return_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check(
             "fn apply(f: |x: i32| i32, v: i32): i32\n    return f(v)\nend fn\n\
              fn main()\n    put apply(|x| str(x), 21)\nend fn",
-        )
-        .unwrap_err();
+        ) else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected fn(i32) -> i32")));
+        Ok(())
     }
 
     #[test]
-    fn rejects_closure_arity_mismatch() {
-        let errors = check(
+    fn rejects_closure_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check(
             "fn apply(f: |x: i32| i32, v: i32): i32\n    return f(v)\nend fn\n\
              fn main()\n    put apply(|a, b| a + b, 21)\nend fn",
-        )
-        .unwrap_err();
+        ) else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected fn(i32) -> i32")));
+        Ok(())
     }
 
     #[test]
-    fn accepts_function_returning_closure() {
+    fn accepts_function_returning_closure() -> Result<(), Box<dyn std::error::Error>> {
         // A function-typed return value: the returned closure literal inherits
         // the declared signature and the result can be stored and called.
         let source = "fn make_adder(n: i32): |x: i32| i32\n    return |x| x + n\nend fn\n\
                       fn main()\n    var add5 := make_adder(5)\n    put add5(10)\n    put make_adder(100)(1)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn rejects_closure_return_value_mismatch() {
-        let errors =
-            check("fn make(x: i32): |x: i32| i32\n    return |x| str(x)\nend fn").unwrap_err();
+    fn rejects_closure_return_value_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check("fn make(x: i32): |x: i32| i32\n    return |x| str(x)\nend fn")
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors.iter().any(|error| error
             .message
             .contains("expected fn(i32) -> i32, got fn(i32) -> String")));
+        Ok(())
     }
 
     #[test]
-    fn accepts_vec_higher_order_methods() {
+    fn accepts_vec_higher_order_methods() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var xs := [1, 2, 3, 4, 5]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x mod 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\n    put xs.reduce(1, |acc, x| acc * x)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn accepts_typed_closure_variable_passed_to_hof() {
+    fn accepts_typed_closure_variable_passed_to_hof() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var xs := [1, 2, 3]\n    var double := |x: i32| x * 2\n    put xs.map(double)[0]\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn rejects_filter_callback_returning_non_bool() {
-        let errors =
+    fn rejects_filter_callback_returning_non_bool() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) =
             check("fn main()\n    var xs := [1, 2, 3]\n    put xs.filter(|x| x + 1)\nend fn")
-                .unwrap_err();
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected bool, got i32")));
+        Ok(())
     }
 
     #[test]
-    fn rejects_hof_callback_arity_mismatch() {
-        let errors = check("fn main()\n    var xs := [1, 2, 3]\n    put xs.map(|a, b| a)\nend fn")
-            .unwrap_err();
+    fn rejects_hof_callback_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) =
+            check("fn main()\n    var xs := [1, 2, 3]\n    put xs.map(|a, b| a)\nend fn")
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors.iter().any(|error| error
             .message
             .contains("expects a callback with 1 parameter")));
+        Ok(())
     }
     #[test]
-    fn rejects_hof_callback_that_is_not_a_function() {
-        let errors =
-            check("fn main()\n    var xs := [1, 2, 3]\n    put xs.map(5)\nend fn").unwrap_err();
+    fn rejects_hof_callback_that_is_not_a_function() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check("fn main()\n    var xs := [1, 2, 3]\n    put xs.map(5)\nend fn")
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors.iter().any(|error| error
             .message
             .contains("expects a function callback, got i32")));
+        Ok(())
     }
 
     #[test]
-    fn accepts_higher_order_methods_on_strings_and_sort_by() {
+    fn accepts_higher_order_methods_on_strings_and_sort_by(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    put \"hello\".map(|c| c)\n    put \"hello\".filter(|c| c != unicode 'l')\n    put \"hello\".reduce(0, |acc, c| acc + (c as i32))\n    var xs := [3, 1, 2]\n    put xs.sort_by(|a, b| a > b)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn rejects_sort_by_on_a_string() {
-        let errors = check("fn main()\n    put \"hi\".sort_by(|a, b| a < b)\nend fn").unwrap_err();
+    fn rejects_sort_by_on_a_string() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check("fn main()\n    put \"hi\".sort_by(|a, b| a < b)\nend fn") else {
+            panic!("expected an Err result")
+        };
         assert!(errors.iter().any(|error| error
             .message
             .contains("type String has no method `sort_by`")));
+        Ok(())
     }
 
     #[test]
-    fn rejects_sort_by_comparator_returning_non_bool() {
-        let errors =
+    fn rejects_sort_by_comparator_returning_non_bool() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) =
             check("fn main()\n    var xs := [3, 1, 2]\n    put xs.sort_by(|a, b| a + b)\nend fn")
-                .unwrap_err();
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected bool, got i32")));
+        Ok(())
     }
 
     // ------------------------------------------------------------------
@@ -3209,104 +3304,120 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
-    fn rejects_misspelled_enum_variant_in_match() {
-        let errors = check(
+    fn rejects_misspelled_enum_variant_in_match() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check(
             "enum Color\n    Red\n    Green\n    Blue\nend enum\nfn main()\n    var c := Color::Red\n    match c\n        Red, put 1\n        Gren, put 2\n        Blue, put 3\n    end match\nend fn",
         )
-        .unwrap_err();
+        else { panic!("expected an Err result") };
         assert!(errors.iter().any(|error| error
             .message
             .contains("`Gren` is not a variant of enum `Color`")));
+        Ok(())
     }
 
     #[test]
-    fn rejects_misspelled_enum_variant_with_payload_in_match() {
-        let errors = check(
+    fn rejects_misspelled_enum_variant_with_payload_in_match(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check(
             "enum Shape\n    Circle(i32)\nend enum\nfn main()\n    var s := Shape::Circle(1)\n    match s\n        Gren(x), put x\n    end match\nend fn",
         )
-        .unwrap_err();
+        else { panic!("expected an Err result") };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("enum `Shape` has no variant `Gren`")));
+        Ok(())
     }
 
     #[test]
-    fn rejects_unknown_identifier_pattern_on_result() {
-        let errors = check(
+    fn rejects_unknown_identifier_pattern_on_result() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) = check(
             "fn main()\n    var r := get --timeout 100\n    match r\n        Bogus(x), put x\n    end match\nend fn",
         )
-        .unwrap_err();
+        else { panic!("expected an Err result") };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("`Bogus` is not a Result variant")));
+        Ok(())
     }
 
     #[test]
-    fn accepts_binding_patterns_on_scalar_scrutinees() {
+    fn accepts_binding_patterns_on_scalar_scrutinees() -> Result<(), Box<dyn std::error::Error>> {
         // Binding identifiers remain valid for non-enum scrutinees.
         assert!(check(
             "fn main()\n    var n := 42\n    match n\n        x, put x\n    end match\nend fn"
         )
         .is_ok());
+        Ok(())
     }
 
     #[test]
-    fn accepts_range_patterns_in_match() {
+    fn accepts_range_patterns_in_match() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
             "fn main()\n    var n := 42\n    match n\n        0..=9, put unicode \"small\"\n        10..=99, put unicode \"medium\"\n        _, put unicode \"large\"\n    end match\nend fn"
         )
         .is_ok());
+        Ok(())
     }
 
     #[test]
-    fn accepts_map_and_set_methods() {
+    fn accepts_map_and_set_methods() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var m Map<ustring, i32> := []\n    m.insert(unicode \"key\", 42)\n    var v := m.get(unicode \"key\")\n    put m.contains_key(unicode \"key\")\n    m.remove(unicode \"key\")\n    put m.len()\n    var s Set<i32> := []\n    s.insert(1)\n    put s.contains(1)\n    s.remove(1)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn accepts_map_indexing_with_key_type() {
+    fn accepts_map_indexing_with_key_type() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var m Map<ustring, i32> := []\n    m[unicode \"a\"] = 1\n    var v := m[unicode \"a\"]\n    put v\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn rejects_wrong_map_key_type() {
-        let errors =
+    fn rejects_wrong_map_key_type() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) =
             check("fn main()\n    var m Map<ustring, i32> := []\n    m.insert(7, 1)\nend fn")
-                .unwrap_err();
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected String, got i32")));
+        Ok(())
     }
 
     #[test]
-    fn accepts_stored_then_returned_closure() {
+    fn accepts_stored_then_returned_closure() -> Result<(), Box<dyn std::error::Error>> {
         // Untyped closure parameters stored in a variable and then returned
         // must type-check against the declared function-typed return.
         let source =
             "fn make_adder(n: i32): |x: i32| i32\n    var f := |x| x + n\n    return f\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn accepts_typed_closure_stored_in_variable() {
+    fn accepts_typed_closure_stored_in_variable() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var double := |x: i32| x * 2\n    put double(21)\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn rejects_zero_loop_step() {
-        let errors =
+    fn rejects_zero_loop_step() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(errors) =
             check("fn main()\n    loop i 0..10 step 0\n        put i\n    end loop\nend fn")
-                .unwrap_err();
+        else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("loop range step must not be zero")));
+        Ok(())
     }
 
     #[test]
-    fn no_warning_for_real_network_builtins() {
+    fn no_warning_for_real_network_builtins() -> Result<(), Box<dyn std::error::Error>> {
         // `http_get`/`tcp_connect`/`spawn` are real tokio implementations and
         // `db_execute` runs SQL against SQLite; none of them should warn.
         let (tokens, lexer_errors) = Lexer::lex(
@@ -3314,95 +3425,112 @@ mod tests {
         );
         assert!(lexer_errors.is_empty());
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().expect("source should parse");
+        let program = parser.parse()?;
         let (result, warnings) = TypeChecker::check_with_warnings(&program);
         assert!(result.is_ok());
         assert!(!warnings
             .iter()
             .any(|warning| warning.contains("`http_get` is an experimental stub")));
+        Ok(())
     }
 
     #[test]
-    fn db_execute_no_longer_warns() {
+    fn db_execute_no_longer_warns() -> Result<(), Box<dyn std::error::Error>> {
         // `db_execute` runs SQL against SQLite now; it must type-check without
         // the old "experimental stub" warning.
         let source = "fn main()\n    var rows := db_execute(unicode \"SELECT 1\").await\n    put rows\nend fn";
         let (tokens, lexer_errors) = Lexer::lex(source);
         assert!(lexer_errors.is_empty());
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().expect("source should parse");
+        let program = parser.parse()?;
         let (result, warnings) = TypeChecker::check_with_warnings(&program);
         assert!(result.is_ok(), "{:?}", result.err());
         assert!(!warnings
             .iter()
             .any(|warning| warning.contains("`db_execute` is an experimental stub")));
+        Ok(())
     }
 
     #[test]
-    fn db_execute_requires_string_query() {
+    fn db_execute_requires_string_query() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var rows := db_execute(42).await\n    put rows\nend fn";
-        let errors = check(source).unwrap_err();
+        let Err(errors) = check(source) else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected String, got i32")));
+        Ok(())
     }
 
     #[test]
-    fn explicit_extern_signature_checks_arguments_and_return_type() {
+    fn explicit_extern_signature_checks_arguments_and_return_type(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let valid = "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc\nfn main()\n    var result i32 := double(21)\n    put result\nend fn";
         assert!(check(valid).is_ok(), "{:?}", check(valid).err());
 
         let invalid = "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc\nfn main()\n    var result i32 := double(unicode \"wrong\")\n    put result\nend fn";
-        let errors = check(invalid).unwrap_err();
+        let Err(errors) = check(invalid) else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected i32, got String")));
+        Ok(())
     }
 
     #[test]
-    fn unknown_compatibility_builtin_is_rejected() {
+    fn unknown_compatibility_builtin_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    process_config(unicode \"config\")\nend fn";
-        let errors = check(source).unwrap_err();
+        let Err(errors) = check(source) else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("unknown function `process_config`")));
+        Ok(())
     }
 
     #[test]
-    fn generic_call_infers_return_type_at_call_site() {
+    fn generic_call_infers_return_type_at_call_site() -> Result<(), Box<dyn std::error::Error>> {
         // `identity(42)` must resolve `T = i32` and return `i32`, so assigning
         // the result to a `String` fails instead of silently passing as
         // `Unknown`.
         let source = "fn identity<T>(value: T): T\n    return value\nend fn\n\nfn main()\n    var s ustring := identity(42)\n    put s\nend fn";
-        let errors = check(source).unwrap_err();
+        let Err(errors) = check(source) else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected String, got i32")));
+        Ok(())
     }
 
     #[test]
-    fn generic_call_infers_nested_container_types() {
+    fn generic_call_infers_nested_container_types() -> Result<(), Box<dyn std::error::Error>> {
         // `first(xs)` with `xs: Vec<i32>` must bind `T = i32` through the
         // container and return `i32`.
         let source = "fn first<T>(xs: Vec<T>): T\n    return xs[0]\nend fn\n\nfn main()\n    var xs Vec<i32> := [1, 2, 3]\n    var head i32 := first(xs)\n    put head.to_string()\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn generic_call_accepts_correct_argument_type() {
+    fn generic_call_accepts_correct_argument_type() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn identity<T>(value: T): T\n    return value\nend fn\n\nfn main()\n    var n i32 := identity(42)\n    put n.to_string()\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn mask_and_until_flags_are_implemented() {
+    fn mask_and_until_flags_are_implemented() -> Result<(), Box<dyn std::error::Error>> {
         // `--mask` and `--until` are real now: they must type-check without
         // the old "not implemented" warnings.
         let source = "fn main()\n    var pw := get --mask unicode \"*\"\n    put pw\n    var field := get --until unicode \",\"\n    put field\nend fn";
         let (tokens, lexer_errors) = Lexer::lex(source);
         assert!(lexer_errors.is_empty());
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().expect("source should parse");
+        let program = parser.parse()?;
         let (result, warnings) = TypeChecker::check_with_warnings(&program);
         assert!(result.is_ok(), "{:?}", result.err());
         assert!(!warnings
@@ -3411,78 +3539,95 @@ mod tests {
         assert!(!warnings
             .iter()
             .any(|warning| warning.contains("`--until` is not implemented")));
+        Ok(())
     }
 
     #[test]
-    fn assert_and_test_helpers_type_check() {
+    fn assert_and_test_helpers_type_check() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var x i32 := 4\n    assert(x > 3)\n    pass(unicode \"x is positive\")\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn assert_requires_boolean() {
+    fn assert_requires_boolean() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    assert(42)\nend fn";
-        let errors = check(source).unwrap_err();
+        let Err(errors) = check(source) else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("expected bool, got i32")));
+        Ok(())
     }
 
     #[test]
-    fn checked_index_get_returns_option() {
+    fn checked_index_get_returns_option() -> Result<(), Box<dyn std::error::Error>> {
         // `xs.get(i)` must resolve to `Option<T>` and reject non-integer
         // indexes, so the result is usable with `match`/`if` patterns.
         let source = "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    match xs.get(0)\n        Some(value), put value.to_string()\n        None, put \"empty\"\n    end match\n    match unicode \"abc\".get(1)\n        Some(c), put c\n        None, put \"none\"\n    end match\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn checked_index_get_rejects_non_integer() {
+    fn checked_index_get_rejects_non_integer() -> Result<(), Box<dyn std::error::Error>> {
         let source =
             "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    put xs.get(unicode \"zero\")\nend fn";
-        let errors = check(source).unwrap_err();
+        let Err(errors) = check(source) else {
+            panic!("expected an Err result")
+        };
         assert!(errors
             .iter()
             .any(|error| error.message.contains("`get` index must be an integer")));
+        Ok(())
     }
 
     #[test]
-    fn result_accessors_type_check() {
+    fn result_accessors_type_check() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var result := http_get(unicode \"http://example.com\").await\n    assert(result.is_ok())\n    if result.is_ok(),\n        put result.unwrap()\n    end if\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn string_interpolation_type_checks() {
+    fn string_interpolation_type_checks() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn main()\n    var name ustring := unicode \"Alice\"\n    var age i32 := 30\n    put \"Name: {name}, Age: {age}\"\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     #[test]
-    fn interpolation_keeps_literal_braces_when_unparseable() {
+    fn interpolation_keeps_literal_braces_when_unparseable(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // `{` that does not form a parseable expression stays literal text,
         // so strings containing JSON-style braces still compile.
         let source =
             "fn main()\n    var json ustring := \"{{\\\"a\\\": 1}}\"\n    put json\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
+        Ok(())
     }
 
     fn check_strict(source: &str) -> Result<(), Vec<TypeCheckError>> {
         let (tokens, lexer_errors) = Lexer::lex(source);
         assert!(lexer_errors.is_empty(), "lexer errors: {lexer_errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().expect("source should parse");
+        let program = parser
+            .parse()
+            .unwrap_or_else(|e| panic!("source should parse: {e}"));
         TypeChecker::check_with_warnings_strict_foreign(&program).0
     }
 
     #[test]
-    fn strict_mode_rejects_opaque_foreign_call() {
+    fn strict_mode_rejects_opaque_foreign_call() -> Result<(), Box<dyn std::error::Error>> {
         // Without --strict the opaque foreign call is permissive.
         let permissive =
             "#c\nint double_value(int value) { return value * 2; }\n#endc\nvar result i32 := double_value(21)\nput result";
         assert!(check(permissive).is_ok(), "{:?}", check(permissive).err());
         // With --strict the same program is rejected with guidance.
-        let errors = check_strict(permissive).expect_err("strict mode should reject");
+        let Err(errors) = check_strict(permissive) else {
+            panic!("strict mode should reject");
+        };
         assert!(
             errors.iter().any(|error| {
                 error.to_string().contains("strict mode")
@@ -3491,34 +3636,39 @@ mod tests {
             }),
             "unexpected errors: {errors:?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn strict_mode_allows_explicit_extern_declaration() {
+    fn strict_mode_allows_explicit_extern_declaration() -> Result<(), Box<dyn std::error::Error>> {
         let source = "extern c fn double_value(value: i32): i32\n#c\nint double_value(int value) { return value * 2; }\n#endc\nvar result i32 := double_value(21)\nput result";
         assert!(
             check_strict(source).is_ok(),
             "{:?}",
             check_strict(source).err()
         );
+        Ok(())
     }
 
     #[test]
-    fn strict_mode_reports_extern_arity_mismatch() {
+    fn strict_mode_reports_extern_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
         // An explicit declaration opts into interface checking: strict mode
         // surfaces the arity mismatch instead of silently delegating to cc.
         let source = "extern c fn double_value(value: i32): i32\n#c\nint double_value(int value) { return value * 2; }\n#endc\nvar result i32 := double_value(21, 22)";
-        let errors = check_strict(source).expect_err("arity mismatch should be rejected");
+        let Err(errors) = check_strict(source) else {
+            panic!("arity mismatch should be rejected");
+        };
         assert!(
             errors
                 .iter()
                 .any(|error| error.to_string().contains("expects 1 arguments, got 2")),
             "unexpected errors: {errors:?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn strict_mode_allows_poly_and_builtin_calls() {
+    fn strict_mode_allows_poly_and_builtin_calls() -> Result<(), Box<dyn std::error::Error>> {
         // Ordinary Poly declarations and builtins are unaffected by strict mode.
         let source = "fn add_one(value: i32): i32\n    return value + 1\nend fn\nfn main()\n    var n i32 := add_one(41)\n    put n\n    put abs(-3)\nend fn";
         assert!(
@@ -3526,17 +3676,21 @@ mod tests {
             "{:?}",
             check_strict(source).err()
         );
+        Ok(())
     }
 
     #[test]
-    fn strict_mode_ignores_foreign_blocks_for_other_targets() {
+    fn strict_mode_ignores_foreign_blocks_for_other_targets(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Target filtering (Transpiler::parse_target) removes non-selected
         // foreign blocks and their extern declarations before checking, so a
         // #rust call under the c target is an `unknown function` error in
         // permissive mode already — strict mode changes nothing there.
         let dropped = "#rust\nfn rust_helper(x: i32) -> i32 { x }\n#endrust\n#c\nint c_helper(int x) { return x; }\n#endc\nvar n i32 := rust_helper(1)\nput n";
-        let program = crate::codegen::Transpiler::parse_target(dropped, "c").expect("parse");
-        let errors = TypeChecker::check(&program).expect_err("unknown function");
+        let program = crate::codegen::Transpiler::parse_target(dropped, "c")?;
+        let Err(errors) = TypeChecker::check(&program) else {
+            panic!("unknown function");
+        };
         assert!(
             errors
                 .iter()
@@ -3547,16 +3701,17 @@ mod tests {
         // A call into the selected target's foreign block is permissive
         // without strict mode and rejected with guidance under it.
         let selected = "#rust\nfn rust_helper(x: i32) -> i32 { x }\n#endrust\n#c\nint c_helper(int x) { return x; }\n#endc\nvar n i32 := c_helper(1)\nput n";
-        let program = crate::codegen::Transpiler::parse_target(selected, "c").expect("parse");
+        let program = crate::codegen::Transpiler::parse_target(selected, "c")?;
         assert!(TypeChecker::check(&program).is_ok());
-        let errors = TypeChecker::check_with_warnings_strict_foreign(&program)
-            .0
-            .expect_err("reject");
+        let Err(errors) = TypeChecker::check_with_warnings_strict_foreign(&program).0 else {
+            panic!("reject");
+        };
         assert!(
             errors
                 .iter()
                 .any(|error| error.to_string().contains("c_helper")),
             "unexpected errors: {errors:?}"
         );
+        Ok(())
     }
 }

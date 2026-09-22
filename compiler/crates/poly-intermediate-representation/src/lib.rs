@@ -27,7 +27,7 @@ pub fn transpile(source: &str) -> Result<String, String> {
     poly_parser::require_explicit_main(&program)?;
     let intermediate_representation = generator::generate(&program);
     let mut codegen = IntermediateRepresentationCodeGen::new();
-    Ok(codegen.generate(&intermediate_representation))
+    codegen.generate(&intermediate_representation)
 }
 
 /// Convert Poly source to Rust through the intermediate representation pipeline with optimization.
@@ -42,5 +42,5 @@ pub fn transpile_optimized(source: &str) -> Result<String, String> {
     let mut intermediate_representation = generator::generate(&program);
     optimizer::optimize(&mut intermediate_representation);
     let mut codegen = IntermediateRepresentationCodeGen::new();
-    Ok(codegen.generate(&intermediate_representation))
+    codegen.generate(&intermediate_representation)
 }

@@ -80,45 +80,51 @@ mod tests {
     use super::*;
 
     #[test]
-    fn line_col_counts_first_line() {
+    fn line_col_counts_first_line() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(line_col("var x := 42", 0), (1, 1));
         assert_eq!(line_col("var x := 42", 10), (1, 11));
+        Ok(())
     }
 
     #[test]
-    fn line_col_crosses_newlines() {
+    fn line_col_crosses_newlines() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var x := 1\nvar y := 2";
-        let newline_index = source.find('\n').unwrap();
+        let newline_index = source.find('\n').ok_or("source should contain a newline")?;
         assert_eq!(line_col(source, newline_index + 1), (2, 1));
         assert_eq!(line_col(source, newline_index + 4), (2, 4));
+        Ok(())
     }
 
     #[test]
-    fn line_col_past_end_clamps_to_last_position() {
+    fn line_col_past_end_clamps_to_last_position() -> Result<(), Box<dyn std::error::Error>> {
         let source = "abc";
         assert_eq!(line_col(source, 100), (1, 4));
+        Ok(())
     }
 
     #[test]
-    fn source_line_returns_requested_line() {
+    fn source_line_returns_requested_line() -> Result<(), Box<dyn std::error::Error>> {
         let source = "one\ntwo\nthree";
         assert_eq!(source_line(source, 2), Some("two"));
         assert_eq!(source_line(source, 5), None);
+        Ok(())
     }
 
     #[test]
-    fn render_error_includes_position_and_caret() {
+    fn render_error_includes_position_and_caret() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var x := 42\n";
         let rendered = render_error(source, Span::new(0, 3), "test.poly", "oops");
         assert!(rendered.contains("--> test.poly:1:1"));
         assert!(rendered.contains("var x := 42"));
         assert!(rendered.contains("^^^"));
+        Ok(())
     }
 
     #[test]
-    fn render_error_multi_line_span_clamps_caret() {
+    fn render_error_multi_line_span_clamps_caret() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var x := 1\nvar y := 2";
         let rendered = render_error(source, Span::new(0, source.len()), "t.poly", "wide span");
         assert!(rendered.contains("t.poly:1:1"));
+        Ok(())
     }
 }

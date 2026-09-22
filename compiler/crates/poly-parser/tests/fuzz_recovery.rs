@@ -155,16 +155,17 @@ fn assert_recovery_is_total(source: &str) {
 }
 
 #[test]
-fn fuzz_recovery_never_panics() {
+fn fuzz_recovery_never_panics() -> Result<(), Box<dyn std::error::Error>> {
     let mut rng = Rng::new(0x5EED_2026);
     for _ in 0..2000 {
         let source = generate_source(&mut rng, 25);
         assert_recovery_is_total(&source);
     }
+    Ok(())
 }
 
 #[test]
-fn fuzz_recovery_various_seeds() {
+fn fuzz_recovery_various_seeds() -> Result<(), Box<dyn std::error::Error>> {
     for seed in [1, 7, 42, 12345, 0xDEADBEEF, u64::MAX - 1] {
         let mut rng = Rng::new(seed);
         for _ in 0..300 {
@@ -172,10 +173,11 @@ fn fuzz_recovery_various_seeds() {
             assert_recovery_is_total(&source);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn fuzz_recovery_specific_adversarial_inputs() {
+fn fuzz_recovery_specific_adversarial_inputs() -> Result<(), Box<dyn std::error::Error>> {
     // Hand-picked inputs that historically stressed the recovery path.
     for source in [
         "",
@@ -205,6 +207,7 @@ fn fuzz_recovery_specific_adversarial_inputs() {
     ] {
         assert_recovery_is_total(source);
     }
+    Ok(())
 }
 
 /// Recovery invariant: clean parses must produce a program object (comments
@@ -213,7 +216,7 @@ fn fuzz_recovery_specific_adversarial_inputs() {
 /// transpile-pipeline fuzz lives in the transpiler crate's
 /// `fuzz_recovery_transpiler.rs` where both crates are visible.
 #[test]
-fn fuzz_recovery_terminates_on_clean_parses() {
+fn fuzz_recovery_terminates_on_clean_parses() -> Result<(), Box<dyn std::error::Error>> {
     let mut rng = Rng::new(0xC0FFEE);
     let mut error_parses = 0usize;
     let mut clean_parses = 0usize;
@@ -245,4 +248,5 @@ fn fuzz_recovery_terminates_on_clean_parses() {
         clean_parses > 0 || error_parses == 500,
         "fuzzer never produced a clean parse"
     );
+    Ok(())
 }

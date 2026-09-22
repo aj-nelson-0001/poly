@@ -9,3 +9,6 @@ description = "Lexer/tokenizer for the Poly programming language"
 thiserror.workspace = true
 
 [dev-dependencies]
+
+[lints]
+workspace = true

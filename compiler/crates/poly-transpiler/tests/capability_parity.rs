@@ -92,12 +92,13 @@ const CASES: &[Case] = &[
 ];
 
 #[test]
-fn backend_capability_matrix_is_pinned() {
+fn backend_capability_matrix_is_pinned() -> Result<(), Box<dyn std::error::Error>> {
     common::run_matrix(CASES);
+    Ok(())
 }
 
 #[test]
-fn rejection_errors_name_the_backend_or_limitation() {
+fn rejection_errors_name_the_backend_or_limitation() -> Result<(), Box<dyn std::error::Error>> {
     // The refusal path must be a *clear* compile-time error, not a wrong
     // binary or a panic. Pin the distinguishing words per refusing target.
     let transpiler = poly_transpiler::Transpiler::new();
@@ -134,4 +135,5 @@ fn rejection_errors_name_the_backend_or_limitation() {
             );
         }
     }
+    Ok(())
 }

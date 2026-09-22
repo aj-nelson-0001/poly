@@ -114,7 +114,7 @@ fn generate_source(rng: &mut Rng, max_fragments: usize) -> String {
 }
 
 #[test]
-fn fuzz_full_pipeline_never_panics() {
+fn fuzz_full_pipeline_never_panics() -> Result<(), Box<dyn std::error::Error>> {
     let mut rng = Rng::new(0xF0FF_2026);
     let transpiler = poly_transpiler::Transpiler::new();
 
@@ -135,14 +135,13 @@ fn fuzz_full_pipeline_never_panics() {
     // Sanity: the pipeline still accepts an explicitly-valid program (random
     // soup almost never forms the required `fn main` entry point anymore).
     let valid = "fn main()\n    put \"fuzz baseline\"\nend fn\n";
-    let rust = transpiler
-        .transpile_checked(valid)
-        .expect("valid program should transpile");
+    let rust = transpiler.transpile_checked(valid)?;
     assert!(rust.contains("Generated from Poly source code"));
+    Ok(())
 }
 
 #[test]
-fn fuzz_pipeline_various_seeds() {
+fn fuzz_pipeline_various_seeds() -> Result<(), Box<dyn std::error::Error>> {
     let transpiler = poly_transpiler::Transpiler::new();
     for seed in [2, 3, 5, 8, 13, 21, 34, 55, 89, 144] {
         let mut rng = Rng::new(seed);
@@ -152,10 +151,11 @@ fn fuzz_pipeline_various_seeds() {
             let _ = transpiler.transpile(&source);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn fuzz_recovery_parse_then_check_never_panics() {
+fn fuzz_recovery_parse_then_check_never_panics() -> Result<(), Box<dyn std::error::Error>> {
     let mut rng = Rng::new(0xABCDEF);
     let mut error_parses = 0usize;
     let mut clean_parses = 0usize;
@@ -184,4 +184,5 @@ fn fuzz_recovery_parse_then_check_never_panics() {
         clean_parses > 0 || error_parses == 400,
         "fuzzer never produced a clean parse"
     );
+    Ok(())
 }

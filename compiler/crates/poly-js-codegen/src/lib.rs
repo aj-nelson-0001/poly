@@ -136,11 +136,13 @@ impl JsGenerator {
             ));
         }
         let mut result = String::new();
-        writeln!(result, "function {}(fields = {{}}) {{", structure.name).unwrap();
+        writeln!(result, "function {}(fields = {{}}) {{", structure.name)
+            .map_err(|e| e.to_string())?;
         for field in &structure.fields {
-            writeln!(result, "  this.{} = fields.{};", field.name, field.name).unwrap();
+            writeln!(result, "  this.{} = fields.{};", field.name, field.name)
+                .map_err(|e| e.to_string())?;
         }
-        writeln!(result, "}}").unwrap();
+        writeln!(result, "}}").map_err(|e| e.to_string())?;
         Ok(result)
     }
 
@@ -166,11 +168,11 @@ impl JsGenerator {
                     .insert(parameter.name.clone());
             }
         }
-        writeln!(result, "function {}({}) {{", function.name, params).unwrap();
+        writeln!(result, "function {}({}) {{", function.name, params).map_err(|e| e.to_string())?;
         for statement in function.body.as_deref().unwrap_or_default() {
             self.statement_into(&mut result, 1, &statement.node)?;
         }
-        writeln!(result, "}}").unwrap();
+        writeln!(result, "}}").map_err(|e| e.to_string())?;
         Ok(result)
     }
 
@@ -208,7 +210,7 @@ impl JsGenerator {
                     Some(value) => self.expr(value)?,
                     None => "undefined".to_string(),
                 };
-                writeln!(output, "let {} = {};", name, value).unwrap();
+                writeln!(output, "let {} = {};", name, value).map_err(|e| e.to_string())?;
             }
             Statement::LetDeclaration { name, ty, value } => {
                 line_prefix(output);
@@ -219,18 +221,21 @@ impl JsGenerator {
                 {
                     self.string_variables.borrow_mut().insert(name.clone());
                 }
-                writeln!(output, "const {} = {};", name, self.expr(value)?).unwrap();
+                writeln!(output, "const {} = {};", name, self.expr(value)?)
+                    .map_err(|e| e.to_string())?;
             }
             Statement::ConstDeclaration { name, value } => {
                 line_prefix(output);
                 if self.is_string_literal(value) {
                     self.string_variables.borrow_mut().insert(name.clone());
                 }
-                writeln!(output, "const {} = {};", name, self.expr(value)?).unwrap();
+                writeln!(output, "const {} = {};", name, self.expr(value)?)
+                    .map_err(|e| e.to_string())?;
             }
             Statement::Assignment { target, value } => {
                 line_prefix(output);
-                writeln!(output, "{} = {};", self.expr(target)?, self.expr(value)?).unwrap();
+                writeln!(output, "{} = {};", self.expr(target)?, self.expr(value)?)
+                    .map_err(|e| e.to_string())?;
             }
             Statement::PutStatement { expr, redirect } => {
                 if redirect.is_some() {
@@ -239,7 +244,8 @@ impl JsGenerator {
                     );
                 }
                 line_prefix(output);
-                writeln!(output, "console.log({});", self.output_argument(expr)?).unwrap();
+                writeln!(output, "console.log({});", self.output_argument(expr)?)
+                    .map_err(|e| e.to_string())?;
             }
             Statement::ErrorStatement(expr)
             | Statement::WarnStatement(expr)
@@ -255,7 +261,7 @@ impl JsGenerator {
                     "console.error({});",
                     self.output_argument_prefixed(expr, prefix)?
                 )
-                .unwrap();
+                .map_err(|e| e.to_string())?;
             }
             // The parser uses an `if` node without an else block for `while`;
             // the branch below preserves that compatibility representation while
@@ -263,7 +269,8 @@ impl JsGenerator {
             Statement::ExpressionStatement(expr) => match expr {
                 Expression::WhileLoop { condition, body } => {
                     line_prefix(output);
-                    writeln!(output, "while ({}) {{", self.expr(condition)?).unwrap();
+                    writeln!(output, "while ({}) {{", self.expr(condition)?)
+                        .map_err(|e| e.to_string())?;
                     self.block_into(output, indent + 1, body)?;
                     line_prefix(output);
                     output.push_str("}\n");
@@ -274,7 +281,8 @@ impl JsGenerator {
                     else_block: Some(else_block),
                 } => {
                     line_prefix(output);
-                    writeln!(output, "if ({}) {{", self.expr(condition)?).unwrap();
+                    writeln!(output, "if ({}) {{", self.expr(condition)?)
+                        .map_err(|e| e.to_string())?;
                     self.block_into(output, indent + 1, then_block)?;
                     line_prefix(output);
                     if else_block.is_empty() {
@@ -302,7 +310,7 @@ impl JsGenerator {
                             "for (const {variable} of {}) {{",
                             self.expr(collection)?
                         )
-                        .unwrap();
+                        .map_err(|e| e.to_string())?;
                         self.block_into(output, indent + 1, body)?;
                         line_prefix(output);
                         output.push_str("}\n");
@@ -356,7 +364,7 @@ impl JsGenerator {
                             self.expr(start)?,
                             self.expr(end)?
                         )
-                        .unwrap();
+                        .map_err(|e| e.to_string())?;
                         self.block_into(output, indent + 1, body)?;
                         line_prefix(output);
                         output.push_str("}\n");
@@ -367,7 +375,8 @@ impl JsGenerator {
                         line_prefix(output);
                         output.push_str("{\n");
                         line_prefix_for(output, indent + 1);
-                        writeln!(output, "let __poly_step = Number({});", step_value).unwrap();
+                        writeln!(output, "let __poly_step = Number({});", step_value)
+                            .map_err(|e| e.to_string())?;
                         line_prefix_for(output, indent + 1);
                         writeln!(
                             output,
@@ -376,7 +385,7 @@ impl JsGenerator {
                             end_value,
                             end_value
                         )
-                        .unwrap();
+                        .map_err(|e| e.to_string())?;
                         self.block_into(output, indent + 2, body)?;
                         line_prefix_for(output, indent + 1);
                         output.push_str("}\n");
@@ -395,7 +404,7 @@ impl JsGenerator {
                         "for (const {variable} of {}) {{",
                         self.expr(iterable)?
                     )
-                    .unwrap();
+                    .map_err(|e| e.to_string())?;
                     self.block_into(output, indent + 1, body)?;
                     line_prefix(output);
                     output.push_str("}\n");
@@ -413,7 +422,7 @@ impl JsGenerator {
                     // are rejected with guidance.
                     let scrutinee_str = self.expr(scrutinee)?;
                     line_prefix(output);
-                    writeln!(output, "switch ({scrutinee_str}) {{").unwrap();
+                    writeln!(output, "switch ({scrutinee_str}) {{").map_err(|e| e.to_string())?;
                     for arm in arms.iter() {
                         line_prefix_for(output, indent + 1);
                         if matches!(arm.pattern, ast::Pattern::Wildcard) {
@@ -421,7 +430,8 @@ impl JsGenerator {
                         } else {
                             match &arm.pattern {
                                 ast::Pattern::Literal(literal) => {
-                                    writeln!(output, "case {}:", self.expr(literal)?).unwrap();
+                                    writeln!(output, "case {}:", self.expr(literal)?)
+                                        .map_err(|e| e.to_string())?;
                                 }
                                 ast::Pattern::Enum {
                                     enum_name,
@@ -434,7 +444,8 @@ impl JsGenerator {
                                                 .to_string(),
                                         );
                                     }
-                                    writeln!(output, "case {}.{}:", enum_name, variant).unwrap();
+                                    writeln!(output, "case {}.{}:", enum_name, variant)
+                                        .map_err(|e| e.to_string())?;
                                 }
                                 other => {
                                     let _ = other;
@@ -454,7 +465,8 @@ impl JsGenerator {
                         match &arm.body {
                             ast::MatchArmBody::Expression(expr) => {
                                 line_prefix_for(output, indent + 2);
-                                writeln!(output, "{};", self.expr(expr)?).unwrap();
+                                writeln!(output, "{};", self.expr(expr)?)
+                                    .map_err(|e| e.to_string())?;
                             }
                             ast::MatchArmBody::Block(statements) => {
                                 self.block_into(output, indent + 2, statements)?;
@@ -468,13 +480,13 @@ impl JsGenerator {
                 }
                 _ => {
                     line_prefix(output);
-                    writeln!(output, "{};", self.expr(expr)?).unwrap();
+                    writeln!(output, "{};", self.expr(expr)?).map_err(|e| e.to_string())?;
                 }
             },
             Statement::ReturnStatement(value) => {
                 line_prefix(output);
                 if let Some(value) = value {
-                    writeln!(output, "return {};", self.expr(value)?).unwrap();
+                    writeln!(output, "return {};", self.expr(value)?).map_err(|e| e.to_string())?;
                 } else {
                     output.push_str("return;\n");
                 }
@@ -959,108 +971,121 @@ mod tests {
     use poly_lexer::Lexer;
     use poly_parser::Parser;
 
-    fn generate(source: &str) -> String {
+    fn generate(source: &str) -> Result<String, String> {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().unwrap();
-        transpile(&program).unwrap()
+        let program = parser.parse().map_err(|e| e.to_string())?;
+        transpile(&program)
     }
 
     #[test]
-    fn descending_range_loop_flips_comparison_and_update() {
+    fn descending_range_loop_flips_comparison_and_update() -> Result<(), Box<dyn std::error::Error>>
+    {
         // Regression: `step -1` used to emit `i <= 1` (comparison never
         // flipped) with `i -= (-1)` (double negation), producing zero
         // iterations on every descending loop.
-        let output = generate("fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn");
+        let output = generate("fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn")?;
         assert!(output.contains("for (let i = 10; i >= 1; i += (-1)) {"));
+        Ok(())
     }
 
     #[test]
-    fn descending_range_loop_step_minus_two() {
-        let output = generate("fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn");
+    fn descending_range_loop_step_minus_two() -> Result<(), Box<dyn std::error::Error>> {
+        let output = generate("fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn")?;
         assert!(output.contains("for (let i = 10; i >= 1; i += (-2)) {"));
+        Ok(())
     }
 
     #[test]
-    fn ascending_range_loop_keeps_comparison() {
-        let output = generate("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn");
+    fn ascending_range_loop_keeps_comparison() -> Result<(), Box<dyn std::error::Error>> {
+        let output = generate("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn")?;
         assert!(output.contains("for (let i = 0; i <= 10; i += 2) {"));
+        Ok(())
     }
 
     #[test]
-    fn runtime_step_uses_sign_dispatch() {
+    fn runtime_step_uses_sign_dispatch() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: `step s` with a runtime-negative `s` used to keep the
         // ascending `<=` comparison, silently yielding zero iterations. A
         // non-literal step must emit a runtime sign dispatch.
         let output =
-            generate("fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn");
+            generate("fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn")?;
         assert!(output.contains("let __poly_step = Number(s);"), "{output}");
         assert!(
             output.contains("__poly_step > 0 ? i <= 1 : (__poly_step < 0 && i >= 1)"),
             "{output}"
         );
         assert!(output.contains("i += __poly_step) {"), "{output}");
+        Ok(())
     }
 
     #[test]
-    fn negated_variable_step_goes_through_runtime_dispatch() {
+    fn negated_variable_step_goes_through_runtime_dispatch(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // `-(s)` is not a literal: its sign depends on `s` at runtime, so it
         // must not take the static descending path.
-        let output =
-            generate("fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn");
+        let output = generate(
+            "fn main()\nvar s i32 := -2\nloop i 10..1 step -(s)\nput i\nend loop\nend fn",
+        )?;
         assert!(output.contains("let __poly_step = Number"), "{output}");
+        Ok(())
     }
 
     #[test]
-    fn emits_js_foreign_block_and_main() {
+    fn emits_js_foreign_block_and_main() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
             "#js\nfunction doubleValue(x) {\n    return x * 2;\n}\n#endjs\nvar x i32 := doubleValue(21)\nput x",
-        );
+        )?;
         assert!(output.contains("function doubleValue(x)"));
         assert!(output.contains("main();"));
+        Ok(())
     }
 
     #[test]
-    fn lowers_scalars_and_output() {
-        let output = generate("var x i32 := 10\nvar name ustring := unicode \"Poly\"\nput x\nput name\nput \"v: \" + x");
+    fn lowers_scalars_and_output() -> Result<(), Box<dyn std::error::Error>> {
+        let output = generate("var x i32 := 10\nvar name ustring := unicode \"Poly\"\nput x\nput name\nput \"v: \" + x")?;
         assert!(output.contains("let x = 10;"));
         assert!(output.contains("let name = \"Poly\";"));
         assert!(output.contains("console.log(String(x));"));
         // A bare unicode string variable prints directly (no String() wrap).
         assert!(output.contains("console.log(name);"));
         assert!(output.contains("console.log(((\"v: \") + (x)));"));
+        Ok(())
     }
 
     #[test]
-    fn string_len_and_to_string_lower_to_js_equivalents() {
+    fn string_len_and_to_string_lower_to_js_equivalents() -> Result<(), Box<dyn std::error::Error>>
+    {
         // Parity with the other backends: `.len()` on string values is
         // .length, `n.to_string()` is String(n). Chains mixing both must
         // keep operand order (parity pinned end-to-end by
         // tests/diff_string_edges.poly).
         let output = generate(
             "var s ustring := \"hello\"\nput s.len()\nvar n i32 := 42\nput n.to_string()\nput (\"a\" + \"b\").len()",
-        );
+        )?;
         assert!(output.contains("(s).length"), "{output}");
         assert!(output.contains("String(n)"), "{output}");
         assert!(
             output.contains(".length") && output.contains("(\"a\") + (\"b\")"),
             "len of parenthesized concat must wrap the concat: {output}"
         );
+        Ok(())
     }
 
     #[test]
-    fn truncates_integer_division() {
+    fn truncates_integer_division() -> Result<(), Box<dyn std::error::Error>> {
         // Poly `/` on integers is truncated division; JS `/` is float division.
-        let output = generate("var q i32 := 7 / 2\nput q");
+        let output = generate("var q i32 := 7 / 2\nput q")?;
         assert!(output.contains("let q = Math.trunc((7) / (2));"));
+        Ok(())
     }
 
     #[test]
-    fn lowers_control_flow_and_functions() {
+    fn lowers_control_flow_and_functions() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
             "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nvar i i32 := 0\nwhile i < 3\n    i := i + 1\nend while\nloop j 0..3\n    put j\nend loop\nif 1 > 2,\n    put 1\nelse\n    put 0\nend if\nloop k in [1, 2]\n    put k\nend loop",
-        );
+        )?;
         assert!(output.contains("function add(a, b) {"));
         // Typed i32 arithmetic masks to 32 bits (defined wrap semantics);
         // comparisons stay unmasked so they produce real JS booleans.
@@ -1068,33 +1093,36 @@ mod tests {
         assert!(output.contains("while (((i) < (3))) {"));
         assert!(output.contains("for (let j = 0; j <= 3; j += 1) {"));
         assert!(output.contains("for (const k of [1, 2]) {"));
+        Ok(())
     }
 
     #[test]
-    fn lowers_match_to_switch() {
+    fn lowers_match_to_switch() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
             "var x i32 := 3\nmatch x\n    1, put 10\n    3, put 30\n    _, put 99\nend match",
-        );
+        )?;
         assert!(output.contains("switch (x) {"));
         assert!(output.contains("case 1:"));
         assert!(output.contains("case 3:"));
         assert!(output.contains("default:"));
         assert!(output.contains("break;"));
+        Ok(())
     }
 
     #[test]
-    fn lowers_structs_and_literals() {
+    fn lowers_structs_and_literals() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
             "struct Point\n    var x: i32\n    var y: i32\nend struct\nvar p := Point { x: 3, y: 4 }\nput p.x",
-        );
+        )?;
         assert!(output.contains("function Point(fields = {}) {"));
         assert!(output.contains("this.x = fields.x;"));
         assert!(output.contains("let p = new Point({ x: 3, y: 4 });"));
         assert!(output.contains("String(p.x)"));
+        Ok(())
     }
 
     #[test]
-    fn rejects_unsupported_constructs_with_guidance() {
+    fn rejects_unsupported_constructs_with_guidance() -> Result<(), Box<dyn std::error::Error>> {
         for source in [
             "var t i32 := get",
             "put \"a\" to \"file.txt\"",
@@ -1104,11 +1132,12 @@ mod tests {
             let (tokens, errors) = Lexer::lex(source);
             assert!(errors.is_empty(), "{errors:?}");
             let mut parser = Parser::new(&tokens);
-            let program = parser.parse().unwrap();
+            let program = parser.parse()?;
             assert!(
                 transpile(&program).is_err(),
                 "expected rejection for: {source}"
             );
         }
+        Ok(())
     }
 }

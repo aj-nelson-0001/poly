@@ -170,11 +170,11 @@ fn main()
     var circle := Circle(5.0)
     var rect := Rectangle(4.0, 6.0)
     var tri := Triangle(3.0, 4.0, 5.0)
-    
+
     put "Circle area: "
     put area(circle)
     put "\n"
-    
+
     put "Rectangle area: "
     put area(rect)
     put "\n"
@@ -283,7 +283,9 @@ fn bench_intermediate_representation_optimized(c: &mut Criterion) {
 fn bench_intermediate_representation_optimizer_passes(c: &mut Criterion) {
     let (tokens, _) = Lexer::lex(INTERMEDIATE_REPRESENTATION_SOURCE);
     let mut parser = Parser::new(&tokens);
-    let program = parser.parse().expect("benchmark source must parse");
+    let program = parser
+        .parse()
+        .unwrap_or_else(|e| panic!("benchmark source must parse: {e}"));
     let intermediate_representation = poly_intermediate_representation::generate(&program);
 
     c.bench_function("intermediate_representation_optimizer_passes", |b| {

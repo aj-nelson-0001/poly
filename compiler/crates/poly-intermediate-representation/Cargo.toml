@@ -12,3 +12,6 @@ poly-parser = { workspace = true }
 
 [dev-dependencies]
 poly-transpiler = { workspace = true }
+
+[lints]
+workspace = true

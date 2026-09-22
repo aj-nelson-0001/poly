@@ -622,11 +622,13 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "lexer errors: {errors:?}");
         let mut parser = Parser::new(&tokens);
-        parser.parse().expect("source should parse")
+        parser
+            .parse()
+            .unwrap_or_else(|e| panic!("source should parse: {e}"))
     }
 
     #[test]
-    fn generates_functions_and_main_body() {
+    fn generates_functions_and_main_body() -> Result<(), Box<dyn std::error::Error>> {
         let ast =
             parse("fn sum(a: i32, b: i32): i32\n    return a + b\nend fn\nvar x := sum(1, 2)");
         let intermediate_representation = generate(&ast);
@@ -639,10 +641,11 @@ mod tests {
             intermediate_representation.main_body[0],
             Statement::VarDecl { .. }
         ));
+        Ok(())
     }
 
     #[test]
-    fn generates_structs_enums_and_traits() {
+    fn generates_structs_enums_and_traits() -> Result<(), Box<dyn std::error::Error>> {
         let ast = parse(
             "struct Point\n    var x: i32\n    var y: i32\nend struct\n\
              enum Color\n    Red\n    Blue(i32)\nend enum\n\
@@ -655,10 +658,11 @@ mod tests {
         assert_eq!(intermediate_representation.enums.len(), 1);
         assert_eq!(intermediate_representation.enums[0].variants.len(), 2);
         assert_eq!(intermediate_representation.traits.len(), 1);
+        Ok(())
     }
 
     #[test]
-    fn constant_folding_input_is_preserved() {
+    fn constant_folding_input_is_preserved() -> Result<(), Box<dyn std::error::Error>> {
         let ast = parse("var x := 2 + 3");
         let intermediate_representation = generate(&ast);
         match &intermediate_representation.main_body[0] {
@@ -671,10 +675,12 @@ mod tests {
             } => {}
             other => panic!("expected binary add, got {other:?}"),
         }
+        Ok(())
     }
 
     #[test]
-    fn function_local_constants_lower_to_local_declarations() {
+    fn function_local_constants_lower_to_local_declarations(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // A `const` inside a function body is a local binding, not a
         // program-scope constant: it must lower to a `VarDecl` instead of
         // panicking with "constants are collected first".
@@ -695,5 +701,6 @@ mod tests {
                 function.name
             );
         }
+        Ok(())
     }
 }

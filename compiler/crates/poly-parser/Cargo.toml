@@ -8,3 +8,6 @@ description = "Parser for the Poly programming language"
 [dependencies]
 poly-lexer.workspace = true
 thiserror.workspace = true
+
+[lints]
+workspace = true

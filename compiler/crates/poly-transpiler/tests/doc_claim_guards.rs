@@ -173,12 +173,13 @@ const CASES: &[Case] = &[
 ];
 
 #[test]
-fn doc_pinned_claims_hold_on_every_target() {
+fn doc_pinned_claims_hold_on_every_target() -> Result<(), Box<dyn std::error::Error>> {
     common::run_matrix(CASES);
+    Ok(())
 }
 
 #[test]
-fn zero_step_rejection_names_the_limitation() {
+fn zero_step_rejection_names_the_limitation() -> Result<(), Box<dyn std::error::Error>> {
     // The literal-zero-step refusal must be a clear compile-time error on
     // every target, matching POLY_GRAMMAR.md / POLY_SPEC_v2.md wording.
     let transpiler = poly_transpiler::Transpiler::new();
@@ -193,10 +194,12 @@ fn zero_step_rejection_names_the_limitation() {
             "target `{target}`: zero-step error should mention \"zero\", got: {err}"
         );
     }
+    Ok(())
 }
 
 #[test]
-fn async_rejection_names_the_foreign_block_escape_hatch() {
+fn async_rejection_names_the_foreign_block_escape_hatch() -> Result<(), Box<dyn std::error::Error>>
+{
     // C, asm, and JS must refuse async functions with guidance pointing at
     // a foreign block (POLY_TUTORIAL.md Part 7); rust must accept them.
     let transpiler = poly_transpiler::Transpiler::new();
@@ -216,4 +219,5 @@ fn async_rejection_names_the_foreign_block_escape_hatch() {
             "target `{target}`: async rejection should mention async and {block}, got: {err}"
         );
     }
+    Ok(())
 }

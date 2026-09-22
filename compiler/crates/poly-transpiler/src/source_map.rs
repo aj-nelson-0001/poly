@@ -351,24 +351,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_source_map_creation() {
+    fn test_source_map_creation() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var x i32 := 42\nput x";
         let target = "// Generated from Poly source code\nfn main() {\n    let mut x: i32 = 42;\n    println!(\"{}\", x);\n}";
 
         let source_map = SourceMap::new(source, target);
         assert!(source_map.mappings.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_add_mapping() {
+    fn test_add_mapping() -> Result<(), Box<dyn std::error::Error>> {
         let mut source_map = SourceMap::new("line1\nline2", "rust1\nrust2\nrust3");
         source_map.add_mapping(2, 1);
 
         assert_eq!(source_map.lookup_target_line(2), Some(1));
+        Ok(())
     }
 
     #[test]
-    fn test_lookup_target_line() {
+    fn test_lookup_target_line() -> Result<(), Box<dyn std::error::Error>> {
         let mut source_map = SourceMap::new("source", "target");
         source_map.add_mapping(1, 2);
         source_map.add_mapping(3, 5);
@@ -376,30 +378,33 @@ mod tests {
         assert_eq!(source_map.lookup_target_line(1), Some(2));
         assert_eq!(source_map.lookup_target_line(3), Some(5));
         assert_eq!(source_map.lookup_target_line(2), Some(2)); // Falls back to closest
+        Ok(())
     }
 
     #[test]
-    fn test_format_error() {
+    fn test_format_error() -> Result<(), Box<dyn std::error::Error>> {
         let mut source_map = SourceMap::new("var x := 42", "let mut x = 42;");
         source_map.add_mapping(1, 1);
 
         let error_msg = source_map.format_error(1, "type mismatch");
         assert!(error_msg.contains("source line 1"));
         assert!(error_msg.contains("type mismatch"));
+        Ok(())
     }
 
     #[test]
-    fn test_symbol_lookup() {
+    fn test_symbol_lookup() -> Result<(), Box<dyn std::error::Error>> {
         let mut source_map = SourceMap::new("source", "target");
         source_map.add_symbol("main", 1, 0, 4);
 
         let location = source_map.lookup_symbol("main");
         assert!(location.is_some());
-        assert_eq!(location.unwrap().line, 1);
+        assert_eq!(location.ok_or("expected symbol")?.line, 1);
+        Ok(())
     }
 
     #[test]
-    fn test_vlq_encoding() {
+    fn test_vlq_encoding() -> Result<(), Box<dyn std::error::Error>> {
         let source_map = SourceMap::new("", "");
 
         // Test basic VLQ encoding
@@ -407,10 +412,11 @@ mod tests {
         assert_eq!(source_map.encode_vlq(1), "C");
         assert_eq!(source_map.encode_vlq(-1), "D");
         assert_eq!(source_map.encode_vlq(15), "e");
+        Ok(())
     }
 
     #[test]
-    fn test_json_generation() {
+    fn test_json_generation() -> Result<(), Box<dyn std::error::Error>> {
         let mut source_map = SourceMap::new("var x := 1", "let x = 1;");
         source_map.add_mapping(1, 1);
         source_map.add_symbol("x", 1, 4, 1);
@@ -418,10 +424,11 @@ mod tests {
         let json = source_map.to_json();
         assert!(json.contains("\"version\": 3"));
         assert!(json.contains("\"sources\": [\"input.poly\"]"));
+        Ok(())
     }
 
     #[test]
-    fn test_summary() {
+    fn test_summary() -> Result<(), Box<dyn std::error::Error>> {
         let mut source_map = SourceMap::new("line1\nline2", "rust1\nrust2");
         source_map.add_mapping(1, 1);
         source_map.add_mapping(2, 2);
@@ -429,24 +436,27 @@ mod tests {
         let summary = source_map.summary();
         assert!(summary.contains("Source Map Summary"));
         assert!(summary.contains("Mappings: 2"));
+        Ok(())
     }
 
     #[test]
-    fn test_get_source_line() {
+    fn test_get_source_line() -> Result<(), Box<dyn std::error::Error>> {
         let source = "first line\nsecond line\nthird line";
         let mut source_map = SourceMap::new(source, "rust code");
         source_map.add_mapping(1, 2);
 
         assert_eq!(source_map.get_source_line(1), Some("second line"));
+        Ok(())
     }
 
     #[test]
-    fn test_get_target_line() {
+    fn test_get_target_line() -> Result<(), Box<dyn std::error::Error>> {
         let mut source_map = SourceMap::new("source", "rust1\nrust2\nrust3");
         source_map.add_mapping(2, 1);
         source_map.add_mapping(3, 2);
 
         assert_eq!(source_map.get_target_line(1), Some(2));
         assert_eq!(source_map.get_target_line(2), Some(3));
+        Ok(())
     }
 }

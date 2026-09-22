@@ -912,7 +912,7 @@ impl AsmGenerator {
                         let layout = self
                             .structs
                             .get(struct_name)
-                            .expect("checked contains_key above");
+                            .ok_or_else(|| "checked contains_key above".to_string())?;
                         let total: u32 = layout.values().map(|f| f.size.div_ceil(8) * 8).sum();
                         frame.allocate_struct(name, total)
                     } else {
@@ -1268,17 +1268,18 @@ impl AsmGenerator {
                                 expr,
                             }) if matches!(expr.as_ref(), Expression::IntLiteral(_))
                         );
-                    let step_slot = if step.is_none() || step_is_literal {
-                        None
-                    } else {
-                        // A fresh temp (not a name-keyed slot): nested loops
-                        // stepping the same variable by different expressions
-                        // must not share one slot.
-                        let slot = frame.allocate_temp();
-                        let step_loc = self.emit_expr(step.as_ref().unwrap(), frame)?;
-                        self.move_to_loc(step_loc, slot, frame)?;
-                        Some(slot)
-                    };
+                    let step_slot =
+                        if let Some(step_expr) = step.as_ref().filter(|_| !step_is_literal) {
+                            // A fresh temp (not a name-keyed slot): nested loops
+                            // stepping the same variable by different expressions
+                            // must not share one slot.
+                            let slot = frame.allocate_temp();
+                            let step_loc = self.emit_expr(step_expr, frame)?;
+                            self.move_to_loc(step_loc, slot, frame)?;
+                            Some(slot)
+                        } else {
+                            None
+                        };
 
                     let check_label = self.fresh_label("for_check");
                     let body_label = self.fresh_label("for_body");
@@ -1825,9 +1826,12 @@ impl AsmGenerator {
                         let struct_name = self
                             .return_structs
                             .get(&func_name)
-                            .expect("checked above")
+                            .ok_or_else(|| "checked above".to_string())?
                             .clone();
-                        let layout = self.structs.get(&struct_name).expect("checked above");
+                        let layout = self
+                            .structs
+                            .get(&struct_name)
+                            .ok_or_else(|| "checked above".to_string())?;
                         layout.values().map(|f| f.size.div_ceil(8) * 8).sum::<u32>()
                     };
                     frame.allocate_struct(&ret_slot, total_size);
@@ -1859,7 +1863,7 @@ impl AsmGenerator {
                         let total: u32 = self
                             .structs
                             .get(struct_name)
-                            .expect("checked above")
+                            .ok_or_else(|| "checked above".to_string())?
                             .values()
                             .map(|f| f.size.div_ceil(8) * 8)
                             .sum();
@@ -3280,21 +3284,21 @@ mod tests {
     use poly_lexer::Lexer;
     use poly_parser::Parser;
 
-    fn transpile_source(source: &str) -> String {
+    fn transpile_source(source: &str) -> Result<String, String> {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().unwrap();
-        transpile(&program).unwrap()
+        let program = parser.parse().map_err(|e| e.to_string())?;
+        transpile(&program)
     }
 
     #[test]
-    fn descending_range_loop_subtracts_step_magnitude() {
+    fn descending_range_loop_subtracts_step_magnitude() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: a negative literal step lexes as UnaryOp::Neg over an
         // IntLiteral, which the step parser didn't match, so the induction
         // fell back to +1 while the comparison flipped to jge — an infinite
         // loop. The update must SUBTRACT the step magnitude.
-        let output = transpile_source("fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn");
+        let output = transpile_source("fn main()\nloop i 10..1 step -1\nput i\nend loop\nend fn")?;
         assert!(
             output.contains("subq $1, %rax"),
             "expected subq for descending step: {}",
@@ -3304,33 +3308,36 @@ mod tests {
             output.contains("jge for_body"),
             "descending check must be jge"
         );
+        Ok(())
     }
 
     #[test]
-    fn descending_range_loop_step_minus_two() {
-        let output = transpile_source("fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn");
+    fn descending_range_loop_step_minus_two() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("fn main()\nloop i 10..1 step -2\nput i\nend loop\nend fn")?;
         assert!(
             output.contains("subq $2, %rax"),
             "expected subq $2 for step -2: {output}"
         );
+        Ok(())
     }
 
     #[test]
-    fn ascending_range_loop_adds_step() {
-        let output = transpile_source("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn");
+    fn ascending_range_loop_adds_step() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn")?;
         assert!(output.contains("addq $2, %rax"));
         assert!(
             output.contains("jle for_body"),
             "ascending check must be jle"
         );
+        Ok(())
     }
 
     #[test]
-    fn out_of_range_immediates_use_movabs() {
+    fn out_of_range_immediates_use_movabs() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: `0 - 2147483648` emitted `movq $2147483648`, which GNU
         // as rejects (32-bit immediates are sign-extended only). Large
         // constants must take movabsq (register) or the push/pop path (mem).
-        let output = transpile_source("fn main()\nput 0 - 2147483648\nend fn");
+        let output = transpile_source("fn main()\nput 0 - 2147483648\nend fn")?;
         assert!(
             output.contains("movabsq $2147483648"),
             "expected movabsq for the large constant: {output}"
@@ -3339,17 +3346,18 @@ mod tests {
             output.contains("pushq %rax") && output.contains("popq"),
             "stack slot loads must use the push/pop scratch: {output}"
         );
+        Ok(())
     }
 
     #[test]
-    fn runtime_step_uses_sign_dispatch() {
+    fn runtime_step_uses_sign_dispatch() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: a non-literal step used to be ignored (the induction
         // fell back to +1 with the ascending check), so a runtime-negative
         // step silently looped forever or zero times. A runtime step must
         // store its value in a slot and dispatch the comparison on its sign.
         let output = transpile_source(
             "fn main()\nvar s i32 := -1\nloop i 10..1 step s\nput i\nend loop\nend fn",
-        );
+        )?;
         assert!(
             output.contains("addq %rcx, %rax"),
             "induction must add the stored step: {output}"
@@ -3362,40 +3370,45 @@ mod tests {
             output.contains("_up:") && output.contains("_down:"),
             "{output}"
         );
+        Ok(())
     }
 
     #[test]
-    fn literal_step_still_uses_static_fast_path() {
+    fn literal_step_still_uses_static_fast_path() -> Result<(), Box<dyn std::error::Error>> {
         // Literal steps must not grow a runtime dispatch: no sign test, and
         // the induction stays an immediate add/sub.
-        let output = transpile_source("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn");
+        let output = transpile_source("fn main()\nloop i 0..10 step 2\nput i\nend loop\nend fn")?;
         assert!(!output.contains("for_check_up"), "{output}");
         assert!(output.contains("addq $2, %rax"));
+        Ok(())
     }
 
     #[test]
-    fn emits_asm_header_and_exit() {
-        let output = transpile_source("put 42");
+    fn emits_asm_header_and_exit() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("put 42")?;
         assert!(output.contains(".globl _start"));
         assert!(output.contains("movq $60")); // sys_exit
         assert!(output.contains("callq _print_int"));
+        Ok(())
     }
 
     #[test]
-    fn emits_asm_foreign_block() {
-        let output = transpile_source("#asm\nmy_func:\n    retq\n#endasm\nvar x i32 := 1\nput x");
+    fn emits_asm_foreign_block() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("#asm\nmy_func:\n    retq\n#endasm\nvar x i32 := 1\nput x")?;
         assert!(output.contains("my_func:"));
+        Ok(())
     }
 
     #[test]
-    fn supports_integer_arithmetic() {
-        let output = transpile_source("var x i32 := 10 + 20\nput x");
+    fn supports_integer_arithmetic() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("var x i32 := 10 + 20\nput x")?;
         // Default-width ints add at 32 bits (wrapping semantics).
         assert!(output.contains("addl"), "{output}");
+        Ok(())
     }
 
     #[test]
-    fn value_position_string_concat_uses_arena() {
+    fn value_position_string_concat_uses_arena() -> Result<(), Box<dyn std::error::Error>> {
         // Regression: value-position concat used to silently store 0 in the
         // target slot, segfaulting later when the variable was printed as a
         // string pointer. It now materializes through the _str_arena bump
@@ -3403,7 +3416,7 @@ mod tests {
         // `put` uses the strlen writer.
         let output = transpile_source(
             "var s ustring := \"ab\"\nvar t ustring := s + \"cd\"\nvar u := t + s\nput t\nput u",
-        );
+        )?;
         assert!(output.contains("callq _poly_concat"), "{output}");
         assert!(output.contains("_str_arena"), "{output}");
         // Both puts must take the strlen-writer path (string-typed
@@ -3413,69 +3426,78 @@ mod tests {
             "expected strlen-based puts for t and u: {output}"
         );
         assert!(!output.contains("callq _print_int"), "{output}");
+        Ok(())
     }
 
     #[test]
-    fn string_len_calls_strlen_helper() {
-        let output = transpile_source("var s ustring := \"hello\"\nvar n := s.len()\nput n");
+    fn string_len_calls_strlen_helper() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("var s ustring := \"hello\"\nvar n := s.len()\nput n")?;
         assert!(output.contains("callq _strlen"), "{output}");
+        Ok(())
     }
 
     #[test]
-    fn supports_string_put() {
-        let output = transpile_source(r#"put "hello world""#);
+    fn supports_string_put() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source(r#"put "hello world""#)?;
         assert!(output.contains("sys_write") || output.contains("movq $1, %rax"));
         assert!(output.contains(".asciz"));
+        Ok(())
     }
 
     #[test]
-    fn supports_string_variable() {
+    fn supports_string_variable() -> Result<(), Box<dyn std::error::Error>> {
         let output = transpile_source(
             r#"var name string := "Poly"
 put name"#,
-        );
+        )?;
         // String variables hold pointers: put must use the strlen-based
         // sys_write path, never _print_int (which would print the address).
         assert!(output.contains("leaq str_"));
         assert!(!output.contains("callq _print_int"));
+        Ok(())
     }
 
     #[test]
-    fn supports_if_else() {
+    fn supports_if_else() -> Result<(), Box<dyn std::error::Error>> {
         let output =
-            transpile_source("var x i32 := 10\nif x > 5,\n    put 1\nelse\n    put 0\nend if");
+            transpile_source("var x i32 := 10\nif x > 5,\n    put 1\nelse\n    put 0\nend if")?;
         assert!(output.contains("jz"));
         assert!(output.contains("jmp"));
+        Ok(())
     }
 
     #[test]
-    fn supports_while_loop() {
-        let output = transpile_source("var i i32 := 0\nwhile i < 5\n    i := i + 1\nend while");
+    fn supports_while_loop() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("var i i32 := 0\nwhile i < 5\n    i := i + 1\nend while")?;
         assert!(output.contains("while"));
         assert!(output.contains("cmpq"));
+        Ok(())
     }
 
     #[test]
-    fn supports_loop_range() {
-        let output = transpile_source("loop i 0..10\n    put i\nend loop");
+    fn supports_loop_range() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("loop i 0..10\n    put i\nend loop")?;
         assert!(output.contains("for"));
         assert!(output.contains("addq"));
+        Ok(())
     }
 
     #[test]
-    fn supports_for_in_string_loop() {
-        let output = transpile_source("var s string := \"ab\"\nfor c in s\n    put c\nend for");
+    fn supports_for_in_string_loop() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("var s string := \"ab\"\nfor c in s\n    put c\nend for")?;
         // The cursor walks the NUL-terminated data one byte at a time.
         assert!(output.contains("forin_check"));
         assert!(output.contains("forin_body"));
         assert!(output.contains("movb (%rax), %al"));
         assert!(output.contains("testb %al, %al"));
         assert!(output.contains("incq"));
+        Ok(())
     }
 
     #[test]
-    fn supports_vector_literal_and_indexing() {
-        let output = transpile_source("var xs Vec<i32> := [10, 20, 30]\nvar a i32 := xs[1]\nput a");
+    fn supports_vector_literal_and_indexing() -> Result<(), Box<dyn std::error::Error>> {
+        let output =
+            transpile_source("var xs Vec<i32> := [10, 20, 30]\nvar a i32 := xs[1]\nput a")?;
         // Static descriptor data: element array plus {ptr, length} pair.
         assert!(output.contains("vec_"));
         assert!(output.contains("vecdesc_"));
@@ -3484,13 +3506,14 @@ put name"#,
         // Indexed load: ptr = desc.ptr, element = *(ptr + index * 8).
         assert!(output.contains("shlq $3, %rcx"));
         assert!(output.contains("movq (%rax), %rax"));
+        Ok(())
     }
 
     #[test]
-    fn supports_vector_push_pop_len() {
+    fn supports_vector_push_pop_len() -> Result<(), Box<dyn std::error::Error>> {
         let output = transpile_source(
             "var xs Vec<i32> := []\nxs.push(5)\nvar last i32 := xs.pop()\nput xs.len()",
-        );
+        )?;
         // Growable runtime: arena helpers are emitted and called.
         assert!(output.contains("_vec_arena"));
         assert!(output.contains("callq _vec_push"));
@@ -3502,96 +3525,111 @@ put name"#,
         assert!(output.contains(".quad 0"));
         // The arena cursor is initialized at run time (PIE-safe).
         assert!(output.contains("movq %rax, _vec_arena_cursor(%rip)"));
+        Ok(())
     }
 
     #[test]
-    fn growable_runtime_stashes_push_value_across_grow() {
-        let output = transpile_source("var xs Vec<i32> := [1]\nxs.push(5)\nput xs[1]");
+    fn growable_runtime_stashes_push_value_across_grow() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("var xs Vec<i32> := [1]\nxs.push(5)\nput xs[1]")?;
         // The element value must survive _vec_grow's `rep movsq` (which
         // clobbers rsi/rdi/rcx), so push stashes it in the callee-saved %r15.
         assert!(output.contains("movq %rsi, %r15"));
         assert!(output.contains("movq %r15, (%rcx,%rax,8)"));
+        Ok(())
     }
 
     #[test]
-    fn supports_for_in_over_vector() {
-        let output = transpile_source("var xs Vec<i32> := [1, 2]\nfor x in xs\n    put x\nend for");
+    fn supports_for_in_over_vector() -> Result<(), Box<dyn std::error::Error>> {
+        let output =
+            transpile_source("var xs Vec<i32> := [1, 2]\nfor x in xs\n    put x\nend for")?;
         // Vector for-in iterates by index against the descriptor length.
         assert!(output.contains("movq 8(%rax), %rax"));
         assert!(output.contains("shlq $3, %rcx"));
         assert!(output.contains("cmpq %rax, %rcx"));
+        Ok(())
     }
 
     #[test]
-    fn rejects_non_integer_vector_elements() {
-        let err = transpile_source_err("var xs Vec<i32> := [\"a\", \"b\"]\nput xs[0]");
+    fn rejects_non_integer_vector_elements() -> Result<(), Box<dyn std::error::Error>> {
+        let err = transpile_source_err("var xs Vec<i32> := [\"a\", \"b\"]\nput xs[0]")?;
         assert!(err.contains("only support integer"));
+        Ok(())
     }
 
     #[test]
-    fn for_in_rejects_non_variable_iterables() {
-        let err = transpile_source_err("for c in \"ab\"\n    put c\nend for");
+    fn for_in_rejects_non_variable_iterables() -> Result<(), Box<dyn std::error::Error>> {
+        let err = transpile_source_err("for c in \"ab\"\n    put c\nend for")?;
         assert!(err.contains("requires a variable"));
+        Ok(())
     }
 
     #[test]
-    fn supports_dereference() {
+    fn supports_dereference() -> Result<(), Box<dyn std::error::Error>> {
         // Pointers only arise from #asm helpers; the `*expr` prefix lowers to
         // a single qword load through the pointer.
-        let output = transpile_source("#asm\nget_ptr:\n    leaq val(%rip), %rax\n    retq\n#endasm\nvar p i32 := get_ptr()\nvar v i32 := *p\nput v");
+        let output = transpile_source("#asm\nget_ptr:\n    leaq val(%rip), %rax\n    retq\n#endasm\nvar p i32 := get_ptr()\nvar v i32 := *p\nput v")?;
         assert!(output.contains("movq (%rax), %rax"));
+        Ok(())
     }
 
     #[test]
-    fn supports_boolean_expressions() {
+    fn supports_boolean_expressions() -> Result<(), Box<dyn std::error::Error>> {
         let output = transpile_source(
             "var a bool := true\nvar b bool := false\nvar c bool := a != b\nput c",
-        );
+        )?;
         assert!(output.contains("setne"));
         assert!(output.contains("movzbq"));
+        Ok(())
     }
 
     #[test]
-    fn supports_string_concatenation_put() {
-        let output = transpile_source(r#"put "hello " + "world""#);
+    fn supports_string_concatenation_put() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source(r#"put "hello " + "world""#)?;
         // Should emit multiple sys_write calls for each piece
         assert!(output.contains("_newline"));
+        Ok(())
     }
 
     #[test]
-    fn supports_error_put() {
-        let output = transpile_source(r#"error "something failed""#);
+    fn supports_error_put() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source(r#"error "something failed""#)?;
         assert!(output.contains("[ERROR]"));
+        Ok(())
     }
 
     #[test]
-    fn rejects_unsupported_types() {
-        let err = transpile_source_err(r#"var x f64 := 3.14"#);
+    fn rejects_unsupported_types() -> Result<(), Box<dyn std::error::Error>> {
+        let err = transpile_source_err(r#"var x f64 := 3.14"#)?;
         assert!(err.contains("does not support type"));
+        Ok(())
     }
 
     #[test]
-    fn uses_syscalls_not_libc() {
-        let output = transpile_source("put 42");
+    fn uses_syscalls_not_libc() -> Result<(), Box<dyn std::error::Error>> {
+        let output = transpile_source("put 42")?;
         // Should use syscall, not printf
         assert!(output.contains("syscall"));
         assert!(!output.contains("callq printf"));
+        Ok(())
     }
 
     #[test]
-    fn function_emission() {
+    fn function_emission() -> Result<(), Box<dyn std::error::Error>> {
         let output =
-            transpile_source("fn double(v: i32): i32\n    return v * 2\nend fn\nput double(21)");
+            transpile_source("fn double(v: i32): i32\n    return v * 2\nend fn\nput double(21)")?;
         assert!(output.contains(".globl double"));
         assert!(output.contains("double:"));
         assert!(output.contains("retq"));
+        Ok(())
     }
 
-    fn transpile_source_err(source: &str) -> String {
+    fn transpile_source_err(source: &str) -> Result<String, String> {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        let program = parser.parse().unwrap();
-        transpile(&program).unwrap_err()
+        let program = parser.parse().map_err(|e| e.to_string())?;
+        transpile(&program)
+            .err()
+            .ok_or_else(|| "expected transpile to fail".to_string())
     }
 }

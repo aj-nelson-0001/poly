@@ -1,0 +1,4 @@
+# Unwraps are banned everywhere — including tests. Production code propagates
+# errors with `?`; tests return Result<(), Box<dyn Error>> and use `?`.
+allow-unwrap-in-tests = false
+allow-expect-in-tests = false

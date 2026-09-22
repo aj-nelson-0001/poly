@@ -815,7 +815,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simple_tokens() {
+    fn test_simple_tokens() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var x i32 := 42";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -826,18 +826,20 @@ mod tests {
         assert_eq!(tokens[3].kind, TokenKind::ColonEq);
         assert_eq!(tokens[4].kind, TokenKind::IntLiteral("42".to_string()));
         assert_eq!(tokens[5].kind, TokenKind::Eof);
+        Ok(())
     }
 
     #[test]
-    fn test_equality_and_initialization_tokens() {
+    fn test_equality_and_initialization_tokens() -> Result<(), Box<dyn std::error::Error>> {
         let (tokens, errors) = Lexer::lex("var x := 1\nif x = 1,");
         assert!(errors.is_empty());
         assert!(tokens.iter().any(|token| token.kind == TokenKind::ColonEq));
         assert!(tokens.iter().any(|token| token.kind == TokenKind::Eq));
+        Ok(())
     }
 
     #[test]
-    fn test_string_literal() {
+    fn test_string_literal() -> Result<(), Box<dyn std::error::Error>> {
         let source = r#"put "Hello, World!""#;
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -846,10 +848,11 @@ mod tests {
             tokens[1].kind,
             TokenKind::StringLiteral("Hello, World!".to_string())
         );
+        Ok(())
     }
 
     #[test]
-    fn test_unicode_string_prefix() {
+    fn test_unicode_string_prefix() -> Result<(), Box<dyn std::error::Error>> {
         let source = r#"put unicode "Hello, 世界! 🚀""#;
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -859,10 +862,11 @@ mod tests {
             tokens[2].kind,
             TokenKind::StringLiteral("Hello, 世界! 🚀".to_string())
         );
+        Ok(())
     }
 
     #[test]
-    fn test_unicode_character_literals() {
+    fn test_unicode_character_literals() -> Result<(), Box<dyn std::error::Error>> {
         let (tokens, errors) = Lexer::lex("unicode '世' unicode '\\n' unicode '\\\\'");
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Unicode);
@@ -880,24 +884,28 @@ mod tests {
             tokens[5].kind,
             TokenKind::UnicodeCharLiteral("\\".to_string())
         );
+        Ok(())
     }
 
     #[test]
-    fn test_invalid_unicode_character_literals() {
+    fn test_invalid_unicode_character_literals() -> Result<(), Box<dyn std::error::Error>> {
         let (_tokens, errors) = Lexer::lex("'ab'");
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].kind, LexerErrorKind::InvalidToken);
+        Ok(())
     }
 
     #[test]
-    fn test_invalid_unicode_character_escape_has_one_diagnostic() {
+    fn test_invalid_unicode_character_escape_has_one_diagnostic(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (_tokens, errors) = Lexer::lex("'\\q'");
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].kind, LexerErrorKind::InvalidEscape);
+        Ok(())
     }
 
     #[test]
-    fn test_operators() {
+    fn test_operators() -> Result<(), Box<dyn std::error::Error>> {
         let source = "+ - * / % == != < > <= >= && || ! & | ^ ~ << >>";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -923,10 +931,11 @@ mod tests {
         assert_eq!(tokens[17].kind, TokenKind::Tilde);
         assert_eq!(tokens[18].kind, TokenKind::LtLt);
         assert_eq!(tokens[19].kind, TokenKind::GtGt);
+        Ok(())
     }
 
     #[test]
-    fn test_operator_keywords() {
+    fn test_operator_keywords() -> Result<(), Box<dyn std::error::Error>> {
         // Logical, bitwise, and arithmetic operators have keyword spellings;
         // the parser maps them onto the same AST operator variants as the
         // retired symbol spellings did.
@@ -946,10 +955,11 @@ mod tests {
         assert_eq!(tokens[8].kind, TokenKind::Identifier("left".to_string()));
         assert_eq!(tokens[9].kind, TokenKind::Identifier("right".to_string()));
         assert_eq!(tokens[10].kind, TokenKind::Not);
+        Ok(())
     }
 
     #[test]
-    fn test_compound_operators_are_separate_tokens() {
+    fn test_compound_operators_are_separate_tokens() -> Result<(), Box<dyn std::error::Error>> {
         // Compound operators like += are no longer single tokens;
         // they lex as two separate tokens: + and =
         let source = "x + = 5";
@@ -959,10 +969,11 @@ mod tests {
         assert_eq!(tokens[1].kind, TokenKind::Plus);
         assert_eq!(tokens[2].kind, TokenKind::Eq);
         assert_eq!(tokens[3].kind, TokenKind::IntLiteral("5".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_range_operators() {
+    fn test_range_operators() -> Result<(), Box<dyn std::error::Error>> {
         let source = "0..10 0..=10";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -972,10 +983,11 @@ mod tests {
         assert_eq!(tokens[3].kind, TokenKind::IntLiteral("0".to_string()));
         assert_eq!(tokens[4].kind, TokenKind::DotDotEq);
         assert_eq!(tokens[5].kind, TokenKind::IntLiteral("10".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_function_declaration() {
+    fn test_function_declaration() -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn sum(a: i32, b: i32): i32";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -992,10 +1004,11 @@ mod tests {
         assert_eq!(tokens[10].kind, TokenKind::RParen);
         assert_eq!(tokens[11].kind, TokenKind::Colon);
         assert_eq!(tokens[12].kind, TokenKind::I32);
+        Ok(())
     }
 
     #[test]
-    fn test_control_flow() {
+    fn test_control_flow() -> Result<(), Box<dyn std::error::Error>> {
         let source = "if x > 0,\n    put x\nend if";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -1004,26 +1017,29 @@ mod tests {
         assert_eq!(tokens[2].kind, TokenKind::Gt);
         assert_eq!(tokens[3].kind, TokenKind::IntLiteral("0".to_string()));
         assert_eq!(tokens[4].kind, TokenKind::Comma);
+        Ok(())
     }
 
     #[test]
-    fn test_hex_number() {
+    fn test_hex_number() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var x i32 := 0xFF";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[4].kind, TokenKind::IntLiteral("0xFF".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_binary_number() {
+    fn test_binary_number() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var x i32 := 0b1010";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[4].kind, TokenKind::IntLiteral("0b1010".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_float_number() {
+    fn test_float_number() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var pi f64 := 3.14159";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -1031,10 +1047,11 @@ mod tests {
             tokens[4].kind,
             TokenKind::FloatLiteral("3.14159".to_string())
         );
+        Ok(())
     }
 
     #[test]
-    fn test_tuple_index_after_dot_is_integer_not_float() {
+    fn test_tuple_index_after_dot_is_integer_not_float() -> Result<(), Box<dyn std::error::Error>> {
         // `nested.1.0` must lex as `nested`, `.`, `1`, `.`, `0` — the dot after
         // a field-access dot must not be consumed as a float decimal point.
         let source = "put nested.1.0";
@@ -1046,19 +1063,21 @@ mod tests {
         assert_eq!(kinds[3], &TokenKind::IntLiteral("1".to_string()));
         assert_eq!(kinds[4], &TokenKind::Dot);
         assert_eq!(kinds[5], &TokenKind::IntLiteral("0".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_struct_declaration() {
+    fn test_struct_declaration() -> Result<(), Box<dyn std::error::Error>> {
         let source = "struct Point\n    var x: f32\n    var y: f32\nend struct";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Struct);
         assert_eq!(tokens[1].kind, TokenKind::Identifier("Point".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_enum_declaration() {
+    fn test_enum_declaration() -> Result<(), Box<dyn std::error::Error>> {
         let source = "enum Direction\n    North\n    South\n    East\n    West\nend enum";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -1067,19 +1086,21 @@ mod tests {
             tokens[1].kind,
             TokenKind::Identifier("Direction".to_string())
         );
+        Ok(())
     }
 
     #[test]
-    fn test_match_expression() {
+    fn test_match_expression() -> Result<(), Box<dyn std::error::Error>> {
         let source = "match x\n    0, put \"zero\"\n    _, put \"other\"\nend match";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Match);
         assert_eq!(tokens[1].kind, TokenKind::Identifier("x".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_closure() {
+    fn test_closure() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var square := |x: i32| x * x";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -1087,37 +1108,42 @@ mod tests {
         assert_eq!(tokens[1].kind, TokenKind::Identifier("square".to_string()));
         assert_eq!(tokens[2].kind, TokenKind::ColonEq);
         assert_eq!(tokens[3].kind, TokenKind::Pipe);
+        Ok(())
     }
 
     #[test]
-    fn test_arrow_and_fat_arrow() {
+    fn test_arrow_and_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
         let source = "-> =>";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Arrow);
         assert_eq!(tokens[1].kind, TokenKind::FatArrow);
+        Ok(())
     }
 
     #[test]
-    fn test_colon_colon() {
+    fn test_colon_colon() -> Result<(), Box<dyn std::error::Error>> {
         let source = "Shape::Circle";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Identifier("Shape".to_string()));
         assert_eq!(tokens[1].kind, TokenKind::ColonColon);
         assert_eq!(tokens[2].kind, TokenKind::Identifier("Circle".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_comments() {
+    fn test_comments() -> Result<(), Box<dyn std::error::Error>> {
         let source = "# This is a comment\nvar x := 1";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Var);
+        Ok(())
     }
 
     #[test]
-    fn test_foreign_blocks_are_line_delimited_and_language_tagged() {
+    fn test_foreign_blocks_are_line_delimited_and_language_tagged(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let source = "#rust\nconst VALUE: i32 = 1;\nlet text = \"#endrust\";\n#endrust\n#c\nint answer(void) { return 42; }\n#endc";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
@@ -1130,42 +1156,47 @@ mod tests {
             tokens.get(1).map(|token| &token.kind),
             Some(TokenKind::ForeignBlock { language, .. }) if language == "c"
         ));
+        Ok(())
     }
 
     #[test]
-    fn test_foreign_end_marker_must_start_a_line() {
+    fn test_foreign_end_marker_must_start_a_line() -> Result<(), Box<dyn std::error::Error>> {
         let source = "#rust\nlet x = \"#endrust\";\n#endrust\nput 1";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         assert_eq!(tokens.len(), 4);
+        Ok(())
     }
 
     #[test]
-    fn test_block_comment() {
+    fn test_block_comment() -> Result<(), Box<dyn std::error::Error>> {
         let source = "/* block comment */ var x := 1";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
         assert_eq!(tokens[0].kind, TokenKind::Var);
+        Ok(())
     }
 
     #[test]
-    fn test_error_unterminated_string() {
+    fn test_error_unterminated_string() -> Result<(), Box<dyn std::error::Error>> {
         let source = r#"var x = "hello"#;
         let (_tokens, errors) = Lexer::lex(source);
         assert!(!errors.is_empty());
         assert_eq!(errors[0].kind, LexerErrorKind::UnterminatedString);
+        Ok(())
     }
 
     #[test]
-    fn test_error_unexpected_character() {
+    fn test_error_unexpected_character() -> Result<(), Box<dyn std::error::Error>> {
         let source = "var x := @";
         let (_tokens, errors) = Lexer::lex(source);
         assert!(!errors.is_empty());
         assert_eq!(errors[0].kind, LexerErrorKind::UnexpectedCharacter);
+        Ok(())
     }
 
     #[test]
-    fn test_put_with_flags() {
+    fn test_put_with_flags() -> Result<(), Box<dyn std::error::Error>> {
         let source = r#"put -n "Loading...""#;
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -1176,10 +1207,11 @@ mod tests {
             tokens[3].kind,
             TokenKind::StringLiteral("Loading...".to_string())
         );
+        Ok(())
     }
 
     #[test]
-    fn test_get_with_flags() {
+    fn test_get_with_flags() -> Result<(), Box<dyn std::error::Error>> {
         let source = "get --timeout 3000";
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -1188,10 +1220,11 @@ mod tests {
         assert_eq!(tokens[2].kind, TokenKind::Minus);
         assert_eq!(tokens[3].kind, TokenKind::Timeout);
         assert_eq!(tokens[4].kind, TokenKind::IntLiteral("3000".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_file_io_operators() {
+    fn test_file_io_operators() -> Result<(), Box<dyn std::error::Error>> {
         let source = r#"put "hello" > "file.txt""#;
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty());
@@ -1205,5 +1238,6 @@ mod tests {
             tokens[3].kind,
             TokenKind::StringLiteral("file.txt".to_string())
         );
+        Ok(())
     }
 }

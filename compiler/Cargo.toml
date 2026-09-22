@@ -35,3 +35,7 @@ poly-asm-codegen = { path = "crates/poly-asm-codegen" }
 poly-js-codegen = { path = "crates/poly-js-codegen" }
 thiserror = "2"
 anyhow = "1"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

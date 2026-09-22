@@ -1129,8 +1129,8 @@ poly --project dir file.poly  # generate Cargo project
 | \|x\| x * 2 | \|x\| x * 2 |
 | try expr | expr? |
 | assert(cond) | assert!(cond, "assertion failed") |
-| put x to "f" | std::fs::write("f", ...).unwrap(); |
-| put x to "f" | writeln!(f, ...).unwrap(); |
+| put x to "f" | std::fs::write("f", ...).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); |
+| put x to "f" | writeln!(f, ...).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); |
 | get | reads stdin with read_line |
 | http_get(url).await | real HTTP/1.1 GET over tokio TCP |
 | db_execute(q).await | SQLite query via rusqlite |

@@ -79,8 +79,9 @@ fn transpile_source(source: &str, target: &str) -> Result<String, String> {
 fn check_snapshot(name: &str, output: &str) {
     let path = snapshot_path(name);
     if update_snapshots_requested() {
-        std::fs::create_dir_all(snapshot_dir()).expect("create snapshot dir");
-        std::fs::write(&path, output).expect("write snapshot");
+        std::fs::create_dir_all(snapshot_dir())
+            .unwrap_or_else(|e| panic!("create snapshot dir: {e}"));
+        std::fs::write(&path, output).unwrap_or_else(|e| panic!("write snapshot: {e}"));
         return;
     }
     let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| {
@@ -104,7 +105,7 @@ fn check_snapshot(name: &str, output: &str) {
 }
 
 #[test]
-fn snapshots_all_targets() {
+fn snapshots_all_targets() -> Result<(), Box<dyn std::error::Error>> {
     for (name, source) in SAMPLES {
         for target in ["rust", "c", "asm", "js"] {
             let snapshot_name = format!("{name}_{target}");
@@ -118,10 +119,11 @@ fn snapshots_all_targets() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn snapshots_target_fixtures() {
+fn snapshots_target_fixtures() -> Result<(), Box<dyn std::error::Error>> {
     for (name, target, fixture) in TARGET_FIXTURES {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(fixture);
         let source = std::fs::read_to_string(&path)
@@ -131,10 +133,11 @@ fn snapshots_target_fixtures() {
             Err(err) => check_snapshot(&format!("fixture_{name}"), &format!("ERROR:\n{err}")),
         }
     }
+    Ok(())
 }
 
 #[test]
-fn snapshots_rust_pipeline() {
+fn snapshots_rust_pipeline() -> Result<(), Box<dyn std::error::Error>> {
     // The rust target goes through the intermediate representation pipeline;
     // snapshot it separately since its output shape differs from c/asm.
     let transpiler = Transpiler::new();
@@ -144,4 +147,5 @@ fn snapshots_rust_pipeline() {
             .unwrap_or_else(|err| format!("ERROR:\n{err}"));
         check_snapshot(&format!("ir_{name}"), &output);
     }
+    Ok(())
 }

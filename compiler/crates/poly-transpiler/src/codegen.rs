@@ -126,7 +126,7 @@ impl Transpiler {
             poly_intermediate_representation::generator::generate(program);
         let mut codegen =
             poly_intermediate_representation::IntermediateRepresentationCodeGen::new();
-        Ok(codegen.generate(&intermediate_representation))
+        codegen.generate(&intermediate_representation)
     }
 
     fn select_target(mut program: Program, language: &str) -> Result<Program, String> {
@@ -197,7 +197,7 @@ impl Transpiler {
             poly_intermediate_representation::generator::generate(&program);
         let mut codegen =
             poly_intermediate_representation::IntermediateRepresentationCodeGen::new();
-        let rust_code = codegen.generate(&intermediate_representation);
+        let rust_code = codegen.generate(&intermediate_representation)?;
         let statement_locations = codegen.statement_locations().to_vec();
 
         let mut source_map = SourceMap::new(source, &rust_code);
@@ -272,103 +272,111 @@ mod tests {
     use super::*;
 
     #[test]
-    fn transpile_routes_through_shared_pipeline() {
+    fn transpile_routes_through_shared_pipeline() -> Result<(), Box<dyn std::error::Error>> {
         let t = Transpiler::new();
-        let rust = t
-            .transpile("fn main()\n    var x i32 := 42\nend fn")
-            .unwrap();
+        let rust = t.transpile("fn main()\n    var x i32 := 42\nend fn")?;
         assert!(rust.contains("let mut x: i32 = 42"));
+        Ok(())
     }
 
     #[test]
-    fn transpile_checked_rejects_type_errors() {
+    fn transpile_checked_rejects_type_errors() -> Result<(), Box<dyn std::error::Error>> {
         let t = Transpiler::new();
         let result = t.transpile_checked("var x i32 := \"hello\"");
         assert!(result.is_err(), "type mismatch should fail checking");
+        Ok(())
     }
 
     #[test]
-    fn source_map_maps_lines_best_effort() {
+    fn source_map_maps_lines_best_effort() -> Result<(), Box<dyn std::error::Error>> {
         let mut t = Transpiler::with_source_map();
-        let (rust, map) = t
-            .transpile_with_source_map("fn main()\n    put \"hi\"\nend fn")
-            .unwrap();
+        let (rust, map) = t.transpile_with_source_map("fn main()\n    put \"hi\"\nend fn")?;
         assert!(rust.contains("println!"));
         assert!(map.lookup_target_line(1).is_some());
+        Ok(())
     }
 
     #[test]
-    fn source_map_maps_statements_precisely() {
+    fn source_map_maps_statements_precisely() -> Result<(), Box<dyn std::error::Error>> {
         // The generated Rust adds header lines, so a line-identity mapping
         // would point the `var x` statement at its own Rust line instead of
         // Poly line 2.  The span-precise map must resolve the real origin.
         let mut t = Transpiler::with_source_map();
         let source = "fn main()\n    var x i32 := 1\n    put x\nend fn\n";
-        let (rust, map) = t.transpile_with_source_map(source).unwrap();
+        let (rust, map) = t.transpile_with_source_map(source)?;
         let target_line = rust
             .lines()
             .enumerate()
             .find(|(_, line)| line.contains("let mut x: i32 = 1;"))
             .map(|(index, _)| index + 1)
-            .expect("generated Rust should declare x");
+            .ok_or("generated Rust should declare x")?;
         assert_eq!(map.lookup_target_line(target_line), Some(2));
         let put_line = rust
             .lines()
             .enumerate()
             .find(|(_, line)| line.contains("println!") && line.contains(", x)"))
             .map(|(index, _)| index + 1)
-            .expect("generated Rust should print x");
+            .ok_or("generated Rust should print x")?;
         assert_eq!(map.lookup_target_line(put_line), Some(3));
+        Ok(())
     }
 
     #[test]
-    fn source_map_maps_top_level_statements_precisely() {
+    fn source_map_maps_top_level_statements_precisely() -> Result<(), Box<dyn std::error::Error>> {
         // Top-level statements go through `main_body`; their offsets come
         // from the parallel location array rather than function bodies.
         let mut t = Transpiler::with_source_map();
         let source = "var a i32 := 1\nvar b i32 := 2\nput a + b\n";
-        let (rust, map) = t.transpile_with_source_map(source).unwrap();
+        let (rust, map) = t.transpile_with_source_map(source)?;
         let a_line = rust
             .lines()
             .enumerate()
             .find(|(_, line)| line.contains("let mut a: i32 = 1;"))
             .map(|(index, _)| index + 1)
-            .expect("generated Rust should declare a");
+            .ok_or("generated Rust should declare a")?;
         assert_eq!(map.lookup_target_line(a_line), Some(1));
         let b_line = rust
             .lines()
             .enumerate()
             .find(|(_, line)| line.contains("let mut b: i32 = 2;"))
             .map(|(index, _)| index + 1)
-            .expect("generated Rust should declare b");
+            .ok_or("generated Rust should declare b")?;
         assert_eq!(map.lookup_target_line(b_line), Some(2));
+        Ok(())
     }
 
     #[test]
-    fn target_dispatch_rejects_unknown_backends() {
-        let error = Transpiler::new()
-            .transpile_target("put 1", "cpp")
-            .unwrap_err();
+    fn target_dispatch_rejects_unknown_backends() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(error) = Transpiler::new().transpile_target("put 1", "cpp") else {
+            panic!("expected an Err result")
+        };
         assert!(error.contains("Supported targets: rust, c, asm"));
+        Ok(())
     }
 
     #[test]
-    fn cpp_is_explicitly_rejected_until_a_backend_exists() {
+    fn cpp_is_explicitly_rejected_until_a_backend_exists() -> Result<(), Box<dyn std::error::Error>>
+    {
         let source = "#cpp\nint value() { return 1; }\n#endcpp\nput value()";
-        let error = Transpiler::new().transpile_target(source, "c").unwrap_err();
+        let Err(error) = Transpiler::new().transpile_target(source, "c") else {
+            panic!("expected an Err result")
+        };
         assert!(error.contains("#cpp blocks are reserved"));
+        Ok(())
     }
 
     #[test]
-    fn target_selection_keeps_only_matching_foreign_blocks() {
+    fn target_selection_keeps_only_matching_foreign_blocks(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let source = "extern rust fn rust_value(): i32\nextern c fn c_value(): i32\n#rust\nfn rust_value() -> i32 { 1 }\n#endrust\n#c\nint c_value(void) { return 2; }\n#endc\nfn main()\n    var result i32 := rust_value()\n    put result\nend fn";
-        let rust = Transpiler::new().transpile_target(source, "rust").unwrap();
+        let rust = Transpiler::new().transpile_target(source, "rust")?;
         assert!(rust.contains("rust_value"));
         assert!(!rust.contains("c_value"));
 
         let c_source = source.replace("rust_value()", "c_value()");
-        let c = Transpiler::new().transpile_target(&c_source, "c").unwrap();
+        let c = Transpiler::new().transpile_target(&c_source, "c")?;
         assert!(c.contains("c_value"));
         assert!(!c.contains("rust_value"));
+        Ok(())
     }
 }

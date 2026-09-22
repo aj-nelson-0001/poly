@@ -817,7 +817,7 @@ mod tests {
     }
 
     #[test]
-    fn initialize_responds_with_capabilities() {
+    fn initialize_responds_with_capabilities() -> Result<(), Box<dyn std::error::Error>> {
         let mut server = Server::new();
         let result = server.dispatch(&initialize_message());
         assert!(!result.should_exit);
@@ -826,10 +826,11 @@ mod tests {
         assert_eq!(response.get_f64("id"), Some(1.0));
         let capabilities = response.get("result").and_then(|r| r.get("capabilities"));
         assert!(capabilities.is_some());
+        Ok(())
     }
 
     #[test]
-    fn diagnostics_are_published_on_open() {
+    fn diagnostics_are_published_on_open() -> Result<(), Box<dyn std::error::Error>> {
         let mut server = Server::new();
         server.dispatch(&initialize_message());
         let result = server.dispatch(&did_open_message(
@@ -849,11 +850,12 @@ mod tests {
                 Json::Array(items) => Some(items),
                 _ => None,
             });
-        assert!(!diagnostics.unwrap().is_empty());
+        assert!(!diagnostics.ok_or("expected diagnostics")?.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn valid_document_publishes_no_diagnostics() {
+    fn valid_document_publishes_no_diagnostics() -> Result<(), Box<dyn std::error::Error>> {
         let mut server = Server::new();
         server.dispatch(&initialize_message());
         let result = server.dispatch(&did_open_message(
@@ -867,11 +869,12 @@ mod tests {
                 Json::Array(items) => Some(items),
                 _ => None,
             });
-        assert!(diagnostics.unwrap().is_empty());
+        assert!(diagnostics.ok_or("expected diagnostics")?.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn completion_lists_keywords_and_symbols() {
+    fn completion_lists_keywords_and_symbols() -> Result<(), Box<dyn std::error::Error>> {
         let mut server = Server::new();
         server.dispatch(&initialize_message());
         server.dispatch(&did_open_message(
@@ -907,15 +910,16 @@ mod tests {
                 Json::Array(items) => Some(items),
                 _ => None,
             })
-            .unwrap();
+            .ok_or("expected result")?;
         assert!(items.len() >= COMPLETION_KEYWORDS.len());
         assert!(items
             .iter()
             .any(|item| item.get_str("label") == Some("helper")));
+        Ok(())
     }
 
     #[test]
-    fn hover_reports_function_detail() {
+    fn hover_reports_function_detail() -> Result<(), Box<dyn std::error::Error>> {
         let mut server = Server::new();
         server.dispatch(&initialize_message());
         server.dispatch(&did_open_message(
@@ -948,11 +952,12 @@ mod tests {
             .get("result")
             .and_then(|r| r.get("contents"))
             .and_then(|c| c.get_str("value"));
-        assert!(contents.unwrap().contains("fn greet"));
+        assert!(contents.ok_or("expected contents")?.contains("fn greet"));
+        Ok(())
     }
 
     #[test]
-    fn document_symbols_find_declarations() {
+    fn document_symbols_find_declarations() -> Result<(), Box<dyn std::error::Error>> {
         let mut server = Server::new();
         server.dispatch(&initialize_message());
         server.dispatch(&did_open_message(
@@ -978,14 +983,15 @@ mod tests {
                 Json::Array(items) => Some(items),
                 _ => None,
             })
-            .unwrap();
+            .ok_or("expected result")?;
         assert_eq!(symbols.len(), 2);
         assert_eq!(symbols[0].get_str("name"), Some("Point"));
         assert_eq!(symbols[1].get_str("name"), Some("main"));
+        Ok(())
     }
 
     #[test]
-    fn shutdown_then_exit_terminates() {
+    fn shutdown_then_exit_terminates() -> Result<(), Box<dyn std::error::Error>> {
         let mut server = Server::new();
         server.dispatch(&initialize_message());
         let shutdown = Json::obj(vec![
@@ -1002,10 +1008,11 @@ mod tests {
             ("params", Json::empty_object()),
         ]);
         assert!(server.dispatch(&exit).should_exit);
+        Ok(())
     }
 
     #[test]
-    fn word_at_finds_identifier_bounds() {
+    fn word_at_finds_identifier_bounds() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
             word_at("fn helper()", 4),
             Some(("helper".to_string(), 3, 9))
@@ -1015,10 +1022,11 @@ mod tests {
         assert_eq!(word_at("put 42", 0), Some(("put".to_string(), 0, 3)));
         assert_eq!(word_at("put 42", 3), None);
         assert_eq!(word_at("  put 42", 2), Some(("put".to_string(), 2, 5)));
+        Ok(())
     }
 
     #[test]
-    fn document_symbols_report_utf16_ranges() {
+    fn document_symbols_report_utf16_ranges() -> Result<(), Box<dyn std::error::Error>> {
         // é is one UTF-16 unit but two bytes; a byte-based end column would
         // overshoot by one for every such character in the declaration.
         let symbols = document_symbols("struct café\n");
@@ -1028,10 +1036,11 @@ mod tests {
             symbols[0].end_character,
             "struct café".encode_utf16().count()
         );
+        Ok(())
     }
 
     #[test]
-    fn word_at_counts_utf16_units_not_chars() {
+    fn word_at_counts_utf16_units_not_chars() -> Result<(), Box<dyn std::error::Error>> {
         // "caf😀 helper" — 😀 (U+1F600) is one char but two UTF-16 units, so
         // the cursor for the `h` of `helper` sits at character 6, not 5.
         assert_eq!(
@@ -1043,10 +1052,11 @@ mod tests {
         // A character index that is not a UTF-16 boundary still lands on the
         // correct word (cursor inside the second unit of an astral letter).
         assert_eq!(word_at("a𐐀bc xyz", 2), Some(("a𐐀bc".to_string(), 0, 4)));
+        Ok(())
     }
 
     #[test]
-    fn json_rpc_response_round_trips() {
+    fn json_rpc_response_round_trips() -> Result<(), Box<dyn std::error::Error>> {
         let message = Json::obj(vec![
             ("jsonrpc", Json::str("2.0")),
             ("id", Json::num(7)),
@@ -1055,8 +1065,9 @@ mod tests {
         ]);
         let response = json_response(&message, Json::Null);
         let text = response.serialize();
-        let parsed = crate::json::parse(&text).unwrap();
+        let parsed = crate::json::parse(&text)?;
         assert_eq!(parsed.get_f64("id"), Some(7.0));
         assert_eq!(parsed.get("result"), Some(&Json::Null));
+        Ok(())
     }
 }

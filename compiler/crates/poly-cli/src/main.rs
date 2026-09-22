@@ -634,7 +634,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Repl => {
-            repl::run();
+            repl::run()?;
             Ok(())
         }
         Command::DefaultBuild => {
@@ -1839,33 +1839,34 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    fn test_directory() -> PathBuf {
+    fn test_directory() -> Result<PathBuf, String> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .map_err(|e| e.to_string())?
             .as_nanos();
-        std::env::temp_dir().join(format!("poly-cli-test-{}-{}", process::id(), timestamp))
+        Ok(std::env::temp_dir().join(format!("poly-cli-test-{}-{}", process::id(), timestamp)))
     }
 
     #[test]
-    fn target_parsing_supports_rust_and_c() {
-        assert_eq!(Target::from_str("rust").unwrap(), Target::Rust);
-        assert_eq!(Target::from_str("c").unwrap(), Target::C);
+    fn target_parsing_supports_rust_and_c() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(Target::from_str("rust")?, Target::Rust);
+        assert_eq!(Target::from_str("c")?, Target::C);
         assert!(Target::from_str("cpp").is_err());
         assert_eq!(Target::C.extension(), "c");
+        Ok(())
     }
 
     #[test]
-    fn parse_args_accepts_flags_in_any_position() {
+    fn parse_args_accepts_flags_in_any_position() -> Result<(), Box<dyn std::error::Error>> {
         let raw =
             |items: &[&str]| -> Vec<String> { items.iter().map(|item| item.to_string()).collect() };
 
-        let parsed = parse_args(&raw(&["poly", "file.poly", "--emit-rust"])).unwrap();
+        let parsed = parse_args(&raw(&["poly", "file.poly", "--emit-rust"]))?;
         assert_eq!(parsed.command, Command::Emit);
         assert_eq!(parsed.target, Target::Rust);
         assert_eq!(parsed.positionals, vec!["file.poly".to_string()]);
 
-        let parsed = parse_args(&raw(&["poly", "--emit-rust", "file.poly"])).unwrap();
+        let parsed = parse_args(&raw(&["poly", "--emit-rust", "file.poly"]))?;
         assert_eq!(parsed.command, Command::Emit);
 
         let parsed = parse_args(&raw(&[
@@ -1875,41 +1876,43 @@ mod tests {
             "file.poly",
             "--check",
             "--strict",
-        ]))
-        .unwrap();
+        ]))?;
         assert_eq!(parsed.command, Command::Check);
         assert_eq!(parsed.target, Target::Js);
         assert!(parsed.strict);
 
-        let parsed = parse_args(&raw(&["poly", "out", "--project", "file.poly"])).unwrap();
+        let parsed = parse_args(&raw(&["poly", "out", "--project", "file.poly"]))?;
         assert_eq!(parsed.command, Command::Project);
         assert_eq!(
             parsed.positionals,
             vec!["out".to_string(), "file.poly".to_string()]
         );
+        Ok(())
     }
 
     #[test]
-    fn parse_args_defaults_to_build_for_poly_file() {
+    fn parse_args_defaults_to_build_for_poly_file() -> Result<(), Box<dyn std::error::Error>> {
         let raw = vec!["poly".to_string(), "file.poly".to_string()];
-        let parsed = parse_args(&raw).unwrap();
+        let parsed = parse_args(&raw)?;
         assert_eq!(parsed.command, Command::DefaultBuild);
+        Ok(())
     }
 
     #[test]
-    fn parse_args_emit_flag_pins_target() {
+    fn parse_args_emit_flag_pins_target() -> Result<(), Box<dyn std::error::Error>> {
         let raw = vec![
             "poly".to_string(),
             "--emit-js".to_string(),
             "file.poly".to_string(),
         ];
-        let parsed = parse_args(&raw).unwrap();
+        let parsed = parse_args(&raw)?;
         assert_eq!(parsed.command, Command::Emit);
         assert_eq!(parsed.target, Target::Js);
+        Ok(())
     }
 
     #[test]
-    fn parse_args_rejects_conflicting_target_and_emit() {
+    fn parse_args_rejects_conflicting_target_and_emit() -> Result<(), Box<dyn std::error::Error>> {
         let raw = vec![
             "poly".to_string(),
             "--target".to_string(),
@@ -1918,20 +1921,24 @@ mod tests {
             "file.poly".to_string(),
         ];
         assert!(parse_args(&raw).is_err());
+        Ok(())
     }
 
     #[test]
-    fn parse_args_rejects_unknown_flags_in_any_position() {
+    fn parse_args_rejects_unknown_flags_in_any_position() -> Result<(), Box<dyn std::error::Error>>
+    {
         let raw = vec![
             "poly".to_string(),
             "file.poly".to_string(),
             "--frobnicate".to_string(),
         ];
         assert!(parse_args(&raw).is_err());
+        Ok(())
     }
 
     #[test]
-    fn cargo_manifest_adds_tokio_only_for_async_programs() {
+    fn cargo_manifest_adds_tokio_only_for_async_programs() -> Result<(), Box<dyn std::error::Error>>
+    {
         let synchronous = cargo_manifest("demo", false, false, &[]);
         assert!(synchronous.contains("name = \"demo\""));
         assert!(!synchronous.contains("tokio"));
@@ -1945,10 +1952,11 @@ mod tests {
 
         let with_db = cargo_manifest("demo", false, true, &[]);
         assert!(with_db.contains("rusqlite = { version = \"0.31\""));
+        Ok(())
     }
 
     #[test]
-    fn cargo_manifest_includes_declared_dependencies() {
+    fn cargo_manifest_includes_declared_dependencies() -> Result<(), Box<dyn std::error::Error>> {
         let manifest = cargo_manifest(
             "demo",
             false,
@@ -1960,10 +1968,11 @@ mod tests {
         );
         assert!(manifest.contains("minifb = \"0.27\""));
         assert!(manifest.contains("alsa = \"0.9\""));
+        Ok(())
     }
 
     #[test]
-    fn cargo_package_name_is_safe_for_cargo() {
+    fn cargo_package_name_is_safe_for_cargo() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
             cargo_package_name(Path::new("my demo"), Path::new("source.poly")),
             "my-demo"
@@ -1976,10 +1985,11 @@ mod tests {
             cargo_package_name(Path::new("---"), Path::new("source.poly")),
             "poly-project"
         );
+        Ok(())
     }
 
     #[test]
-    fn default_output_dir_is_per_program() {
+    fn default_output_dir_is_per_program() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
             default_cargo_output_dir(Path::new("examples/prime_numbers.poly")),
             PathBuf::from("rust_output/prime_numbers")
@@ -1988,149 +1998,166 @@ mod tests {
             default_cargo_output_dir(Path::new("examples/my program.poly")),
             PathBuf::from("rust_output/my-program")
         );
+        Ok(())
     }
 
     #[test]
-    fn project_generation_writes_manifest_and_main_rs() {
-        let root = test_directory();
+    fn project_generation_writes_manifest_and_main_rs() -> Result<(), Box<dyn std::error::Error>> {
+        let root = test_directory()?;
         let source_path = root.join("hello.poly");
         let output_dir = root.join("generated");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(&source_path, "fn main()\n    put \"Hello\"\nend fn").unwrap();
+        std::fs::create_dir_all(&root)?;
+        std::fs::write(&source_path, "fn main()\n    put \"Hello\"\nend fn")?;
 
-        generate_cargo_project(&source_path, &output_dir).unwrap();
+        generate_cargo_project(&source_path, &output_dir)?;
 
-        let manifest = std::fs::read_to_string(output_dir.join("Cargo.toml")).unwrap();
-        let rust_code = std::fs::read_to_string(output_dir.join("src/main.rs")).unwrap();
+        let manifest = std::fs::read_to_string(output_dir.join("Cargo.toml"))?;
+        let rust_code = std::fs::read_to_string(output_dir.join("src/main.rs"))?;
         assert!(manifest.contains("[package]"));
         assert!(manifest.contains("name = \"generated\""));
         assert!(rust_code.contains("println!"));
 
-        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
-    fn relative_path_strips_shared_prefix() {
-        let root = test_directory();
-        std::fs::create_dir_all(root.join("a/b")).unwrap();
-        std::fs::create_dir_all(root.join("a/c")).unwrap();
-        std::fs::write(root.join("a/b/source.poly"), "x").unwrap();
+    fn relative_path_strips_shared_prefix() -> Result<(), Box<dyn std::error::Error>> {
+        let root = test_directory()?;
+        std::fs::create_dir_all(root.join("a/b"))?;
+        std::fs::create_dir_all(root.join("a/c"))?;
+        std::fs::write(root.join("a/b/source.poly"), "x")?;
 
         let base = root.join("a/c/generated");
-        std::fs::create_dir_all(&base).unwrap();
-        let relative = relative_path(&base, &root.join("a/b/source.poly")).unwrap();
+        std::fs::create_dir_all(&base)?;
+        let relative =
+            relative_path(&base, &root.join("a/b/source.poly")).ok_or("expected relative path")?;
         assert_eq!(relative, PathBuf::from("../../b/source.poly"));
 
-        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
-    fn relative_path_returns_none_for_disjoint_prefixes() {
+    fn relative_path_returns_none_for_disjoint_prefixes() -> Result<(), Box<dyn std::error::Error>>
+    {
         // Windows drive prefixes cannot be relativized; simulate with a
         // base whose canonical form cannot share a prefix by using a
         // nonexistent path (canonicalize fails).
         let missing = Path::new("/definitely/not/a/real/path/poly-base");
         assert_eq!(relative_path(missing, Path::new("/tmp")), None);
+        Ok(())
     }
 
     #[test]
-    fn marker_source_round_trips_through_relative_form() {
-        let root = test_directory();
+    fn marker_source_round_trips_through_relative_form() -> Result<(), Box<dyn std::error::Error>> {
+        let root = test_directory()?;
         let output_dir = root.join("project");
         let source = root.join("src/game.poly");
-        std::fs::create_dir_all(&output_dir).unwrap();
-        std::fs::create_dir_all(source.parent().unwrap()).unwrap();
-        std::fs::write(&source, "x").unwrap();
+        std::fs::create_dir_all(&output_dir)?;
+        std::fs::create_dir_all(source.parent().ok_or("source has no parent")?)?;
+        std::fs::write(&source, "x")?;
 
-        let absolute = source.canonicalize().unwrap();
-        let recorded = relative_path(&output_dir, &absolute).unwrap();
+        let absolute = source.canonicalize()?;
+        let recorded = relative_path(&output_dir, &absolute).ok_or("expected relative path")?;
         let marker = format!("source={}\n", recorded.display());
         assert_eq!(
-            resolve_marker_source(&output_dir, &marker).unwrap(),
+            resolve_marker_source(&output_dir, &marker).ok_or("expected marker source")?,
             absolute
         );
 
         // Absolute records from older compiler versions still resolve.
         let legacy_marker = format!("source={}\n", absolute.display());
         assert_eq!(
-            resolve_marker_source(&output_dir, &legacy_marker).unwrap(),
+            resolve_marker_source(&output_dir, &legacy_marker).ok_or("expected marker source")?,
             absolute
         );
 
-        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
-    fn generated_marker_records_source_relative_to_project() {
-        let root = test_directory();
+    fn generated_marker_records_source_relative_to_project(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let root = test_directory()?;
         let source_path = root.join("hello.poly");
         let output_dir = root.join("generated");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(&source_path, "fn main()\n    put \"Hello\"\nend fn").unwrap();
+        std::fs::create_dir_all(&root)?;
+        std::fs::write(&source_path, "fn main()\n    put \"Hello\"\nend fn")?;
 
-        generate_cargo_project(&source_path, &output_dir).unwrap();
+        generate_cargo_project(&source_path, &output_dir)?;
 
-        let marker = std::fs::read_to_string(output_dir.join(".poly-generated")).unwrap();
-        let recorded = marker.strip_prefix("source=").unwrap().trim_end();
+        let marker = std::fs::read_to_string(output_dir.join(".poly-generated"))?;
+        let recorded = marker
+            .strip_prefix("source=")
+            .ok_or("missing source= prefix")?
+            .trim_end();
         assert!(
-            !recorded.contains(&root.canonicalize().unwrap().display().to_string()),
+            !recorded.contains(&root.canonicalize()?.display().to_string()),
             "marker must not embed the machine-absolute source path: {recorded}"
         );
         assert_eq!(
-            resolve_marker_source(&output_dir, &marker).unwrap(),
-            source_path.canonicalize().unwrap()
+            resolve_marker_source(&output_dir, &marker).ok_or("expected marker source")?,
+            source_path.canonicalize()?
         );
 
-        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
-    fn project_generation_rejects_non_poly_sources() {
-        let root = test_directory();
-        std::fs::create_dir_all(&root).unwrap();
+    fn project_generation_rejects_non_poly_sources() -> Result<(), Box<dyn std::error::Error>> {
+        let root = test_directory()?;
+        std::fs::create_dir_all(&root)?;
         let source_path = root.join("hello.txt");
 
-        std::fs::write(&source_path, "fn main()\n    put \"Hello\"\nend fn").unwrap();
+        std::fs::write(&source_path, "fn main()\n    put \"Hello\"\nend fn")?;
         assert!(generate_cargo_project(&source_path, &root.join("generated")).is_err());
 
-        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
-    fn executable_path_replaces_poly_extension() {
+    fn executable_path_replaces_poly_extension() -> Result<(), Box<dyn std::error::Error>> {
         let expected = if cfg!(windows) {
             PathBuf::from("examples/hello.exe")
         } else {
             PathBuf::from("examples/hello")
         };
         assert_eq!(executable_path(Path::new("examples/hello.poly")), expected);
+        Ok(())
     }
 
     #[test]
-    fn compile_rust_binary_writes_executable() {
-        let root = test_directory();
-        std::fs::create_dir_all(&root).unwrap();
+    fn compile_rust_binary_writes_executable() -> Result<(), Box<dyn std::error::Error>> {
+        let root = test_directory()?;
+        std::fs::create_dir_all(&root)?;
         let output_path = root.join("hello");
 
-        compile_rust_binary("fn main() { println!(\"hello\"); }", &output_path).unwrap();
+        compile_rust_binary("fn main() { println!(\"hello\"); }", &output_path)?;
         assert!(output_path.is_file());
 
-        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
-    fn failed_compilation_preserves_existing_executable() {
-        let root = test_directory();
-        std::fs::create_dir_all(&root).unwrap();
+    fn failed_compilation_preserves_existing_executable() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let root = test_directory()?;
+        std::fs::create_dir_all(&root)?;
         let output_path = root.join("hello");
-        std::fs::write(&output_path, "existing binary placeholder").unwrap();
+        std::fs::write(&output_path, "existing binary placeholder")?;
 
         assert!(compile_rust_binary("fn main( {", &output_path).is_err());
         assert_eq!(
-            std::fs::read_to_string(&output_path).unwrap(),
+            std::fs::read_to_string(&output_path)?,
             "existing binary placeholder"
         );
 
-        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(root)?;
+        Ok(())
     }
 }

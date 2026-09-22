@@ -356,61 +356,66 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_type_system_creation() {
+    fn test_type_system_creation() -> Result<(), Box<dyn std::error::Error>> {
         let ts = TypeSystem::new();
         assert!(ts.env.is_empty());
         assert!(ts.errors.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_type_unification() {
+    fn test_type_unification() -> Result<(), Box<dyn std::error::Error>> {
         let mut ts = TypeSystem::new();
 
         // Same types
         let result = ts.unify(&PolyType::I32, &PolyType::I32);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), PolyType::I32);
+        assert_eq!(result?, PolyType::I32);
 
         // Different types should fail
         let result = ts.unify(&PolyType::I32, &PolyType::Bool);
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_type_var_unification() {
+    fn test_type_var_unification() -> Result<(), Box<dyn std::error::Error>> {
         let mut ts = TypeSystem::new();
         let var = ts.fresh_type_var();
 
         // Unify type var with concrete type
         let result = ts.unify(&var, &PolyType::I32);
         assert!(result.is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_binary_op_inference() {
+    fn test_binary_op_inference() -> Result<(), Box<dyn std::error::Error>> {
         let mut ts = TypeSystem::new();
 
         // Addition of same types
         let result = ts.infer_binary_op("+", &PolyType::I32, &PolyType::I32);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), PolyType::I32);
+        assert_eq!(result?, PolyType::I32);
 
         // Comparison returns bool
         let result = ts.infer_binary_op("==", &PolyType::I32, &PolyType::I32);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), PolyType::Bool);
+        assert_eq!(result?, PolyType::Bool);
+        Ok(())
     }
 
     #[test]
-    fn test_is_numeric() {
+    fn test_is_numeric() -> Result<(), Box<dyn std::error::Error>> {
         assert!(TypeSystem::is_numeric(&PolyType::I32));
         assert!(TypeSystem::is_numeric(&PolyType::F64));
         assert!(!TypeSystem::is_numeric(&PolyType::Bool));
         assert!(!TypeSystem::is_numeric(&PolyType::String));
+        Ok(())
     }
 
     #[test]
-    fn test_coercion() {
+    fn test_coercion() -> Result<(), Box<dyn std::error::Error>> {
         let ts = TypeSystem::new();
 
         // Same type is coercible
@@ -422,10 +427,11 @@ mod tests {
 
         // Not coercible
         assert!(!ts.is_coercible(&PolyType::I32, &PolyType::Bool));
+        Ok(())
     }
 
     #[test]
-    fn test_type_display() {
+    fn test_type_display() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(PolyType::I32.to_string(), "i32");
         assert_eq!(PolyType::Bool.to_string(), "bool");
         assert_eq!(
@@ -440,10 +446,11 @@ mod tests {
             PolyType::Result(Box::new(PolyType::I32), Box::new(PolyType::String)).to_string(),
             "Result<i32, String>"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_tuple_unification() {
+    fn test_tuple_unification() -> Result<(), Box<dyn std::error::Error>> {
         let mut ts = TypeSystem::new();
 
         let a = PolyType::Tuple(vec![PolyType::I32, PolyType::Bool]);
@@ -456,10 +463,11 @@ mod tests {
         let c = PolyType::Tuple(vec![PolyType::I32]);
         let result = ts.unify(&a, &c);
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_vec_unification() {
+    fn test_vec_unification() -> Result<(), Box<dyn std::error::Error>> {
         let mut ts = TypeSystem::new();
 
         let a = PolyType::Vec(Box::new(PolyType::I32));
@@ -467,5 +475,6 @@ mod tests {
 
         let result = ts.unify(&a, &b);
         assert!(result.is_ok());
+        Ok(())
     }
 }

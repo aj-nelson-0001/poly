@@ -10,3 +10,6 @@ poly-parser.workspace = true
 
 [dev-dependencies]
 poly-lexer.workspace = true
+
+[lints]
+workspace = true

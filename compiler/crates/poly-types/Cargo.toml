@@ -7,3 +7,6 @@ description = "Type system for the Poly programming language"
 
 [dependencies]
 thiserror.workspace = true
+
+[lints]
+workspace = true

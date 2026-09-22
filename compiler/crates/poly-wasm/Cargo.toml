@@ -12,3 +12,6 @@ crate-type = ["cdylib"]
 poly-lexer.workspace = true
 poly-parser.workspace = true
 poly-transpiler.workspace = true
+
+[lints]
+workspace = true

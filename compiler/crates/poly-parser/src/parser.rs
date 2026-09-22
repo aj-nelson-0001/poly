@@ -1201,6 +1201,22 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse a statement in a nested position (function, module, block, or
+    /// match-arm bodies). Only the file's top-level statement list may host
+    /// `extern fn` declarations, so this enforces at parse time the invariant
+    /// that IR lowering relies on instead of panicking later.
+    fn parse_nested_statement(&mut self) -> Result<Statement, ParseError> {
+        let span = self.current().span;
+        let statement = self.parse_statement()?;
+        if matches!(statement, Statement::ExternFunctionDeclaration(_)) {
+            return Err(ParseError::new(
+                "`extern fn` declarations are only allowed at the top level of the source file",
+                span,
+            ));
+        }
+        Ok(statement)
+    }
+
     fn parse_module_declaration(&mut self) -> Result<ModuleDecl, ParseError> {
         self.advance(); // consume 'module'
         let name = self.expect_identifier()?;
@@ -1209,7 +1225,7 @@ impl<'a> Parser<'a> {
 
         while !self.match_token(&TokenKind::End) {
             let start = self.pos;
-            let statement = match self.parse_statement() {
+            let statement = match self.parse_nested_statement() {
                 Ok(statement) => statement,
                 Err(error) => {
                     self.block_depth -= 1;
@@ -1334,7 +1350,7 @@ impl<'a> Parser<'a> {
         self.macros
             .insert(name.clone(), MacroDecl { name, params, body });
         // The declaration itself is not a statement; continue with the next one.
-        self.parse_statement()
+        self.parse_nested_statement()
     }
 
     /// Expand a macro invocation into a block statement whose bodies have had
@@ -3028,7 +3044,7 @@ impl<'a> Parser<'a> {
             }
 
             let start = self.pos;
-            let statement = self.parse_statement()?;
+            let statement = self.parse_nested_statement()?;
             stmts.push(Spanned::new(statement, self.statement_span(start)));
         }
 
@@ -3339,7 +3355,7 @@ impl<'a> Parser<'a> {
             && self.peek() != &TokenKind::Else
         {
             let start = self.pos;
-            let statement = match self.parse_statement() {
+            let statement = match self.parse_nested_statement() {
                 Ok(statement) => statement,
                 Err(error) => {
                     self.block_depth -= 1;
@@ -5372,6 +5388,28 @@ end fn"#;
                 assert!(matches!(statements[0].node, Statement::PutStatement { .. }));
             }
             other => panic!("expected expanded macro block, got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn nested_extern_declarations_are_rejected() -> Result<(), Box<dyn std::error::Error>> {
+        // Two layers guard this: the `block_depth` program-scope check inside
+        // `parse_extern_function_declaration` (fn/if/module bodies) and
+        // `parse_nested_statement` (match-arm and macro bodies, which never
+        // bump `block_depth`).
+        let sources = [
+            "fn main()\n    extern c fn sneaky(value: i32): i32\nend fn",
+            "fn main()\n    match 1\n        1,\n        extern c fn sneaky(value: i32): i32\n    end match\nend fn",
+        ];
+        for source in sources {
+            let Err(error) = parse_source(source) else {
+                panic!("nested extern must be rejected at parse time: {source}");
+            };
+            assert!(
+                error.message.contains("top level") || error.message.contains("program scope"),
+                "unexpected error: {error:?}"
+            );
         }
         Ok(())
     }

@@ -3719,4 +3719,15 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn unknown_hof_method_reports_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+        let mut checker = TypeChecker::default();
+        let result = checker.check_hof_method("flat_map", &PolyType::I32, &[]);
+        assert!(matches!(result, PolyType::Unknown));
+        assert_eq!(checker.errors.len(), 1, "expected exactly one diagnostic");
+        let message = checker.errors[0].to_string();
+        assert!(message.contains("flat_map"), "unexpected error: {message}");
+        Ok(())
+    }
 }

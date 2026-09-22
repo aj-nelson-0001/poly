@@ -807,4 +807,25 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn nested_extern_lowers_to_error() -> Result<(), Box<dyn std::error::Error>> {
+        let mut program =
+            parse("extern c fn double(value: i32): i32\nfn main()\n    put 1\nend fn");
+        let nested_extern = program.statements.remove(0);
+        match &mut program.statements[0].node {
+            ast::Statement::FunctionDeclaration(function) => {
+                function
+                    .body
+                    .get_or_insert_with(Vec::new)
+                    .push(nested_extern);
+            }
+            other => panic!("expected function declaration first, got {other:?}"),
+        }
+        let Err(message) = generate(&program) else {
+            panic!("nested extern must be rejected by IR lowering");
+        };
+        assert!(message.contains("top level"), "unexpected error: {message}");
+        Ok(())
+    }
 }

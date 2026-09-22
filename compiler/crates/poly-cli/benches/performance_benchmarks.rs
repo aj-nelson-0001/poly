@@ -286,7 +286,8 @@ fn bench_intermediate_representation_optimizer_passes(c: &mut Criterion) {
     let program = parser
         .parse()
         .unwrap_or_else(|e| panic!("benchmark source must parse: {e}"));
-    let intermediate_representation = poly_intermediate_representation::generate(&program);
+    let intermediate_representation = poly_intermediate_representation::generate(&program)
+        .unwrap_or_else(|e| panic!("benchmark source must lower to IR: {e}"));
 
     c.bench_function("intermediate_representation_optimizer_passes", |b| {
         b.iter(|| {

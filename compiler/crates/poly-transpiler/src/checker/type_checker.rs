@@ -1560,7 +1560,12 @@ impl TypeChecker {
                 }
                 PolyType::Vec(Box::new(element.clone()))
             }
-            _ => unreachable!(),
+            _ => {
+                self.error(TypeCheckError::new(format!(
+                    "`{method}` is not a supported higher-order method"
+                )));
+                PolyType::Unknown
+            }
         }
     }
 

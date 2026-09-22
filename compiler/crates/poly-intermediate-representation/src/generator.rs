@@ -10,7 +10,7 @@ use poly_parser::ast;
 use crate::intermediate_representation::*;
 
 /// Convert a parsed Poly program into intermediate representation.
-pub fn generate(program: &ast::Program) -> Program {
+pub fn generate(program: &ast::Program) -> Result<Program, String> {
     // Keep this pass structural: semantic meaning belongs to the checker and
     // target-specific lowering belongs to codegen, which keeps the IR reusable.
     let mut intermediate_representation = Program::default();
@@ -26,28 +26,28 @@ pub fn generate(program: &ast::Program) -> Program {
             ast::Statement::FunctionDeclaration(function) => {
                 intermediate_representation
                     .functions
-                    .push(gen_function(function));
+                    .push(gen_function(function)?);
             }
             ast::Statement::StructDeclaration(struct_decl) => {
                 intermediate_representation
                     .structs
-                    .push(gen_struct(struct_decl));
+                    .push(gen_struct(struct_decl)?);
             }
             ast::Statement::EnumDeclaration(enum_decl) => {
-                intermediate_representation.enums.push(gen_enum(enum_decl));
+                intermediate_representation.enums.push(gen_enum(enum_decl)?);
             }
             ast::Statement::TraitDeclaration(trait_decl) => {
                 intermediate_representation
                     .traits
-                    .push(gen_trait(trait_decl));
+                    .push(gen_trait(trait_decl)?);
             }
             ast::Statement::ImplDeclaration(impl_decl) => {
-                intermediate_representation.impls.push(gen_impl(impl_decl));
+                intermediate_representation.impls.push(gen_impl(impl_decl)?);
             }
             ast::Statement::ModuleDeclaration(module) => {
                 let mut statements = Vec::new();
                 for spanned in &module.statements {
-                    statements.push(gen_statement(&spanned.node));
+                    statements.push(gen_statement(&spanned.node)?);
                 }
                 intermediate_representation.modules.push(Module {
                     name: module.name.clone(),
@@ -57,14 +57,14 @@ pub fn generate(program: &ast::Program) -> Program {
             ast::Statement::ConstDeclaration { name, value } => {
                 intermediate_representation.constants.push(Constant {
                     name: name.clone(),
-                    value: gen_expr(value),
+                    value: gen_expr(value)?,
                     source_location: None,
                 });
             }
             ast::Statement::TypeDeclaration(decl) => {
                 intermediate_representation.type_aliases.push(TypeAlias {
                     name: decl.name.clone(),
-                    ty: gen_type(&decl.ty),
+                    ty: gen_type(&decl.ty)?,
                 });
             }
             ast::Statement::UseDeclaration(decl) => {
@@ -94,15 +94,15 @@ pub fn generate(program: &ast::Program) -> Program {
                 }));
                 intermediate_representation
                     .main_body
-                    .push(gen_statement(statement));
+                    .push(gen_statement(statement)?);
             }
         }
     }
     intermediate_representation.main_body_locations = main_body_locations;
-    intermediate_representation
+    Ok(intermediate_representation)
 }
 
-fn gen_function(function: &ast::FunctionDecl) -> Function {
+fn gen_function(function: &ast::FunctionDecl) -> Result<Function, String> {
     let body_locations: Vec<Option<SourceLocation>> = function
         .body
         .as_ref()
@@ -116,24 +116,29 @@ fn gen_function(function: &ast::FunctionDecl) -> Function {
                 .collect()
         })
         .unwrap_or_default();
-    Function {
+    Ok(Function {
         name: function.name.clone(),
-        params: function.params.iter().map(gen_parameter).collect(),
-        return_type: function.return_type.as_ref().map(gen_type),
+        params: function
+            .params
+            .iter()
+            .map(gen_parameter)
+            .collect::<Result<Vec<_>, String>>()?,
+        return_type: function.return_type.as_ref().map(gen_type).transpose()?,
         body: function
             .body
             .as_ref()
             .map(|body| {
                 body.iter()
                     .map(|spanned| gen_statement(&spanned.node))
-                    .collect()
+                    .collect::<Result<Vec<_>, String>>()
             })
+            .transpose()?
             .unwrap_or_default(),
         body_locations,
         is_async: function.is_async,
         generics: function.generics.iter().map(gen_generic_param).collect(),
         source_location: None,
-    }
+    })
 }
 
 fn gen_generic_param(param: &ast::GenericParam) -> GenericParam {
@@ -143,104 +148,128 @@ fn gen_generic_param(param: &ast::GenericParam) -> GenericParam {
     }
 }
 
-fn gen_parameter(parameter: &ast::Parameter) -> Parameter {
-    Parameter {
+fn gen_parameter(parameter: &ast::Parameter) -> Result<Parameter, String> {
+    Ok(Parameter {
         name: parameter.name.clone(),
-        ty: gen_type(&parameter.ty),
-        default: parameter.default.as_ref().map(gen_expr),
-    }
+        ty: gen_type(&parameter.ty)?,
+        default: parameter.default.as_ref().map(gen_expr).transpose()?,
+    })
 }
 
-fn gen_struct(struct_decl: &ast::StructDecl) -> Struct {
-    Struct {
+fn gen_struct(struct_decl: &ast::StructDecl) -> Result<Struct, String> {
+    Ok(Struct {
         name: struct_decl.name.clone(),
         fields: struct_decl
             .fields
             .iter()
-            .map(|field| Field {
-                name: field.name.clone(),
-                ty: gen_type(&field.ty),
-                default: field.default.as_ref().map(gen_expr),
+            .map(|field| {
+                Ok(Field {
+                    name: field.name.clone(),
+                    ty: gen_type(&field.ty)?,
+                    default: field.default.as_ref().map(gen_expr).transpose()?,
+                })
             })
-            .collect(),
-        methods: struct_decl.methods.iter().map(gen_function).collect(),
+            .collect::<Result<Vec<_>, String>>()?,
+        methods: struct_decl
+            .methods
+            .iter()
+            .map(gen_function)
+            .collect::<Result<Vec<_>, String>>()?,
         generics: struct_decl.generics.iter().map(gen_generic_param).collect(),
         source_location: None,
-    }
+    })
 }
 
-fn gen_enum(enum_decl: &ast::EnumDecl) -> Enum {
+fn gen_enum(enum_decl: &ast::EnumDecl) -> Result<Enum, String> {
     let variants = enum_decl
         .variants
         .iter()
-        .map(|variant| match variant {
-            ast::EnumVariant::Unit(name) => Variant {
-                name: name.clone(),
-                fields: Vec::new(),
-                is_struct: false,
-            },
-            ast::EnumVariant::Tuple(name, types) => Variant {
-                name: name.clone(),
-                fields: types
-                    .iter()
-                    .map(|ty| Field {
-                        name: String::new(),
-                        ty: gen_type(ty),
-                        default: None,
-                    })
-                    .collect(),
-                is_struct: false,
-            },
-            ast::EnumVariant::Struct(name, fields) => Variant {
-                name: name.clone(),
-                fields: fields
-                    .iter()
-                    .map(|(field, ty)| Field {
-                        name: field.clone(),
-                        ty: gen_type(ty),
-                        default: None,
-                    })
-                    .collect(),
-                is_struct: true,
-            },
+        .map(|variant| {
+            Ok(match variant {
+                ast::EnumVariant::Unit(name) => Variant {
+                    name: name.clone(),
+                    fields: Vec::new(),
+                    is_struct: false,
+                },
+                ast::EnumVariant::Tuple(name, types) => Variant {
+                    name: name.clone(),
+                    fields: types
+                        .iter()
+                        .map(|ty| {
+                            Ok(Field {
+                                name: String::new(),
+                                ty: gen_type(ty)?,
+                                default: None,
+                            })
+                        })
+                        .collect::<Result<Vec<_>, String>>()?,
+                    is_struct: false,
+                },
+                ast::EnumVariant::Struct(name, fields) => Variant {
+                    name: name.clone(),
+                    fields: fields
+                        .iter()
+                        .map(|(field, ty)| {
+                            Ok(Field {
+                                name: field.clone(),
+                                ty: gen_type(ty)?,
+                                default: None,
+                            })
+                        })
+                        .collect::<Result<Vec<_>, String>>()?,
+                    is_struct: true,
+                },
+            })
         })
-        .collect();
-    Enum {
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(Enum {
         name: enum_decl.name.clone(),
         variants,
-        methods: enum_decl.methods.iter().map(gen_function).collect(),
+        methods: enum_decl
+            .methods
+            .iter()
+            .map(gen_function)
+            .collect::<Result<Vec<_>, String>>()?,
         source_location: None,
-    }
+    })
 }
 
-fn gen_trait(trait_decl: &ast::TraitDecl) -> Trait {
-    Trait {
+fn gen_trait(trait_decl: &ast::TraitDecl) -> Result<Trait, String> {
+    Ok(Trait {
         name: trait_decl.name.clone(),
-        methods: trait_decl.methods.iter().map(gen_function).collect(),
+        methods: trait_decl
+            .methods
+            .iter()
+            .map(gen_function)
+            .collect::<Result<Vec<_>, String>>()?,
         source_location: None,
-    }
+    })
 }
 
-fn gen_impl(impl_decl: &ast::ImplDecl) -> Impl {
-    Impl {
+fn gen_impl(impl_decl: &ast::ImplDecl) -> Result<Impl, String> {
+    Ok(Impl {
         trait_name: impl_decl.trait_name.clone(),
         type_name: impl_decl.type_name.clone(),
-        methods: impl_decl.methods.iter().map(gen_function).collect(),
+        methods: impl_decl
+            .methods
+            .iter()
+            .map(gen_function)
+            .collect::<Result<Vec<_>, String>>()?,
         source_location: None,
-    }
+    })
 }
 
-fn gen_statement(statement: &ast::Statement) -> Statement {
-    match statement {
+fn gen_statement(statement: &ast::Statement) -> Result<Statement, String> {
+    Ok(match statement {
         ast::Statement::VarDeclaration { name, ty, value } => Statement::VarDecl {
             name: name.clone(),
-            ty: ty.as_ref().map(gen_type),
-            value: value.as_ref().map(gen_expr),
+            ty: ty.as_ref().map(gen_type).transpose()?,
+            value: value.as_ref().map(gen_expr).transpose()?,
         },
         ast::Statement::LetDeclaration { name, ty, value } => Statement::LetDecl {
             name: name.clone(),
-            ty: ty.as_ref().map(gen_type),
-            value: gen_expr(value),
+            ty: ty.as_ref().map(gen_type).transpose()?,
+            value: gen_expr(value)?,
         },
         // Only program-scope constants are lifted into `IR.constants` by
         // `generate`; a `const` inside a function body (or a module) is a
@@ -250,14 +279,14 @@ fn gen_statement(statement: &ast::Statement) -> Statement {
         ast::Statement::ConstDeclaration { name, value } => Statement::VarDecl {
             name: name.clone(),
             ty: None,
-            value: Some(gen_expr(value)),
+            value: Some(gen_expr(value)?),
         },
         ast::Statement::Assignment { target, value } => Statement::Assignment {
-            target: gen_expr(target),
-            value: gen_expr(value),
+            target: gen_expr(target)?,
+            value: gen_expr(value)?,
         },
         ast::Statement::FunctionDeclaration(function) => {
-            Statement::NestedFunction(gen_function(function))
+            Statement::NestedFunction(gen_function(function)?)
         }
         // Program-scope declarations are collected by `generate` before any
         // `gen_statement` call, but the parser also accepts declarations
@@ -273,38 +302,46 @@ fn gen_statement(statement: &ast::Statement) -> Statement {
         | ast::Statement::UseDeclaration(_)
         | ast::Statement::DependencyDeclaration(_)
         | ast::Statement::TypeDeclaration(_) => Statement::Block(Vec::new()),
-        ast::Statement::ExpressionStatement(expr) => Statement::Expression(gen_expr(expr)),
-        ast::Statement::ReturnStatement(value) => Statement::Return(value.as_ref().map(gen_expr)),
+        ast::Statement::ExpressionStatement(expr) => Statement::Expression(gen_expr(expr)?),
+        ast::Statement::ReturnStatement(value) => {
+            Statement::Return(value.as_ref().map(gen_expr).transpose()?)
+        }
         ast::Statement::BreakStatement => Statement::Break,
         ast::Statement::ContinueStatement => Statement::Continue,
         ast::Statement::PutStatement { expr, redirect } => Statement::Put {
-            expr: gen_expr(expr),
-            redirect: redirect.as_ref().map(|redirect| match redirect {
-                ast::Redirect::Write(path) => Redirect::Write(gen_expr(path)),
-                ast::Redirect::Append(path) => Redirect::Append(gen_expr(path)),
-            }),
+            expr: gen_expr(expr)?,
+            redirect: match redirect.as_ref() {
+                Some(ast::Redirect::Write(path)) => Some(Redirect::Write(gen_expr(path)?)),
+                Some(ast::Redirect::Append(path)) => Some(Redirect::Append(gen_expr(path)?)),
+                None => None,
+            },
         },
-        ast::Statement::ErrorStatement(expr) => Statement::Error(gen_expr(expr)),
-        ast::Statement::WarnStatement(expr) => Statement::Warn(gen_expr(expr)),
-        ast::Statement::InfoStatement(expr) => Statement::Info(gen_expr(expr)),
+        ast::Statement::ErrorStatement(expr) => Statement::Error(gen_expr(expr)?),
+        ast::Statement::WarnStatement(expr) => Statement::Warn(gen_expr(expr)?),
+        ast::Statement::InfoStatement(expr) => Statement::Info(gen_expr(expr)?),
         ast::Statement::Block(statements) => Statement::Block(
             statements
                 .iter()
                 .map(|spanned| gen_statement(&spanned.node))
-                .collect(),
+                .collect::<Result<Vec<_>, String>>()?,
         ),
         ast::Statement::ForeignBlock { language, content } => Statement::ForeignBlock {
             language: language.clone(),
             content: content.clone(),
         },
         ast::Statement::ExternFunctionDeclaration(_) => {
-            unreachable!("extern declarations are consumed by the checker")
+            // Top-level externs are skipped in `generate()` before lowering;
+            // reaching this arm means the declaration is nested inside a
+            // function/module/block body, which the IR cannot represent.
+            return Err(
+                "extern function declarations may only appear at the top level".to_string(),
+            );
         }
-    }
+    })
 }
 
-fn gen_expr(expr: &ast::Expression) -> Expr {
-    match expr {
+fn gen_expr(expr: &ast::Expression) -> Result<Expr, String> {
+    Ok(match expr {
         ast::Expression::IntLiteral(value) => Expr::Literal(Literal::Int(value.clone())),
         ast::Expression::FloatLiteral(value) => Expr::Literal(Literal::Float(value.clone())),
         ast::Expression::StringLiteral(value) => Expr::Literal(Literal::String(value.clone())),
@@ -317,8 +354,8 @@ fn gen_expr(expr: &ast::Expression) -> Expr {
         ast::Expression::Identifier(name) => Expr::Identifier(name.clone()),
         ast::Expression::BinaryOp { op, left, right } => Expr::BinaryOp {
             op: gen_binary_op(op),
-            left: Box::new(gen_expr(left)),
-            right: Box::new(gen_expr(right)),
+            left: Box::new(gen_expr(left)?),
+            right: Box::new(gen_expr(right)?),
         },
         ast::Expression::UnaryOp { op, expr } => Expr::UnaryOp {
             op: match op {
@@ -327,78 +364,99 @@ fn gen_expr(expr: &ast::Expression) -> Expr {
                 ast::UnaryOp::BitNot => UnaryOp::BitNot,
                 ast::UnaryOp::Deref => UnaryOp::Deref,
             },
-            expr: Box::new(gen_expr(expr)),
+            expr: Box::new(gen_expr(expr)?),
         },
         ast::Expression::Call { func, args } => Expr::Call {
-            func: Box::new(gen_expr(func)),
-            args: args.iter().map(gen_expr).collect(),
+            func: Box::new(gen_expr(func)?),
+            args: args
+                .iter()
+                .map(gen_expr)
+                .collect::<Result<Vec<_>, String>>()?,
         },
         ast::Expression::MethodCall {
             object,
             method,
             args,
         } => Expr::MethodCall {
-            object: Box::new(gen_expr(object)),
+            object: Box::new(gen_expr(object)?),
             method: method.clone(),
-            args: args.iter().map(gen_expr).collect(),
+            args: args
+                .iter()
+                .map(gen_expr)
+                .collect::<Result<Vec<_>, String>>()?,
         },
         ast::Expression::Index { object, index } => Expr::Index {
-            object: Box::new(gen_expr(object)),
-            index: Box::new(gen_expr(index)),
+            object: Box::new(gen_expr(object)?),
+            index: Box::new(gen_expr(index)?),
         },
         ast::Expression::FieldAccess { object, field } => Expr::FieldAccess {
-            object: Box::new(gen_expr(object)),
+            object: Box::new(gen_expr(object)?),
             field: field.clone(),
         },
         ast::Expression::TupleIndex { object, index } => Expr::TupleIndex {
-            object: Box::new(gen_expr(object)),
+            object: Box::new(gen_expr(object)?),
             index: *index,
         },
-        ast::Expression::Parenthesized(expr) => Expr::Parenthesized(Box::new(gen_expr(expr))),
+        ast::Expression::Parenthesized(expr) => Expr::Parenthesized(Box::new(gen_expr(expr)?)),
         ast::Expression::IfExpression {
             condition,
             then_block,
             else_block,
         } => Expr::If {
-            condition: Box::new(gen_expr(condition)),
+            condition: Box::new(gen_expr(condition)?),
             then_block: then_block
                 .iter()
                 .map(|spanned| gen_statement(&spanned.node))
-                .collect(),
-            else_block: else_block.as_ref().map(|block| {
-                block
-                    .iter()
-                    .map(|spanned| gen_statement(&spanned.node))
-                    .collect()
-            }),
+                .collect::<Result<Vec<_>, String>>()?,
+            else_block: else_block
+                .as_ref()
+                .map(|block| {
+                    block
+                        .iter()
+                        .map(|spanned| gen_statement(&spanned.node))
+                        .collect::<Result<Vec<_>, String>>()
+                })
+                .transpose()?,
         },
         ast::Expression::MatchExpression { scrutinee, arms } => Expr::Match {
-            scrutinee: Box::new(gen_expr(scrutinee)),
-            arms: arms.iter().map(gen_match_arm).collect(),
+            scrutinee: Box::new(gen_expr(scrutinee)?),
+            arms: arms
+                .iter()
+                .map(gen_match_arm)
+                .collect::<Result<Vec<_>, String>>()?,
         },
         ast::Expression::WhileLoop { condition, body } => Expr::WhileLoop {
-            condition: Box::new(gen_expr(condition)),
+            condition: Box::new(gen_expr(condition)?),
             body: body
                 .iter()
                 .map(|spanned| gen_statement(&spanned.node))
-                .collect(),
+                .collect::<Result<Vec<_>, String>>()?,
         },
         ast::Expression::Closure { params, body } => Expr::Closure {
-            params: params.iter().map(gen_parameter).collect(),
-            body: Box::new(gen_expr(body)),
+            params: params
+                .iter()
+                .map(gen_parameter)
+                .collect::<Result<Vec<_>, String>>()?,
+            body: Box::new(gen_expr(body)?),
         },
-        ast::Expression::ArrayLiteral(elements) => {
-            Expr::Array(elements.iter().map(gen_expr).collect())
-        }
-        ast::Expression::TupleLiteral(elements) => {
-            Expr::Tuple(elements.iter().map(gen_expr).collect())
-        }
+        ast::Expression::ArrayLiteral(elements) => Expr::Array(
+            elements
+                .iter()
+                .map(gen_expr)
+                .collect::<Result<Vec<_>, String>>()?,
+        ),
+        ast::Expression::TupleLiteral(elements) => Expr::Tuple(
+            elements
+                .iter()
+                .map(gen_expr)
+                .collect::<Result<Vec<_>, String>>()?,
+        ),
         ast::Expression::StructLiteral { name, fields } => Expr::Struct {
             name: name.clone(),
             fields: fields
                 .iter()
-                .map(|(name, value)| (name.clone(), gen_expr(value)))
-                .collect(),
+                .map(|(name, value)| Ok((name.clone(), gen_expr(value)?)))
+                .collect::<Result<Vec<_>, String>>()?,
         },
         ast::Expression::EnumVariant {
             enum_name,
@@ -409,7 +467,12 @@ fn gen_expr(expr: &ast::Expression) -> Expr {
             variant: variant.clone(),
             data: data
                 .as_ref()
-                .map(|data| data.iter().map(gen_expr).collect()),
+                .map(|data| {
+                    data.iter()
+                        .map(gen_expr)
+                        .collect::<Result<Vec<_>, String>>()
+                })
+                .transpose()?,
         },
         ast::Expression::LoopRange {
             variable,
@@ -417,11 +480,14 @@ fn gen_expr(expr: &ast::Expression) -> Expr {
             body,
         } => Expr::LoopRange {
             variable: variable.clone(),
-            ranges: ranges.iter().map(gen_loop_range_part).collect(),
+            ranges: ranges
+                .iter()
+                .map(gen_loop_range_part)
+                .collect::<Result<Vec<_>, String>>()?,
             body: body
                 .iter()
                 .map(|spanned| gen_statement(&spanned.node))
-                .collect(),
+                .collect::<Result<Vec<_>, String>>()?,
         },
         ast::Expression::ForLoop {
             variable,
@@ -429,63 +495,68 @@ fn gen_expr(expr: &ast::Expression) -> Expr {
             body,
         } => Expr::ForLoop {
             variable: variable.clone(),
-            iterable: Box::new(gen_expr(iterable)),
+            iterable: Box::new(gen_expr(iterable)?),
             body: body
                 .iter()
                 .map(|spanned| gen_statement(&spanned.node))
-                .collect(),
+                .collect::<Result<Vec<_>, String>>()?,
         },
         ast::Expression::InfiniteLoop(body) => Expr::InfiniteLoop(
             body.iter()
                 .map(|spanned| gen_statement(&spanned.node))
-                .collect(),
+                .collect::<Result<Vec<_>, String>>()?,
         ),
         ast::Expression::AsExpression { expr, ty } => Expr::As {
-            expr: Box::new(gen_expr(expr)),
-            ty: gen_type(ty),
+            expr: Box::new(gen_expr(expr)?),
+            ty: gen_type(ty)?,
         },
-        ast::Expression::TryExpression(expr) => Expr::Try(Box::new(gen_expr(expr))),
-        ast::Expression::GetExpression(get) => Expr::Get(Box::new(gen_get_expr(get))),
+        ast::Expression::TryExpression(expr) => Expr::Try(Box::new(gen_expr(expr)?)),
+        ast::Expression::GetExpression(get) => Expr::Get(Box::new(gen_get_expr(get)?)),
         ast::Expression::UnsafeBlock(statements) => Expr::UnsafeBlock(
             statements
                 .iter()
                 .map(|spanned| gen_statement(&spanned.node))
-                .collect(),
+                .collect::<Result<Vec<_>, String>>()?,
         ),
         ast::Expression::Range {
             start,
             end,
             inclusive,
         } => Expr::Range {
-            start: Box::new(gen_expr(start)),
-            end: Box::new(gen_expr(end)),
+            start: Box::new(gen_expr(start)?),
+            end: Box::new(gen_expr(end)?),
             inclusive: *inclusive,
         },
-    }
+    })
 }
 
-fn gen_match_arm(arm: &ast::MatchArm) -> MatchArm {
-    MatchArm {
-        pattern: gen_pattern(&arm.pattern),
-        guard: arm.guard.as_ref().map(gen_expr),
+fn gen_match_arm(arm: &ast::MatchArm) -> Result<MatchArm, String> {
+    Ok(MatchArm {
+        pattern: gen_pattern(&arm.pattern)?,
+        guard: arm.guard.as_ref().map(gen_expr).transpose()?,
         body: match &arm.body {
-            ast::MatchArmBody::Expression(expr) => MatchArmBody::Expression(gen_expr(expr)),
+            ast::MatchArmBody::Expression(expr) => MatchArmBody::Expression(gen_expr(expr)?),
             ast::MatchArmBody::Block(statements) => MatchArmBody::Block(
                 statements
                     .iter()
                     .map(|spanned| gen_statement(&spanned.node))
-                    .collect(),
+                    .collect::<Result<Vec<_>, String>>()?,
             ),
         },
-    }
+    })
 }
 
-fn gen_pattern(pattern: &ast::Pattern) -> Pattern {
-    match pattern {
+fn gen_pattern(pattern: &ast::Pattern) -> Result<Pattern, String> {
+    Ok(match pattern {
         ast::Pattern::Wildcard => Pattern::Wildcard,
-        ast::Pattern::Literal(expr) => Pattern::Literal(gen_expr(expr)),
+        ast::Pattern::Literal(expr) => Pattern::Literal(gen_expr(expr)?),
         ast::Pattern::Identifier(name) => Pattern::Identifier(name.clone()),
-        ast::Pattern::Tuple(patterns) => Pattern::Tuple(patterns.iter().map(gen_pattern).collect()),
+        ast::Pattern::Tuple(patterns) => Pattern::Tuple(
+            patterns
+                .iter()
+                .map(gen_pattern)
+                .collect::<Result<Vec<_>, String>>()?,
+        ),
         ast::Pattern::Enum {
             enum_name,
             variant,
@@ -495,98 +566,131 @@ fn gen_pattern(pattern: &ast::Pattern) -> Pattern {
             variant: variant.clone(),
             inner: inner
                 .as_ref()
-                .map(|inner| inner.iter().map(gen_pattern).collect()),
+                .map(|inner| {
+                    inner
+                        .iter()
+                        .map(gen_pattern)
+                        .collect::<Result<Vec<_>, String>>()
+                })
+                .transpose()?,
         },
         ast::Pattern::NamedFields { name, fields } => Pattern::NamedFields {
             name: name.clone(),
             fields: fields
                 .iter()
-                .map(|(name, pattern)| (name.clone(), gen_pattern(pattern)))
-                .collect(),
+                .map(|(name, pattern)| Ok((name.clone(), gen_pattern(pattern)?)))
+                .collect::<Result<Vec<_>, String>>()?,
         },
         ast::Pattern::Range {
             start,
             end,
             inclusive,
         } => Pattern::Range {
-            start: gen_expr(start),
-            end: gen_expr(end),
+            start: gen_expr(start)?,
+            end: gen_expr(end)?,
             inclusive: *inclusive,
         },
         ast::Pattern::Binding { name, pattern } => Pattern::Binding {
             name: name.clone(),
-            pattern: Box::new(gen_pattern(pattern)),
+            pattern: Box::new(gen_pattern(pattern)?),
         },
-    }
+    })
 }
 
-fn gen_loop_range_part(part: &ast::LoopRangePart) -> LoopRangePart {
-    match part {
+fn gen_loop_range_part(part: &ast::LoopRangePart) -> Result<LoopRangePart, String> {
+    Ok(match part {
         ast::LoopRangePart::Range {
             start,
             end,
             inclusive,
             step,
         } => LoopRangePart::Range {
-            start: Box::new(gen_expr(start)),
-            end: Box::new(gen_expr(end)),
+            start: Box::new(gen_expr(start)?),
+            end: Box::new(gen_expr(end)?),
             inclusive: *inclusive,
-            step: step.as_ref().map(gen_expr),
+            step: step.as_ref().map(gen_expr).transpose()?,
         },
-        ast::LoopRangePart::Value(value) => LoopRangePart::Value(Box::new(gen_expr(value))),
-    }
+        ast::LoopRangePart::Value(value) => LoopRangePart::Value(Box::new(gen_expr(value)?)),
+    })
 }
 
-fn gen_get_expr(get: &ast::GetExpr) -> GetExpr {
-    GetExpr {
-        prompt: get.prompt.as_ref().map(|prompt| Box::new(gen_expr(prompt))),
-        source: get.source.as_ref().map(|source| Box::new(gen_expr(source))),
+fn gen_get_expr(get: &ast::GetExpr) -> Result<GetExpr, String> {
+    Ok(GetExpr {
+        prompt: get
+            .prompt
+            .as_ref()
+            .map(|prompt| gen_expr(prompt))
+            .transpose()?
+            .map(Box::new),
+        source: get
+            .source
+            .as_ref()
+            .map(|source| gen_expr(source))
+            .transpose()?
+            .map(Box::new),
         flags: get
             .flags
             .iter()
             .map(|flag| match flag {
-                ast::GetFlag::Timeout(value) => GetFlag::Timeout(gen_expr(value)),
-                ast::GetFlag::Default(value) => GetFlag::Default(gen_expr(value)),
-                ast::GetFlag::Mask(value) => GetFlag::Mask(gen_expr(value)),
-                ast::GetFlag::Until(value) => GetFlag::Until(gen_expr(value)),
-                ast::GetFlag::Bytes(value) => GetFlag::Bytes(gen_expr(value)),
-                ast::GetFlag::As(ty) => GetFlag::As(gen_type(ty)),
+                ast::GetFlag::Timeout(value) => Ok(GetFlag::Timeout(gen_expr(value)?)),
+                ast::GetFlag::Default(value) => Ok(GetFlag::Default(gen_expr(value)?)),
+                ast::GetFlag::Mask(value) => Ok(GetFlag::Mask(gen_expr(value)?)),
+                ast::GetFlag::Until(value) => Ok(GetFlag::Until(gen_expr(value)?)),
+                ast::GetFlag::Bytes(value) => Ok(GetFlag::Bytes(gen_expr(value)?)),
+                ast::GetFlag::As(ty) => Ok(GetFlag::As(gen_type(ty)?)),
             })
-            .collect(),
-        with_clause: get.with_clause.as_ref().map(|clause| match clause {
-            ast::WithClause::Validate(expr) => WithClause::Validate(gen_expr(expr)),
-            ast::WithClause::Complete(expr) => WithClause::Complete(gen_expr(expr)),
-            ast::WithClause::Encoding(expr) => WithClause::Encoding(gen_expr(expr)),
-        }),
-    }
+            .collect::<Result<Vec<_>, String>>()?,
+        with_clause: get
+            .with_clause
+            .as_ref()
+            .map(|clause| -> Result<WithClause, String> {
+                match clause {
+                    ast::WithClause::Validate(expr) => Ok(WithClause::Validate(gen_expr(expr)?)),
+                    ast::WithClause::Complete(expr) => Ok(WithClause::Complete(gen_expr(expr)?)),
+                    ast::WithClause::Encoding(expr) => Ok(WithClause::Encoding(gen_expr(expr)?)),
+                }
+            })
+            .transpose()?,
+    })
 }
 
-fn gen_type(ty: &ast::TypeAnnotation) -> Type {
-    match ty {
+fn gen_type(ty: &ast::TypeAnnotation) -> Result<Type, String> {
+    Ok(match ty {
         ast::TypeAnnotation::Named(name) => Type::Named(name.clone()),
         ast::TypeAnnotation::Array(inner, size) => {
-            Type::Array(Box::new(gen_type(inner)), Box::new(gen_expr(size)))
+            Type::Array(Box::new(gen_type(inner)?), Box::new(gen_expr(size)?))
         }
-        ast::TypeAnnotation::Tuple(types) => Type::Tuple(types.iter().map(gen_type).collect()),
-        ast::TypeAnnotation::Vec(inner) => Type::Vec(Box::new(gen_type(inner))),
-        ast::TypeAnnotation::Option(inner) => Type::Option(Box::new(gen_type(inner))),
+        ast::TypeAnnotation::Tuple(types) => Type::Tuple(
+            types
+                .iter()
+                .map(gen_type)
+                .collect::<Result<Vec<_>, String>>()?,
+        ),
+        ast::TypeAnnotation::Vec(inner) => Type::Vec(Box::new(gen_type(inner)?)),
+        ast::TypeAnnotation::Option(inner) => Type::Option(Box::new(gen_type(inner)?)),
         ast::TypeAnnotation::Result(ok, err) => {
-            Type::Result(Box::new(gen_type(ok)), Box::new(gen_type(err)))
+            Type::Result(Box::new(gen_type(ok)?), Box::new(gen_type(err)?))
         }
         ast::TypeAnnotation::Reference(mutable, inner) => {
-            Type::Reference(*mutable, Box::new(gen_type(inner)))
+            Type::Reference(*mutable, Box::new(gen_type(inner)?))
         }
-        ast::TypeAnnotation::Pointer(inner) => Type::Pointer(Box::new(gen_type(inner))),
-        ast::TypeAnnotation::Nullable(inner) => Type::Nullable(Box::new(gen_type(inner))),
+        ast::TypeAnnotation::Pointer(inner) => Type::Pointer(Box::new(gen_type(inner)?)),
+        ast::TypeAnnotation::Nullable(inner) => Type::Nullable(Box::new(gen_type(inner)?)),
         ast::TypeAnnotation::Function { params, ret } => Type::Function {
-            params: params.iter().map(gen_type).collect(),
-            ret: Box::new(gen_type(ret)),
+            params: params
+                .iter()
+                .map(gen_type)
+                .collect::<Result<Vec<_>, String>>()?,
+            ret: Box::new(gen_type(ret)?),
         },
         ast::TypeAnnotation::Generic { name, args } => Type::Generic {
             name: name.clone(),
-            args: args.iter().map(gen_type).collect(),
+            args: args
+                .iter()
+                .map(gen_type)
+                .collect::<Result<Vec<_>, String>>()?,
         },
-    }
+    })
 }
 
 fn gen_binary_op(op: &ast::BinaryOp) -> BinaryOp {
@@ -631,7 +735,7 @@ mod tests {
     fn generates_functions_and_main_body() -> Result<(), Box<dyn std::error::Error>> {
         let ast =
             parse("fn sum(a: i32, b: i32): i32\n    return a + b\nend fn\nvar x := sum(1, 2)");
-        let intermediate_representation = generate(&ast);
+        let intermediate_representation = generate(&ast)?;
 
         assert_eq!(intermediate_representation.functions.len(), 1);
         assert_eq!(intermediate_representation.functions[0].name, "sum");
@@ -651,7 +755,7 @@ mod tests {
              enum Color\n    Red\n    Blue(i32)\nend enum\n\
              trait Drawable\n    fn draw(self)\nend trait",
         );
-        let intermediate_representation = generate(&ast);
+        let intermediate_representation = generate(&ast)?;
 
         assert_eq!(intermediate_representation.structs.len(), 1);
         assert_eq!(intermediate_representation.structs[0].fields.len(), 2);
@@ -664,7 +768,7 @@ mod tests {
     #[test]
     fn constant_folding_input_is_preserved() -> Result<(), Box<dyn std::error::Error>> {
         let ast = parse("var x := 2 + 3");
-        let intermediate_representation = generate(&ast);
+        let intermediate_representation = generate(&ast)?;
         match &intermediate_representation.main_body[0] {
             Statement::VarDecl {
                 value:
@@ -688,7 +792,7 @@ mod tests {
             "fn helper(): i32\n    const scale := 3\n    return 5 * scale\nend fn\
              \nfn main()\n    const local := 10\n    put local\nend fn",
         );
-        let intermediate_representation = generate(&ast);
+        let intermediate_representation = generate(&ast)?;
         assert_eq!(intermediate_representation.constants.len(), 0);
         assert_eq!(intermediate_representation.functions.len(), 2);
         for function in &intermediate_representation.functions {

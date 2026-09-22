@@ -116,7 +116,7 @@ Closes #123
 
 - Follow Rust style guidelines
 - Use `cargo fmt` to format code
-- Use `cargo clippy` to check for warnings
+- Use `cargo clippy --workspace --all-targets -- -D warnings` to check for warnings (this is exactly what CI runs)
 - Add comments for complex logic
 - Keep functions focused and small
 
@@ -216,7 +216,13 @@ Brief description of changes
 - Use meaningful variable names
 - Add doc comments for public items
 - Handle errors appropriately
-- Avoid unwrap() in production code
+- Never call `unwrap()`/`unwrap_err()`/`expect()`/`expect_err()` — both are
+  denied workspace-wide by `clippy::unwrap_used` and `clippy::expect_used`
+  (tests included). Propagate failures with `?`; for `Option` use
+  `.ok_or("original message")?` or `let … else { return Err(...) }`.
+- Prefer returning errors over `panic!` on any path input can reach; keep
+  `unreachable!` only for invariants an earlier pass or the parser enforces,
+  and name that invariant in the message.
 - Use early returns for clarity
 
 ### Poly Code

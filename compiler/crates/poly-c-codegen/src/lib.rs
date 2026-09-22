@@ -475,12 +475,15 @@ impl CGenerator {
                     .collect::<Result<Vec<_>, String>>()?
                     .join(", ")
             );
-            let name = match statement {
-                Statement::VarDeclaration { name, .. } | Statement::LetDeclaration { name, .. } => {
-                    name
-                }
-                _ => unreachable!(),
-            };
+            let name =
+                match statement {
+                    Statement::VarDeclaration { name, .. }
+                    | Statement::LetDeclaration { name, .. } => name,
+                    _ => {
+                        return Err("function-pointer lowering expects a var or let declaration"
+                            .to_string())
+                    }
+                };
             let line = format!(
                 "{} = {};\n",
                 pointer_type.replace("PLACEHOLDER", name),

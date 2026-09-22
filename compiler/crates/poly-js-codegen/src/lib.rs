@@ -323,7 +323,9 @@ impl JsGenerator {
                         step,
                     } = &ranges[0]
                     else {
-                        unreachable!("range part is either Value or Range");
+                        return Err(
+                            "loop range part must be a Range after Value handling".to_string()
+                        );
                     };
                     let descending = step.as_ref().is_some_and(is_negative_expression);
                     // Descending loops compare against the upper bound with

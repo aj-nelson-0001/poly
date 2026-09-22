@@ -123,7 +123,7 @@ impl Transpiler {
 
     fn generate_rust(&self, program: &Program) -> Result<String, String> {
         let intermediate_representation =
-            poly_intermediate_representation::generator::generate(program);
+            poly_intermediate_representation::generator::generate(program)?;
         let mut codegen =
             poly_intermediate_representation::IntermediateRepresentationCodeGen::new();
         codegen.generate(&intermediate_representation)
@@ -194,7 +194,7 @@ impl Transpiler {
     ) -> Result<(String, SourceMap), String> {
         let program = Self::parse_target(source, "rust")?;
         let intermediate_representation =
-            poly_intermediate_representation::generator::generate(&program);
+            poly_intermediate_representation::generator::generate(&program)?;
         let mut codegen =
             poly_intermediate_representation::IntermediateRepresentationCodeGen::new();
         let rust_code = codegen.generate(&intermediate_representation)?;

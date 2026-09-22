@@ -25,7 +25,7 @@ pub fn transpile(source: &str) -> Result<String, String> {
     let mut parser = poly_parser::Parser::new(&tokens);
     let program = parser.parse().map_err(|e| e.to_string())?;
     poly_parser::require_explicit_main(&program)?;
-    let intermediate_representation = generator::generate(&program);
+    let intermediate_representation = generator::generate(&program)?;
     let mut codegen = IntermediateRepresentationCodeGen::new();
     codegen.generate(&intermediate_representation)
 }
@@ -39,7 +39,7 @@ pub fn transpile_optimized(source: &str) -> Result<String, String> {
     let mut parser = poly_parser::Parser::new(&tokens);
     let program = parser.parse().map_err(|e| e.to_string())?;
     poly_parser::require_explicit_main(&program)?;
-    let mut intermediate_representation = generator::generate(&program);
+    let mut intermediate_representation = generator::generate(&program)?;
     optimizer::optimize(&mut intermediate_representation);
     let mut codegen = IntermediateRepresentationCodeGen::new();
     codegen.generate(&intermediate_representation)

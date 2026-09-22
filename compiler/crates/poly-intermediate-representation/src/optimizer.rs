@@ -1073,6 +1073,7 @@ mod tests {
             .parse()
             .unwrap_or_else(|e| panic!("source should parse: {e}"));
         crate::generator::generate(&ast)
+            .unwrap_or_else(|e| panic!("source should lower to IR: {e}"))
     }
 
     fn int_value(expr: &Expr) -> Result<i64, String> {

@@ -2964,7 +2964,7 @@ impl AsmGenerator {
                 left,
                 right,
             } => (left.as_ref(), right.as_ref()),
-            _ => unreachable!("emit_value_concat called on non-concat expression"),
+            _ => return Err("emit_value_concat called on non-concat expression".to_string()),
         };
         let left_loc = self.emit_string_ptr(left, frame)?;
         let right_loc = self.emit_string_ptr(right, frame)?;

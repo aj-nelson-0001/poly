@@ -4,6 +4,15 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- Parser: statement nesting is capped at 128 levels with a
+  `Maximum nested statement depth` diagnostic. Every nested statement
+  re-enters one guarded entry point, so parser stack use is now provably
+  bounded for any input (the cap is sized so a full-depth debug parse
+  stays well under an 8 MiB stack); previously only chained `if`
+  conditions had a depth limit.
+
 ### Changed
 
 - **`unwrap()`/`expect()` are banned workspace-wide.** Production code, tests,
@@ -31,9 +40,10 @@ All notable changes to the Poly language compiler will be documented in this fil
 - **`parse_block` stays frame-neutral.** An intermediate iteration routed
   every block statement through an extra wrapper frame, overflowing the
   macOS CI stack on deeply nested input; the wrapper now runs only where
-  the depth counter is absent, and CI pins that recursion's stack floor
-  on Linux (`RUST_MIN_STACK=1968 KiB`, measured between the healthy
-  floor and the frame-per-level regression floor).
+  the depth counter is absent, and CI pins a stack floor under the
+  **full error-handling suite** on Linux (`RUST_MIN_STACK=1968 KiB`,
+  measured between the healthy full-suite floor and the frame-per-level
+  regression floor), so any test that regresses frame usage is caught.
 
 ## [2.0.0-preview.15] - 2026-09-21
 

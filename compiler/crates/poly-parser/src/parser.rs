@@ -25,6 +25,10 @@ pub struct Parser<'a> {
     stop_at_double_minus: bool,
     // Foreign blocks are only valid at program scope.
     block_depth: usize,
+    // Every nested statement re-enters `parse_statement`, so one cap here
+    // bounds parser stack use for any input: nested blocks, match arms,
+    // macro expansions, and `pub` chains alike.
+    stmt_depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -38,6 +42,7 @@ impl<'a> Parser<'a> {
             macros: HashMap::new(),
             stop_at_double_minus: false,
             block_depth: 0,
+            stmt_depth: 0,
         }
     }
 
@@ -355,6 +360,23 @@ impl<'a> Parser<'a> {
     // Dispatching on the first token keeps each declaration/control-flow parser
     // small and makes synchronization points explicit in `synchronize` above.
     fn parse_statement(&mut self) -> Result<Statement, ParseError> {
+        // Sized so the worst case (every level live at once) stays well
+        // under an 8 MiB debug test stack: a debug `parse_statement_inner`
+        // frame is ~35 KiB, so 128 levels peak near 4.5 MiB.
+        const MAX_STATEMENT_DEPTH: usize = 128;
+        if self.stmt_depth >= MAX_STATEMENT_DEPTH {
+            return Err(ParseError::new(
+                format!("Maximum nested statement depth ({MAX_STATEMENT_DEPTH}) exceeded"),
+                self.current().span,
+            ));
+        }
+        self.stmt_depth += 1;
+        let result = self.parse_statement_inner();
+        self.stmt_depth -= 1;
+        result
+    }
+
+    fn parse_statement_inner(&mut self) -> Result<Statement, ParseError> {
         match self.peek().clone() {
             TokenKind::Var => self.parse_var_declaration(),
             TokenKind::Let => self.parse_let_declaration(),
@@ -5490,5 +5512,34 @@ end fn"#;
             "expected the pub'd extern declaration"
         );
         Ok(())
+    }
+
+    /// Every nested statement re-enters `parse_statement`, so one cap bounds
+    /// parser stack for hostile nesting: the deepest allowed program parses,
+    /// one level past it fails with a diagnostic instead of risking the
+    /// stack — the parse-time counterpart of the CI stack-floor guard.
+    #[test]
+    fn statement_nesting_depth_is_capped() {
+        const LIMIT: usize = 128;
+        let open = "while false\n";
+        let close = "end while\n";
+
+        let ok_source: String = open.repeat(LIMIT) + &close.repeat(LIMIT);
+        let (tokens, _errors) = Lexer::lex(&ok_source);
+        assert!(
+            Parser::new(&tokens).parse().is_ok(),
+            "the deepest allowed nesting must still parse"
+        );
+
+        let deep_source: String = open.repeat(LIMIT + 1) + &close.repeat(LIMIT + 1);
+        let (tokens, _errors) = Lexer::lex(&deep_source);
+        let message = match Parser::new(&tokens).parse() {
+            Ok(_) => "<parsed successfully>".to_string(),
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            message.contains("Maximum nested statement depth"),
+            "expected the statement-depth diagnostic, got: {message}"
+        );
     }
 }

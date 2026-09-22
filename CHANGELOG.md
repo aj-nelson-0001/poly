@@ -4,6 +4,8 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.16] - 2026-09-22
+
 ### Added
 
 - Parser: statement nesting is capped at 128 levels with a

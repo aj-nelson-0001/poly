@@ -2,7 +2,20 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.15 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+Poly 2.0.0-preview.16 continues the target-aware compiler model established by the earlier previews. Rust remains the default and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.16
+
+- Error handling hardened workspace-wide: `unwrap()`/`expect()` are banned
+  with clippy gates that fail CI on regressions, reachable compiler panics
+  now return diagnostics or errors, and generated code reports runtime
+  failures with context instead of panicking.
+- Parser robustness: program-scope-only statements (`extern fn` and
+  foreign `#lang` blocks) are rejected in every nested context including
+  match arms, macro and `pub` continuations stay level-faithful, and
+  statement nesting is capped at 128 levels so parser stack use is
+  provably bounded for any input. CI pins the error-handling suite's
+  stack floor to keep deep-nesting handling regression-free.
 
 ## What's New in 2.0.0-preview.15
 

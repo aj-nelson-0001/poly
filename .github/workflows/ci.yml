@@ -72,6 +72,13 @@ jobs:
         run: cargo check --manifest-path compiler/Cargo.toml --workspace --all-targets
 
       - name: Run tests
+        # macOS arm64 debug frames leave the deep-nesting test within
+        # kilobytes of Rust's 2 MiB spawned-thread default, so any tiny
+        # change tips it; 4 MiB gives headroom while the Linux
+        # stack-floor guard below stays the precision gate for
+        # per-level regressions (its inline RUST_MIN_STACK wins there).
+        env:
+          RUST_MIN_STACK: 4194304
         run: cargo test --manifest-path compiler/Cargo.toml --workspace -- --test-threads=1
 
       - name: Error-handling suite stack guard

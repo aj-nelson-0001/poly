@@ -229,6 +229,10 @@ impl<'a> Parser<'a> {
     /// Synchronize the parser after an error by skipping tokens until a
     /// synchronization point (statement boundary).
     fn synchronize(&mut self) {
+        // Recovery abandons whatever nesting `?` unwound through (early
+        // returns skip the depth decrement), so the statement-depth counter
+        // restarts at top level here.
+        self.stmt_depth = 0;
         while !self.is_at_end() {
             match self.peek() {
                 // Statement boundary tokens
@@ -360,9 +364,11 @@ impl<'a> Parser<'a> {
     // Dispatching on the first token keeps each declaration/control-flow parser
     // small and makes synchronization points explicit in `synchronize` above.
     fn parse_statement(&mut self) -> Result<Statement, ParseError> {
-        // Sized so the worst case (every level live at once) stays well
-        // under an 8 MiB debug test stack: a debug `parse_statement_inner`
-        // frame is ~35 KiB, so 128 levels peak near 4.5 MiB.
+        // One guard at the single entry every nested statement re-enters, so
+        // hostile nesting can't exhaust the stack. Deliberately frame-neutral
+        // (locals only — a helper call per level tipped macOS's 2 MiB test
+        // threads over on the deep-nesting test): sized so a full-depth debug
+        // parse peaks near 4.5 MiB, under the default test-thread stack.
         const MAX_STATEMENT_DEPTH: usize = 128;
         if self.stmt_depth >= MAX_STATEMENT_DEPTH {
             return Err(ParseError::new(
@@ -371,13 +377,7 @@ impl<'a> Parser<'a> {
             ));
         }
         self.stmt_depth += 1;
-        let result = self.parse_statement_inner();
-        self.stmt_depth -= 1;
-        result
-    }
-
-    fn parse_statement_inner(&mut self) -> Result<Statement, ParseError> {
-        match self.peek().clone() {
+        let result = match self.peek().clone() {
             TokenKind::Var => self.parse_var_declaration(),
             TokenKind::Let => self.parse_let_declaration(),
             TokenKind::Const => self.parse_const_declaration(),
@@ -490,7 +490,9 @@ impl<'a> Parser<'a> {
                 }
                 Ok(Statement::ExpressionStatement(expr))
             }
-        }
+        };
+        self.stmt_depth -= 1;
+        result
     }
 
     /// Reject retired assembly-style mutation statements with a migration

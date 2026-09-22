@@ -12,8 +12,9 @@ All notable changes to the Poly language compiler will be documented in this fil
   `Maximum nested statement depth` diagnostic. Every nested statement
   re-enters one guarded entry point, so parser stack use is now provably
   bounded for any input (the cap is sized so a full-depth debug parse
-  stays well under an 8 MiB stack); previously only chained `if`
-  conditions had a depth limit.
+  stays well under an 8 MiB stack, and the guard is frame-neutral —
+  nesting costs no more stack per level than before); previously only
+  chained `if` conditions had a depth limit.
 
 ### Changed
 
@@ -46,6 +47,8 @@ All notable changes to the Poly language compiler will be documented in this fil
   **full error-handling suite** on Linux (`RUST_MIN_STACK=1968 KiB`,
   measured between the healthy full-suite floor and the frame-per-level
   regression floor), so any test that regresses frame usage is caught.
+  macOS runs tests with a 4 MiB thread stack (its arm64 debug frames sat
+  within kilobytes of the 2 MiB default on the deep-nesting test).
 
 ## [2.0.0-preview.15] - 2026-09-21
 

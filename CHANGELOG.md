@@ -4,6 +4,37 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- **`unwrap()`/`expect()` are banned workspace-wide.** Production code, tests,
+  and benches propagate failures with `?` — including a full `Result`
+  cascade through the IR generator and the codegen crates — and
+  `clippy.toml` plus workspace lints deny `clippy::unwrap_used` and
+  `clippy::expect_used`, so the CI clippy job rejects regressions.
+  CONTRIBUTING.md documents the policy and the reachable-panic rule.
+- **Reachable compiler panics became errors.** The asm/C/JS codegen
+  precondition arms return `Err`, the checker's higher-order-method
+  fallback reports a diagnostic instead of panicking on method-list
+  drift, and the IR generator rejects nested `extern fn` declarations
+  through `Result`-returning `generate`/`gen_*` helpers. Generated code
+  reports runtime failures with context instead of calling `unwrap`.
+
+### Fixed
+
+- **Match-arm bodies can no longer host program-scope-only statements.**
+  `extern fn` declarations and foreign `#lang` blocks were already
+  rejected in function/if/loop/macro/module bodies via the `block_depth`
+  counter, but slipped through in match-arm bodies — the one nested
+  context that never bumps it. A statement-level check closes the hole,
+  and a guard matrix test covers every nested context (plus positive
+  tests keeping `pub` and macro continuations level-faithful).
+- **`parse_block` stays frame-neutral.** An intermediate iteration routed
+  every block statement through an extra wrapper frame, overflowing the
+  macOS CI stack on deeply nested input; the wrapper now runs only where
+  the depth counter is absent, and CI pins that recursion's stack floor
+  on Linux (`RUST_MIN_STACK=1968 KiB`, measured between the healthy
+  floor and the frame-per-level regression floor).
+
 ## [2.0.0-preview.15] - 2026-09-21
 
 ### Added

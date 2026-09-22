@@ -74,6 +74,19 @@ jobs:
       - name: Run tests
         run: cargo test --manifest-path compiler/Cargo.toml --workspace -- --test-threads=1
 
+      - name: Deep-nesting stack guard
+        # parse_block is unbounded recursion over a giant debug-frame
+        # parse_statement, so a stray stack frame per nesting level
+        # overflows small-stack targets (macOS CI caught exactly that).
+        # 1968 KiB sits between the frame-neutral floor (1952 KiB) and the
+        # frame-per-level regression floor (1984 KiB), measured with
+        # RUST_MIN_STACK on both revisions of this test.
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          bin=$(ls compiler/target/debug/deps/error_handling_edge_cases-* | grep -v '\.d$' | head -1)
+          RUST_MIN_STACK=$((1968 * 1024)) "$bin" test_deeply_nested_blocks_fail_gracefully
+
       - name: Check Rust examples
         shell: bash
         run: |

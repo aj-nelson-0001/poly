@@ -418,6 +418,11 @@ impl<'a> Parser<'a> {
             TokenKind::Pub => {
                 // Public modifier - parse the next statement and mark it as public
                 self.advance(); // consume 'pub'
+                                // Same-level delegation: the statement after `pub` is parsed
+                                // exactly as if `pub` were absent, so scope rules apply
+                                // unchanged — the `block_depth` guards reject `extern`/foreign
+                                // in body contexts and `parse_nested_statement` rejects them
+                                // in match-arm bodies.
                 let stmt = self.parse_statement()?;
                 // For now, just parse it normally - the modifier is noted but not stored
                 Ok(stmt)
@@ -1356,7 +1361,9 @@ impl<'a> Parser<'a> {
         self.expect(&TokenKind::Macro)?;
         self.macros
             .insert(name.clone(), MacroDecl { name, params, body });
-        // The declaration itself is not a statement; continue with the next one.
+        // The declaration itself is not a statement; continue with the next
+        // one at this declaration's own level — nested guards belong to the
+        // caller's context (see `a_macro_declaration_does_not_nest_the_`).
         self.parse_statement()
     }
 
@@ -5415,6 +5422,7 @@ end fn"#;
                 "foreign block",
                 "    #c\n    int helper(void) { return 1; }\n    #endc",
             ),
+            ("pub extern", "    pub extern c fn sneaky(value: i32): i32"),
         ];
         let contexts = [
             ("fn body", "fn main()\n{item}\nend fn"),
@@ -5464,6 +5472,22 @@ end fn"#;
                 Statement::ExternFunctionDeclaration(_)
             ),
             "expected the extern declaration first"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn pub_delegates_at_the_same_level() -> Result<(), Box<dyn std::error::Error>> {
+        // `pub` parses the statement that follows it at the same level, so
+        // top-level `pub extern` keeps working while every nested context
+        // still rejects it (covered by the matrix's `pub extern` item).
+        let program = parse_source("pub extern c fn shared(value: i32): i32")?;
+        assert!(
+            matches!(
+                program.statements[0].node,
+                Statement::ExternFunctionDeclaration(_)
+            ),
+            "expected the pub'd extern declaration"
         );
         Ok(())
     }

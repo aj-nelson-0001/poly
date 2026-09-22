@@ -475,7 +475,12 @@ impl<'a> Parser<'a> {
                     return Err(error);
                 }
                 if self.starts_assignment_statement() {
-                    return self.parse_assignment_statement();
+                    // Early return: release the depth the tail would release
+                    // (inspect runs after the inner parse, so nesting is
+                    // still counted while it executes).
+                    return self.parse_assignment_statement().inspect(|_| {
+                        self.stmt_depth -= 1;
+                    });
                 }
                 let expr = self.parse_expression()?;
                 // Statement-position macro invocation: `name(args)` expands
@@ -484,7 +489,11 @@ impl<'a> Parser<'a> {
                 if let Expression::Call { func, args } = &expr {
                     if let Expression::Identifier(name) = func.as_ref() {
                         if let Some(declaration) = self.macros.get(name).cloned() {
-                            return self.expand_macro_call(&declaration, args);
+                            // Early return: release the depth the tail would
+                            // release (inspect runs after the expansion).
+                            return self.expand_macro_call(&declaration, args).inspect(|_| {
+                                self.stmt_depth -= 1;
+                            });
                         }
                     }
                 }
@@ -5542,6 +5551,20 @@ end fn"#;
         assert!(
             message.contains("Maximum nested statement depth"),
             "expected the statement-depth diagnostic, got: {message}"
+        );
+    }
+
+    /// The fallback arm returns assignments and macro expansions early; those
+    /// paths must release the statement-depth count the tail would release,
+    /// or a long real program (tetris: every assignment leaked one level)
+    /// hits the cap mid-file. More statements than the cap proves it.
+    #[test]
+    fn early_return_statements_do_not_leak_statement_depth() {
+        let source: String = (0..130).map(|i| format!("x{i} = 1\n")).collect();
+        let (tokens, _errors) = Lexer::lex(&source);
+        assert!(
+            Parser::new(&tokens).parse().is_ok(),
+            "130 assignments must parse without hitting the depth cap"
         );
     }
 }

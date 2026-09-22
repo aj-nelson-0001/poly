@@ -1201,14 +1201,14 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a statement in a nested position (function, module, block, or
-    /// match-arm bodies). Only the file's top-level statement list may host
-    /// `extern fn` declarations or foreign `#lang` blocks, so this enforces
-    /// at parse time the invariants that IR lowering and codegen rely on
-    /// instead of failing later. Contexts that bump `block_depth` are also
-    /// caught inside `parse_extern_function_declaration` and the foreign-block
-    /// arm; this wrapper backstops the contexts that never do (match-arm and
-    /// macro bodies).
+    /// Parse a statement in a match-arm body. Match-arm bodies are the one
+    /// nested context that never bumps `block_depth`, so the program-scope
+    /// checks inside `parse_extern_function_declaration` and the
+    /// foreign-block arm do not fire there. This wrapper applies the same
+    /// rules so `extern fn` declarations and foreign `#lang` blocks stay
+    /// top-level-only at every nesting depth — and it stays out of
+    /// `parse_block`'s hot path, which is unbounded recursion where an extra
+    /// frame per level would overflow small-stack targets.
     fn parse_nested_statement(&mut self) -> Result<Statement, ParseError> {
         let span = self.current().span;
         match self.parse_statement()? {
@@ -1232,7 +1232,7 @@ impl<'a> Parser<'a> {
 
         while !self.match_token(&TokenKind::End) {
             let start = self.pos;
-            let statement = match self.parse_nested_statement() {
+            let statement = match self.parse_statement() {
                 Ok(statement) => statement,
                 Err(error) => {
                     self.block_depth -= 1;
@@ -1357,7 +1357,7 @@ impl<'a> Parser<'a> {
         self.macros
             .insert(name.clone(), MacroDecl { name, params, body });
         // The declaration itself is not a statement; continue with the next one.
-        self.parse_nested_statement()
+        self.parse_statement()
     }
 
     /// Expand a macro invocation into a block statement whose bodies have had
@@ -3362,7 +3362,7 @@ impl<'a> Parser<'a> {
             && self.peek() != &TokenKind::Else
         {
             let start = self.pos;
-            let statement = match self.parse_nested_statement() {
+            let statement = match self.parse_statement() {
                 Ok(statement) => statement,
                 Err(error) => {
                     self.block_depth -= 1;
@@ -5404,10 +5404,11 @@ end fn"#;
     ) -> Result<(), Box<dyn std::error::Error>> {
         // The parser guards program-scope-only statements in two layers:
         // `block_depth` checks inside `parse_extern_function_declaration` and
-        // the foreign-block arm (contexts that bump depth), and
-        // `parse_nested_statement` (match-arm and macro bodies, which never
-        // do). This matrix keeps every nested context covered if a new parse
-        // path is added or one of the guards is removed.
+        // the foreign-block arm (every nested context parsed through
+        // `parse_block`/`parse_module` bumps that counter), and
+        // `parse_nested_statement` (match-arm bodies, the one nested context
+        // that never does). This matrix keeps every nested context covered if
+        // a new parse path is added or one of the guards is removed.
         let items = [
             ("extern", "    extern c fn sneaky(value: i32): i32"),
             (
@@ -5430,6 +5431,7 @@ end fn"#;
                 "fn main()\n    match 1\n        1,\n{item}\n    end match\nend fn",
             ),
             ("module body", "module m\n{item}\nend module"),
+            ("macro body", "macro holder()\n{item}\nend macro"),
         ];
         for (item_name, item) in items {
             for (context_name, template) in contexts {
@@ -5443,6 +5445,26 @@ end fn"#;
                 );
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn a_macro_declaration_does_not_nest_the_following_statement(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // `parse_macro_declaration` finishes by parsing the statement that
+        // follows the declaration, at the declaration's own level — a
+        // top-level `extern` after a macro must stay legal even though
+        // `extern` inside the macro body is rejected (covered by the matrix).
+        let program = parse_source(
+            "macro holder()\n    put 1\nend macro\nextern c fn real(value: i32): i32",
+        )?;
+        assert!(
+            matches!(
+                program.statements[0].node,
+                Statement::ExternFunctionDeclaration(_)
+            ),
+            "expected the extern declaration first"
+        );
         Ok(())
     }
 }

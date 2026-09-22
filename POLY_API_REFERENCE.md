@@ -120,7 +120,7 @@ end fn
 
 ## Foreign Blocks
 
-Foreign blocks are selected by target and emitted at target-language scope. Keep them at program scope.
+Foreign blocks are selected by target and emitted at target-language scope. Keep them at program scope: the parser rejects foreign blocks (and `extern fn` declarations) in every nested context — function/if/loop/macro bodies and modules via the block-depth check, match-arm bodies via a statement-level check.
 
 ~~~poly
 #rust

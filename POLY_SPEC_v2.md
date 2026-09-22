@@ -81,6 +81,12 @@ struct Config {
 - `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, and
   `extern js fn ...` declarations are optional top-level interface contracts
   for foreign calls. They are checked by Poly and are not emitted.
+- Both top-level rules are enforced in two layers at parse time: bodies
+  parsed with a depth counter (functions, conditionals, loops, macros,
+  modules) reject out-of-scope statements before they are built, and
+  match-arm bodies — the one nested context without a counter — are checked
+  statement-by-statement. A violation is an ordinary parse error
+  (`must appear at program scope`), never a later crash.
 - `dep name = "version"` declarations are program-scope Cargo crate
   dependencies for the Rust target (see below).
 

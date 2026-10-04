@@ -2672,7 +2672,7 @@ impl AsmGenerator {
         match expr {
             Expression::StringLiteral(value) | Expression::UnicodeStringLiteral(value) => {
                 let label = self.intern_string(value);
-                let len = asm_escape(value).len() as i64;
+                let len = interned_string_len(value);
                 self.output.push_str("    # put (string literal)\n");
                 let _ = writeln!(self.output, "    movq $1, %rax");
                 self.output.push_str("    movq $1, %rdi\n");
@@ -2715,7 +2715,7 @@ impl AsmGenerator {
     ) -> Result<(), String> {
         // Write prefix string
         let label = self.intern_string(prefix);
-        let len = asm_escape(prefix).len() as i64;
+        let len = interned_string_len(prefix);
         let _ = writeln!(self.output, "    movq $1, %rax");
         self.output.push_str("    movq $1, %rdi\n");
         let _ = writeln!(self.output, "    leaq {label}(%rip), %rsi");
@@ -2734,7 +2734,7 @@ impl AsmGenerator {
         match expr {
             Expression::StringLiteral(value) | Expression::UnicodeStringLiteral(value) => {
                 let label = self.intern_string(value);
-                let len = asm_escape(value).len() as i64;
+                let len = interned_string_len(value);
                 self.output.push_str("    movq $1, %rax\n");
                 self.output.push_str("    movq $1, %rdi\n");
                 let _ = writeln!(self.output, "    leaq {label}(%rip), %rsi");
@@ -3259,6 +3259,13 @@ fn is_negative_expression(expression: &Expression) -> bool {
     ) || matches!(expression, Expression::IntLiteral(value) if value.starts_with('-'))
 }
 
+/// Escape a Poly string for inclusion in a generated `.ascii`/`.asciz` directive.
+///
+/// NUL and the remaining C0 control characters are emitted as fixed-width
+/// three-digit octal (`\NNN`): a raw NUL would terminate the assembler's
+/// string early and truncate the runtime value, and the fixed width stops the
+/// next character from being read as extra digits. DEL (`0x7f`) is escaped for
+/// the same reason. Characters above `0x7f` pass through as UTF-8.
 fn asm_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
@@ -3268,10 +3275,25 @@ fn asm_escape(s: &str) -> String {
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
+            _ if (ch as u32) < 0x20 || ch as u32 == 0x7f => {
+                out.push_str(&format!("\\{:03o}", ch as u32))
+            }
             _ => out.push(ch),
         }
     }
     out
+}
+
+/// Runtime byte length of a string literal interned into `.data`.
+///
+/// Every escape `asm_escape` emits stands for exactly one byte, and
+/// non-ASCII characters pass through as their UTF-8 bytes, so the length of the
+/// assembled data equals the original Rust string's byte length. Using
+/// `asm_escape(value).len()` instead would count escape *source* characters
+/// (`\n` as two, `\000` as four) and make every `write` syscall over-read the
+/// label.
+fn interned_string_len(value: &str) -> i64 {
+    value.len() as i64
 }
 
 // ---------------------------------------------------------------------------
@@ -3283,6 +3305,21 @@ mod tests {
     use super::*;
     use poly_lexer::Lexer;
     use poly_parser::Parser;
+
+    #[test]
+    fn asm_escape_covers_nul_and_every_control_character() {
+        // Regression: a raw NUL in a `.ascii` directive terminates the
+        // assembler's string early and truncates the runtime value.
+        assert_eq!(asm_escape("a\0b"), "a\\000b");
+        assert_eq!(asm_escape("\u{1b}[0m"), "\\033[0m");
+        assert_eq!(asm_escape("\u{7f}"), "\\177");
+        assert_eq!(asm_escape("\u{0}"), "\\000");
+        assert_eq!(asm_escape("a\\b\"c\nd\re\tf"), "a\\\\b\\\"c\\nd\\re\\tf");
+        // Fixed-width octal: the next character is never read as a digit.
+        assert_eq!(asm_escape("\u{1}f"), "\\001f");
+        assert_eq!(asm_escape("\u{1}7"), "\\0017");
+        assert_eq!(asm_escape("héllo→"), "héllo→");
+    }
 
     fn transpile_source(source: &str) -> Result<String, String> {
         let (tokens, errors) = Lexer::lex(source);

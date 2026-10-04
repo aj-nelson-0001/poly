@@ -9,6 +9,57 @@ fn examples_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../examples")
 }
 
+/// A private scratch directory under the system temp dir, removed on drop.
+///
+/// The tests below used to build `<prefix>_<pid>_<nanos>` paths directly in the
+/// shared temp dir and never removed them, so every test run left a
+/// `poly_*_<pid>_<nanos>` directory behind on the machine (and on every CI
+/// runner). Mirrors `poly_cli::create_private_temp_dir`: an OS-seeded
+/// unpredictable name, `create_dir` so a pre-existing path is never adopted,
+/// and `0700` on Unix. Nothing in these tests runs a manifest, so this is
+/// hygiene rather than a code-execution concern.
+struct ScratchDir(std::path::PathBuf);
+
+impl ScratchDir {
+    fn new(prefix: &str) -> std::io::Result<Self> {
+        use std::collections::hash_map::RandomState;
+        use std::hash::{BuildHasher, Hasher};
+
+        let mut hasher = RandomState::new().build_hasher();
+        hasher.write_u32(std::process::id());
+        let seed = hasher.finish();
+        let base = std::env::temp_dir();
+        for attempt in 0..16u64 {
+            let mut builder = std::fs::DirBuilder::new();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                builder.mode(0o700);
+            }
+            let path = base.join(format!("{prefix}_{seed:016x}_{attempt}"));
+            match builder.create(&path) {
+                Ok(()) => return Ok(ScratchDir(path)),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error),
+            }
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("could not create a private temp dir for {prefix}"),
+        ))
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 #[test]
 fn test_transpile_prime_numbers() -> Result<(), Box<dyn std::error::Error>> {
     let source = std::fs::read_to_string(examples_dir().join("prime_numbers.poly"))?;
@@ -97,15 +148,8 @@ fn test_loop_ranges_include_all_endpoints_at_runtime() -> Result<(), Box<dyn std
     let source =
         "fn main()\n    loop value 1..3, 7, 19..20\n        put value\n    end loop\nend fn";
     let rust_code = Transpiler::new().transpile(source)?;
-    let unique = format!(
-        "poly_loop_runtime_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos()
-    );
-    let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory)?;
+    let scratch = ScratchDir::new("poly_loop_runtime")?;
+    let directory = scratch.path().to_path_buf();
     let source_path = directory.join("main.rs");
     let binary_path = directory.join("loop_program");
     std::fs::write(&source_path, rust_code)?;
@@ -345,16 +389,8 @@ fn normalize_newlines(text: &str) -> String {
 /// test's assertion stays focused on behavior.
 fn compile_and_run(source: &str, stdin: Option<&str>) -> Result<String, String> {
     let rust_code = Transpiler::new().transpile(source)?;
-    let unique = format!(
-        "poly_runtime_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| e.to_string())?
-            .as_nanos()
-    );
-    let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+    let scratch = ScratchDir::new("poly_runtime").map_err(|e| e.to_string())?;
+    let directory = scratch.path().to_path_buf();
     let source_path = directory.join("main.rs");
     let binary_path = directory.join("program");
     std::fs::write(&source_path, rust_code).map_err(|e| e.to_string())?;
@@ -424,15 +460,8 @@ end fn
 "#;
     // `open` resolves relative to the process working directory, so create the
     // fixture file inside the temp directory before compiling and running.
-    let unique = format!(
-        "poly_file_fixture_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos()
-    );
-    let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory)?;
+    let scratch = ScratchDir::new("poly_file_fixture")?;
+    let directory = scratch.path().to_path_buf();
     std::fs::write(directory.join("data.txt"), "hello\nworld\n")?;
 
     let rust_code = Transpiler::new().transpile(source)?;
@@ -532,15 +561,8 @@ end fn
 /// Returns the program's stdout.
 fn compile_and_run_async(source: &str) -> Result<String, String> {
     let rust_code = Transpiler::new().transpile(source)?;
-    let unique = format!(
-        "poly_async_runtime_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| e.to_string())?
-            .as_nanos()
-    );
-    let directory = std::env::temp_dir().join(unique);
+    let scratch = ScratchDir::new("poly_async_runtime").map_err(|e| e.to_string())?;
+    let directory = scratch.path().to_path_buf();
     let src_dir = directory.join("src");
     std::fs::create_dir_all(&src_dir).map_err(|e| e.to_string())?;
     std::fs::write(src_dir.join("main.rs"), &rust_code).map_err(|e| e.to_string())?;
@@ -641,8 +663,10 @@ fn verify_rust_compiles_with_emit(code: &str, emit: &str) -> Result<(), String> 
         .map_err(|_| "rustc verification lock was poisoned".to_string())?;
 
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    let temp_dir = std::env::temp_dir();
-    let stem = format!("poly_test_compile_{}_{}", std::process::id(), id);
+    let scratch = ScratchDir::new("poly_test_compile").map_err(|e| e.to_string())?;
+    let temp_dir = scratch.path().to_path_buf();
+    let stem = "poly_test_compile";
+    let _ = id;
     let temp_file = temp_dir.join(format!("{stem}.rs"));
     let output_extension = if emit == "metadata" { "rmeta" } else { "rlib" };
     let output_file = temp_dir.join(format!("lib{stem}.{output_extension}"));
@@ -654,7 +678,7 @@ fn verify_rust_compiles_with_emit(code: &str, emit: &str) -> Result<(), String> 
         .arg("--crate-type")
         .arg("lib")
         .arg("--crate-name")
-        .arg(&stem)
+        .arg(stem)
         .arg("--emit")
         .arg(emit)
         .arg("--out-dir")
@@ -784,15 +808,8 @@ fn main()
 end fn
 "#;
     let rust_code = Transpiler::new().transpile(source)?;
-    let unique = format!(
-        "poly_runtime_fail_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos()
-    );
-    let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory)?;
+    let scratch = ScratchDir::new("poly_runtime_fail")?;
+    let directory = scratch.path().to_path_buf();
     let source_path = directory.join("main.rs");
     let binary_path = directory.join("program");
     std::fs::write(&source_path, rust_code)?;
@@ -932,16 +949,8 @@ fn compile_and_run_c(source: &str) -> Result<String, String> {
 
 fn compile_and_run_c_capture(source: &str) -> Result<(String, String), String> {
     let c_code = Transpiler::new().transpile_c_checked(source)?;
-    let unique = format!(
-        "poly_c_runtime_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| e.to_string())?
-            .as_nanos()
-    );
-    let directory = std::env::temp_dir().join(unique);
-    std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+    let scratch = ScratchDir::new("poly_c_runtime").map_err(|e| e.to_string())?;
+    let directory = scratch.path().to_path_buf();
     let source_path = directory.join("main.c");
     let binary_path = directory.join(format!("program{}", std::env::consts::EXE_SUFFIX));
     std::fs::write(&source_path, c_code).map_err(|e| e.to_string())?;

@@ -59,6 +59,14 @@ designed.
 
 See [POLY_SPEC_v2.md](POLY_SPEC_v2.md) for the full specification, [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the frozen target contract, and [POLY_ROADMAP_v2.md](POLY_ROADMAP_v2.md) for the implementation plan.
 
+> ⚠️ **`poly` compiles and runs code.** `poly file.poly`, `poly --project`,
+> and `poly --check` all hand the generated code to `rustc`, `cargo`, `cc`,
+> `as`, or `node`, and `--check` still executes the build scripts of any `dep`
+> crate. Combined with the verbatim foreign blocks above, running `poly` on a
+> file you did not write is arbitrary code execution. **Never run `poly` on an
+> untrusted `.poly` file**, and in CI treat every `.poly` file in a pull
+> request as executable code. See [POLY_SECURITY_GUIDE.md](POLY_SECURITY_GUIDE.md#0-running-the-compiler-on-untrusted-files).
+
 ---
 
 ## What's New in v2.0 Preview
@@ -397,6 +405,13 @@ top-level `dep` statement. Only the Rust target has a dependency mechanism:
 `--check` resolves them through Cargo so the program validates standalone. The
 C, asm, and JS targets reject `dep` declarations with an explanatory warning.
 
+The version must be a plain Cargo version requirement (`"1"`, `"0.9"`,
+`"1.0.0"`, `"^1.2"`, `">=1, <2"`). Quotes, braces, brackets, backslashes and
+control characters are rejected: the value is written into a generated
+`Cargo.toml`, and a `dep` line that could inject extra manifest tables (for
+example `[build-dependencies]`, whose build scripts run during `--check`) is
+not accepted.
+
 ~~~poly
 dep rand = "0.8"
 dep libc = "0.2"
@@ -479,7 +494,8 @@ Poly/
 ├── POLY_BEST_PRACTICES.md             # Idiomatic patterns
 ├── POLY_TESTING_GUIDE.md              # Testing strategies
 ├── POLY_PERFORMANCE_GUIDE.md          # Optimization tips
-├── POLY_SECURITY_GUIDE.md             # Security considerations
+├── POLY_SECURITY_GUIDE.md             # Running poly on untrusted files; security considerations
+├── SECURITY_AUDIT_REPORT.md           # Compiler security audit findings and fixes
 ├── POLY_COMPATIBILITY_GUIDE.md        # Cross-platform notes
 ├── POLY_DEPLOYMENT_GUIDE.md           # Build & deploy
 ├── POLY_VERSIONING_GUIDE.md           # Version management
@@ -543,7 +559,8 @@ Poly/
 | [Best Practices](POLY_BEST_PRACTICES.md) | Idiomatic Poly patterns |
 | [Testing Guide](POLY_TESTING_GUIDE.md) | How to test Poly programs |
 | [Performance Guide](POLY_PERFORMANCE_GUIDE.md) | Optimization techniques |
-| [Security Guide](POLY_SECURITY_GUIDE.md) | Security considerations |
+| [Security Guide](POLY_SECURITY_GUIDE.md) | **Running `poly` on untrusted files**, and security considerations |
+| [Security Audit Report](SECURITY_AUDIT_REPORT.md) | Compiler security audit: findings, fixes, and residual risk |
 | [Documentation Style Guide](POLY_DOCUMENTATION_STYLE_GUIDE.md) | Documentation and example conventions |
 | [Grammar](POLY_GRAMMAR.md) | Compact v2 grammar accepted by the parser |
 | [Support Matrix](POLY_V2_SUPPORT_MATRIX.md) | Frozen per-target feature contract |

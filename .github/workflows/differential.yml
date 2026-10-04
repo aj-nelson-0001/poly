@@ -6,6 +6,10 @@ on:
     - cron: "7 3 * * *"
   workflow_dispatch: {}
 
+# Least privilege: these jobs compile and execute every `.poly` file in the
+# tree, so no token scope is warranted.
+permissions: {}
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_BUILD_JOBS: 2
@@ -16,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.98.0
+        uses: dtolnay/rust-toolchain@4dfd137a5aecc12897f37a01818006f58cf58347 # 1.98.0
 
       - name: Build compiler
         run: cargo build --release -p poly-cli
@@ -38,10 +42,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.98.0
+        uses: dtolnay/rust-toolchain@4dfd137a5aecc12897f37a01818006f58cf58347 # 1.98.0
 
       - name: Build compiler
         run: cargo build --release -p poly-cli
@@ -58,7 +62,7 @@ jobs:
 
       - name: Upload divergence artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: fuzz-divergences
           path: |

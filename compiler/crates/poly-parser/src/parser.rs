@@ -50,6 +50,48 @@ const MAX_EXPRESSION_DEPTH: usize = 32;
 /// and the more specific limit must win the diagnostic).
 const MAX_IF_DEPTH: usize = 32;
 
+/// Longest `dep` crate name Cargo will accept in a manifest.
+const MAX_DEPENDENCY_NAME_LEN: usize = 64;
+
+/// Longest `dep` version requirement accepted before validation gives up.
+const MAX_DEPENDENCY_VERSION_LEN: usize = 128;
+
+/// True when `name` is safe to interpolate into a generated `Cargo.toml`
+/// dependency key.
+///
+/// Cargo package names are alphanumerics plus `-` and `_`; nothing else can
+/// appear, so no combination of the name can terminate the line it is written
+/// on or open a TOML table/inline-table.
+pub fn is_valid_dependency_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_DEPENDENCY_NAME_LEN
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// True when `version` is safe to interpolate into a generated `Cargo.toml`
+/// basic string.
+///
+/// The CLI writes declared dependencies as `name = "<version>"`, so a version
+/// containing `"`, `\`, a control character, `[`, `]`, `{`, `}`, or `#` can
+/// escape the string and inject arbitrary manifest tables — most damagingly
+/// `[build-dependencies]`, whose build scripts run when the generated project is
+/// compiled. Since `dep` has no other use for a version requirement, the
+/// allowlist is deliberately limited to the characters Cargo version
+/// requirements actually use.
+pub fn is_valid_dependency_version(version: &str) -> bool {
+    !version.is_empty()
+        && version.len() <= MAX_DEPENDENCY_VERSION_LEN
+        && version.chars().all(|c| {
+            c.is_ascii_alphanumeric()
+                || matches!(
+                    c,
+                    '.' | '*' | '+' | '-' | '_' | ',' | ' ' | '^' | '~' | '>' | '<' | '='
+                )
+        })
+}
+
 impl<'a> Parser<'a> {
     /// Create a new parser for the given token stream.
     pub fn new(tokens: &'a [Token]) -> Self {
@@ -1365,13 +1407,43 @@ impl<'a> Parser<'a> {
 
     /// `dep name = "version"` declares an external crate dependency. Program
     /// scope only: dependencies are project-level metadata, not statements.
+    ///
+    /// Both fields are validated here because they are written verbatim into a
+    /// generated `Cargo.toml` (see `is_valid_dependency_version`): an
+    /// unvalidated version string can break out of its TOML string and inject
+    /// manifest tables, so reject anything that is not a plain version
+    /// requirement rather than sanitizing it into something the user did not
+    /// write.
     fn parse_dependency_declaration(&mut self) -> Result<DependencyDecl, ParseError> {
         self.advance(); // consume 'dep'
+        let name_span = self.current().span;
         let name = self.expect_identifier()?;
+        if !is_valid_dependency_name(&name) {
+            return Err(ParseError::new(
+                format!(
+                    "Invalid crate name `{name}`: expected 1-{} characters from [A-Za-z0-9_-]",
+                    MAX_DEPENDENCY_NAME_LEN
+                ),
+                name_span,
+            ));
+        }
         self.expect(&TokenKind::Eq)?;
         let version = match self.peek().clone() {
             TokenKind::StringLiteral(version) => {
+                let span = self.current().span;
                 self.advance();
+                if !is_valid_dependency_version(&version) {
+                    return Err(ParseError::new(
+                        format!(
+                            "Invalid version requirement `{version}` for `dep {name}`: expected a plain \
+                             Cargo version requirement (for example \"1\", \"0.9\", \"1.0.0\", \
+                             \"^1.2\", \">=1, <2\"). Quotes, braces, brackets, backslashes and control \
+                             characters are not allowed because the value is written into a generated \
+                             Cargo.toml."
+                        ),
+                        span,
+                    ));
+                }
                 version
             }
             other => {
@@ -4083,6 +4155,97 @@ mod tests {
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
         assert!(parser.parse().is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn dependency_version_cannot_escape_the_generated_toml_string() {
+        // Each of these breaks out of `name = "<version>"` when the CLI writes
+        // the generated Cargo.toml, letting the source inject manifest tables
+        // (e.g. `[build-dependencies]`, whose build scripts execute during
+        // `poly --check`). None may parse.
+        let escapes = [
+            // The literal Poly text an attacker would write to close the
+            // generated TOML string and open a `[build-dependencies]` table.
+            r#"1.0\"\n[build-dependencies]\nevil = { path = \"/tmp/evil\" }\n#"#,
+            "1.0\"",
+            "1.0\\",
+            "1.0\\n[dependencies]",
+            "{ version = \"1\" }",
+            "[build-dependencies]",
+            "1.0 # comment",
+            "1.0\\u{7}",
+            "1.0\\u{1b}[0m",
+        ];
+        for version in escapes {
+            let source = format!("dep serde = \"{version}\"\n");
+            let (tokens, lexer_errors) = Lexer::lex(&source);
+            let mut parser = Parser::new(&tokens);
+            assert!(
+                !lexer_errors.is_empty() || parser.parse().is_err(),
+                "dep version {version:?} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn dependency_name_cannot_escape_the_generated_toml_string() {
+        for name in ["", "ser de", "serde\\", "serde]", "ser\\\"de"] {
+            assert!(
+                !is_valid_dependency_name(name),
+                "crate name {name:?} must be rejected"
+            );
+        }
+        for name in ["serde", "serde-derive", "serde_json", "a_b", "x1"] {
+            assert!(is_valid_dependency_name(name), "{name:?} is a valid crate");
+        }
+    }
+
+    #[test]
+    fn dependency_version_allowlist_matches_cargo_version_requirements() {
+        for version in [
+            "1",
+            "0.9",
+            "1.0.0",
+            "1.0.0-alpha.1",
+            "^1.2",
+            "~0.27",
+            ">=1, <2",
+            "1.*",
+        ] {
+            assert!(
+                is_valid_dependency_version(version),
+                "{version:?} is a valid version requirement"
+            );
+        }
+        for version in [
+            "",
+            "\"",
+            "\\",
+            "{",
+            "}",
+            "[",
+            "]",
+            "#",
+            "1.0\r\nx",
+            "1.0\u{7f}",
+        ] {
+            assert!(
+                !is_valid_dependency_version(version),
+                "{version:?} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_dependency_declarations_still_parse() -> Result<(), Box<dyn std::error::Error>> {
+        for version in ["0.27", "1.0.0", "^1.2", ">=1, <2"] {
+            let source = format!("dep serde = \"{version}\"\nfn main()\n    put \"ok\"\nend fn\n");
+            let (tokens, errors) = Lexer::lex(&source);
+            assert!(errors.is_empty(), "{errors:?}");
+            let mut parser = Parser::new(&tokens);
+            parser.parse()?;
+        }
         Ok(())
     }
 

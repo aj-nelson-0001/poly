@@ -442,18 +442,9 @@ fn main() -> Result<()> {
                     match transpiler.transpile_target(&source, target.language_name()) {
                         Ok(code) => {
                             let compile_result = match target {
-                                Target::Rust => verify_rust_compiles_with_dependencies(
-                                    &code,
-                                    &dependencies,
-                                    &format!(
-                                        "{}-{}",
-                                        process::id(),
-                                        std::time::SystemTime::now()
-                                            .duration_since(std::time::UNIX_EPOCH)
-                                            .unwrap_or_default()
-                                            .as_nanos()
-                                    ),
-                                ),
+                                Target::Rust => {
+                                    verify_rust_compiles_with_dependencies(&code, &dependencies)
+                                }
                                 Target::C => verify_c_compiles(&code),
                                 Target::Asm => verify_asm_compiles(&code),
                                 Target::Js => verify_js_compiles(&code),
@@ -1070,7 +1061,18 @@ fn cargo_manifest(
         // "bundled" compiles SQLite from source so no system library is needed.
         dependencies.push_str("rusqlite = { version = \"0.31\", features = [\"bundled\"] }\n");
     }
+    // Defence in depth for the manifest sink: the parser already rejects any
+    // `dep` name/version that could break out of the generated TOML string
+    // (see `poly_parser::is_valid_dependency_version`), but this function must
+    // never be the only thing standing between a `.poly` file and an injected
+    // `[build-dependencies]` table, whose build scripts run on `cargo check`.
+    // Skip rather than emit a manifest Cargo would misparse.
     for (name, version) in declared_dependencies {
+        if !poly_parser::is_valid_dependency_name(name)
+            || !poly_parser::is_valid_dependency_version(version)
+        {
+            continue;
+        }
         dependencies.push_str(&format!("{name} = \"{version}\"\n"));
     }
 
@@ -1159,25 +1161,63 @@ fn executable_path(source_path: &Path) -> PathBuf {
     output_path
 }
 
+/// Create a private, unpredictable temporary directory under the system temp
+/// dir, for scratch files handed to an external toolchain (`rustc`, `cargo`,
+/// `cc`, `as`, `node`).
+///
+/// The name is derived from `RandomState`, whose seed the OS supplies per
+/// process, so another user on the same machine cannot predict it and
+/// pre-create it. `create_dir` -- not `create_dir_all` -- fails when the path
+/// already exists, and on Unix the directory is created `0700`, so nothing else
+/// on the box can read it or swap a file between the write and the toolchain
+/// run. (Previously these paths were `<pid>-<nanos>` files written straight
+/// into the shared temp dir, which a local attacker could pre-create or
+/// symlink.) Callers own cleanup with `remove_dir_all`.
+fn create_private_temp_dir(prefix: &str) -> Result<PathBuf> {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+
+    let mut hasher = RandomState::new().build_hasher();
+    hasher.write_u32(process::id());
+    let seed = hasher.finish();
+    let base = std::env::temp_dir();
+
+    let mut collision: Option<std::io::Error> = None;
+    for attempt in 0..16u64 {
+        let mut builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        match builder.create(base.join(format!("{prefix}_{seed:016x}_{attempt}"))) {
+            Ok(()) => return Ok(base.join(format!("{prefix}_{seed:016x}_{attempt}"))),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                collision = Some(error);
+            }
+            Err(error) => {
+                return Err(error).context("Failed to create temporary scratch directory")
+            }
+        }
+    }
+    Err(anyhow::anyhow!(
+        "Failed to create a private temporary directory for {prefix}: {}",
+        collision.map(|error| error.to_string()).unwrap_or_default()
+    ))
+}
+
 /// Compile generated Rust into an executable with rustc.
 #[allow(dead_code)]
 fn compile_rust_binary(code: &str, output_path: &Path) -> Result<()> {
     use std::process::Command;
 
-    let unique_id = format!(
-        "{}-{}",
-        process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    );
-    let temp_source = std::env::temp_dir().join(format!("poly-{}.rs", unique_id));
+    let scratch_dir = create_private_temp_dir("poly_rustc")?;
+    let temp_source = scratch_dir.join("poly.rs");
     let output_name = output_path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("poly-output");
-    let temp_output = output_path.with_file_name(format!(".{}.tmp-{}", output_name, unique_id));
+    let temp_output = scratch_dir.join(format!("{output_name}.tmp-{}", process::id()));
 
     std::fs::write(&temp_source, code).context("Failed to write temporary Rust source")?;
 
@@ -1191,11 +1231,10 @@ fn compile_rust_binary(code: &str, output_path: &Path) -> Result<()> {
         .arg(&temp_output)
         .output();
 
-    let _ = std::fs::remove_file(&temp_source);
     let output = match rustc_result {
         Ok(output) => output,
         Err(error) => {
-            let _ = std::fs::remove_file(&temp_output);
+            let _ = std::fs::remove_dir_all(&scratch_dir);
             return Err(anyhow::anyhow!(
                 "Failed to run rustc. Is Rust installed? ({})",
                 error
@@ -1204,20 +1243,21 @@ fn compile_rust_binary(code: &str, output_path: &Path) -> Result<()> {
     };
 
     if !output.status.success() {
-        let _ = std::fs::remove_file(&temp_output);
         let stderr = String::from_utf8_lossy(&output.stderr);
         let message = if stderr.trim().is_empty() {
             String::from_utf8_lossy(&output.stdout).to_string()
         } else {
             stderr.to_string()
         };
+        let _ = std::fs::remove_dir_all(&scratch_dir);
         return Err(anyhow::anyhow!(message));
     }
 
-    if let Err(error) = install_compiled_binary(&temp_output, output_path) {
-        let _ = std::fs::remove_file(&temp_output);
-        return Err(error);
-    }
+    // Install before cleaning up: the compiled binary lives in the scratch
+    // directory until `install_compiled_binary` moves it into place.
+    let installed = install_compiled_binary(&temp_output, output_path);
+    let _ = std::fs::remove_dir_all(&scratch_dir);
+    installed?;
     Ok(())
 }
 
@@ -1428,17 +1468,9 @@ node main.js\n\
 /// Verify generated x86-64 assembly syntax using `as`.
 fn verify_asm_compiles(code: &str) -> Result<()> {
     use std::process::Command;
-    let unique_id = format!(
-        "{}-{}",
-        process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    );
-    let temp_dir = std::env::temp_dir();
-    let source_path = temp_dir.join(format!("poly_check_{unique_id}.S"));
-    let output_path = temp_dir.join(format!("poly_check_{unique_id}.o"));
+    let temp_dir = create_private_temp_dir("poly_asm")?;
+    let source_path = temp_dir.join("check.S");
+    let output_path = temp_dir.join("check.o");
     std::fs::write(&source_path, code).context("Failed to write temporary assembly source")?;
     let output = Command::new("as")
         .arg("--64")
@@ -1447,8 +1479,7 @@ fn verify_asm_compiles(code: &str) -> Result<()> {
         .arg(&source_path)
         .output()
         .context("Failed to run `as`. Is GNU binutils installed?");
-    let _ = std::fs::remove_file(&source_path);
-    let _ = std::fs::remove_file(&output_path);
+    let _ = std::fs::remove_dir_all(&temp_dir);
     let output = output?;
     if output.status.success() {
         Ok(())
@@ -1469,23 +1500,15 @@ fn c_binary_path(source_path: &Path) -> PathBuf {
 /// overrides the Node binary; when Node is absent the caller degrades to a
 /// warning, mirroring how the C target treats a missing compiler.
 fn verify_js_compiles(code: &str) -> Result<()> {
-    let unique_id = format!(
-        "{}-{}",
-        process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    );
-    let temp_dir = std::env::temp_dir();
-    let source_path = temp_dir.join(format!("poly_check_{unique_id}.js"));
+    let temp_dir = create_private_temp_dir("poly_js")?;
+    let source_path = temp_dir.join("check.js");
     std::fs::write(&source_path, code).context("Failed to write temporary JS source")?;
     let node = std::env::var("POLY_NODE").unwrap_or_else(|_| "node".to_string());
     let output = std::process::Command::new(&node)
         .arg("--check")
         .arg(&source_path)
         .output();
-    let _ = std::fs::remove_file(&source_path);
+    let _ = std::fs::remove_dir_all(&temp_dir);
     let output = output.map_err(|error| {
         anyhow::anyhow!("failed to run `{node}` (set POLY_NODE to override): {error}")
     })?;
@@ -1499,17 +1522,8 @@ fn verify_js_compiles(code: &str) -> Result<()> {
 }
 
 fn verify_c_compiles(code: &str) -> Result<()> {
-    let unique_id = format!(
-        "{}-{}",
-        process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    );
-    let temp_dir = std::env::temp_dir();
-    let source_path = temp_dir.join(format!("poly_check_{unique_id}.c"));
-    let output_path = temp_dir.join(format!("poly_check_{unique_id}"));
+    let temp_dir = create_private_temp_dir("poly_c")?;
+    let source_path = temp_dir.join("check.c");
     std::fs::write(&source_path, code).context("Failed to write temporary C source")?;
     let mut compiler = c_compiler_command()?;
     let output = compiler
@@ -1520,8 +1534,7 @@ fn verify_c_compiles(code: &str) -> Result<()> {
         .arg(&source_path)
         .output()
         .context("Failed to run the configured C compiler");
-    let _ = std::fs::remove_file(&source_path);
-    let _ = std::fs::remove_file(&output_path);
+    let _ = std::fs::remove_dir_all(&temp_dir);
     let output = output?;
     if output.status.success() {
         Ok(())
@@ -1587,8 +1600,9 @@ fn compile_c_binary(source_path: &Path, output_path: &Path) -> Result<()> {
 /// Verify generated Rust without running LLVM code generation.
 ///
 /// Metadata emission preserves the compiler checks needed by `--check` while
-/// avoiding an unnecessary object file. The unique source and output names
-/// also make concurrent CLI checks safe.
+/// avoiding an unnecessary object file. Scratch files live in a private,
+/// unguessable temp directory, so concurrent CLI checks stay safe without
+/// relying on predictable file names in the shared temp dir.
 ///
 /// Async programs emit `#[tokio::main]`, which a bare `rustc` invocation
 /// cannot resolve, so those are verified in a temporary Cargo project that
@@ -1596,7 +1610,6 @@ fn compile_c_binary(source_path: &Path, output_path: &Path) -> Result<()> {
 fn verify_rust_compiles(code: &str) -> Result<()> {
     use std::process::Command;
     use std::sync::{Mutex, OnceLock};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     static RUSTC_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     let _rustc_guard = RUSTC_LOCK
@@ -1604,27 +1617,17 @@ fn verify_rust_compiles(code: &str) -> Result<()> {
         .lock()
         .map_err(|_| anyhow::anyhow!("rustc verification lock was poisoned"))?;
 
-    let unique_id = format!(
-        "{}-{}",
-        process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    );
-
     // A program needs the Cargo project when it emits `#[tokio::main]` or
     // references tokio directly (e.g. `delay` lowers to `tokio::time::sleep`
     // inside async functions even when main stays sync), or when `db_execute`
     // references the rusqlite crate.
     if code.contains("#[tokio::main]") || code.contains("tokio::") || code.contains("rusqlite::") {
-        return verify_async_rust_compiles(code, &unique_id);
+        return verify_async_rust_compiles(code);
     }
 
-    let temp_dir = std::env::temp_dir();
-    let stem = format!("poly_check_{unique_id}").replace('-', "_");
-    let temp_file = temp_dir.join(format!("{stem}.rs"));
-    let output_file = temp_dir.join(format!("lib{stem}.rmeta"));
+    let temp_dir = create_private_temp_dir("poly_rust")?;
+    let stem = "poly_check";
+    let temp_file = temp_dir.join("poly_check.rs");
     std::fs::write(&temp_file, code).context("Failed to write temp file")?;
 
     let output = Command::new("rustc")
@@ -1633,7 +1636,7 @@ fn verify_rust_compiles(code: &str) -> Result<()> {
         .arg("--crate-type")
         .arg("lib")
         .arg("--crate-name")
-        .arg(&stem)
+        .arg(stem)
         .arg("--emit=metadata")
         .arg("--out-dir")
         .arg(&temp_dir)
@@ -1641,8 +1644,7 @@ fn verify_rust_compiles(code: &str) -> Result<()> {
         .output()
         .context("Failed to run rustc. Is Rust installed?");
 
-    let _ = std::fs::remove_file(&temp_file);
-    let _ = std::fs::remove_file(output_file);
+    let _ = std::fs::remove_dir_all(&temp_dir);
     let output = output?;
 
     if output.status.success() {
@@ -1658,7 +1660,6 @@ fn verify_rust_compiles(code: &str) -> Result<()> {
 fn verify_rust_compiles_with_dependencies(
     code: &str,
     dependencies: &[(String, String)],
-    unique_id: &str,
 ) -> Result<()> {
     use std::process::Command;
 
@@ -1666,9 +1667,12 @@ fn verify_rust_compiles_with_dependencies(
         return verify_rust_compiles(code);
     }
     // External crates only resolve through Cargo, so compile the generated
-    // Rust inside a temporary project whose manifest declares them.
-    let temp_dir = std::env::temp_dir();
-    let project_dir = temp_dir.join(format!("poly_check_deps_{unique_id}"));
+    // Rust inside a temporary project whose manifest declares them. The
+    // project lives in a private, unguessable directory: `cargo` executes
+    // build scripts and proc macros from whatever manifest it finds there, so
+    // a shared-temp-dir path another user could pre-create would be a local
+    // code-execution hole.
+    let project_dir = create_private_temp_dir("poly_deps")?;
     let src_dir = project_dir.join("src");
     std::fs::create_dir_all(&src_dir).context("Failed to create temp Cargo project")?;
     let manifest = cargo_manifest("poly_check_deps", false, false, dependencies);
@@ -1698,11 +1702,10 @@ fn verify_rust_compiles_with_dependencies(
     }
 }
 
-fn verify_async_rust_compiles(code: &str, unique_id: &str) -> Result<()> {
+fn verify_async_rust_compiles(code: &str) -> Result<()> {
     use std::process::Command;
 
-    let temp_dir = std::env::temp_dir();
-    let project_dir = temp_dir.join(format!("poly_check_async_{unique_id}"));
+    let project_dir = create_private_temp_dir("poly_async")?;
     let src_dir = project_dir.join("src");
     std::fs::create_dir_all(&src_dir).context("Failed to create temp Cargo project")?;
     let rusqlite = if code.contains("rusqlite::") {
@@ -1972,6 +1975,39 @@ mod tests {
     }
 
     #[test]
+    fn cargo_manifest_never_emits_an_injectable_dependency_line(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Sink-level guard for the dep TOML injection: even if a hostile
+        // (name, version) pair reaches `cargo_manifest`, nothing that could
+        // close the quoted string or open a new TOML table may be written.
+        let hostile = vec![
+            (
+                "evil".to_string(),
+                r#"0.1.0\"\n[build-dependencies]\nevilbuild = { path = \"/tmp/evil\" }\n#"#
+                    .to_string(),
+            ),
+            ("serde".to_string(), "1.0\"".to_string()),
+            ("serde".to_string(), "{ version = \"1\" }".to_string()),
+            ("serde".to_string(), "1.0 # comment".to_string()),
+            ("ser de".to_string(), "1.0".to_string()),
+        ];
+        let manifest = cargo_manifest("demo", false, false, &hostile);
+        for line in manifest.lines() {
+            assert!(
+                !line.contains("[build-dependencies]"),
+                "injected table header reached the manifest: {line}"
+            );
+            assert!(!line.contains("path ="), "injected path reached: {line}");
+            assert!(
+                !line.starts_with(' ') && !line.contains(" = {"),
+                "injected table entry reached the manifest: {line}"
+            );
+        }
+        assert!(manifest.contains("[dependencies]"));
+        Ok(())
+    }
+
+    #[test]
     fn cargo_package_name_is_safe_for_cargo() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
             cargo_package_name(Path::new("my demo"), Path::new("source.poly")),
@@ -1998,6 +2034,30 @@ mod tests {
             default_cargo_output_dir(Path::new("examples/my program.poly")),
             PathBuf::from("rust_output/my-program")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn private_temp_dirs_are_private_unique_and_unguessable(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let first = create_private_temp_dir("poly_test")?;
+        let second = create_private_temp_dir("poly_test")?;
+        // Distinct, non-guessable names: the old `<pid>-<nanos>` scheme let a
+        // local attacker pre-create the directory and swap in their own
+        // manifest before `cargo` ran in it.
+        assert_ne!(first, second);
+        assert!(first.starts_with(std::env::temp_dir()));
+        assert_eq!(
+            std::fs::metadata(&first)?.permissions().mode() & 0o777,
+            0o700,
+            "scratch dir must not be world- or group-accessible"
+        );
+        std::fs::write(first.join("scratch"), b"x")?;
+        let _ = std::fs::remove_dir_all(&first);
+        assert!(!first.exists());
+        let _ = std::fs::remove_dir_all(&second);
         Ok(())
     }
 

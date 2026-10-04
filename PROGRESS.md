@@ -1,7 +1,129 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-09-21.
+Last updated: 2026-10-03.
+
+## Deep security audit: `dep` TOML injection fixed (confirmed RCE), escape and temp-dir hardening, CI locked down (2026-10-03)
+
+Full security review of the compiler, LSP, WASM/playground, CI and scripts. Unlike
+the earlier correctness audits, this round looked for exploitable defects, and every
+finding was reproduced against the release binary rather than reasoned about from the
+source. One **critical arbitrary-code-execution** bug was found and closed; three more
+findings were fixed, one was documented as a design property, and one portability bug
+was recorded. Written up in full in the new `SECURITY_AUDIT_REPORT.md`.
+
+- **`dep` version strings could inject arbitrary TOML into the generated
+  `Cargo.toml`, giving arbitrary code execution (CRITICAL, confirmed
+  end-to-end).** `cargo_manifest` built each dependency line with
+  `format!("{name} = \"{version}\"\n")` from the raw `dep` version, and the
+  lexer decodes both `\"` and `\n`, so a one-line `.poly` file could close
+  its own TOML string and open a `[build-dependencies]` table pointing at a
+  crate with a `build.rs`. `--check` writes that manifest to a scratch Cargo
+  project and runs `cargo check` on it, so the injected build script executed
+  — with `--check --strict` printing `OK: 2 statements parsed, rust code
+  compiles` while it ran. Two details make the exploit reliable and are worth
+  remembering for re-testing: the injected key must match the target crate's
+  `[package] name`, and a plain `[dependencies]` path entry is the reliable
+  vector (`cargo check` will not build `[build-dependencies]` for a root
+  package with no `build.rs` of its own).
+  Fixed in two layers: `poly-parser` now exposes
+  `is_valid_dependency_name`/`is_valid_dependency_version` and
+  `parse_dependency_declaration` rejects anything outside those allowlists with
+  a spanned diagnostic; `cargo_manifest` re-checks as defence in depth so the
+  manifest writer is never the only guard. The version allowlist covers exactly
+  what a Cargo version requirement needs (alphanumerics plus `. * + - _ ,`,
+  space, `^ ~ > < =`), so `"`, `\`, brackets, braces, `#`, control characters
+  and non-ASCII are all rejected and nothing legitimate is lost. Rejecting
+  rather than sanitizing is deliberate — a silently rewritten dependency is
+  worse than a clear diagnostic.
+- **NUL and the remaining control characters were not escaped in generated
+  C, asm and JS.** `c_escape`, `asm_escape` and `js_escape` each handled only
+  `\\ " \n \r \t` and did it with a chain of `str::replace` calls, so
+  `put "a\0b"` wrote a raw NUL byte into the emitted source. `cc -std=c11` only
+  warns (`null character(s) preserved in literal`) and exits 0, so the build
+  looks clean while the binary silently prints `a`. All three are now a single
+  character-wise pass emitting fixed-width octal (C, asm) or `\xNN` (JS), so
+  the following character can never be absorbed as extra digits; bytes above
+  `0x7f` pass through as UTF-8. The JS target's behaviour genuinely improved —
+  it now round-trips the NUL (`node` receives `61 00 62`).
+- **asm used the escaped length as the `write` syscall byte count** (found
+  while fixing the above, pre-existing): `asm_escape(value).len()` counted
+  escape *source* characters (`\n` as two, `\000` as four), so any literal with
+  an escape — or any non-ASCII text — over-read the interned label. Now
+  `interned_string_len`, the original byte length, which is exact because every
+  escape stands for one byte.
+- **Predictable temp directories (`CWE-377`).** Every scratch path handed to
+  `rustc`/`cargo`/`cc`/`as`/`node` was `<pid>-<nanos>` written straight into
+  the shared temp dir, and the temporary Cargo project used `create_dir_all`,
+  which succeeds on a pre-existing directory — so a local attacker could
+  pre-create it and have `cargo` resolve and run build scripts and proc macros
+  from a manifest of their choosing. Demonstrated with a watcher loop that won
+  the race and swapped the project's `src/` for a symlink.
+  `create_private_temp_dir` derives the name from a `RandomState` hash (OS
+  seeded per process), uses `create_dir` so an existing path is never adopted,
+  creates the directory `0700` on Unix, and cleans up with `remove_dir_all`.
+  All eight CLI call sites routed through it; **no new dependency**, matching
+  the workspace's minimal-dependency posture. The test harness had the same
+  pattern *and* leaked `/tmp/poly_*` directories on every run, so it got the
+  same treatment via an RAII `ScratchDir`; a full test run now leaves nothing
+  behind.
+- **CI ran untrusted input with a token, and every action was pinned to a
+  floating tag.** `poly` compiles and runs `.poly` files, so a pull request
+  adding a fixture executes code on the runner — while reporting green.
+  `ci.yml` and `differential.yml` now declare `permissions: {}`; in
+  `release.yml` only `create-release` gets `contents: write` (artifact
+  upload/download uses the Actions runtime token, not `GITHUB_TOKEN`, so it is
+  unaffected). All **28** action references across the three workflows are full
+  commit SHAs with the version in a trailing comment — the SHAs are the commits
+  the floating tags currently resolve to, so behaviour is unchanged while the
+  tag mutability is gone.
+- **`poly file.poly` is code execution, and nothing said so (documented).**
+  Foreign blocks are copied verbatim into the generated target source (a
+  `#rust` block calling `std::process::Command` reached `src/main.rs` and ran),
+  foreign calls resolve against the target compiler unless `--strict` is used,
+  and `dep` runs a crate's build scripts. Expected for a systems language, but
+  previously undocumented — and the Security Guide was entirely about writing
+  secure *Poly programs*, not about running the *compiler* on hostile input.
+  New section `0. Running the compiler on untrusted files` at the top of
+  `POLY_SECURITY_GUIDE.md` gives a per-command table of what each mode does,
+  the three execution paths, the rules, and the compiler-side guarantees the
+  project does provide; README carries a callout and a pointer.
+- **Checked and confirmed clean**, each by execution rather than reading:
+  identifier-based injection into the generated targets (impossible — the lexer
+  restricts identifiers to `[A-Za-z_][A-Za-z0-9_]*`); expression nesting DoS
+  (capped at 32; 200k nested parens give a clean diagnostic); statement nesting
+  DoS (capped at 128; 100k nested loops give a clean error — the CI comments
+  calling `parse_block` unbounded are stale relative to that guard); playground
+  XSS (no `innerHTML`/`eval`/`new Function`/`document.write`, all output via
+  `textContent`, WASM instantiated from fetched bytes with zero imports);
+  `poly-lsp` (hand-rolled JSON is bounds-checked and escapes all `<0x20`, and the
+  server does no file I/O at all); the Python scripts (argument-list subprocesses
+  only, no `shell=True`, no `eval`); subprocess use in the compiler (no shell
+  anywhere; `POLY_CC`/`POLY_NODE` take a bare executable name and are
+  environment-controlled); and `--project` output-path safety.
+- **Left open on purpose, with the reasoning recorded:**
+  `put` of a string containing NUL still truncates on the C target, because
+  `put` lowers to a single `printf` call and a C string literal is
+  NUL-terminated. `%.*s` was tried and reverted — precision is a *maximum*, not
+  a byte count — so the real fix is an ordered `fwrite`-per-piece `put` path
+  across all four backends, which would churn the codegen snapshots. Documented
+  as residual risk 7 instead of shipped half-working. Also recorded: the REPL's
+  hand-rolled `struct termios` is correct for glibc but wrong on musl
+  (`c_cc[19]`, no `c_line`) — a portability bug, not a security one, so left
+  alone.
+- **New `SECURITY_AUDIT_REPORT.md`** in the house style of the existing audits:
+  findings ranked by severity with reproductions, the fixes, a verified-clean
+  table, and the residual risks. Wired into README (structure tree and
+  documentation table) and CHANGELOG `[Unreleased]`, which also records each
+  fix individually.
+- **Verification**: 539 workspace tests pass, 0 failed (single-threaded, CI's
+  mode), with 9 new regression tests pinning each fix; clippy
+  `-D warnings` clean; fmt clean; markdown check 56 files / 1,388 tilde fence
+  markers; doc audit 589 blocks / 0 unmarked failures; generated-path check
+  clean; all 6 differential suites byte-identical across the four targets;
+  `cargo audit` 0 vulnerabilities across 82 crates. Both attack
+  reproductions were re-run against the fixed binary: the injection is
+  rejected at parse time and the JS target round-trips NUL.
 
 ## Tutorial promoted to v2; comment coverage across the docs; comment-style and async claims verified (2026-09-21)
 

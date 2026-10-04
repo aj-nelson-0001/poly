@@ -10,6 +10,81 @@ This guide covers security best practices for the new Poly I/O and error handlin
 
 ---
 
+## 0. Running the compiler on untrusted files
+
+**The most important warning in this document. Read it before anything else.**
+
+`poly` is a compiler, not a validator. Running it on a `.poly` file **compiles and
+executes that file's target code on your machine**. This is not a theoretical
+concern — it is the documented purpose of the tool, and it holds for every mode
+that does more than print output:
+
+| Command | Effect on an untrusted file |
+|---|---|
+| `poly untrusted.poly` | Generates a Cargo project, runs `cargo build`, **runs the binary** |
+| `poly --project out untrusted.poly` | Writes a Cargo project that `cargo build`/`cargo run` will execute |
+| `poly --check --strict untrusted.poly` | Hands the generated code to `rustc`/`cargo check`/`cc`/`as`/`node` |
+| `poly --repl` | Executes each line as you type it |
+
+Three concrete paths to arbitrary code execution, all of them by design:
+
+1. **Foreign blocks.** `#rust`, `#c`, `#asm` and `#js` blocks are copied
+   **verbatim** into the generated target source and handed to the native
+   toolchain. A `#rust` block can call `std::process::Command` directly; an
+   `#asm` block can emit a `syscall`.
+2. **`extern` declarations and foreign calls.** With `--strict`, a call to a
+   foreign function requires an explicit `extern <target> fn` declaration —
+   without `--strict` the default is permissive, so an undeclared name is
+   assumed to be a native call and resolved by the target compiler.
+3. **`dep` declarations.** `dep <crate> = "<version>"` makes the generated
+   project resolve that crate through Cargo, which runs its build scripts.
+   Version requirements are validated against a strict allowlist, so a `dep`
+   line cannot inject arbitrary manifest content — but a legitimate dependency
+   still has build-script execution at build time.
+
+### Rules
+
+- **Never run `poly` on a file you did not write**, and never on a file that
+  arrived from an untrusted source (issue tracker, chat, email, a downloaded
+  repository, a code-generation service).
+- Prefer a mode that prints without building when you only need to inspect a
+  file: `--tokens`, `--ast`, `--emit-rust`, `--emit-c`, `--emit-asm`,
+  `--emit-js`. These still run the front end (so the language's own resource
+  caps apply) but hand nothing to an external toolchain.
+  **`--emit-*` is not a security boundary against a hostile file** — treat its
+  output as untrusted input, and do not pipe it into a compiler yourself.
+- Use `--strict` whenever you want foreign calls to be rejected rather than
+  silently delegated to the target compiler.
+- On a shared or multi-tenant machine, compile untrusted input inside a
+  container or VM.
+- In CI, treat every `.poly` file in a pull request as executable code. Run
+  those jobs with `permissions: {}`, no secrets, and no write-scoped tokens.
+
+### What the compiler does protect against
+
+These are compiler-side guarantees, not promises about your file's contents:
+
+- `dep` names and version requirements are validated against an allowlist
+  before they reach the generated `Cargo.toml`, so a source file cannot inject
+  extra manifest tables (`[build-dependencies]`, `[patch]`, …) that would change
+  what the build does.
+- Identifier emission into the C, asm and JS backends is constrained by the
+  lexer's identifier rules, so a variable name cannot break out into generated
+  target syntax.
+- Expression nesting (32) and statement nesting (128) are capped, so a hostile
+  file cannot exhaust the parser's stack.
+- Strings emitted into generated C, asm and JS sources have NUL and all other
+  control characters escaped, so a hostile string cannot smuggle raw bytes into
+  the target source.
+- Scratch files and temporary Cargo projects are created in private (`0700`)
+  directories with names derived from per-process OS randomness, so another
+  user on the same machine cannot pre-create or read them.
+- The playground has no XSS sinks: compiler output is written with
+  `textContent`, never `innerHTML`, and the WASM module is instantiated with no
+  host imports.
+
+---
+
 ## 1. Input Validation
 
 ### Always Validate User Input
@@ -118,12 +193,12 @@ fn is_valid_path(path: ustring): bool
     if path.contains(unicode ".."),
         return false
     end if
-    
+
     // Check for absolute paths (if not allowed)
     if path.starts_with(unicode "/"),
         return false
     end if
-    
+
     return true
 end fn
 
@@ -281,11 +356,11 @@ put user_input  // Could contain malicious HTML
 fn authenticate(username: ustring, password: ustring): Result<User, AuthError>
     var user := try get_user(username)
     var hashed_password := try get_password_hash(username)
-    
+
     if not verify_password(password, hashed_password),
         return Error(AuthError::InvalidCredentials)
     end if
-    
+
     return Ok(user)
 end fn
 
@@ -303,7 +378,7 @@ end fn
 fn create_session(user: User): Session
     var session_id := generate_secure_token()
     var expiry := get_timestamp() + 3600  // 1 hour
-    
+
     store_session(session_id, user.id, expiry)
     return Session(id: session_id, expiry: expiry)
 end fn
@@ -412,18 +487,18 @@ fn process_external_data(data: ustring): Result<ustring, ustring>
     if not data.is_valid_json(),
         return Error(unicode "Invalid JSON format")
     end if
-    
+
     // Validate data size
     if data.len() > 1000000,
         return Error(unicode "Data too large")
     end if
-    
+
     // Validate data content
     var parsed := try parse_json(data)
     if not validate_schema(parsed),
         return Error(unicode "Data doesn't match schema")
     end if
-    
+
     return Ok(data)
 end fn
 

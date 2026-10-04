@@ -4,6 +4,70 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Security
+
+- **`dep` version strings can no longer inject TOML into the generated
+  `Cargo.toml`** (arbitrary code execution, confirmed end-to-end). `dep`
+  names and version requirements are validated against an allowlist in
+  `parse_dependency_declaration`, with a spanned diagnostic, and
+  `cargo_manifest` re-checks as defence in depth. The version allowlist
+  covers exactly what a Cargo version requirement needs
+  (alphanumerics plus `. * + - _ , <space> ^ ~ > < =`), so `"`, `\`,
+  brackets, braces, `#`, control characters and non-ASCII are rejected.
+  Previously a one-line `.poly` file could close its TOML string and
+  inject a `[build-dependencies]` table, whose build script then ran
+  during a plain `poly --check --strict`. See
+  [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) finding 1.
+- **Generated C, asm and JS sources now escape NUL and every other
+  control character.** `c_escape`, `asm_escape` and `js_escape` emitted
+  raw bytes for anything outside `\\ " \n \r \t`, so `put "a\0b"` wrote a
+  literal NUL into the generated source: `cc` only warned and the binary
+  silently printed `a`. All three are now a single character-wise pass
+  emitting fixed-width octal (C, asm) or `\xNN` (JS) escapes. See
+  [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) finding 4.
+- **Scratch files and temporary Cargo projects moved to private,
+  unpredictable directories.** Every path handed to `rustc`/`cargo`/`cc`/
+  `as`/`node` was `<pid>-<nanos>` written straight into the shared temp
+  dir, and the temporary Cargo project used `create_dir_all`, which
+  succeeds on a pre-existing directory — so a local attacker could
+  pre-create it and have `cargo` resolve and execute build scripts from
+  a manifest of their choosing. `create_private_temp_dir` derives the
+  name from per-process OS randomness, uses `create_dir`, creates the
+  directory `0700` on Unix, and all eight call sites clean up with
+  `remove_dir_all`. No new dependency. See
+  [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) finding 5.
+- **CI runs untrusted input with no token, and every action is pinned
+  to a commit SHA.** `poly` compiles and runs `.poly` files, so a pull
+  request adding a fixture executes code on the runner. `ci.yml` and
+  `differential.yml` now declare `permissions: {}`; in `release.yml` only
+  `create-release` gets `contents: write`. All 28 action references
+  across the three workflows are full SHAs with the version in a
+  trailing comment. See
+  [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) finding 3.
+
+### Fixed
+
+- asm: the `write` syscall byte count for an interned string literal used
+  the *escaped* length (`asm_escape(value).len()`) rather than the
+  runtime length, so any literal containing an escape — or any non-ASCII
+  text — over-read the label by the escape characters' width. Now
+  `interned_string_len`, the original byte length.
+
+### Documentation
+
+- [POLY_SECURITY_GUIDE.md](POLY_SECURITY_GUIDE.md) gains section 0,
+  "Running the compiler on untrusted files": what each CLI mode actually
+  does, the three paths from a `.poly` file to arbitrary code execution
+  (verbatim foreign blocks, undeclared foreign calls, `dep` build
+  scripts), the rules for handling files you did not write, and the
+  compiler-side guarantees the project does provide. The guide previously
+  covered only how to write secure Poly programs, not how to run the
+  compiler safely.
+- New [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md): the full
+  security audit of the compiler, LSP, WASM/playground, CI and scripts —
+  including the areas checked and found clean, and the two residual
+  limitations left open with the reasoning.
+
 ## [2.0.0-preview.17] - 2026-09-22
 
 ### Added

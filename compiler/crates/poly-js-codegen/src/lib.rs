@@ -948,13 +948,30 @@ fn line_prefix_for(output: &mut String, indent: usize) {
     }
 }
 
+/// Escape a Poly string for inclusion in a generated JavaScript string literal.
+///
+/// NUL and the remaining C0 control characters are emitted as `\xNN` escapes:
+/// a raw NUL (or any raw control character) inside a JS literal is not portable
+/// and, in the NUL case, silently truncates the string at runtime. `\xNN` is
+/// fixed-width, so the next character can never extend the escape. DEL
+/// (`0x7f`) is escaped too; anything above `0x7f` passes through as UTF-8,
+/// matching the JS string's own representation.
 fn js_escape(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ if (ch as u32) < 0x20 || ch as u32 == 0x7f => {
+                out.push_str(&format!("\\x{:02x}", ch as u32))
+            }
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 fn is_negative_expression(expression: &Expression) -> bool {
@@ -972,6 +989,21 @@ mod tests {
     use super::*;
     use poly_lexer::Lexer;
     use poly_parser::Parser;
+
+    #[test]
+    fn js_escape_covers_nul_and_every_control_character() {
+        // Regression: a raw NUL in an emitted JS literal is not portable and
+        // silently truncates the string at runtime.
+        assert_eq!(js_escape("a\0b"), "a\\x00b");
+        assert_eq!(js_escape("\u{1b}[0m"), "\\x1b[0m");
+        assert_eq!(js_escape("\u{7f}"), "\\x7f");
+        assert_eq!(js_escape("\u{0}"), "\\x00");
+        assert_eq!(js_escape("a\\b\"c\nd\re\tf"), "a\\\\b\\\"c\\nd\\re\\tf");
+        // `\xNN` is fixed width, so a trailing hex digit cannot extend it.
+        assert_eq!(js_escape("\u{1}f"), "\\x01f");
+        assert_eq!(js_escape("\u{1}7"), "\\x017");
+        assert_eq!(js_escape("héllo→"), "héllo→");
+    }
 
     fn generate(source: &str) -> Result<String, String> {
         let (tokens, errors) = Lexer::lex(source);

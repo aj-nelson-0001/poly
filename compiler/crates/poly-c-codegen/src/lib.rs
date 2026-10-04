@@ -1353,6 +1353,14 @@ impl CGenerator {
     fn printf_parts(&self, expression: &Expression) -> Result<(String, String), String> {
         match expression {
             Expression::StringLiteral(value) | Expression::UnicodeStringLiteral(value) => {
+                // Known limitation: a C string literal is NUL-terminated, so
+                // `put`ing a value containing NUL still stops at the NUL on the
+                // C target (the JS and asm targets carry an explicit length and
+                // are unaffected). Fixing it needs an ordered
+                // `fwrite`-per-piece emission path rather than one `printf`
+                // format string; tracked rather than half-fixed here, because
+                // `%.*s` would not help -- precision is a maximum, not a byte
+                // count.
                 Ok((c_format_escape(value), String::new()))
             }
             Expression::BinaryOp {
@@ -1945,13 +1953,31 @@ fn line_prefix_for(output: &mut String, indent: usize) {
     }
 }
 
+/// Escape a Poly string for inclusion in a generated C string or char literal.
+///
+/// NUL and the remaining C0 control characters have no short C escape, and
+/// emitting them raw makes the C compiler silently truncate the literal at the
+/// NUL (`cc` only warns: "null character(s) preserved in literal"). Emit them
+/// as fixed-width three-digit octal so the character that follows can never be
+/// absorbed as extra digits. DEL (`0x7f`) is escaped for the same reason.
+/// Characters above `0x7f` pass through: the emitted source is UTF-8, matching
+/// the UTF-8 bytes the runtime string already holds.
 fn c_escape(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ if (ch as u32) < 0x20 || ch as u32 == 0x7f => {
+                out.push_str(&format!("\\{:03o}", ch as u32))
+            }
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 fn c_format_escape(value: &str) -> String {
@@ -1973,6 +1999,24 @@ mod tests {
     use super::*;
     use poly_lexer::Lexer;
     use poly_parser::Parser;
+
+    #[test]
+    fn c_escape_covers_nul_and_every_control_character() {
+        // Regression: a raw NUL in an emitted C literal made `cc` warn and
+        // silently truncate the string at runtime (`put "a\0b"` printed `a`).
+        assert_eq!(c_escape("a\0b"), "a\\000b");
+        assert_eq!(c_escape("\u{1b}[0m"), "\\033[0m");
+        assert_eq!(c_escape("\u{7f}"), "\\177");
+        assert_eq!(c_escape("\u{0}"), "\\000");
+        // The five classic escapes and a trailing hex-looking digit must not
+        // merge with the following character.
+        assert_eq!(c_escape("a\\b\"c\nd\re\tf"), "a\\\\b\\\"c\\nd\\re\\tf");
+        assert_eq!(c_escape("\u{1}f"), "\\001f");
+        assert_eq!(c_escape("\u{1}7"), "\\0017");
+        // Non-ASCII passes through unchanged (already valid UTF-8 in source).
+        assert_eq!(c_escape("héllo→"), "héllo→");
+        assert_eq!(c_format_escape("100% \0"), "100%% \\000");
+    }
 
     #[test]
     fn float_variables_print_with_f() -> Result<(), Box<dyn std::error::Error>> {

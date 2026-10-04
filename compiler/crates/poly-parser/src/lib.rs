@@ -10,4 +10,4 @@ pub mod parser;
 pub use ast::*;
 pub use entry_point::require_explicit_main;
 pub use error::ParseError;
-pub use parser::Parser;
+pub use parser::{is_valid_dependency_name, is_valid_dependency_version, Parser};

@@ -228,18 +228,25 @@ impl Transpiler {
             source_map.add_mapping(target_line, source_line);
             last_source_line = source_line;
         }
-        self.register_statement_symbols(source, &mut source_map);
+        self.register_statement_symbols(&program, source, &mut source_map);
         self.source_map = Some(source_map.clone());
         Ok((rust_code, source_map))
     }
 
     /// Record top-level names against their parser spans for editor and CLI
     /// diagnostics; malformed programs simply produce no symbol entries.
-    fn register_statement_symbols(&self, source: &str, source_map: &mut SourceMap) {
+    ///
+    /// Takes the already-parsed `program`: target selection only removes
+    /// foreign blocks and `extern` declarations, neither of which produces a
+    /// symbol here, so the filtered program records exactly the same names as
+    /// re-parsing the raw source while avoiding a second lex+parse pass.
+    fn register_statement_symbols(
+        &self,
+        program: &Program,
+        source: &str,
+        source_map: &mut SourceMap,
+    ) {
         use poly_lexer::diagnostics::line_col;
-        let Ok(program) = Self::parse(source) else {
-            return;
-        };
         for spanned in &program.statements {
             let (line, column) = line_col(source, spanned.span.start);
             match &spanned.node {

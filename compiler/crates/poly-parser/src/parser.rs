@@ -144,10 +144,17 @@ impl<'a> Parser<'a> {
                 }
                 // `put ... > "file"` → suggest `to "file"`
                 TokenKind::Put => {
-                    // Scan ahead for `> "..."` or `>> "..."` (but NOT `to>>` or `from>>`)
+                    // Scan ahead for `> "..."` or `>> "..."` (but NOT `to>>` or `from>>`).
+                    // Newline tokens are never emitted, so the end of the line is
+                    // the token whose recorded `line` changes. Bounding the scan
+                    // this way keeps it O(line length) instead of O(remaining
+                    // tokens); the unbounded form made parsing quadratic on files
+                    // with many `put`/`get` statements.
+                    let line = self.tokens[i].line;
                     let mut j = i + 1;
                     while j < self.tokens.len()
-                        && !matches!(self.tokens[j].kind, TokenKind::Eof | TokenKind::Newline)
+                        && self.tokens[j].line == line
+                        && !matches!(self.tokens[j].kind, TokenKind::Eof)
                     {
                         if matches!(self.tokens[j].kind, TokenKind::Gt | TokenKind::GtGt) {
                             // Skip operators that belong to an explicit `to`/`from` clause;
@@ -189,9 +196,12 @@ impl<'a> Parser<'a> {
                 }
                 // `get < "file"` → suggest `from "file"`
                 TokenKind::Get => {
+                    // Same-line bound as the `put` case above.
+                    let line = self.tokens[i].line;
                     let mut j = i + 1;
                     while j < self.tokens.len()
-                        && !matches!(self.tokens[j].kind, TokenKind::Eof | TokenKind::Newline)
+                        && self.tokens[j].line == line
+                        && !matches!(self.tokens[j].kind, TokenKind::Eof)
                     {
                         if matches!(self.tokens[j].kind, TokenKind::Lt | TokenKind::LtLt)
                             && j + 1 < self.tokens.len()

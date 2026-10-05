@@ -25,6 +25,14 @@ pub struct Lexer {
     chars: Vec<char>,
     // How many characters have been consumed so far.
     pos: usize,
+    // 1-based line of the character under the cursor. Advanced whenever a
+    // newline is consumed, so tokens can record the line they start on even
+    // though newline tokens themselves are discarded.
+    line: usize,
+    // Line the token currently being scanned started on, captured before its
+    // characters are consumed so a multi-line token (a string or foreign
+    // block) still reports its first line rather than its last.
+    token_line: usize,
     // The tokens produced, in source order.
     tokens: Vec<Token>,
     // Any errors encountered; the lexer does not stop at the first one.
@@ -41,6 +49,8 @@ impl Lexer {
             // Collect the characters once; all later work indexes this list.
             chars: source.chars().collect(),
             pos: 0,
+            line: 1,
+            token_line: 1,
             tokens: Vec::new(),
             errors: Vec::new(),
         }
@@ -66,8 +76,11 @@ impl Lexer {
         }
         // Every token stream ends with an EOF marker so the parser can rely on
         // always having one more token to look at.
-        self.tokens
-            .push(Token::new(TokenKind::Eof, Span::new(self.pos, self.pos)));
+        self.tokens.push(Token::new(
+            TokenKind::Eof,
+            Span::new(self.pos, self.pos),
+            self.line,
+        ));
     }
 
     /// Get the tokens produced by lexing.
@@ -113,6 +126,9 @@ impl Lexer {
     fn advance(&mut self) -> char {
         let ch = self.current();
         self.pos += 1;
+        if ch == '\n' {
+            self.line += 1;
+        }
         ch
     }
 
@@ -220,7 +236,10 @@ impl Lexer {
 
         // `start` is the byte offset of this token's first character; it is
         // passed to `add_token` (which spans from `start` to the current pos).
+        // Capture the line here, before consuming, so multi-line tokens still
+        // record the line they begin on.
         let start = self.pos;
+        self.token_line = self.line;
         // Consume the first character; the match decides what to do with it.
         let ch = self.advance();
 
@@ -394,8 +413,11 @@ impl Lexer {
     fn add_token(&mut self, kind: TokenKind, start: usize) {
         // All scanners use one constructor so spans consistently cover the
         // source from the first character through the final consumed character.
-        self.tokens
-            .push(Token::new(kind, Span::new(start, self.pos)));
+        self.tokens.push(Token::new(
+            kind,
+            Span::new(start, self.pos),
+            self.token_line,
+        ));
     }
 
     /// Return the language after `#` when the marker is a standalone block

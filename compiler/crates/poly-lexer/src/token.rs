@@ -38,17 +38,24 @@ impl Span {
 
 /// A token with its kind and span in source code.
 ///
-/// This pairs *what* the token is (`kind`) with *where* it was found (`span`).
+/// This pairs *what* the token is (`kind`) with *where* it was found (`span`),
+/// plus the 1-based source line it starts on. Newlines are discarded during
+/// lexing (Poly block termination is `end <keyword>`, not indentation), so the
+/// line is the only surviving record of line structure; the parser uses it to
+/// bound lookahead to the current line instead of scanning to end of input.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
+    /// 1-based line on which the token's first character appears.
+    pub line: usize,
 }
 
 impl Token {
-    /// Pair a token classification with the exact source range that produced it.
-    pub fn new(kind: TokenKind, span: Span) -> Self {
-        Self { kind, span }
+    /// Pair a token classification with the exact source range that produced it
+    /// and the line it starts on.
+    pub fn new(kind: TokenKind, span: Span, line: usize) -> Self {
+        Self { kind, span, line }
     }
 }
 

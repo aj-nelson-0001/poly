@@ -47,6 +47,44 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Fixed
 
+- **A deeply nested expression could exhaust the stack.** `MAX_EXPRESSION_DEPTH`
+  bounds *syntactic* nesting, so a flat `1 + 1 + … + 1` has no delimiters for it
+  to count — yet the precedence ladder folds it into a tree one level deep per
+  operand, and the type checker, every backend, and Rust's own `Drop` for
+  `Box<Expression>` all recurse over that tree. Rejecting the finished tree did
+  not help, because it still had to be dropped. The parser now refuses to build
+  it: a chain is capped at 512 operands per statement, behind an iterative depth
+  validator and a type-checker backstop. A 200,000-operand file exits with
+  `operator chain has more than 512 operands` instead of aborting.
+- **Deeply nested JSON aborted the language server.** `parse_value` recursed
+  without a limit; it is now capped at 128 levels, checked in a wrapper so the
+  counter unwinds on every early return. 200,000 levels now return a JSON-RPC
+  `-32700` instead of crashing the server.
+- **`Content-Length` was trusted outright**, so a single header could demand an
+  arbitrary allocation before any byte was read — `Content-Length:
+  100000000000` aborted the server with an allocation failure. Frames larger than
+  8 MiB are now refused before allocating. The limit is measured rather than
+  guessed: a real session against the largest `.poly` in the tree peaks at a 21 KB
+  frame, leaving roughly 400x headroom.
+- `--ast` no longer prints quadratic output. Alternate `Debug` indents every line
+  by node depth, so a left-nested chain cost 4113 ms and 3.1 MB for 512 operands;
+  an iterative printer makes it linear (9 ms, 141 KB) and removes a stack-overflow
+  vector besides. Output streams to stdout and treats a closed pipe (`| head`) as
+  normal.
+- `--emit-rust` could hang indefinitely. rustfmt backtracks pathologically on the
+  fully-parenthesised code the Rust backend emits (rust-lang/rustfmt#5128,
+  reproducible at paren depth 88), and the CLI waited on that child forever.
+  Formatting was already best-effort, so the child is now bounded by a 10 s
+  deadline and falls back to unformatted output. The same call also leaked the
+  child when writing stdin failed and never drained its pipes; both are fixed.
+- **`playground/poly.wasm` rebuilt and shrunk below its previous committed
+  size.** The checked-in artifact was roughly twenty compiler commits stale, so
+  the growth it appeared to show was never really these guards' doing: rebuilt
+  from a clean tree the depth fixes cost +9,713 B (+1.4%). `wasm-opt -Oz` is
+  now applied when the tool is present and skipped cleanly when it is not,
+  giving 609,080 B — 29,799 B smaller than the artifact it replaces. The
+  `--enable-bulk-memory` family of flags is required, not cosmetic: the Rust
+  backend emits those post-MVP opcodes, and validation fails without them.
 - asm: the `write` syscall byte count for an interned string literal used
   the *escaped* length (`asm_escape(value).len()`) rather than the
   runtime length, so any literal containing an escape — or any non-ASCII

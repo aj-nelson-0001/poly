@@ -283,10 +283,10 @@ not rediscovered as a bug report from an Alpine user.
 | Area | Result |
 |---|---|
 | **Identifier injection into C/JS/asm** | Impossible. `poly-lexer` starts identifiers only on `[a-zA-Z_]` and continues only on alphanumerics/underscore, so no variable name can break out into generated target syntax. Confirmed empirically: `var a$b i32 := 1` produces no C output. |
-| **Expression nesting DoS** | Capped at 32 (`MAX_EXPRESSION_DEPTH`, enforced in `parse_unary`). 200,000 nested parens produce a clean `Maximum nested expression depth (32) exceeded` error, no crash. |
+| **Expression nesting DoS** | Capped at 32 (`MAX_EXPRESSION_DEPTH`, enforced in `parse_unary`). 200,000 nested parens produce a clean `Maximum nested expression depth (32) exceeded` error, no crash. **Superseded:** this cap alone was later found insufficient — see "Flat operator chains" below. |
 | **Statement nesting DoS** | Capped at 128 (`MAX_STATEMENT_DEPTH`, checked in `parse_block`). 100,000 nested `loop`/`end loop` produce a clean parse error, no stack overflow. Note that the CI comments describing `parse_block` as unbounded recursion are stale relative to this guard. |
 | **Playground XSS** | No `innerHTML`, `eval`, `new Function`, or `document.write` anywhere; all compiler output goes through `textContent`. WASM is instantiated from `fetch()` bytes with **zero host imports**, and the Rust `unsafe` blocks null- and length-check before every `from_raw_parts`. |
-| **LSP** | The hand-rolled JSON parser in `poly-lsp/src/json.rs` is bounds-checked (`peek` uses `.get()`), rejects trailing characters, and escapes every control character below `0x20` in output strings. The server performs **no file I/O at all**. |
+| **LSP** | The hand-rolled JSON parser in `poly-lsp/src/json.rs` is bounds-checked (`peek` uses `.get()`), rejects trailing characters, and escapes every control character below `0x20` in output strings. The server performs **no file I/O at all**. **Superseded:** nesting depth and frame size are now bounded too — see below. |
 | **Python scripts** | All subprocess calls use `subprocess.run([...])` argument lists — no `shell=True`, no `os.system`, no `eval`. |
 | **Dependency posture** | `cargo audit` reports **0 vulnerabilities** across 82 crates. CI has an `audit` job. |
 | **Subprocess use** | No shell invocation anywhere in the compiler. `POLY_CC` and `POLY_NODE` name a single executable and are environment-controlled, not reachable from source. |
@@ -343,3 +343,31 @@ mistakes them for a sandbox.
   that refuses them would be new language surface, so it is left as a design decision
   rather than a security patch.
 - **`printf_parts` → ordered `fwrite` pieces** (finding 7): described above.
+
+## Found after this audit was written
+
+This report is a snapshot dated 2026-10-03 (539 tests). Three further
+availability issues were found and fixed later; each was verified by disabling
+the guard and reproducing the original crash.
+
+- **Flat operator chains overflowed the stack.** `MAX_EXPRESSION_DEPTH` bounds
+  *syntactic* nesting, so `1 + 1 + … + 1` has no delimiters for it to count —
+  yet the precedence ladder folds it into a tree one level deep per operand.
+  Three consumers then recurse over that tree, including Rust's own `Drop` for
+  `Box<Expression>`, which is why rejecting the finished tree did not help: it
+  still had to be dropped. The parser now refuses to build the tree, capping a
+  chain at 512 operands per statement, with an iterative depth validator and a
+  type-checker backstop behind it. A 200k-operand file exits with a diagnostic
+  instead of aborting.
+- **Deeply nested JSON aborted the LSP.** `parse_value` recursed without a
+  limit. Now capped at 128 levels, checked in a wrapper so the counter unwinds
+  on every early return; the boundary holds at 128 accepted / 129 rejected.
+- **`Content-Length` was trusted outright**, so one header could demand an
+  arbitrary allocation before a byte was read (`Content-Length:
+  100000000000` aborted with an allocation failure). Frames over 8 MiB are now
+  refused before allocating. That figure is measured rather than guessed: a real
+  session against the largest `.poly` in the tree peaks at a 21 KB frame.
+
+Full detail, including the negative tests, is in
+[SECURITY_FIX_HANDOFF.md](SECURITY_FIX_HANDOFF.md); the limits themselves are
+specified in [POLY_SPEC_v2.md](POLY_SPEC_v2.md#depth-limits).

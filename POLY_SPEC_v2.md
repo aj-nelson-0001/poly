@@ -92,7 +92,7 @@ struct Config {
 
 ### Depth limits
 
-Parsing is recursive, so three caps turn machine-generated or hostile
+Parsing is recursive, so four caps turn machine-generated or hostile
 input into an ordinary parse error instead of a stack overflow. Each
 diagnostic names the cap that was hit:
 
@@ -105,8 +105,19 @@ diagnostic names the cap that was hit:
   `else if` arms recurse through their own counter. When an `if` chain and
   the expression budget run out at the same nesting level, the if-specific
   diagnostic wins because it names the construct to split.
+- `operator chain has more than 512 operands; break it into smaller
+  statements` — a *flat* chain of one precedence level has no delimiters
+  for the expression counter to count, yet still folds into a tree one
+  level deep per operand. The cap counts operands per statement, so
+  splitting a long sum across several statements keeps each one legal.
 
-Hand-written programs sit far below all three limits; CI pins the parser's
+The syntactic caps alone were not sufficient, and the operand cap is not
+redundant with them. Rejecting a finished deep tree does not help: the tree
+still has to be walked by the type checker, by every backend, and by Rust's
+own `Drop` for `Box<Expression>`. The parser therefore refuses to *build*
+the tree in the first place.
+
+Hand-written programs sit far below all four limits; CI pins the parser's
 stack floor so the margins stay measured rather than assumed.
 
 ### External crate dependencies

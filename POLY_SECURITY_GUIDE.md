@@ -71,8 +71,13 @@ These are compiler-side guarantees, not promises about your file's contents:
 - Identifier emission into the C, asm and JS backends is constrained by the
   lexer's identifier rules, so a variable name cannot break out into generated
   target syntax.
-- Expression nesting (32) and statement nesting (128) are capped, so a hostile
-  file cannot exhaust the parser's stack.
+- Expression nesting (32), statement nesting (128), `if` nesting (32), and
+  operator-chain length (512 operands per statement) are capped, so a hostile
+  file cannot exhaust the parser's stack. The chain cap is not redundant with
+  the nesting caps: a flat `1 + 1 + ...` has no delimiters for the nesting
+  counter to see, yet still folds into a tree one level deep per operand. The
+  parser refuses to build that tree at all, because a deep tree still has to be
+  dropped — rejecting it after the fact does not avoid the overflow.
 - Strings emitted into generated C, asm and JS sources have NUL and all other
   control characters escaped, so a hostile string cannot smuggle raw bytes into
   the target source.

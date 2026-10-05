@@ -166,6 +166,42 @@ Select C with `--target c` and use `#c` instead. A foreign block for another lan
 
 When a target feature is unsupported, the compiler should name the feature and suggest a foreign helper. Treat that diagnostic as a contract boundary rather than changing the generated source by hand.
 
+### `operator chain has more than 512 operands`
+
+A single flat expression cannot chain more than 512 operands. The parser
+counts operands per statement, so the fix is to split the work rather than to
+shorten it:
+
+~~~poly
+fn main()
+    # Instead of one 600-term sum:
+    #   put 1 + 1 + 1 + ...
+    var part1 i32 := 1 + 1 + 1  # ... keep each statement under the cap
+    var part2 i32 := 1 + 1 + 1
+    put part1 + part2
+end fn
+~~~
+
+The cap is not arbitrary. The precedence ladder folds a flat chain into a
+tree one level deep per operand, and the type checker, every backend, and even
+Rust's `Drop` then walk that tree recursively — so the parser refuses to build
+it rather than discovering the problem later. Grouping with parentheses does not
+raise the limit; the operand count is what is measured. See
+[POLY_SPEC_v2.md](POLY_SPEC_v2.md#depth-limits) for the other depth caps
+(statement 128, expression 32, `if` 32).
+
+### `--emit-rust` output is one very long line
+
+Formatting is best-effort. If `rustfmt` is missing, fails, or exceeds a 10 s
+deadline, the CLI falls back to the unformatted program so the command still
+succeeds and the output is still valid Rust — it simply is not wrapped. This
+most often shows up on unusually long expressions. Compile the result as usual,
+or pipe it through `rustfmt` yourself:
+
+~~~bash
+poly --emit-rust program.poly | rustfmt
+~~~
+
 ## CLI Checks
 
 ~~~bash

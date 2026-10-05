@@ -164,6 +164,7 @@ pub fn parse(text: &str) -> Result<Json, JsonError> {
     let mut parser = Parser {
         bytes: text.as_bytes(),
         position: 0,
+        depth: 0,
     };
     let value = parser.parse_value()?;
     parser.skip_whitespace();
@@ -176,11 +177,28 @@ pub fn parse(text: &str) -> Result<Json, JsonError> {
     Ok(value)
 }
 
+/// Maximum nesting depth accepted in a JSON-RPC frame, counted in containers.
+///
+/// `parse_value` recurses through `parse_array`/`parse_object`, so a deeply
+/// nested document drives the parser down the stack once per level. Nothing
+/// bounds that on the way in: a client can send `[[[[...]]]]` thousands of
+/// levels deep, and the process dies with `fatal runtime error: stack overflow`
+/// before any diagnostic can be produced. Real JSON-RPC traffic for a language
+/// server is shallow -- a few levels for params/results -- so a low cap costs
+/// nothing and stops a single hostile frame from killing the server.
+///
+/// The limit is compared after the increment, so a document may nest exactly
+/// this many arrays or objects; the scalar at the center of the nesting is not
+/// a container and does not count against the budget.
+const MAX_JSON_DEPTH: usize = 128;
+
 struct Parser<'a> {
     // JSON-RPC arrives as UTF-8 bytes. Tracking a byte cursor keeps framing
     // and error offsets exact; string parsing reconstructs Unicode explicitly.
     bytes: &'a [u8],
     position: usize,
+    // Current `parse_value` recursion depth, guarded by `MAX_JSON_DEPTH`.
+    depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -204,6 +222,20 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_value(&mut self) -> Result<Json, JsonError> {
+        // Depth guard. Bailing out here stops the descent, so an over-nested
+        // document yields one diagnostic instead of unwinding thousands of
+        // frames first. The counter is paired in this wrapper rather than
+        // inside `parse_value_inner` so every early return still unwinds it.
+        if self.depth > MAX_JSON_DEPTH {
+            return Err(self.error(format!("JSON nesting deeper than {MAX_JSON_DEPTH} levels")));
+        }
+        self.depth += 1;
+        let value = self.parse_value_inner();
+        self.depth -= 1;
+        value
+    }
+
+    fn parse_value_inner(&mut self) -> Result<Json, JsonError> {
         self.skip_whitespace();
         match self.peek() {
             Some(b'n') => self.parse_literal("null", Json::Null),
@@ -508,6 +540,70 @@ mod tests {
     fn number_integer_rendering() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(Json::Number(7.0).serialize(), "7");
         assert_eq!(Json::Number(0.5).serialize(), "0.5");
+        Ok(())
+    }
+
+    /// Build `depth` levels of nested arrays around a scalar.
+    fn nested_arrays(depth: usize) -> String {
+        format!("{}1{}", "[".repeat(depth), "]".repeat(depth))
+    }
+
+    #[test]
+    fn moderate_nesting_is_accepted() -> Result<(), Box<dyn std::error::Error>> {
+        // Real JSON-RPC traffic is shallow, so anything a language server
+        // plausibly sends must still parse.
+        parse(&nested_arrays(16))?;
+        parse(&nested_arrays(MAX_JSON_DEPTH))?;
+        Ok(())
+    }
+
+    #[test]
+    fn over_deep_nesting_is_rejected_without_overflowing() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Regression: `parse_value` recursed through `parse_array` with no
+        // depth cap, so a deeply nested document aborted the process with
+        // `fatal runtime error: stack overflow`. A client controls this input,
+        // so it has to come back as a diagnostic instead.
+        let Err(error) = parse(&nested_arrays(MAX_JSON_DEPTH + 1)) else {
+            panic!("nesting past the limit must be rejected");
+        };
+        assert!(
+            error.message.contains("nesting deeper than"),
+            "unexpected diagnostic: {}",
+            error.message
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn absurd_nesting_is_rejected_rather_than_crashing() -> Result<(), Box<dyn std::error::Error>> {
+        // Far past any stack a recursive parser could survive. The key
+        // assertion is that this returns at all.
+        assert!(parse(&nested_arrays(200_000)).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn deeply_nested_objects_are_rejected_too() -> Result<(), Box<dyn std::error::Error>> {
+        // Objects recurse through a different arm than arrays; both must be
+        // bounded, not just the array path.
+        let text = format!(
+            "{}1{}",
+            "{".repeat(MAX_JSON_DEPTH + 5),
+            "}".repeat(MAX_JSON_DEPTH + 5)
+        );
+        assert!(parse(&text).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn depth_counter_resets_between_documents() -> Result<(), Box<dyn std::error::Error>> {
+        // The counter is paired in `parse_value`, so two shallow documents
+        // parsed in sequence must not accumulate toward the limit.
+        for _ in 0..(MAX_JSON_DEPTH * 2) {
+            assert!(parse("[1, 2, 3]").is_ok());
+            assert!(parse("{\"a\": {\"b\": 1}}").is_ok());
+        }
         Ok(())
     }
 }

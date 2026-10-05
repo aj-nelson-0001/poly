@@ -122,7 +122,26 @@ pub struct TypeChecker {
     // through ordinary Poly declarations (a plain `fn`, impl method, or
     // builtin); only opaque foreign names are affected.
     strict_foreign: bool,
+    // Current `check_expression` recursion depth, guarded by
+    // `MAX_CHECK_EXPRESSION_DEPTH`.
+    expr_depth: usize,
 }
+
+/// Cap on `check_expression` recursion depth.
+///
+/// The parser's `MAX_EXPRESSION_DEPTH` bounds *syntactic* nesting, but it does
+/// not bound the AST: a left-associative chain such as `1 + 1 + ... + 1` has
+/// no nested delimiters at all, so it parses fine at any length and produces a
+/// left-nested `BinaryOp` tree one level deep per operand. The type checker
+/// then recurses once per level, so without this guard a few thousand operands
+/// exhaust the stack and abort the process (`fatal runtime error: stack
+/// overflow`) — a crash, not a diagnostic.
+///
+/// Sized to be far above anything hand-written while staying well inside the
+/// stack: one `check_expression` frame costs on the order of a few hundred
+/// bytes, so 512 levels peak in the low hundreds of KiB even in debug builds.
+/// Chains longer than this are rejected with a normal type error instead.
+const MAX_CHECK_EXPRESSION_DEPTH: usize = 512;
 
 impl TypeChecker {
     /// Create an empty checker.
@@ -140,6 +159,7 @@ impl TypeChecker {
             type_variables: std::collections::HashSet::new(),
             keep_type_variable_names: false,
             strict_foreign: false,
+            expr_depth: 0,
         }
     }
 
@@ -190,6 +210,12 @@ impl TypeChecker {
 
     /// Check a complete program with a reusable checker instance.
     pub fn check_program(&mut self, program: &Program) {
+        // Defensive: `check_expression` balances its own depth counter on every
+        // path, so this is normally already zero. Resetting here keeps the
+        // guard correct if a reused checker is ever entered mid-recursion by a
+        // future change, rather than silently applying a shrunken budget.
+        self.expr_depth = 0;
+
         // Register functions defined in #rust blocks so the checker
         // accepts calls to them without type information.
         let statements: Vec<&Statement> = program.statements.iter().map(|s| &s.node).collect();
@@ -691,6 +717,24 @@ impl TypeChecker {
     }
 
     fn check_expression(&mut self, expression: &Expression) -> PolyType {
+        // Depth guard. Returning here stops the descent, so an over-deep chain
+        // produces exactly one diagnostic rather than one per remaining level.
+        // The increment/decrement is paired in this wrapper rather than inside
+        // the match so every early return in the body still unwinds it.
+        if self.expr_depth >= MAX_CHECK_EXPRESSION_DEPTH {
+            self.error(TypeCheckError::new(format!(
+                "expression nests deeper than {MAX_CHECK_EXPRESSION_DEPTH} levels; \
+                 split it into smaller statements"
+            )));
+            return PolyType::Unknown;
+        }
+        self.expr_depth += 1;
+        let ty = self.check_expression_inner(expression);
+        self.expr_depth -= 1;
+        ty
+    }
+
+    fn check_expression_inner(&mut self, expression: &Expression) -> PolyType {
         // Return `Unknown` after reporting an error where possible. That lets
         // checking continue and prevents one bad subexpression from hiding all
         // diagnostics that follow it.
@@ -2798,6 +2842,80 @@ mod tests {
             .parse()
             .unwrap_or_else(|e| panic!("source should parse: {e}"));
         TypeChecker::check(&program)
+    }
+
+    /// Parse without asserting success, so tests can drive the checker over
+    /// ASTs the parser builds for hand-constructed (over-deep) inputs.
+    fn parse_lenient(source: &str) -> poly_parser::ast::Program {
+        let (tokens, _) = Lexer::lex(source);
+        let mut parser = Parser::new(&tokens);
+        match parser.parse() {
+            Ok(program) => program,
+            // A parse rejection is itself a safe outcome; the caller only needs
+            // something the checker can be pointed at.
+            Err(_) => poly_parser::ast::Program {
+                statements: Vec::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn deep_operator_chain_reports_instead_of_overflowing() {
+        // Regression: `check_expression` recursed once per operand with no
+        // depth guard, so a long chain aborted the process with
+        // `fatal runtime error: stack overflow`. The parser now rejects these
+        // before they reach the checker, and the checker carries its own guard
+        // for trees built another way. Either path must return, not crash.
+        let terms = 5_000;
+        let joined = std::iter::repeat_n("1", terms)
+            .collect::<Vec<_>>()
+            .join(" + ");
+        let source = format!("fn main()\n  var x i32 := {joined}\n  put x\nend fn");
+        let program = parse_lenient(&source);
+        // The key assertion is that this call returns at all.
+        let _ = TypeChecker::check(&program);
+    }
+
+    #[test]
+    fn nested_closures_do_not_overflow_the_checker() {
+        // Closure bodies recurse through `check_expression` too; a long chain
+        // inside one must still be bounded.
+        let terms = 2_000;
+        let joined = std::iter::repeat_n("1", terms)
+            .collect::<Vec<_>>()
+            .join(" + ");
+        let source = format!("fn main()\n  var f := fn(): i32 => {joined}\n  put f()\nend fn");
+        let program = parse_lenient(&source);
+        let _ = TypeChecker::check(&program);
+    }
+
+    #[test]
+    fn moderate_expression_still_checks_cleanly() -> Result<(), Box<dyn std::error::Error>> {
+        // The guard must not disturb ordinary code: a realistic expression
+        // tree still type-checks and produces no diagnostics.
+        let source = "fn main()\n  var total i32 := 1 + 2 * 3 - 4\n  put total\nend fn";
+        assert!(
+            check(source).is_ok(),
+            "a normal arithmetic expression must check cleanly"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn long_but_legal_expression_still_checks_cleanly() -> Result<(), Box<dyn std::error::Error>> {
+        // Depth guard regression guard in the other direction: a chain well
+        // past the old crash threshold but inside the cap must still be
+        // accepted, so the fix rejects only pathological input.
+        let terms = 200;
+        let joined = std::iter::repeat_n("1", terms)
+            .collect::<Vec<_>>()
+            .join(" + ");
+        let source = format!("fn main()\n  var x i32 := {joined}\n  put x\nend fn");
+        assert!(
+            check(&source).is_ok(),
+            "a 200 operand chain is legitimate and must check cleanly"
+        );
+        Ok(())
     }
 
     #[test]

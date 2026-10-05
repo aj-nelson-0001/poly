@@ -42,7 +42,7 @@ pub struct Parser<'a> {
 /// `parse_unary`. Sized from measurement: one debug precedence-chain level
 /// costs ~45 KiB of stack, so the worst case (32 levels in flight) peaks
 /// near 1.6 MiB — inside the 2 MiB default test-thread budget with margin.
-const MAX_EXPRESSION_DEPTH: usize = 32;
+pub const MAX_EXPRESSION_DEPTH: usize = 32;
 
 /// Cap on chained `if` conditionals, checked inside the if parser and
 /// consulted by the expression/type guards (each if-statement leaves its
@@ -52,6 +52,22 @@ const MAX_IF_DEPTH: usize = 32;
 
 /// Longest `dep` crate name Cargo will accept in a manifest.
 const MAX_DEPENDENCY_NAME_LEN: usize = 64;
+
+/// Maximum number of operands folded into a single left-associative operator
+/// chain at one precedence level.
+///
+/// `MAX_EXPRESSION_DEPTH` cannot bound this: `1 + 1 + ... + 1` has no nested
+/// delimiters, so the parse-time depth counter never rises, yet the precedence
+/// ladder still folds it into a tree one level deep per operand. Downstream
+/// that tree is walked recursively by the type checker, by each backend, and by
+/// Rust's own `Drop` for `Box<Expression>`, so a long chain aborts the process
+/// with a stack overflow. Capping the fold stops the deep tree from being
+/// built at all, which is what actually prevents the crash -- rejecting the
+/// finished tree would still require dropping it.
+///
+/// Well above any hand-written chain, and comfortably inside the stack for the
+/// recursive walks it feeds.
+pub const MAX_OPERAND_CHAIN: usize = 512;
 
 /// Longest `dep` version requirement accepted before validation gives up.
 const MAX_DEPENDENCY_VERSION_LEN: usize = 128;
@@ -232,11 +248,42 @@ impl<'a> Parser<'a> {
         }
 
         if self.errors.is_empty() {
-            Ok(Program { statements })
+            let program = Program { statements };
+            // Reject trees too deep for downstream phases to walk. `MAX_EXPRESSION_DEPTH`
+            // cannot catch this: a left-associative chain has no nested delimiters, so it
+            // parses at any length while producing a tree one level deep per operand.
+            if let Some(error) = self.ast_depth_error(&program) {
+                return Err(error);
+            }
+            Ok(program)
         } else {
             // Return the first error for backward compatibility
             Err(self.errors[0].clone())
         }
+    }
+
+    /// Build a diagnostic when `program` nests deeper than the AST limit allows.
+    ///
+    /// The span points at the first top-level statement so the CLI and editor
+    /// clients can render the failure against real source text instead of
+    /// byte 0.  Returns `None` when the program is within the limit.
+    fn ast_depth_error(&self, program: &Program) -> Option<ParseError> {
+        let Err(depth) = crate::depth_limit::ast_depth(program) else {
+            return None;
+        };
+        let span = program
+            .statements
+            .first()
+            .map(|statement| statement.span)
+            .unwrap_or(Span::new(0, 0));
+        Some(ParseError::new(
+            format!(
+                "expression nests {depth} levels deep, over the {} level limit; \
+                 break it into smaller statements",
+                crate::depth_limit::MAX_AST_DEPTH
+            ),
+            span,
+        ))
     }
 
     /// Parse with error recovery, collecting all errors.
@@ -261,7 +308,55 @@ impl<'a> Parser<'a> {
             }
         }
 
-        (Program { statements }, self.errors.clone())
+        // The depth check is a safety limit rather than a syntax error, so it
+        // is reported alongside the recovered parse errors instead of
+        // discarding the partially built program that editor tooling relies on.
+        let program = Program { statements };
+        if self.errors.is_empty() {
+            if let Some(error) = self.ast_depth_error(&program) {
+                self.errors.push(error);
+            }
+        }
+
+        (program, self.errors.clone())
+    }
+
+    /// Fold one operator into a left-associative chain, enforcing the chain cap.
+    ///
+    /// The precedence ladder is iterative: each operator wraps the accumulated
+    /// `left` in a new `BinaryOp`, so `a + b + c` becomes
+    /// `BinaryOp(BinaryOp(a, b), c)`. That builds a tree one level deep per
+    /// operand without any recursive descent, which is why
+    /// [`MAX_EXPRESSION_DEPTH`] never sees it. The depth only becomes a problem
+    /// later, when the type checker, the backends, and `Drop` each walk the
+    /// result recursively. Capping the chain here stops the deep tree from
+    /// existing in the first place.
+    ///
+    /// `chain_len` tracks operands already folded at this level; it is reset by
+    /// each precedence function when it starts.
+    fn fold_binary(
+        &self,
+        left: Expression,
+        op: BinaryOp,
+        right: Expression,
+        chain_len: &mut usize,
+        span: Span,
+    ) -> Result<Expression, ParseError> {
+        *chain_len += 1;
+        if *chain_len > MAX_OPERAND_CHAIN {
+            return Err(ParseError::new(
+                format!(
+                    "operator chain has more than {MAX_OPERAND_CHAIN} operands; \
+                     break it into smaller statements"
+                ),
+                span,
+            ));
+        }
+        Ok(Expression::BinaryOp {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+        })
     }
 
     /// Compute the source span of a successfully parsed statement.
@@ -1770,16 +1865,20 @@ impl<'a> Parser<'a> {
 
     fn parse_or_expression(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_and_expression()?;
+        // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
+        let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 TokenKind::Or => {
                     self.advance();
                     let right = self.parse_and_expression()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Or,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Or,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 // `||` is the retired symbol spelling of `or`.
                 TokenKind::OrOr => {
@@ -1796,16 +1895,20 @@ impl<'a> Parser<'a> {
 
     fn parse_and_expression(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_comparison()?;
+        // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
+        let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 TokenKind::And => {
                     self.advance();
                     let right = self.parse_comparison()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::And,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::And,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 // `&&` is the retired symbol spelling of `and`.
                 TokenKind::AndAnd => {
@@ -1828,16 +1931,20 @@ impl<'a> Parser<'a> {
 
     fn parse_comparison(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_bitwise_or()?;
+        // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
+        let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 TokenKind::Eq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Eq,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Eq,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 TokenKind::EqEq => {
                     return Err(ParseError::with_suggestion(
@@ -1849,47 +1956,57 @@ impl<'a> Parser<'a> {
                 TokenKind::NotEq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::NotEq,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::NotEq,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 TokenKind::Lt => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Lt,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Lt,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 TokenKind::Gt => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Gt,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Gt,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 TokenKind::LtEq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::LtEq,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::LtEq,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 TokenKind::GtEq => {
                     self.advance();
                     let right = self.parse_bitwise_or()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::GtEq,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::GtEq,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 _ => break,
             }
@@ -1899,16 +2016,20 @@ impl<'a> Parser<'a> {
 
     fn parse_bitwise_or(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_bitwise_xor()?;
+        // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
+        let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 TokenKind::BitOr => {
                     self.advance();
                     let right = self.parse_bitwise_xor()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::BitOr,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::BitOr,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 // `|` is the retired symbol spelling of `bitor`. Closure
                 // parameters (`|x| ...`) never reach this position, so a
@@ -1927,16 +2048,20 @@ impl<'a> Parser<'a> {
 
     fn parse_bitwise_xor(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_bitwise_and()?;
+        // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
+        let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 TokenKind::Xor => {
                     self.advance();
                     let right = self.parse_bitwise_and()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::BitXor,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::BitXor,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 // `^` is the retired symbol spelling of `xor`.
                 TokenKind::Caret => {
@@ -1953,16 +2078,20 @@ impl<'a> Parser<'a> {
 
     fn parse_bitwise_and(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_shift()?;
+        // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
+        let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 TokenKind::BitAnd => {
                     self.advance();
                     let right = self.parse_shift()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::BitAnd,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::BitAnd,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 // `&` is the retired symbol spelling of `bitand`.
                 TokenKind::Amp => {
@@ -1979,6 +2108,8 @@ impl<'a> Parser<'a> {
 
     fn parse_shift(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_add_sub()?;
+        // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
+        let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 // `<<` / `>>` remain valid alternative shift syntax alongside
@@ -1986,20 +2117,24 @@ impl<'a> Parser<'a> {
                 TokenKind::LtLt => {
                     self.advance();
                     let right = self.parse_add_sub()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Shl,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Shl,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 TokenKind::GtGt => {
                     self.advance();
                     let right = self.parse_add_sub()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Shr,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Shr,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 // Keyword form: `x shift left 2` / `x shift right 2`. The
                 // direction word stays an ordinary identifier so `left` and
@@ -2019,11 +2154,13 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                     let right = self.parse_add_sub()?;
-                    left = Expression::BinaryOp {
-                        op: direction,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        direction,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 _ => break,
             }
@@ -2033,6 +2170,8 @@ impl<'a> Parser<'a> {
 
     fn parse_add_sub(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_mul_div()?;
+        // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
+        let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 TokenKind::Plus => {
@@ -2043,11 +2182,13 @@ impl<'a> Parser<'a> {
                         return Err(self.compound_assignment_error("+=", "+"));
                     }
                     let right = self.parse_mul_div()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Add,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Add,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 TokenKind::Minus => {
                     // Inside a `get` flag value, `--` begins the next flag
@@ -2067,11 +2208,13 @@ impl<'a> Parser<'a> {
                         return Err(self.compound_assignment_error("-=", "-"));
                     }
                     let right = self.parse_mul_div()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Sub,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Sub,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 _ => break,
             }
@@ -2081,34 +2224,42 @@ impl<'a> Parser<'a> {
 
     fn parse_mul_div(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_unary()?;
+        // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
+        let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 TokenKind::Star => {
                     self.advance();
                     let right = self.parse_unary()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Mul,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Mul,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 TokenKind::Slash => {
                     self.advance();
                     let right = self.parse_unary()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Div,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Div,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 TokenKind::Mod => {
                     self.advance();
                     let right = self.parse_unary()?;
-                    left = Expression::BinaryOp {
-                        op: BinaryOp::Mod,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    };
+                    left = self.fold_binary(
+                        left,
+                        BinaryOp::Mod,
+                        right,
+                        &mut chain_len,
+                        self.current().span,
+                    )?;
                 }
                 // `%` is the retired symbol spelling of `mod`.
                 TokenKind::Percent => {

@@ -4,6 +4,7 @@
 
 mod repl;
 
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -337,7 +338,19 @@ fn main() -> Result<()> {
             let mut parser = poly_parser::Parser::new(&tokens);
             match parser.parse() {
                 Ok(program) => {
-                    println!("{:#?}", program);
+                    // Streamed with a linear-cost printer rather than
+                    // `println!("{:#?}", ...)`: alternate `Debug` indents every
+                    // line by node depth, which made both the output size and
+                    // the formatting time quadratic on nested expressions.
+                    let stdout = io::stdout();
+                    let mut handle = stdout.lock();
+                    if let Err(error) = poly_parser::write_program(&program, &mut handle) {
+                        // A closed pipe (`poly --ast f.poly | head`) is normal.
+                        if error.kind() != io::ErrorKind::BrokenPipe {
+                            eprintln!("Error writing AST: {error}");
+                            process::exit(1);
+                        }
+                    }
                 }
                 Err(e) => {
                     let rendered = poly_lexer::render_error(&source, e.span, &label, &e.message);
@@ -1124,13 +1137,38 @@ fn source_dependencies(source: &str) -> Vec<(String, String)> {
     }
 }
 
-/// Run the interactive REPL with syntax highlighting
-/// Format Rust code with rustfmt
+/// How long to wait for `rustfmt` before giving up and using the unformatted code.
+///
+/// rustfmt is an external process, and it is not fast on every input: on a
+/// deeply nested expression it backtracks badly and stops finishing in any
+/// practical time (rust-lang/rustfmt#5128 -- "prohibitively slow for
+/// sufficiently nested" constructs, reproducible here at paren depth 88 in a
+/// `let` binding). Generated code is fully parenthesised, so a long operator
+/// chain reaches that shape on its own, with no unusual source involved.
+///
+/// Because formatting is explicitly best-effort -- every caller keeps the
+/// unformatted output when rustfmt is missing, errors, or times out -- a stuck
+/// child must not be able to hang the compiler. Well-formed output formats in
+/// well under a second, so this is generous; exceeding it means falling back,
+/// not waiting indefinitely.
+const RUSTFMT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Format Rust code with rustfmt.
+///
+/// Returns `None` when rustfmt is unavailable, fails, or exceeds
+/// [`RUSTFMT_TIMEOUT`]; callers keep the unformatted code in every one of those
+/// cases.
 fn format_with_rustfmt(code: &str) -> Option<String> {
-    // Formatting is best-effort: all callers retain valid unformatted output
-    // when rustfmt is unavailable or rejects incomplete generated code.
-    use std::io::Write;
+    format_with_rustfmt_timeout(code, RUSTFMT_TIMEOUT)
+}
+
+/// [`format_with_rustfmt`] with an explicit deadline, so the timeout path is
+/// testable without waiting on a genuinely pathological input.
+fn format_with_rustfmt_timeout(code: &str, timeout: std::time::Duration) -> Option<String> {
+    use std::io::Read;
     use std::process::Command;
+    use std::sync::mpsc;
+    use std::time::Instant;
 
     let mut child = Command::new("rustfmt")
         .arg("--edition")
@@ -1141,13 +1179,67 @@ fn format_with_rustfmt(code: &str) -> Option<String> {
         .spawn()
         .ok()?;
 
+    // Closing stdin is what tells rustfmt the input is complete; without this
+    // it waits for EOF that never arrives. `take` hands us the handle and the
+    // drop below closes the pipe.
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(code.as_bytes()).ok()?;
+        use std::io::Write;
+        if stdin.write_all(code.as_bytes()).is_err() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
     }
 
-    let output = child.wait_with_output().ok()?;
-    if output.status.success() {
-        String::from_utf8(output.stdout).ok()
+    // Drain both pipes on their own threads. Reading them inline would risk
+    // deadlocking once rustfmt's output outgrows the pipe buffer.
+    let stdout = child.stdout.take();
+    let (sender, receiver) = mpsc::channel();
+    let stdout_sender = sender.clone();
+    let reader = std::thread::spawn(move || {
+        let mut buffer = Vec::new();
+        if let Some(mut stdout) = stdout {
+            let _ = stdout.read_to_end(&mut buffer);
+        }
+        let _ = stdout_sender.send(buffer);
+    });
+    let stderr = child.stderr.take();
+    let stderr_reader = std::thread::spawn(move || {
+        let mut sink = Vec::new();
+        if let Some(mut stderr) = stderr {
+            let _ = stderr.read_to_end(&mut sink);
+        }
+    });
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            // Still running: keep waiting until the deadline.
+            Ok(None) => {}
+            Err(_) => break None,
+        }
+        if Instant::now() >= deadline {
+            break None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+
+    let Some(status) = status else {
+        // Out of time or un-waitable: stop the child so it cannot linger, then
+        // fall back to the unformatted code.
+        let _ = child.kill();
+        let _ = child.wait();
+        return None;
+    };
+
+    let _ = sender.send(Vec::new());
+    let buffer = receiver.recv().ok();
+    let _ = reader.join();
+    let _ = stderr_reader.join();
+
+    if status.success() {
+        String::from_utf8(buffer?).ok()
     } else {
         None // Fall back to unformatted code
     }
@@ -1841,6 +1933,51 @@ fn chrono_free_timestamp() -> String {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn rustfmt_timeout_falls_back_to_unformatted_code() {
+        // The regression: a deeply nested *binary* expression makes rustfmt
+        // backtrack for minutes (rust-lang/rustfmt#5128). Generated code is
+        // emitted fully parenthesised, so a long operator chain reaches that
+        // shape on its own, with no unusual source involved.
+        //
+        // Plain nesting is not enough to trigger it -- the operators matter --
+        // so the fixture mirrors what the Rust backend actually emits.
+        let mut expr = String::from("1");
+        for _ in 0..200 {
+            expr = format!("({expr} + 1)");
+        }
+        let deep = format!("fn main() {{\n    let _x = {expr};\n}}\n");
+        let started = std::time::Instant::now();
+        let result = format_with_rustfmt_timeout(&deep, std::time::Duration::from_millis(50));
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "formatting took {elapsed:?}; the deadline is not being enforced"
+        );
+        // When the deadline is missed the caller must get None so it keeps the
+        // unformatted code, never a truncated or partial buffer.
+        if let Some(formatted) = result {
+            assert!(
+                formatted.contains("_x"),
+                "a successful format must still contain the whole program: {formatted:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rustfmt_still_formats_ordinary_code() {
+        // The timeout must not cost us formatting on normal input: when
+        // rustfmt succeeds within the deadline we still get its output back.
+        let Some(formatted) = format_with_rustfmt("fn  main( ) {\nlet x=1;\n}\n") else {
+            // rustfmt unavailable in this environment; nothing to assert.
+            return;
+        };
+        assert!(
+            formatted.contains("fn main()"),
+            "expected rustfmt output, got {formatted:?}"
+        );
+    }
 
     fn test_directory() -> Result<PathBuf, String> {
         let timestamp = SystemTime::now()

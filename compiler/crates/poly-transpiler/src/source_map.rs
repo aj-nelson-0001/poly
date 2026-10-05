@@ -2,6 +2,15 @@
 //!
 //! This module generates source maps that map Rust output lines back to
 //! Poly source lines, enabling better debugging and error reporting.
+//!
+//! A [`SourceMap`] records two kinds of information:
+//!
+//! * line *mappings* from generated Rust lines back to Poly lines, and
+//! * named *symbols* (functions, structs, variables) with their source
+//!   positions.
+//!
+//! It can also serialise itself to the standard Source Map v3 JSON format
+//! using VLQ-encoded mappings.
 
 use std::collections::HashMap;
 
@@ -116,11 +125,13 @@ impl SourceMap {
     /// Generated helper lines commonly have no direct mapping, so the previous
     /// mapping gives callers the most useful surrounding Poly context.
     pub fn lookup_target_line(&self, target_line: usize) -> Option<usize> {
-        // First try exact match
+        // First try exact match on the requested line.
         if let Some(mapping) = self.mappings.iter().find(|m| m.target_line == target_line) {
             return Some(mapping.source_line);
         }
-        // Fall back to closest previous mapping
+        // Otherwise fall back to the closest mapping at or before it, so a
+        // generated helper line still resolves to sensible source context.
+        // (Fall back to closest previous mapping.)
         self.mappings
             .iter()
             .filter(|m| m.target_line <= target_line)
@@ -276,10 +287,12 @@ impl SourceMap {
     fn encode_vlq(&self, value: i64) -> String {
         let mut result = String::new();
 
+        // Take the absolute value and remember the sign separately.
         // Determine sign bit (1 for negative, 0 for positive)
         let sign_bit = if value < 0 { 1 } else { 0 };
         let mut value = value.unsigned_abs();
 
+        // Fold the sign into the low bit by shifting left one place.
         // First sextet: add sign bit by shifting value left 1 and adding sign
         value = (value << 1) | sign_bit;
 

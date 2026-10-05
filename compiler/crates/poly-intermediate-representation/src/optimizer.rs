@@ -47,7 +47,7 @@ pub fn optimize(program: &mut Program) -> Vec<String> {
 // =============================================================================
 
 /// Constant folding: evaluates constant subexpressions (integer and boolean
-/// arithmetic) at compile time.
+/// arithmetic) at compile time, replacing them with literal values.
 pub struct ConstantFolding;
 
 impl OptimizationPass for ConstantFolding {
@@ -149,6 +149,11 @@ fn fold_statements(statements: &mut [Statement]) -> bool {
     changed
 }
 
+/// Fold constant subexpressions within one expression tree.
+///
+/// Returns `true` when anything was rewritten. Arithmetic is performed with
+/// checked operations so overflow and division-by-zero are left for the target
+/// language instead of being silently folded.
 fn fold_expr(expr: &mut Expr) -> bool {
     let mut changed = false;
     match expr {

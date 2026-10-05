@@ -53,6 +53,7 @@ struct Buffer {
 }
 
 impl Buffer {
+    /// Wrap a raw region of wasm memory for sequential writes from offset 0.
     fn from_raw(ptr: *mut u8, len: usize) -> Self {
         Self {
             ptr,
@@ -248,7 +249,10 @@ pub unsafe extern "C" fn poly_free(ptr: *mut u8, len: usize) {
     unsafe { dealloc(ptr, layout) };
 }
 
-/// Read a little-endian u32 at `offset` inside a raw block, safely.
+/// Read a little-endian u32 at `offset` inside a raw block.
+///
+/// Defensive against null pointers and short blocks so a malformed call from
+/// JS yields 0 rather than undefined behavior.
 fn read_u32(block: *const u8, offset: usize) -> u32 {
     if block.is_null() {
         return 0;
@@ -266,6 +270,8 @@ fn read_u32(block: *const u8, offset: usize) -> u32 {
 }
 
 /// Read a native-size pointer or length at `offset` inside a raw block.
+///
+/// Like `read_u32`, this guards against null and out-of-range reads.
 fn read_usize(block: *const u8, offset: usize) -> usize {
     if block.is_null() {
         return 0;

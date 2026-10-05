@@ -108,6 +108,9 @@ impl Transpiler {
     }
 
     /// Transpile Poly source to the selected target (`rust`, `c`, `asm`, or `js`).
+    ///
+    /// Each alias (for example `rs` for `rust`) maps onto the same checked
+    /// entry point; unknown targets get a helpful error rather than a panic.
     pub fn transpile_target(&self, source: &str, target: &str) -> Result<String, String> {
         match target {
             "rust" | "rs" => self.transpile_checked(source),
@@ -121,6 +124,8 @@ impl Transpiler {
         }
     }
 
+    /// Lower an already-parsed program to Rust through the intermediate
+    /// representation: source AST -> IR -> Rust text.
     fn generate_rust(&self, program: &Program) -> Result<String, String> {
         let intermediate_representation =
             poly_intermediate_representation::generator::generate(program)?;
@@ -129,6 +134,8 @@ impl Transpiler {
         codegen.generate(&intermediate_representation)
     }
 
+    /// Drop foreign blocks and `extern` declarations that belong to other
+    /// targets, keeping only those matching `language`.
     fn select_target(mut program: Program, language: &str) -> Result<Program, String> {
         // Filter only after parsing the complete source: this preserves useful
         // diagnostics for mixed-target files while ensuring the checker and

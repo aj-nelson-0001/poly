@@ -132,17 +132,31 @@ pub enum Redirect {
 }
 
 /// Type annotation.
+///
+/// This is how a *type* is written in source (the thing after a `:`). Each
+/// variant is one shape of type; most wrap their inner type in `Box` so the
+/// structure can nest to any depth.
 #[derive(Debug, Clone)]
 pub enum TypeAnnotation {
+    /// A named type: a built-in like `i32` or a user type like `Point`.
     Named(String),
+    /// A fixed-size array `[T; N]` (element type, length expression).
     Array(Box<TypeAnnotation>, Box<Expression>),
+    /// A tuple type `(i32, bool, f64)`.
     Tuple(Vec<TypeAnnotation>),
+    /// A growable vector `Vec<T>`.
     Vec(Box<TypeAnnotation>),
+    /// An optional value `Option<T>`.
     Option(Box<TypeAnnotation>),
+    /// A fallible result `Result<T, E>` (success type, error type).
     Result(Box<TypeAnnotation>, Box<TypeAnnotation>),
+    /// A reference `&T` or `&mut T` (the `bool` records mutability).
     Reference(bool, Box<TypeAnnotation>), // mutability, inner type
+    /// A raw pointer `*T`.
     Pointer(Box<TypeAnnotation>),
+    /// A nullable type.
     Nullable(Box<TypeAnnotation>),
+    /// A function type: parameter types and a return type.
     Function {
         params: Vec<TypeAnnotation>,
         ret: Box<TypeAnnotation>,
@@ -288,33 +302,33 @@ pub enum Expression {
 /// (`or`) to high precedence (multiplication and unary expressions).
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Eq,
-    NotEq,
-    Lt,
-    Gt,
-    LtEq,
-    GtEq,
-    And,
-    Or,
-    BitAnd,
-    BitOr,
-    BitXor,
-    Shl,
-    Shr,
+    Add,    // +
+    Sub,    // -
+    Mul,    // *
+    Div,    // /
+    Mod,    // mod / %
+    Eq,     // = comparison
+    NotEq,  // !=
+    Lt,     // <
+    Gt,     // >
+    LtEq,   // <=
+    GtEq,   // >=
+    And,    // `and`
+    Or,     // `or`
+    BitAnd, // `bitand`
+    BitOr,  // `bitor`
+    BitXor, // `xor`
+    Shl,    // shift left
+    Shr,    // shift right
 }
 
-/// Unary operators.
+/// Unary operators (operators that take a single operand).
 #[derive(Debug, Clone)]
 pub enum UnaryOp {
-    Neg,
-    Not,
-    BitNot,
-    Deref,
+    Neg,    // arithmetic negation (-x)
+    Not,    // logical negation (`not x`)
+    BitNot, // bitwise complement (`bitnot x`)
+    Deref,  // pointer dereference (`deref x`)
 }
 
 /// Match arm.
@@ -420,14 +434,21 @@ pub struct GenericParam {
     pub bounds: Vec<String>,
 }
 
-/// Function declaration.
+/// Function declaration (`fn name(params): ret ... end fn`).
 #[derive(Debug, Clone)]
 pub struct FunctionDecl {
+    // The function's name as written in source.
     pub name: String,
+    // Parameters, in order.
     pub params: Vec<Parameter>,
+    // Optional return type; `None` means the function returns nothing.
     pub return_type: Option<TypeAnnotation>,
+    // The body; `None` for a signature with no body (e.g. a trait method or an
+    // external declaration).
     pub body: Option<Block>,
+    // True for `async fn`.
     pub is_async: bool,
+    // Generic parameters such as `<T: Display>`.
     pub generics: Vec<GenericParam>,
 }
 
@@ -439,11 +460,12 @@ pub struct Parameter {
     pub default: Option<Expression>,
 }
 
-/// Struct declaration.
+/// Struct declaration (`struct Name ... end struct`).
 #[derive(Debug, Clone)]
 pub struct StructDecl {
     pub name: String,
     pub fields: Vec<StructField>,
+    // Methods declared inside the struct body.
     pub methods: Vec<FunctionDecl>,
     pub generics: Vec<GenericParam>,
 }
@@ -457,11 +479,12 @@ pub struct StructField {
     pub default: Option<Expression>,
 }
 
-/// Enum declaration.
+/// Enum declaration (`enum Name ... end enum`).
 #[derive(Debug, Clone)]
 pub struct EnumDecl {
     pub name: String,
     pub variants: Vec<EnumVariant>,
+    // Methods declared inside the enum body.
     pub methods: Vec<FunctionDecl>,
 }
 

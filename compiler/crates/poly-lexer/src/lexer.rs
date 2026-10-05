@@ -1,24 +1,44 @@
 //! The Poly language lexer.
 //!
 //! Converts Poly source code into a stream of tokens.
+//!
+//! The lexer walks the source text from left to right. At each position it
+//! decides what kind of token starts there (a number, a name, a symbol, ...)
+//! and hands off to a small scanner method that consumes the whole token. When
+//! it cannot recognise something it records an error but keeps going, so one
+//! pass can surface several problems.
 
+// Error types produced while lexing (and the categories they belong to).
 use crate::error::{LexerError, LexerErrorKind};
+// The token/span types the lexer builds.
 use crate::token::{Span, Token, TokenKind};
 
 /// The Poly language lexer.
 ///
 /// Converts source code into a stream of tokens.
+///
+/// The fields are simply the source split into characters, a current position
+/// into that list, and the results accumulated so far (tokens and errors).
 pub struct Lexer {
+    // The source, stored as a `Vec<char>` so indexing is O(1) and we never
+    // split a multi-byte UTF-8 character by accident.
     chars: Vec<char>,
+    // How many characters have been consumed so far.
     pos: usize,
+    // The tokens produced, in source order.
     tokens: Vec<Token>,
+    // Any errors encountered; the lexer does not stop at the first one.
     errors: Vec<LexerError>,
 }
 
 impl Lexer {
     /// Create a new lexer for the given source code.
+    ///
+    /// This only sets up the state; call [`Lexer::tokenize`] to actually do the
+    /// work, or use the convenience [`Lexer::lex`] method.
     pub fn new(source: &str) -> Self {
         Self {
+            // Collect the characters once; all later work indexes this list.
             chars: source.chars().collect(),
             pos: 0,
             tokens: Vec::new(),
@@ -27,7 +47,11 @@ impl Lexer {
     }
 
     /// Lex the entire source code and return tokens and errors.
+    ///
+    /// This is the simplest entry point for callers: give it source text, get
+    /// back the token list and any lexing errors.
     pub fn lex(source: &str) -> (Vec<Token>, Vec<LexerError>) {
+        // Build a lexer, run it to completion, then hand back the results.
         let mut lexer = Lexer::new(source);
         lexer.tokenize();
         (lexer.tokens, lexer.errors)
@@ -40,6 +64,8 @@ impl Lexer {
         while !self.is_at_end() {
             self.scan_token();
         }
+        // Every token stream ends with an EOF marker so the parser can rely on
+        // always having one more token to look at.
         self.tokens
             .push(Token::new(TokenKind::Eof, Span::new(self.pos, self.pos)));
     }
@@ -55,11 +81,16 @@ impl Lexer {
     }
 
     // === Character navigation ===
+    // These small helpers are the lexer's "cursor". They hide the details of
+    // bounds checking so the scanning code can read like English.
 
+    /// Have we consumed every character yet?
     fn is_at_end(&self) -> bool {
         self.pos >= self.chars.len()
     }
 
+    /// The character under the cursor, or a NUL (`'\0'`) sentinel at the end.
+    /// Using a sentinel avoids a bounds check at every call site.
     fn current(&self) -> char {
         if self.is_at_end() {
             '\0'
@@ -68,6 +99,8 @@ impl Lexer {
         }
     }
 
+    /// The character just after the cursor, or NUL at the end.
+    /// Used for two-character operators such as `==` and `->`.
     fn peek_next(&self) -> char {
         if self.pos + 1 >= self.chars.len() {
             '\0'
@@ -76,12 +109,16 @@ impl Lexer {
         }
     }
 
+    /// Consume the character under the cursor and return it.
     fn advance(&mut self) -> char {
         let ch = self.current();
         self.pos += 1;
         ch
     }
 
+    /// Consume the next character only if it equals `expected`.
+    /// Returns `true` when it matched (and was consumed). This is how the lexer
+    /// recognises optional second characters like the `=` in `<=`.
     fn match_char(&mut self, expected: char) -> bool {
         if self.is_at_end() || self.current() != expected {
             false
@@ -91,11 +128,13 @@ impl Lexer {
         }
     }
 
+    /// Skip over spaces, tabs, blank lines, and comments.
     fn skip_whitespace(&mut self) {
         // Newlines are discarded here because Poly block termination is
         // expressed with `end <keyword>`, not line-sensitive indentation.
         while !self.is_at_end() {
             match self.current() {
+                // Ordinary horizontal whitespace: just step over it.
                 ' ' | '\r' | '\t' => {
                     self.advance();
                 }
@@ -105,25 +144,31 @@ impl Lexer {
                     self.advance();
                 }
                 '#' => {
-                    // Foreign block openings must reach `scan_token`; ordinary
-                    // `#` comments remain whitespace to the parser.
+                    // `#` introduces either a foreign-language block (which is
+                    // a real token) or a one-line comment. Stop so the block
+                    // opener reaches `scan_token`; otherwise treat it as a
+                    // comment and keep skipping.
                     if self.foreign_block_language_at_current().is_some() {
                         break;
                     }
                     self.skip_comment();
                 }
+                // `//` and `/* ... */` are also comment openers.
                 '/' if self.peek_next() == '*' || self.peek_next() == '/' => {
                     self.skip_comment();
                 }
+                // Anything else is the start of a real token.
                 _ => break,
             }
         }
     }
 
+    /// Consume one comment. Handles the three comment styles Poly accepts.
     fn skip_comment(&mut self) {
         if self.current() == '#' {
             // Single-line comment: skip the #
             self.advance();
+            // Consume everything up to (but not including) the newline.
             while !self.is_at_end() && self.current() != '\n' {
                 self.advance();
             }
@@ -138,6 +183,8 @@ impl Lexer {
             // Block comment: skip /* ... */
             self.advance(); // /
             self.advance(); // *
+                            // Remember where the comment body begins so we can point a
+                            // diagnostic at it if the closing `*/` never arrives.
             let start = self.pos;
             while !self.is_at_end() {
                 if self.current() == '*' && self.peek_next() == '/' {
@@ -147,6 +194,7 @@ impl Lexer {
                 }
                 self.advance();
             }
+            // Reached the end of input without `*/`: report it.
             self.errors.push(LexerError::new(
                 LexerErrorKind::UnterminatedComment,
                 Span::new(start, self.pos),
@@ -157,6 +205,11 @@ impl Lexer {
 
     // === Token scanning ===
 
+    /// Recognise and consume exactly one token, starting at the cursor.
+    ///
+    /// The big `match` below is the lexer's dispatch table: the first character
+    /// decides which scanner runs. Scanners called from here are responsible
+    /// for consuming the *whole* token and leaving `pos` just past it.
     fn scan_token(&mut self) {
         // Whitespace/comments may consume the rest of the input, so always
         // re-check EOF before recording the next token's starting offset.
@@ -165,11 +218,14 @@ impl Lexer {
             return;
         }
 
+        // `start` is the byte offset of this token's first character; it is
+        // passed to `add_token` (which spans from `start` to the current pos).
         let start = self.pos;
+        // Consume the first character; the match decides what to do with it.
         let ch = self.advance();
 
         match ch {
-            // Single character tokens
+            // Single character tokens: the character alone is the whole token.
             '(' => self.add_token(TokenKind::LParen, start),
             ')' => self.add_token(TokenKind::RParen, start),
             '[' => self.add_token(TokenKind::LBracket, start),
@@ -178,6 +234,7 @@ impl Lexer {
             '}' => self.add_token(TokenKind::RBrace, start),
             ',' => self.add_token(TokenKind::Comma, start),
             ';' => self.add_token(TokenKind::Semicolon, start),
+            // `:` can begin `::` or `:=`, otherwise it is a lone colon.
             ':' => {
                 if self.match_char(':') {
                     self.add_token(TokenKind::ColonColon, start);
@@ -187,6 +244,7 @@ impl Lexer {
                     self.add_token(TokenKind::Colon, start);
                 }
             }
+            // `.` can begin `..=`, `..`, or stand alone (field access).
             '.' => {
                 if self.match_char('.') {
                     if self.match_char('=') {
@@ -203,6 +261,8 @@ impl Lexer {
             // String and character literals
             '"' => self.scan_string(start),
             '\'' => self.scan_unicode_char(start),
+            // A leading `u` might introduce a legacy `u"..."` string, otherwise
+            // it starts an ordinary identifier/keyword.
             'u' => {
                 if self.current() == '"' {
                     self.advance(); // consume the legacy prefix quote
@@ -212,7 +272,7 @@ impl Lexer {
                 }
             }
 
-            // Numbers
+            // Numbers. `0` may start a base-prefixed literal (0x/0b/0o).
             '0' => {
                 if self.current() == 'x' || self.current() == 'X' {
                     self.scan_hex_number(start);
@@ -226,11 +286,12 @@ impl Lexer {
             }
             '1'..='9' => self.scan_number(start),
 
-            // Identifiers and keywords
+            // Identifiers and keywords (including a lone `_`).
             'a'..='z' | 'A'..='Z' | '_' => self.scan_identifier_or_keyword(start),
 
             // Operators
             '+' => self.add_token(TokenKind::Plus, start),
+            // `-` may be the start of the arrow `->`.
             '-' => {
                 if self.match_char('>') {
                     self.add_token(TokenKind::Arrow, start);
@@ -241,6 +302,7 @@ impl Lexer {
             '*' => self.add_token(TokenKind::Star, start),
             '/' => self.add_token(TokenKind::Slash, start),
             '%' => self.add_token(TokenKind::Percent, start),
+            // `=` may be `==` or, in closure/match context, the fat arrow `=>`.
             '=' => {
                 if self.match_char('=') {
                     self.add_token(TokenKind::EqEq, start);
@@ -260,6 +322,7 @@ impl Lexer {
                     self.add_token(TokenKind::Bang, start);
                 }
             }
+            // `<` may be `<=`, `<<`, or plain less-than.
             '<' => {
                 if self.match_char('=') {
                     self.add_token(TokenKind::LtEq, start);
@@ -269,6 +332,7 @@ impl Lexer {
                     self.add_token(TokenKind::Lt, start);
                 }
             }
+            // `>` similarly may be `>=`, `>>`, or plain greater-than.
             '>' => {
                 if self.match_char('=') {
                     self.add_token(TokenKind::GtEq, start);
@@ -309,7 +373,8 @@ impl Lexer {
                 }
             }
 
-            // Unexpected character
+            // Anything else is not part of Poly. Record an error but keep the
+            // character in the stream as an `Error` token.
             _ => {
                 self.errors.push(LexerError::new(
                     LexerErrorKind::UnexpectedCharacter,
@@ -324,6 +389,8 @@ impl Lexer {
         }
     }
 
+    /// Record a finished token. `start` is its first character's offset and the
+    /// current `pos` is just past its last character.
     fn add_token(&mut self, kind: TokenKind, start: usize) {
         // All scanners use one constructor so spans consistently cover the
         // source from the first character through the final consumed character.
@@ -333,12 +400,20 @@ impl Lexer {
 
     /// Return the language after `#` when the marker is a standalone block
     /// opener. This is called after `#` has already been consumed.
+    ///
+    /// For example `#rust` on its own line yields `Some("rust")`, whereas an
+    /// ordinary `# a comment` yields `None` (the text after `#` isn't a known
+    /// language name followed only by whitespace).
     fn foreign_block_language_at_current(&self) -> Option<String> {
+        // If the `#` is still under the cursor, look just past it; otherwise
+        // (the common case here) it has already been consumed and the marker
+        // text starts at the cursor.
         let marker_start = if self.current() == '#' {
             self.pos + 1
         } else {
             self.pos
         };
+        // Find the end of the current line, i.e. the next newline (or EOF).
         let line_end = self
             .chars
             .iter()
@@ -346,10 +421,14 @@ impl Lexer {
             .skip(marker_start)
             .find_map(|(index, ch)| (*ch == '\n').then_some(index))
             .unwrap_or(self.chars.len());
+        // The text between `#` and end-of-line is the candidate marker.
         let marker: String = self.chars[marker_start..line_end].iter().collect();
+        // Only a handful of languages are supported for passthrough blocks.
         let language = ["rust", "cpp", "c", "asm", "js"]
             .iter()
             .find(|language| marker.starts_with(**language))?;
+        // It counts as a block opener only if nothing but whitespace follows
+        // the language name on that line (so `#rusty` is not a `rust` block).
         if marker[language.len()..].trim().is_empty() {
             Some((*language).to_string())
         } else {
@@ -360,21 +439,30 @@ impl Lexer {
     /// Scan a `#<language> ... #end<language>` block. The opening `#` has
     /// already been consumed. End markers are recognized only at line starts,
     /// so strings and comments inside foreign code remain opaque.
+    ///
+    /// The whole block becomes a single `ForeignBlock` token whose `content` is
+    /// the raw text between the opening line and the end marker.
     fn scan_foreign_block(&mut self, start: usize, language: String) {
+        // Skip past the language name (the `#` is already gone).
         for _ in 0..language.chars().count() {
             self.advance();
         }
+        // Skip the rest of the opening line.
         while !self.is_at_end() && self.current() != '\n' {
             self.advance();
         }
         if !self.is_at_end() {
-            self.advance();
+            self.advance(); // consume the newline itself
         }
 
+        // Collect the raw foreign source until we find the end marker.
         let mut content = String::new();
         let block_start = self.pos;
         let end_marker = format!("#end{language}");
         while !self.is_at_end() {
+            // Work out whether the cursor is at the start of a line (ignoring
+            // leading whitespace). End markers only count at line starts so
+            // that a string like "#endrust" inside the foreign code is ignored.
             let mut line_start = self.pos;
             while line_start > 0 && self.chars[line_start - 1] != '\n' {
                 line_start -= 1;
@@ -385,12 +473,15 @@ impl Lexer {
             if at_line_start {
                 let remaining: String = self.chars[self.pos..].iter().collect();
                 let marker_end = end_marker.chars().count();
+                // The marker must be followed by a newline or end-of-input, so
+                // `#endrusty` does not accidentally close a `rust` block.
                 if remaining.starts_with(&end_marker)
                     && remaining
                         .chars()
                         .nth(marker_end)
                         .is_none_or(|ch| ch == '\n' || ch == '\r')
                 {
+                    // Consume the end marker and the rest of its line.
                     for _ in 0..marker_end {
                         self.advance();
                     }
@@ -401,9 +492,11 @@ impl Lexer {
                     return;
                 }
             }
+            // Not the end marker: this character is part of the foreign code.
             content.push(self.advance());
         }
 
+        // Ran out of input before finding the end marker.
         self.errors.push(LexerError::new(
             LexerErrorKind::UnterminatedComment,
             Span::new(block_start, self.pos),
@@ -413,13 +506,19 @@ impl Lexer {
     }
 
     // === Scanners ===
+    // Each scanner below is called with the token's first character already
+    // consumed, and must consume the rest of the token (or report an error).
 
+    /// Scan an ASCII string literal. A handful of backslash escapes are
+    /// recognised; anything else is reported as an invalid escape.
     fn scan_string(&mut self, start: usize) {
         // Store decoded characters in the AST-facing value; the source span
         // still retains the original spelling for diagnostics.
         let mut value = String::new();
+        // Read until the closing quote (or end of input).
         while !self.is_at_end() && self.current() != '"' {
             if self.current() == '\\' {
+                // Escape: consume the backslash and decode the next character.
                 self.advance();
                 if self.is_at_end() {
                     break;
@@ -434,6 +533,7 @@ impl Lexer {
                     '\'' => value.push('\''),
                     '0' => value.push('\0'),
                     _ => {
+                        // Unknown escape: keep going but note the problem.
                         self.errors.push(LexerError::new(
                             LexerErrorKind::InvalidEscape,
                             Span::new(self.pos - 2, self.pos),
@@ -442,10 +542,12 @@ impl Lexer {
                     }
                 }
             } else {
+                // Ordinary character: copy it through.
                 value.push(self.advance());
             }
         }
 
+        // Reached the end without a closing quote.
         if self.is_at_end() {
             self.errors.push(LexerError::new(
                 LexerErrorKind::UnterminatedString,
@@ -459,8 +561,11 @@ impl Lexer {
         self.add_token(TokenKind::StringLiteral(value), start);
     }
 
+    /// Scan a `unicode '...'` character literal. Unlike an ordinary string it
+    /// must contain exactly one character, and it may be escaped.
     fn scan_unicode_char(&mut self, start: usize) {
         // The opening quote has already been consumed by the dispatcher.
+        // Empty literal or a stray newline is an error.
         let value = if self.is_at_end() || self.current() == '\n' {
             self.errors.push(LexerError::new(
                 LexerErrorKind::InvalidToken,
@@ -469,6 +574,7 @@ impl Lexer {
             ));
             return;
         } else if self.current() == '\'' {
+            // Immediate closing quote means the literal is empty.
             self.advance(); // consume the empty literal's closing quote
             self.errors.push(LexerError::new(
                 LexerErrorKind::InvalidToken,
@@ -477,6 +583,7 @@ impl Lexer {
             ));
             return;
         } else if self.current() == '\\' {
+            // Escaped character: decode it the same way strings are decoded.
             self.advance();
             if self.is_at_end() {
                 self.errors.push(LexerError::new(
@@ -496,6 +603,7 @@ impl Lexer {
                 '"' => '"',
                 '0' => '\0',
                 _ => {
+                    // Unknown escape: report, then skip to the closing quote.
                     self.errors.push(LexerError::new(
                         LexerErrorKind::InvalidEscape,
                         Span::new(self.pos - 2, self.pos),
@@ -511,9 +619,12 @@ impl Lexer {
                 }
             }
         } else {
+            // A single ordinary (possibly multi-byte) character.
             self.advance()
         };
 
+        // The opening value was consumed; the next character must be the
+        // closing quote, otherwise the literal held more than one character.
         if self.current() != '\'' {
             while !self.is_at_end() && self.current() != '\'' && self.current() != '\n' {
                 self.advance();
@@ -533,10 +644,13 @@ impl Lexer {
         self.add_token(TokenKind::UnicodeCharLiteral(value.to_string()), start);
     }
 
+    /// Scan a legacy `u"..."` Unicode string. The body may contain any
+    /// characters, including multi-byte ones, and the usual escapes apply.
     fn scan_unicode_string(&mut self, start: usize) {
         let mut value = String::new();
         while !self.is_at_end() && self.current() != '"' {
             if self.current() == '\\' {
+                // Same escape handling as an ordinary string literal.
                 self.advance();
                 if self.is_at_end() {
                     break;
@@ -576,6 +690,7 @@ impl Lexer {
         self.add_token(TokenKind::UnicodeStringLiteral(value), start);
     }
 
+    /// Scan a decimal integer or float. The first digit was already consumed.
     fn scan_number(&mut self, start: usize) {
         // Numeric text is preserved rather than parsed here. The semantic phase
         // can then apply the surrounding declaration's target type.
@@ -635,23 +750,31 @@ impl Lexer {
                 ));
             }
 
+            // A decimal point was consumed earlier, so this is a float.
             let text: String = self.chars[start..self.pos].iter().collect();
             self.add_token(TokenKind::FloatLiteral(text), start);
         } else {
+            // Plain digits with no decimal point: an integer.
             let text: String = self.chars[start..self.pos].iter().collect();
             self.add_token(TokenKind::IntLiteral(text), start);
         }
     }
 
+    /// Scan a hexadecimal literal such as `0xFF`. The `0` was consumed by the
+    /// dispatcher; this starts at the `x`.
     fn scan_hex_number(&mut self, start: usize) {
         self.advance(); // consume 'x'
+                        // Remember where the digits begin so we can detect an empty literal.
         let digit_start = self.pos;
         while !self.is_at_end() && self.current().is_ascii_hexdigit() {
             self.advance();
         }
+        // A letter/digit/underscore right after the digits means something the
+        // hex literal cannot contain (e.g. `0xG` or `0x1z`).
         let invalid_digit =
             !self.is_at_end() && (self.current().is_ascii_alphanumeric() || self.current() == '_');
         if self.pos == digit_start || invalid_digit {
+            // Gobble the bad suffix so the whole literal is one error token.
             while !self.is_at_end()
                 && (self.current().is_ascii_alphanumeric() || self.current() == '_')
             {
@@ -667,8 +790,10 @@ impl Lexer {
         self.add_token(TokenKind::IntLiteral(text), start);
     }
 
+    /// Scan a binary literal such as `0b1010`.
     fn scan_binary_number(&mut self, start: usize) {
         self.advance(); // consume 'b'
+                        // Only 0 and 1 are binary digits.
         while !self.is_at_end() && (self.current() == '0' || self.current() == '1') {
             self.advance();
         }
@@ -676,8 +801,10 @@ impl Lexer {
         self.add_token(TokenKind::IntLiteral(text), start);
     }
 
+    /// Scan an octal literal such as `0o755`.
     fn scan_octal_number(&mut self, start: usize) {
         self.advance(); // consume 'o'
+                        // `is_digit(8)` accepts 0-7.
         while !self.is_at_end() && self.current().is_digit(8) {
             self.advance();
         }
@@ -685,6 +812,7 @@ impl Lexer {
         self.add_token(TokenKind::IntLiteral(text), start);
     }
 
+    /// Scan a word, then classify it as a keyword, a literal, or an identifier.
     fn scan_identifier_or_keyword(&mut self, start: usize) {
         // Read the complete word before classification; prefixes such as `u`
         // need this to distinguish an identifier from a legacy literal.
@@ -692,6 +820,8 @@ impl Lexer {
             self.advance();
         }
 
+        // Now compare the collected word against the keyword table. Anything
+        // not listed becomes a plain identifier carrying its text.
         let text: String = self.chars[start..self.pos].iter().collect();
         let kind = match text.as_str() {
             // Keywords
@@ -802,7 +932,7 @@ impl Lexer {
             "true" => TokenKind::BoolLiteral(true),
             "false" => TokenKind::BoolLiteral(false),
 
-            // Default: identifier
+            // Not a keyword or a boolean literal: a user-defined name.
             _ => TokenKind::Identifier(text),
         };
 

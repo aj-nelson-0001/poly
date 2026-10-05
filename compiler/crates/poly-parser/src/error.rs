@@ -1,14 +1,23 @@
 //! Parser error types with helpful suggestions.
+//!
+//! When the parser cannot make sense of the token stream it produces a
+//! `ParseError`. Besides a message and the source location, a parse error can
+//! carry a *suggestion* — a short hint like "Poly uses 'end' to close blocks".
+//! These hints turn cryptic syntax errors into something a learner can act on.
 
 use std::fmt;
 
+// A span records where in the source the error occurred.
 use poly_lexer::token::Span;
 
 /// Errors that can occur during parsing.
 #[derive(Debug, Clone)]
 pub struct ParseError {
+    // What went wrong, written for a human.
     pub message: String,
+    // Where in the source it happened.
     pub span: Span,
+    // An optional, friendlier hint about how to fix it.
     pub suggestion: Option<String>,
 }
 
@@ -39,14 +48,22 @@ impl ParseError {
     }
 
     /// Generate helpful error suggestions based on the error message.
+    ///
+    /// This is a small "expert system": it inspects the (lower-cased) message
+    /// text for patterns and attaches the matching hint. If a suggestion was
+    /// already supplied, this does nothing.
     pub fn generate_suggestion(&mut self) {
+        // Don't overwrite an explicit suggestion.
         if self.suggestion.is_some() {
             return;
         }
 
+        // Matching is done on lower-case text so casing in the message doesn't
+        // matter.
         let msg = self.message.to_lowercase();
 
         self.suggestion = if msg.contains("expected 'end'") || msg.contains("expected end") {
+            // The classic Poly beginner mistake: forgetting `end <keyword>`.
             Some(
                 "Poly uses 'end' to close blocks. Did you forget 'end fn', 'end if', etc.?"
                     .to_string(),
@@ -72,18 +89,22 @@ impl ParseError {
         } else if msg.contains("expected '") && msg.contains("enum") {
             Some("Enum variants: VariantName or VariantName(type)".to_string())
         } else {
+            // No matching pattern: leave the suggestion empty.
             None
         };
     }
 }
 
 impl fmt::Display for ParseError {
+    /// Print the error as `Parse error at start..end: message`, followed by a
+    /// bullet-pointed suggestion when one exists.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Parse error at {}..{}: {}",
             self.span.start, self.span.end, self.message
         )?;
+        // Only print the suggestion line if there is one.
         if let Some(ref suggestion) = self.suggestion {
             write!(f, "\n  💡 {}", suggestion)?;
         }
@@ -91,4 +112,5 @@ impl fmt::Display for ParseError {
     }
 }
 
+// Allows `ParseError` to flow through `?` in functions returning boxed errors.
 impl std::error::Error for ParseError {}

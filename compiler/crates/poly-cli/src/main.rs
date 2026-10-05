@@ -1,6 +1,11 @@
 //! Poly Language CLI
 //!
 //! Command-line interface for the Poly compiler/transpiler.
+//!
+//! This is the `poly` binary. It parses the command line, then dispatches to
+//! one of several modes: a default build, token/AST dumps, type checking,
+//! emitting a target language, IR inspection, formatting, watching a file, or
+//! generating a full project. The REPL lives in the sibling [`repl`] module.
 
 mod repl;
 
@@ -10,7 +15,7 @@ use std::process;
 
 use anyhow::{bail, Context, Result};
 
-/// Supported compilation targets.
+/// Supported compilation targets (the languages Poly can emit).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Target {
     Rust,
@@ -20,6 +25,8 @@ enum Target {
 }
 
 impl Target {
+    /// Recognise a target from its CLI spelling, accepting short aliases
+    /// (`rs`, `s`, `S`, `mjs`) as well as the canonical names.
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "rust" | "rs" => Ok(Target::Rust),
@@ -33,6 +40,7 @@ impl Target {
         }
     }
 
+    /// The conventional file extension for generated output of this target.
     fn extension(&self) -> &str {
         match self {
             Target::Rust => "rs",
@@ -42,6 +50,7 @@ impl Target {
         }
     }
 
+    /// The canonical language name, used in diagnostics and `#lang` markers.
     fn language_name(&self) -> &str {
         match self {
             Target::Rust => "rust",

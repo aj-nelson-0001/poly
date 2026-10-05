@@ -6,8 +6,11 @@
 
 use std::fmt::Write as _;
 
-/// A JSON value.  Object keys are kept insertion-ordered via `BTreeMap` is
-/// not needed; `Vec` preserves order and the server only does lookups.
+/// A JSON value.
+///
+/// Object keys are kept in insertion order by storing pairs in a `Vec`; the
+/// server only ever looks fields up by name and benefits from stable ordering
+/// (no map dependency, no sorting of protocol fields).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
     /// JSON-RPC uses null for absent optional values and empty results.
@@ -78,12 +81,16 @@ impl Json {
         out
     }
 
+    /// Append this value's compact JSON text to `out`.
     fn write(&self, out: &mut String) {
         match self {
             Json::Null => out.push_str("null"),
             Json::Bool(true) => out.push_str("true"),
             Json::Bool(false) => out.push_str("false"),
             Json::Number(number) => {
+                // Whole numbers print without a trailing `.0` (JSON has no
+                // separate integer type, but LSP clients prefer `1` to `1.0`
+                // for ids and counts).
                 if number.fract() == 0.0 && number.is_finite() && number.abs() < 1e15 {
                     let _ = write!(out, "{}", *number as i64);
                 } else {

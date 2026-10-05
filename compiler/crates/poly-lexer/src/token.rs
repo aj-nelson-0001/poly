@@ -1,8 +1,15 @@
 //! Token definitions for the Poly language.
+//!
+//! A *token* is one recognised piece of source text: a keyword, a name, a
+//! number, a symbol. This module defines what tokens exist (`TokenKind`), where
+//! they came from (`Span`), and how to print them for diagnostics.
 
 use std::fmt;
 
 /// A span represents a location in source code (start offset, end offset).
+///
+/// The offsets are byte positions into the original source string. The range
+/// is *half-open*: it includes `start` but not `end`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     pub start: usize,
@@ -21,12 +28,17 @@ impl Span {
     }
 
     /// Empty spans are used for zero-width locations such as EOF.
+    ///
+    /// `clippy` wants `len` and `is_empty` to be defined together; this is the
+    /// companion `is_empty` even though the lexer rarely needs it directly.
     pub fn is_empty(&self) -> bool {
         self.start == self.end
     }
 }
 
 /// A token with its kind and span in source code.
+///
+/// This pairs *what* the token is (`kind`) with *where* it was found (`span`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
@@ -41,6 +53,10 @@ impl Token {
 }
 
 /// All possible token kinds in the Poly language.
+///
+/// Each variant is one "shape" of token. Literals and identifiers carry their
+/// text/value; keywords and operators are represented by dedicated variants so
+/// the parser can match on them quickly without comparing strings.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // === Literals ===
@@ -67,6 +83,7 @@ pub enum TokenKind {
 
     // Keywords are represented as dedicated variants so the parser can make
     // structural decisions without repeatedly comparing identifier text.
+    // The spelling of each keyword is shown in its `Display` implementation.
     Var,
     Let,
     Const,
@@ -245,16 +262,18 @@ impl fmt::Display for TokenKind {
     // `error` statement keyword itself.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            // Literals
+            // Literals — print the value in the same shape the user wrote it.
             TokenKind::IntLiteral(s) => write!(f, "{}", s),
             TokenKind::FloatLiteral(s) => write!(f, "{}", s),
             TokenKind::StringLiteral(s) => write!(f, "\"{}\"", s),
             TokenKind::UnicodeStringLiteral(s) => write!(f, "u\"{}\"", s),
             TokenKind::UnicodeCharLiteral(s) => write!(f, "unicode '{}'", s),
             TokenKind::Unicode => write!(f, "unicode"),
+            // Byte literals are shown as a bracketed list of hex bytes.
             TokenKind::ByteLiteral(bytes) => {
                 write!(f, "[")?;
                 for (i, b) in bytes.iter().enumerate() {
+                    // Put a separator between bytes, but not before the first.
                     if i > 0 {
                         write!(f, ", ")?;
                     }
@@ -264,10 +283,10 @@ impl fmt::Display for TokenKind {
             }
             TokenKind::BoolLiteral(b) => write!(f, "{}", b),
 
-            // Identifiers
+            // Identifiers just print their text.
             TokenKind::Identifier(s) => write!(f, "{}", s),
 
-            // Keywords
+            // Keywords — each variant maps back to its source spelling.
             TokenKind::Var => write!(f, "var"),
             TokenKind::Let => write!(f, "let"),
             TokenKind::Const => write!(f, "const"),
@@ -324,6 +343,8 @@ impl fmt::Display for TokenKind {
             TokenKind::Put => write!(f, "put"),
 
             TokenKind::Get => write!(f, "get"),
+            // See the note above: the keyword deliberately prints as `<error>`
+            // to avoid confusion with the ordinary English word.
             TokenKind::Error => write!(f, "<error>"),
             TokenKind::Warn => write!(f, "warn"),
             TokenKind::Info => write!(f, "info"),
@@ -392,7 +413,8 @@ impl fmt::Display for TokenKind {
             TokenKind::DotDotEq => write!(f, "..="),
             TokenKind::ColonColon => write!(f, "::"),
 
-            // Delimiters
+            // Delimiters. Braces are doubled so a single `{` in a diagnostic
+            // can never be mistaken for the Rust format-string placeholder.
             TokenKind::LParen => write!(f, "("),
             TokenKind::RParen => write!(f, ")"),
             TokenKind::LBracket => write!(f, "["),
@@ -408,6 +430,7 @@ impl fmt::Display for TokenKind {
             // Special
             TokenKind::Newline => write!(f, "\\n"),
             TokenKind::Eof => write!(f, "EOF"),
+            // Show the whole foreign block in its source form.
             TokenKind::ForeignBlock { language, content } => {
                 write!(f, "#{language} {content} #end{language}")
             }
@@ -417,6 +440,10 @@ impl fmt::Display for TokenKind {
 
 impl TokenKind {
     /// Check if this token is a keyword that could also be an identifier.
+    ///
+    /// Some keywords are *contextual*: they only act as keywords in certain
+    /// positions, so the parser uses this to decide when to treat the word as a
+    /// plain name instead.
     pub fn is_keyword(&self) -> bool {
         matches!(
             self,
@@ -476,6 +503,9 @@ impl TokenKind {
     }
 
     /// Check if this token is a type keyword.
+    ///
+    /// Used when the parser needs to tell a built-in type name (like `i32`)
+    /// apart from a user-defined type name.
     pub fn is_type_keyword(&self) -> bool {
         matches!(
             self,
@@ -505,6 +535,10 @@ impl TokenKind {
     }
 
     /// Check if this token is a literal.
+    ///
+    /// Literals carry a constant value directly in the source (a number, a
+    /// string, `true`/`false`) rather than referring to something computed
+    /// elsewhere.
     pub fn is_literal(&self) -> bool {
         matches!(
             self,

@@ -17,7 +17,12 @@ use crate::ast::{Program, Statement};
 ///
 /// Returns a human-readable diagnostic when the program has top-level
 /// executable statements instead of `fn main() ... end fn`.
+///
+/// A program is accepted in two cases: it declares a zero-argument `fn main`,
+/// or it contains only declarations (no statements that would run).
 pub fn require_explicit_main(program: &Program) -> Result<(), String> {
+    // Look for a function called `main` that takes no parameters. An `async fn
+    // main` has the same name and parameter shape, so it also counts.
     let has_main = program.statements.iter().any(|statement| {
         matches!(
             &statement.node,
@@ -26,10 +31,13 @@ pub fn require_explicit_main(program: &Program) -> Result<(), String> {
         )
     });
 
+    // Found an entry point: nothing more to check.
     if has_main {
         return Ok(());
     }
 
+    // No `main`, so the program is only valid if it contains no executable
+    // top-level statements. Report the first one we find.
     for statement in &program.statements {
         if is_executable_statement(&statement.node) {
             return Err(format!(
@@ -46,7 +54,8 @@ pub fn require_explicit_main(program: &Program) -> Result<(), String> {
 /// level. Declarations of any kind return `false`.
 fn is_executable_statement(statement: &Statement) -> bool {
     match statement {
-        // Declarations allowed at module scope.
+        // Declarations allowed at module scope — these only define things, so
+        // they are safe at the top level and return `false`.
         Statement::FunctionDeclaration(_)
         | Statement::StructDeclaration(_)
         | Statement::EnumDeclaration(_)
@@ -60,7 +69,8 @@ fn is_executable_statement(statement: &Statement) -> bool {
         | Statement::ForeignBlock { .. }
         | Statement::ExternFunctionDeclaration(_) => false,
 
-        // Everything else would execute inside the generated entry point.
+        // Everything else would execute inside the generated entry point, so
+        // any of these appearing at the top level is an error.
         Statement::VarDeclaration { .. }
         | Statement::LetDeclaration { .. }
         | Statement::Assignment { .. }

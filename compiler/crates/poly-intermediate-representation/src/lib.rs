@@ -18,13 +18,16 @@ pub use optimizer::{optimize, OptimizationPass};
 /// Convert Poly source directly to Rust through the intermediate representation pipeline (without
 /// optimization).  Useful for consumers that want a single-call entry point.
 pub fn transpile(source: &str) -> Result<String, String> {
+    // Lex, then parse: turn source text into tokens, then into an AST.
     let (tokens, errors) = poly_lexer::Lexer::lex(source);
     if !errors.is_empty() {
         return Err(format!("Lexer errors: {:?}", errors));
     }
     let mut parser = poly_parser::Parser::new(&tokens);
     let program = parser.parse().map_err(|e| e.to_string())?;
+    // A program must declare `fn main`; reject top-level executable code.
     poly_parser::require_explicit_main(&program)?;
+    // Lower the AST to the IR, then generate Rust from the IR.
     let intermediate_representation = generator::generate(&program)?;
     let mut codegen = IntermediateRepresentationCodeGen::new();
     codegen.generate(&intermediate_representation)
@@ -39,6 +42,7 @@ pub fn transpile_optimized(source: &str) -> Result<String, String> {
     let mut parser = poly_parser::Parser::new(&tokens);
     let program = parser.parse().map_err(|e| e.to_string())?;
     poly_parser::require_explicit_main(&program)?;
+    // Same pipeline, with the optimization passes run on the IR in between.
     let mut intermediate_representation = generator::generate(&program)?;
     optimizer::optimize(&mut intermediate_representation);
     let mut codegen = IntermediateRepresentationCodeGen::new();

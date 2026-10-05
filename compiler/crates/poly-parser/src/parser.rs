@@ -569,6 +569,19 @@ impl<'a> Parser<'a> {
                 .map(Statement::TypeDeclaration),
             TokenKind::Macro => self.parse_macro_declaration(),
             TokenKind::While => self.parse_while_statement(),
+            // An `if` at the head of a statement is the block form (or the
+            // compact expression form), never a sub-expression of something
+            // larger, so it is parsed directly here rather than through
+            // `parse_expression`. That matters for the stack: the `_` arm
+            // below would descend the whole precedence ladder
+            // (`parse_or_expression` .. `parse_primary`) and leave all of
+            // those frames live while the if's body recurses, so every
+            // nested `if` would pay ~a dozen extra frames. `while` already
+            // takes this shortcut; without it a chain of nested `if`s
+            // exhausts the stack before `MAX_IF_DEPTH` can stop it.
+            TokenKind::If => self
+                .parse_if_expression()
+                .map(Statement::ExpressionStatement),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Break => {
                 self.advance();
@@ -835,19 +848,23 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse `let name [: type] := value`.
     fn parse_let_declaration(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'let'
         let name = self.expect_identifier()?;
+        // The type annotation is optional for `let`.
         let ty = if self.match_token(&TokenKind::Colon) {
             Some(self.parse_type()?)
         } else {
             None
         };
+        // `let` always requires an initializer (`:=`).
         self.expect_initializer()?;
         let value = self.parse_expression()?;
         Ok(Statement::LetDeclaration { name, ty, value })
     }
 
+    /// Parse `const NAME := value`.
     fn parse_const_declaration(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'const'
         let name = self.expect_identifier()?;
@@ -856,6 +873,8 @@ impl<'a> Parser<'a> {
         Ok(Statement::ConstDeclaration { name, value })
     }
 
+    /// Parse `return` with an optional value. A bare `return` is allowed when
+    /// the next token ends the statement or closes the surrounding block.
     fn parse_return_statement(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'return'
         let value = if self.is_at_end()
@@ -867,17 +886,22 @@ impl<'a> Parser<'a> {
                     | TokenKind::Else
                     | TokenKind::RBrace
             ) {
+            // No value: `return` on its own.
             None
         } else {
+            // `return expr`.
             Some(self.parse_expression()?)
         };
         Ok(Statement::ReturnStatement(value))
     }
 
+    /// Parse `while condition ... end while`.
     fn parse_while_statement(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'while'
         let condition = self.parse_expression()?;
         let body = self.parse_block()?;
+        // Require the explicit terminator so loops can never run off the end of
+        // a file unnoticed.
         self.expect(&TokenKind::End)?;
         self.expect(&TokenKind::While)?;
         Ok(Statement::ExpressionStatement(Expression::WhileLoop {
@@ -996,17 +1020,22 @@ impl<'a> Parser<'a> {
         Ok(target)
     }
 
+    /// Parse `target := value`, where `target` can be a name, field access, or
+    /// index expression.
     fn parse_assignment_statement(&mut self) -> Result<Statement, ParseError> {
         let target = self.parse_assignment_target()?;
+        // `=` is reserved for equality, so assignment must use `:=`.
         self.expect(&TokenKind::ColonEq)?;
         let value = self.parse_expression()?;
         Ok(Statement::Assignment { target, value })
     }
 
+    /// Parse `put expr [to "file" [-append]]`, the output statement.
     fn parse_put_statement(&mut self) -> Result<Statement, ParseError> {
         // `put` always emits an LF at the end (like Rust's println!).
         self.advance(); // consume 'put'
 
+        // The retired `-n` flag is rejected with a migration hint.
         if self.peek() == &TokenKind::Minus
             && matches!(
                 self.tokens.get(self.pos + 1).map(|token| &token.kind),
@@ -1047,20 +1076,25 @@ impl<'a> Parser<'a> {
 
     // Function, struct, enum, trait, and impl parsers all preserve the source
     // declaration shape so later phases can share one AST representation.
+    /// Parse `[async] fn name[<generics>](params)[: ret] ... end fn`.
     fn parse_function_declaration(&mut self) -> Result<FunctionDecl, ParseError> {
         // Check for async modifier
         let is_async = self.match_token(&TokenKind::Async);
         self.advance(); // consume 'fn'
         let name = self.expect_identifier()?;
+        // Optional `<T: Bound>` list.
         let generics = self.parse_generic_params()?;
         self.expect(&TokenKind::LParen)?;
         let params = self.parse_params()?;
         self.expect(&TokenKind::RParen)?;
+        // Optional return type after `:`.
         let return_type = if self.match_token(&TokenKind::Colon) {
             Some(self.parse_type()?)
         } else {
             None
         };
+        // The body can be brace-delimited, an explicit `end fn`, absent at EOF,
+        // or the ordinary `... end fn` form.
         let body = if self.peek() == &TokenKind::LBrace {
             self.advance();
             let stmts = self.parse_block()?;
@@ -1117,8 +1151,10 @@ impl<'a> Parser<'a> {
         Ok(params)
     }
 
+    /// Parse a comma-separated parameter list: `a: i32, b: f64 := 1.0`.
     fn parse_params(&mut self) -> Result<Vec<Parameter>, ParseError> {
         let mut params = Vec::new();
+        // An empty parameter list is valid.
         if self.peek() == &TokenKind::RParen {
             return Ok(params);
         }
@@ -1132,6 +1168,7 @@ impl<'a> Parser<'a> {
                     default: None,
                 });
             } else {
+                // Ordinary parameter: `name: Type` with an optional `:= default`.
                 self.expect(&TokenKind::Colon)?;
                 let ty = self.parse_type()?;
                 let default = if self.match_initializer() {
@@ -1141,6 +1178,7 @@ impl<'a> Parser<'a> {
                 };
                 params.push(Parameter { name, ty, default });
             }
+            // Keep reading while commas separate parameters.
             if !self.match_token(&TokenKind::Comma) {
                 break;
             }
@@ -1148,6 +1186,7 @@ impl<'a> Parser<'a> {
         Ok(params)
     }
 
+    /// Parse `struct Name ... end struct`, collecting fields and methods.
     fn parse_struct_declaration(&mut self) -> Result<StructDecl, ParseError> {
         self.advance(); // consume 'struct'
         let name = self.expect_identifier()?;
@@ -1155,10 +1194,14 @@ impl<'a> Parser<'a> {
         let mut fields = Vec::new();
         let mut methods = Vec::new();
 
+        // Read declarations until the closing `end struct` (consumed by the
+        // `match_token` test).
         while !self.match_token(&TokenKind::End) {
+            // A `fn` introduces a method; anything else is a field.
             if self.peek() == &TokenKind::Fn {
                 methods.push(self.parse_function_declaration()?);
             } else {
+                // Fields may be declared `var` (mutable) or plain (immutable).
                 let mutable = self.match_token(&TokenKind::Var);
                 let field_name = self.expect_identifier()?;
                 self.expect(&TokenKind::Colon)?;
@@ -1187,6 +1230,7 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse `enum Name ... end enum`, collecting variants and methods.
     fn parse_enum_declaration(&mut self) -> Result<EnumDecl, ParseError> {
         self.advance(); // consume 'enum'
         let name = self.expect_identifier()?;
@@ -1194,9 +1238,11 @@ impl<'a> Parser<'a> {
         let mut methods = Vec::new();
 
         while !self.match_token(&TokenKind::End) {
+            // A `fn` introduces a method; anything else is a variant.
             if self.peek() == &TokenKind::Fn {
                 methods.push(self.parse_function_declaration()?);
             } else {
+                // Variant shapes: `Unit`, `Tuple(T1, T2)`, or `Struct{...}`.
                 let variant_name = self.expect_identifier()?;
                 if self.match_token(&TokenKind::LParen) {
                     let mut fields = Vec::new();
@@ -1297,6 +1343,7 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse `trait Name ... end trait`. Trait methods are signatures only.
     fn parse_trait_declaration(&mut self) -> Result<TraitDecl, ParseError> {
         self.advance(); // consume 'trait'
         let name = self.expect_identifier()?;
@@ -1331,6 +1378,7 @@ impl<'a> Parser<'a> {
         Ok(TraitDecl { name, methods })
     }
 
+    /// Parse `impl Type ... end impl` or `impl Trait for Type ... end impl`.
     fn parse_impl_declaration(&mut self) -> Result<ImplDecl, ParseError> {
         self.advance(); // consume 'impl'
         let type_name = self.expect_identifier()?;
@@ -1420,6 +1468,10 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse `module Name ... end module`.
+    ///
+    /// `block_depth` is bumped for the duration so nested code knows it is
+    /// inside a block (used to reject foreign blocks and `extern fn` there).
     fn parse_module_declaration(&mut self) -> Result<ModuleDecl, ParseError> {
         self.advance(); // consume 'module'
         let name = self.expect_identifier()?;
@@ -1482,16 +1534,20 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse `use a::b::c [as Alias]`, including a trailing `::*`.
     fn parse_use_declaration(&mut self) -> Result<UseDecl, ParseError> {
         self.advance(); // consume 'use'
+                        // The path is one or more identifiers separated by `::`.
         let mut path = vec![self.expect_identifier()?];
         while self.match_token(&TokenKind::ColonColon) {
+            // A `*` glob segment terminates the path.
             if self.peek() == &TokenKind::Star {
                 self.advance();
                 break;
             }
             path.push(self.expect_identifier()?);
         }
+        // Optional `as Alias`.
         let alias = if self.match_token(&TokenKind::As) {
             Some(self.expect_identifier()?)
         } else {
@@ -1551,6 +1607,7 @@ impl<'a> Parser<'a> {
         Ok(DependencyDecl { name, version })
     }
 
+    /// Parse a type alias: `type Name := SomeType`.
     fn parse_type_declaration(&mut self) -> Result<TypeDecl, ParseError> {
         self.advance(); // consume 'type'
         let name = self.expect_identifier()?;
@@ -1620,8 +1677,12 @@ impl<'a> Parser<'a> {
 
     // === Type parsing ===
 
-    // Type parsing is recursive because containers and function signatures nest
-    // other annotations inside delimiters such as `<...>` and `(...)`.
+    /// Parse a type annotation.
+    ///
+    /// Type parsing is recursive because containers and function signatures nest
+    /// other annotations inside delimiters such as `<...>` and `(...)`. The
+    /// `expr_depth` guard below bounds that recursion so malformed deeply nested
+    /// types cannot exhaust the stack.
     fn parse_type(&mut self) -> Result<TypeAnnotation, ParseError> {
         // Frame-neutral on purpose, like the `parse_unary` guard; tuple,
         // reference, and array types recurse here without touching it.
@@ -1859,10 +1920,18 @@ impl<'a> Parser<'a> {
     // Each helper below represents one precedence level. Lower-precedence
     // helpers call higher-precedence helpers first, producing left-associative
     // trees without a separate precedence table.
+    //
+    // From lowest to highest precedence the ladder is:
+    //   or -> and -> comparison -> bitwise or -> bitwise xor -> bitwise and
+    //   -> shift -> additive -> multiplicative -> unary -> postfix -> primary
+
+    /// Parse a full expression. `or` is the lowest-precedence operator, so it
+    /// sits at the top of the ladder.
     fn parse_expression(&mut self) -> Result<Expression, ParseError> {
         self.parse_or_expression()
     }
 
+    /// Parse `a or b or c ...` (lowest precedence, left-associative).
     fn parse_or_expression(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_and_expression()?;
         // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
@@ -1893,6 +1962,7 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
+    /// Parse `a and b and c ...` (just above `or`).
     fn parse_and_expression(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_comparison()?;
         // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
@@ -1929,6 +1999,7 @@ impl<'a> Parser<'a> {
         ParseError::with_suggestion(message, self.current().span, suggestion)
     }
 
+    /// Parse comparison operators (`=`, `!=`, `<`, `>`, `<=`, `>=`).
     fn parse_comparison(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_bitwise_or()?;
         // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
@@ -2014,6 +2085,7 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
+    /// Parse `a bitor b ...` (bitwise or).
     fn parse_bitwise_or(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_bitwise_xor()?;
         // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
@@ -2046,6 +2118,7 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
+    /// Parse `a xor b ...` (bitwise exclusive or).
     fn parse_bitwise_xor(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_bitwise_and()?;
         // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
@@ -2076,6 +2149,7 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
+    /// Parse `a bitand b ...` (bitwise and).
     fn parse_bitwise_and(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_shift()?;
         // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
@@ -2106,6 +2180,7 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
+    /// Parse shift operators (`shift left`/`shift right`, plus `<<`/`>>`).
     fn parse_shift(&mut self) -> Result<Expression, ParseError> {
         let mut left = self.parse_add_sub()?;
         // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
@@ -2274,6 +2349,10 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
+    /// Parse prefix unary operators (`-`, `not`, `bitnot`, `deref`, `addr`).
+    ///
+    /// This is the bottom of the precedence chain, so the shared expression
+    /// depth guard is applied here: every expression form funnels through it.
     fn parse_unary(&mut self) -> Result<Expression, ParseError> {
         // Frame-neutral on purpose (locals only — a helper call per level
         // adds a frame and tips the deep-nesting stack floor).
@@ -2385,6 +2464,7 @@ impl<'a> Parser<'a> {
         result
     }
 
+    /// Parse a closure: `|x: i32| expr` or `|x| ... end`.
     fn parse_closure(&mut self) -> Result<Expression, ParseError> {
         self.advance(); // consume first |
         let mut params = Vec::new();
@@ -2724,6 +2804,8 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse postfix operations on a primary expression: calls `f(...)`,
+    /// indexing `a[i]`, and field/tuple access `x.field` / `x.0`.
     fn parse_postfix(&mut self) -> Result<Expression, ParseError> {
         // Start with an atom, then repeatedly attach calls, indexing, and field
         // access. Repetition is what permits expressions like `a.b()[i].c`.
@@ -2845,6 +2927,9 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
+    /// Parse a primary expression: a literal, name, parenthesised expression,
+    /// or one of the compound forms (array/tuple/struct literal, if, match,
+    /// loop, `get`, unsafe block, ...).
     fn parse_primary(&mut self) -> Result<Expression, ParseError> {
         // Primary expressions are the leaves of the expression tree: literals,
         // names, grouped values, and language constructs such as `match`.
@@ -3158,6 +3243,8 @@ impl<'a> Parser<'a> {
         Some(expression)
     }
 
+    /// Parse `if cond ... [else ...] end if`. The dedicated `if_depth`
+    /// counter bounds chains of nested conditionals.
     fn parse_if_expression(&mut self) -> Result<Expression, ParseError> {
         self.parse_if_expression_inner(true)
     }
@@ -3323,6 +3410,7 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse `match scrutinee ... arm ... end match`.
     fn parse_match_expression(&mut self) -> Result<Expression, ParseError> {
         // Match arms are parsed until their closing `end match`; each arm owns
         // its pattern, optional guard, and either an expression or block body.
@@ -3676,6 +3764,8 @@ impl<'a> Parser<'a> {
         })))
     }
 
+    /// Parse a sequence of statements up to (but not including) the block's
+    /// `end`/`}` terminator.
     fn parse_block(&mut self) -> Result<Block, ParseError> {
         // Blocks stop before terminators so the caller can consume the exact
         // closing keyword (`end if`, `end fn`, and so on).  Every nested

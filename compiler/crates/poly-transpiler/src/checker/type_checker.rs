@@ -380,6 +380,8 @@ impl TypeChecker {
         }
     }
 
+    /// First pass: record every declaration's signature so later passes can
+    /// resolve names regardless of where they appear in the file.
     fn collect_declarations(&mut self, statements: &[&Statement]) {
         // Register names before checking any body. This mirrors how Rust allows
         // item declarations to be referenced independently of source order.
@@ -506,6 +508,7 @@ impl TypeChecker {
         }
     }
 
+    /// Type-check one statement, updating scopes and diagnostics as needed.
     fn check_statement(&mut self, statement: &Statement) {
         // Statements may introduce bindings, mutate existing values, or simply
         // force an expression to be type-checked for its side effects.
@@ -629,6 +632,8 @@ impl TypeChecker {
         }
     }
 
+    /// Type-check a function body in its own fresh scope.
+    /// `owner` names the struct/enum/impl the method belongs to, when any.
     fn check_function(&mut self, function: &FunctionDecl, owner: Option<&str>) {
         // Parameters and locals must not leak into the surrounding module or
         // into a sibling function, so every function gets a fresh scope.
@@ -655,6 +660,8 @@ impl TypeChecker {
         self.pop_scope();
     }
 
+    /// Type-check a `return` against the enclosing function's declared return
+    /// type (empty when the function returns nothing).
     fn check_return(&mut self, value: Option<&Expression>) {
         let Some(expected) = self.return_types.last().cloned() else {
             self.error(TypeCheckError::new(
@@ -695,6 +702,8 @@ impl TypeChecker {
         }
     }
 
+    /// Type-check the target of an assignment (a name, field, or index) and
+    /// return the type it can hold.
     fn check_lvalue(&mut self, expression: &Expression) -> PolyType {
         // Lvalues share expression syntax but have stricter rules: a call or
         // literal can be read, never assigned to.
@@ -716,6 +725,10 @@ impl TypeChecker {
         }
     }
 
+    /// Type-check an expression, enforcing the recursion-depth guard.
+    ///
+    /// This is the entry every nested expression goes through, so the guard
+    /// here bounds the checker's stack use for any input.
     fn check_expression(&mut self, expression: &Expression) -> PolyType {
         // Depth guard. Returning here stops the descent, so an over-deep chain
         // produces exactly one diagnostic rather than one per remaining level.
@@ -734,6 +747,7 @@ impl TypeChecker {
         ty
     }
 
+    /// The actual expression dispatcher, called once past the depth guard.
     fn check_expression_inner(&mut self, expression: &Expression) -> PolyType {
         // Return `Unknown` after reporting an error where possible. That lets
         // checking continue and prevents one bad subexpression from hiding all
@@ -1100,6 +1114,7 @@ impl TypeChecker {
         }
     }
 
+    /// Infer the result type of a binary operation from its operand types.
     fn check_binary_op(&mut self, op: &BinaryOp, left: &PolyType, right: &PolyType) -> PolyType {
         // Binary rules are kept in one place so arithmetic, comparisons, logic,
         // and bitwise operations produce consistent errors.
@@ -1209,6 +1224,8 @@ impl TypeChecker {
         }
     }
 
+    /// Type-check a function or method call, including argument arity and
+    /// types, returning the callee's (possibly generic-substituted) result.
     fn check_call(&mut self, function: &Expression, args: &[Expression]) -> PolyType {
         // Resolve the callee's declared parameter types up front so that
         // closure-literal arguments can be checked against the expected
@@ -2705,6 +2722,7 @@ impl TypeChecker {
         }
     }
 
+    /// Introduce a binding in the innermost scope.
     fn declare(&mut self, name: &str, ty: PolyType) {
         // A declaration belongs only to the innermost lexical scope.
         if let Some(scope) = self.scopes.last_mut() {
@@ -2712,6 +2730,7 @@ impl TypeChecker {
         }
     }
 
+    /// Resolve a name by searching scopes from innermost to outermost.
     fn lookup(&self, name: &str) -> Option<PolyType> {
         // Search from inner to outer scope to implement lexical shadowing.
         self.scopes
@@ -2720,11 +2739,13 @@ impl TypeChecker {
             .find_map(|scope| scope.get(name).cloned())
     }
 
+    /// Enter a new nested scope (function body, block, module body, ...).
     fn push_scope(&mut self) {
         // A separate map keeps temporary bindings isolated from their caller.
         self.scopes.push(HashMap::new());
     }
 
+    /// Leave the innermost scope; the program scope is never popped.
     fn pop_scope(&mut self) {
         // Retain the root scope even if recovery encounters an imbalanced block.
         if self.scopes.len() > 1 {

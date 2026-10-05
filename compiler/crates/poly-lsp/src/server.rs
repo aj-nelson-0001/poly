@@ -47,8 +47,10 @@ impl Server {
 
     /// Process a decoded JSON-RPC message and produce responses.
     ///
-    /// Returns `(outputs, should_exit)`.  `outputs` may contain both
-    /// responses and notifications (e.g. `publishDiagnostics`).
+    /// The `method` string selects the handler; messages without a `method`
+    /// (responses to server-initiated requests we never send) are ignored.
+    /// `outputs` may contain both responses and notifications (e.g.
+    /// `publishDiagnostics`).
     pub fn dispatch(&mut self, message: &Json) -> DispatchResult {
         let method = match message.get_str("method") {
             Some(method) => method,
@@ -103,6 +105,8 @@ impl Server {
     // Lifecycle
     // ---------------------------------------------------------------------
 
+    /// Answer `initialize` by advertising the capabilities this server
+    /// supports: full document sync, completion, hover, and document symbols.
     fn handle_initialize(&mut self, message: &Json) -> DispatchResult {
         let result = Json::obj(vec![
             (

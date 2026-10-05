@@ -52,6 +52,8 @@ struct StackFrame {
 impl StackFrame {
     fn new() -> Self {
         Self {
+            // Offset 0 is reserved (saved frame/base pointer), so the first
+            // local slot starts at 8.
             next_offset: 8,
             locals: std::collections::HashMap::new(),
             var_types: std::collections::HashMap::new(),
@@ -60,7 +62,10 @@ impl StackFrame {
         }
     }
 
+    /// Return the slot for `name`, allocating one if this is its first use.
     fn allocate(&mut self, name: &str) -> Location {
+        // Reusing the existing slot keeps repeated references to one variable
+        // pointing at the same storage.
         if let Some(loc) = self.locals.get(name) {
             return *loc;
         }
@@ -261,7 +266,14 @@ impl AsmGenerator {
     // Top-level generation
     // -------------------------------------------------------------------
 
+    /// Build a complete x86-64 assembly unit from the parsed program.
+    ///
+    /// Pass 0 registers type metadata, then user functions are emitted (they
+    /// must precede `_start`), and finally the `_start` body. String literals
+    /// collected along the way are emitted afterwards in `.data`.
     fn generate(&mut self, program: &ast::Program) -> Result<String, String> {
+        // Partition the program: foreign blocks, functions, and everything
+        // executable (which runs inside the generated `_start`).
         let mut asm_blocks: Vec<String> = Vec::new();
         let mut functions: Vec<FunctionDecl> = Vec::new();
         let mut top_level: Vec<ast::Spanned<Statement>> = Vec::new();

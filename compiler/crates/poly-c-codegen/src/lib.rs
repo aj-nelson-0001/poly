@@ -124,6 +124,11 @@ impl CGenerator {
         }
     }
 
+    /// Build a complete C translation unit from the parsed program.
+    ///
+    /// The pass order matters: a pre-pass records every function's return type,
+    /// then declarations are rendered, and only then is the entry point and its
+    /// body emitted (so forward calls already know their result types).
     fn generate(&mut self, program: &ast::Program) -> Result<String, String> {
         // Partition first because C declarations must precede main, while Poly
         // executable statements are intentionally retained in source order.

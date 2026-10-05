@@ -26,6 +26,8 @@ use poly_lsp::server::Server;
 /// is to refuse an absurd header, not to second-guess a large genuine document.
 const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 
+/// The server main loop: read a framed message, dispatch it, write the
+/// responses, and stop when the client exits or the pipe closes.
 fn main() {
     let stdin = io::stdin();
     let stdout = io::stdout();
@@ -55,10 +57,13 @@ fn main() {
             }
         };
 
+        // Dispatch to the server state machine and stream back everything it
+        // produced (responses and diagnostics notifications alike).
         let result = server.dispatch(&message);
         for output in &result.outputs {
             write_message(&stdout, output);
         }
+        // `exit` (or a shutdown-followed-by-exit sequence) ends the loop.
         if result.should_exit {
             break;
         }

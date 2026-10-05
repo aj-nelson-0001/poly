@@ -2,10 +2,23 @@
 //!
 //! Defines the type system for the Poly programming language.
 //! Provides type inference, checking, and semantic analysis.
+//!
+//! This crate holds the small, reusable pieces: what a type *is* ([`PolyType`]),
+//! how two types can be made compatible ([`TypeSystem::unify`]), and the rules
+//! for operators and coercions. The AST-aware checker in `poly-transpiler`
+//! builds on top of these rules to understand whole programs.
+//!
+//! The design keeps types *target-neutral*: a `PolyType` never names a Rust or
+//! C spelling. That decision is deferred to the code generators, so one type
+//! model serves every backend.
 
 use std::collections::HashMap;
 
 /// A Poly type.
+///
+/// Each variant is one kind of type the checker can represent. Container types
+/// (`Vec`, `Option`, `Result`, ...) wrap their element types in `Box` so the
+/// enum can nest to any depth.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolyType {
     /// The checker keeps target-neutral types here; backend-specific spellings
@@ -71,6 +84,10 @@ pub enum PolyType {
 }
 
 impl std::fmt::Display for PolyType {
+    /// Render a type the way a user would write it, for diagnostics. Note that
+    /// some Poly spellings map onto the same display form (a `UnicodeString`
+    /// prints as `String`, a `Byte` prints as `u8`) because these are the
+    /// target-language names used in messages.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PolyType::I8 => write!(f, "i8"),
@@ -211,23 +228,26 @@ impl TypeSystem {
     /// numeric cases, or produce a diagnostic.
     pub fn unify(&mut self, left: &PolyType, right: &PolyType) -> Result<PolyType, TypeError> {
         match (left, right) {
-            // Same types
+            // Identical types trivially unify to themselves.
             (a, b) if a == b => Ok(a.clone()),
 
-            // Type variables
+            // An inference variable unifies with anything: record the binding
+            // and adopt the other side's type. The two patterns make this
+            // work whichever side the variable is on.
             (PolyType::TypeVar(id), ty) | (ty, PolyType::TypeVar(id)) => {
                 self.type_vars.insert(*id, ty.clone());
                 Ok(ty.clone())
             }
 
-            // Numeric type compatibility
+            // Numeric type compatibility: mixing the two integer widths (or
+            // the two float widths) widens to the larger type.
             (PolyType::I32, PolyType::I64) | (PolyType::I64, PolyType::I32) => Ok(PolyType::I64),
             (PolyType::F32, PolyType::F64) | (PolyType::F64, PolyType::F32) => Ok(PolyType::F64),
 
-            // Option unwrapping
+            // Option unwrapping: an `Option<T>` unifies against the inner type.
             (PolyType::Option(inner), ty) | (ty, PolyType::Option(inner)) => self.unify(inner, ty),
 
-            // Tuple types
+            // Tuples unify element-by-element; the lengths must match.
             (PolyType::Tuple(a), PolyType::Tuple(b)) if a.len() == b.len() => {
                 let unified: Result<Vec<_>, _> = a
                     .iter()
@@ -237,12 +257,13 @@ impl TypeSystem {
                 Ok(PolyType::Tuple(unified?))
             }
 
-            // Vec types
+            // Vectors unify on their element type.
             (PolyType::Vec(a), PolyType::Vec(b)) => Ok(PolyType::Vec(Box::new(self.unify(a, b)?))),
 
-            // Named types (same name)
+            // Named types unify only when the names are identical.
             (PolyType::Named(a), PolyType::Named(b)) if a == b => Ok(PolyType::Named(a.clone())),
 
+            // Anything else is an incompatibility.
             _ => Err(TypeError {
                 message: format!("Cannot unify {} with {}", left, right),
                 span: None,
@@ -261,25 +282,27 @@ impl TypeSystem {
         right: &PolyType,
     ) -> Result<PolyType, TypeError> {
         match op {
-            // Arithmetic
+            // Arithmetic: both operands must agree, and the result is that
+            // common type (`i32 + i32 -> i32`).
             "+" | "-" | "*" | "/" | "%" => {
                 // Both operands must be the same numeric type
                 let unified = self.unify(left, right)?;
                 Ok(unified)
             }
-            // Comparison
+            // Comparison: operands must be compatible; the result is always
+            // a boolean.
             "==" | "!=" | "<" | ">" | "<=" | ">=" => {
                 // Both operands must be comparable
                 self.unify(left, right)?;
                 Ok(PolyType::Bool)
             }
-            // Logical
+            // Logical: both sides must be booleans; result is boolean.
             "&&" | "||" => {
                 self.unify(left, &PolyType::Bool)?;
                 self.unify(right, &PolyType::Bool)?;
                 Ok(PolyType::Bool)
             }
-            // Bitwise
+            // Bitwise: operands must agree; result is their common type.
             "&" | "|" | "^" | "<<" | ">>" => {
                 let unified = self.unify(left, right)?;
                 Ok(unified)
@@ -318,10 +341,14 @@ impl TypeSystem {
     /// that may flow into an explicitly requested destination type.
     pub fn is_coercible(&self, from: &PolyType, to: &PolyType) -> bool {
         match (from, to) {
+            // A value is always coercible to its own type.
             (a, b) if a == b => true,
+            // Supported numeric widenings (integer and float).
             (PolyType::I32, PolyType::I64) => true,
             (PolyType::F32, PolyType::F64) => true,
             (PolyType::I32, PolyType::F64) => true,
+            // An `Option<T>` is coercible to a destination when its inner
+            // type is (so the inner type's widening rules still apply).
             (PolyType::Option(inner), ty) => self.is_coercible(inner, ty),
             _ => false,
         }

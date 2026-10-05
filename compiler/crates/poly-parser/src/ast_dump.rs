@@ -93,8 +93,13 @@ struct Printer<'a, W: std::io::Write> {
 
 impl<W: std::io::Write> Printer<'_, W> {
     /// Write the indent prefix for `depth`, bounded by `MAX_INDENT_LEVELS`.
+    ///
+    /// Capping the indent is what keeps output linear: past the cap the depth
+    /// number still grows but the number of leading spaces stops.
     fn indent(&mut self, depth: usize) -> std::io::Result<()> {
+        // Never indent more than the cap, no matter how deep the node is.
         let levels = depth.min(MAX_INDENT_LEVELS);
+        // A fixed-size buffer of spaces; we write only the prefix we need.
         let buffer = [b' '; MAX_INDENT_LEVELS * INDENT_WIDTH];
         let width = levels * INDENT_WIDTH;
         self.out.write_all(&buffer[..width])
@@ -120,6 +125,7 @@ impl<W: std::io::Write> Printer<'_, W> {
     }
 
     fn program(&mut self, program: &Program) -> std::io::Result<()> {
+        // The top-level header, then the whole program block one level in.
         self.line(0, "Program")?;
         let mut work: Vec<Step<'_>> = Vec::new();
         work.push(Step::Block(&program.statements, 1));
@@ -766,9 +772,9 @@ fn expression_kind(expression: &Expression) -> &'static str {
         | Expression::Identifier(_) => "literal",
     }
 }
-
 /// Expressions reachable from a `get`, so they are walked rather than
-/// stringified by `Debug`.
+/// stringified by `Debug` (the plain `{:?}` above is only for the flag
+/// shape itself).
 fn get_expressions(get: &GetExpr) -> Vec<&Expression> {
     let mut out = Vec::new();
     if let Some(prompt) = &get.prompt {

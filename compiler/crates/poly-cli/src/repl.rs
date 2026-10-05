@@ -17,6 +17,8 @@ use poly_lexer::Lexer;
 use poly_parser::Parser;
 use poly_transpiler::Transpiler;
 
+// ANSI escape sequences for colouring terminal output. Terminals that do not
+// understand them simply ignore the codes.
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
 const DIM: &str = "\x1b[2m";
@@ -53,7 +55,9 @@ impl Session {
         }
     }
 
+    /// The accumulated program as a single source string.
     fn source(&self) -> String {
+        // Statements are stored one per entry, so join them with newlines.
         self.program_lines.join("\n")
     }
 
@@ -78,6 +82,11 @@ impl Session {
 }
 
 /// Run the interactive REPL.
+/// Entry point for the interactive REPL loop.
+///
+/// Sets up the session, history file, and (on Unix terminals) the raw-mode
+/// line editor, then reads and evaluates input until the user quits.
+/// Returns an I/O error if the terminal itself fails.
 pub fn run() -> std::io::Result<()> {
     let mut session = Session::new();
     let history_path = dirs_and_history_path();

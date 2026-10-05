@@ -3,12 +3,25 @@
 //! This generator lowers the intermediate representation to idiomatic Rust.  It intentionally mirrors
 //! the direct AST generator's behavior for the core language while keeping the
 //! walk driven by the flat intermediate representation (which the optimizer may have rewritten).
+//!
+//! The generator tracks a fair amount of context as it walks: Rust requires
+//! `mut` on reassigned parameters, `String`/vector types affect how values are
+//! formatted, and enum variants must be qualified. The `IntermediateRepresentationCodeGen`
+//! struct below keeps that context in its fields.
 
 /// Collect the parameter names a function body assigns to (directly or in a
 /// nested statement), so the Rust signature can mark them `mut`.
+///
+/// Rust rejects assigning to a parameter that is not declared `mut`, so this
+/// scan must catch assignments anywhere in the body, including inside `if`,
+/// `match`, loop, and block bodies.
 fn assigned_param_names(function: &Function) -> HashSet<String> {
+    // Only assignments to *parameters* matter; locals are declared `mut`
+    // independently.
+
     let param_names: HashSet<String> = function.params.iter().map(|p| p.name.clone()).collect();
     let mut assigned = HashSet::new();
+    /// Walk a statement list looking for assignments to parameters.
     fn walk(stmts: &[Statement], params: &HashSet<String>, assigned: &mut HashSet<String>) {
         for stmt in stmts {
             match stmt {

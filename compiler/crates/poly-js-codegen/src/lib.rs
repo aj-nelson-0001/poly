@@ -50,6 +50,11 @@ impl JsGenerator {
         }
     }
 
+    /// Build a complete JavaScript module from the parsed program.
+    ///
+    /// Strategy: first *partition* the program (foreign blocks, structs, and
+    /// functions go to file scope; executable statements are queued for the
+    /// generated `main`), then emit the pieces in dependency order.
     fn generate(&mut self, program: &ast::Program) -> Result<String, String> {
         // Partition declarations from orchestration statements so `#js` blocks
         // and Poly functions are emitted at file scope while executable
@@ -183,12 +188,18 @@ impl JsGenerator {
         Ok(())
     }
 
+    /// Render one statement into `output` at the given indentation.
+    ///
+    /// Rendering is separated from `self.output` so functions, structs, and
+    /// the entry point can all be generated into local buffers before the
+    /// final assembly step.
     fn statement_into(
         &self,
         output: &mut String,
         indent: usize,
         statement: &Statement,
     ) -> Result<(), String> {
+        // Small helper that writes the leading indentation for a line.
         let line_prefix = |output: &mut String| {
             for _ in 0..indent {
                 output.push_str("  ");

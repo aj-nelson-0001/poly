@@ -138,6 +138,8 @@ pub(crate) fn substitute_generic(
 /// Check whether two types are assignment-compatible (the right side may be
 /// assigned to a variable of the left side's type).
 pub(crate) fn compatible(actual: &PolyType, expected: &PolyType) -> bool {
+    // `Unknown` acts as a wildcard: an unresolved type is assumed compatible
+    // with anything (avoids cascading errors while inference is incomplete).
     if matches!(actual, PolyType::Unknown) || matches!(expected, PolyType::Unknown) {
         return true;
     }
@@ -145,6 +147,8 @@ pub(crate) fn compatible(actual: &PolyType, expected: &PolyType) -> bool {
         return true;
     }
     match (actual, expected) {
+        // Numeric values may widen, but not narrow: an `i32` fits in an `i64`,
+        // never the reverse.
         (a, b) if is_numeric(a) && is_numeric(b) => numeric_rank(a) <= numeric_rank(b),
         // An empty array literal is polymorphic and may initialize any container.
         (PolyType::Vec(inner), _) if matches!(**inner, PolyType::Unknown) => true,
@@ -199,12 +203,17 @@ pub(crate) fn numeric_join(left: &PolyType, right: &PolyType) -> PolyType {
 /// Numeric rank for type widening: higher rank wins in a binary operation.
 pub(crate) fn numeric_rank(ty: &PolyType) -> u8 {
     match ty {
+        // Rank 0 is reserved for non-numeric types, so `numeric_rank(t) > 0`
+        // doubles as the `is_numeric` test.
         PolyType::I8 | PolyType::U8 => 1,
         PolyType::I16 | PolyType::U16 => 2,
         PolyType::I32 | PolyType::U32 => 3,
         PolyType::I64 | PolyType::U64 => 4,
         PolyType::I128 | PolyType::U128 => 5,
+        // `isize`/`usize` are pointer-sized, ranked alongside 64-bit ints.
         PolyType::ISize | PolyType::USize => 4,
+        // Floats rank above all integers so integer/float mixing widens to a
+        // float.
         PolyType::F32 => 6,
         PolyType::F64 => 7,
         _ => 0,
@@ -264,6 +273,8 @@ pub(crate) fn is_castable(actual: &PolyType, target: &PolyType) -> bool {
 /// tuple pattern in the loop variable; every other binding is a plain name.
 pub(crate) fn split_loop_binding(variable: &str) -> Vec<String> {
     let trimmed = variable.trim();
+    // A parenthesised binding is a tuple pattern (`(a, b)`); split it into the
+    // individual names, dropping any empty pieces from stray commas.
     if trimmed.starts_with('(') && trimmed.ends_with(')') {
         trimmed[1..trimmed.len() - 1]
             .split(',')
@@ -271,6 +282,7 @@ pub(crate) fn split_loop_binding(variable: &str) -> Vec<String> {
             .filter(|name| !name.is_empty())
             .collect()
     } else {
+        // A plain binding is a single name.
         vec![trimmed.to_string()]
     }
 }

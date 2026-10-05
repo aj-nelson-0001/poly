@@ -60,9 +60,12 @@ pub const MAX_AST_DEPTH: usize = crate::parser::MAX_OPERAND_CHAIN + 64;
 /// Iteration is explicit (see the module docs); this function is safe to call
 /// on a tree deep enough to overflow a recursive walk.
 pub fn ast_depth(program: &Program) -> Result<usize, usize> {
+    // The deepest nesting seen so far, and a heap worklist of nodes still to
+    // visit (each paired with its depth).
     let mut deepest = 0usize;
     let mut work: Vec<(Work<'_>, usize)> = Vec::new();
 
+    // Start at depth 1 with every top-level statement.
     for statement in &program.statements {
         work.push((Work::Statement(&statement.node), 1));
     }
@@ -76,6 +79,7 @@ pub fn ast_depth(program: &Program) -> Result<usize, usize> {
                 return Err(deepest);
             }
         }
+        // Children sit one level deeper than the node that contains them.
         let inner = depth + 1;
         match item {
             Work::Statement(statement) => statement_children(statement, inner, &mut work),
@@ -103,12 +107,14 @@ enum Work<'a> {
     TypeAnnotation(&'a TypeAnnotation),
 }
 
+/// Queue every statement in `block` for visiting at `depth`.
 fn push_block<'a>(block: &'a Block, depth: usize, work: &mut Vec<(Work<'a>, usize)>) {
     for statement in block {
         work.push((Work::Statement(&statement.node), depth));
     }
 }
 
+/// Queue a function's parameters and body for visiting at `depth`.
 fn push_function<'a>(function: &'a FunctionDecl, depth: usize, work: &mut Vec<(Work<'a>, usize)>) {
     for parameter in &function.params {
         push_parameter(parameter, depth, work);
@@ -130,6 +136,10 @@ fn push_methods<'a>(methods: &'a [FunctionDecl], depth: usize, work: &mut Vec<(W
     }
 }
 
+/// Queue the child nodes directly contained in `statement`.
+///
+/// Every statement variant must list its children here; missing one would let
+/// a deep tree escape the depth check.
 fn statement_children<'a>(
     statement: &'a Statement,
     inner: usize,
@@ -195,6 +205,7 @@ fn statement_children<'a>(
     }
 }
 
+/// Queue the child nodes directly contained in `expression`.
 fn expression_children<'a>(
     expression: &'a Expression,
     inner: usize,
@@ -356,6 +367,7 @@ fn get_children<'a>(get: &'a GetExpr) -> Vec<&'a Expression> {
     out
 }
 
+/// Queue the child nodes directly contained in a match `pattern`.
 fn pattern_children<'a>(pattern: &'a Pattern, inner: usize, work: &mut Vec<(Work<'a>, usize)>) {
     match pattern {
         Pattern::Tuple(patterns) => {
@@ -388,6 +400,7 @@ fn pattern_children<'a>(pattern: &'a Pattern, inner: usize, work: &mut Vec<(Work
     }
 }
 
+/// Collect the immediate child types of a type annotation.
 fn type_children<'a>(annotation: &'a TypeAnnotation) -> Vec<&'a TypeAnnotation> {
     let mut out: Vec<&'a TypeAnnotation> = Vec::new();
     match annotation {

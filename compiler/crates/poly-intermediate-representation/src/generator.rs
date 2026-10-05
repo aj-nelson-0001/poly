@@ -102,6 +102,7 @@ pub fn generate(program: &ast::Program) -> Result<Program, String> {
     Ok(intermediate_representation)
 }
 
+/// Lower one function declaration, including per-statement source locations.
 fn gen_function(function: &ast::FunctionDecl) -> Result<Function, String> {
     let body_locations: Vec<Option<SourceLocation>> = function
         .body
@@ -141,6 +142,7 @@ fn gen_function(function: &ast::FunctionDecl) -> Result<Function, String> {
     })
 }
 
+/// Lower a generic parameter such as `T: Display`.
 fn gen_generic_param(param: &ast::GenericParam) -> GenericParam {
     GenericParam {
         name: param.name.clone(),
@@ -148,6 +150,7 @@ fn gen_generic_param(param: &ast::GenericParam) -> GenericParam {
     }
 }
 
+/// Lower a function parameter (name, type, optional default).
 fn gen_parameter(parameter: &ast::Parameter) -> Result<Parameter, String> {
     Ok(Parameter {
         name: parameter.name.clone(),
@@ -156,6 +159,7 @@ fn gen_parameter(parameter: &ast::Parameter) -> Result<Parameter, String> {
     })
 }
 
+/// Lower a struct declaration, including its methods.
 fn gen_struct(struct_decl: &ast::StructDecl) -> Result<Struct, String> {
     Ok(Struct {
         name: struct_decl.name.clone(),
@@ -180,6 +184,7 @@ fn gen_struct(struct_decl: &ast::StructDecl) -> Result<Struct, String> {
     })
 }
 
+/// Lower an enum declaration, including its variants and methods.
 fn gen_enum(enum_decl: &ast::EnumDecl) -> Result<Enum, String> {
     let variants = enum_decl
         .variants
@@ -234,6 +239,7 @@ fn gen_enum(enum_decl: &ast::EnumDecl) -> Result<Enum, String> {
     })
 }
 
+/// Lower a trait declaration (method signatures only).
 fn gen_trait(trait_decl: &ast::TraitDecl) -> Result<Trait, String> {
     Ok(Trait {
         name: trait_decl.name.clone(),
@@ -246,6 +252,7 @@ fn gen_trait(trait_decl: &ast::TraitDecl) -> Result<Trait, String> {
     })
 }
 
+/// Lower an `impl` block, recording the trait name when present.
 fn gen_impl(impl_decl: &ast::ImplDecl) -> Result<Impl, String> {
     Ok(Impl {
         trait_name: impl_decl.trait_name.clone(),
@@ -259,6 +266,7 @@ fn gen_impl(impl_decl: &ast::ImplDecl) -> Result<Impl, String> {
     })
 }
 
+/// Lower one statement. This is the structural heart of the generator.
 fn gen_statement(statement: &ast::Statement) -> Result<Statement, String> {
     Ok(match statement {
         ast::Statement::VarDeclaration { name, ty, value } => Statement::VarDecl {
@@ -340,6 +348,7 @@ fn gen_statement(statement: &ast::Statement) -> Result<Statement, String> {
     })
 }
 
+/// Lower one expression, recursing into subexpressions.
 fn gen_expr(expr: &ast::Expression) -> Result<Expr, String> {
     Ok(match expr {
         ast::Expression::IntLiteral(value) => Expr::Literal(Literal::Int(value.clone())),
@@ -530,6 +539,7 @@ fn gen_expr(expr: &ast::Expression) -> Result<Expr, String> {
     })
 }
 
+/// Lower a match arm (pattern, optional guard, and body).
 fn gen_match_arm(arm: &ast::MatchArm) -> Result<MatchArm, String> {
     Ok(MatchArm {
         pattern: gen_pattern(&arm.pattern)?,
@@ -546,6 +556,7 @@ fn gen_match_arm(arm: &ast::MatchArm) -> Result<MatchArm, String> {
     })
 }
 
+/// Lower a match pattern.
 fn gen_pattern(pattern: &ast::Pattern) -> Result<Pattern, String> {
     Ok(match pattern {
         ast::Pattern::Wildcard => Pattern::Wildcard,
@@ -597,6 +608,7 @@ fn gen_pattern(pattern: &ast::Pattern) -> Result<Pattern, String> {
     })
 }
 
+/// Lower one part of a `loop:` range list (a range or a single value).
 fn gen_loop_range_part(part: &ast::LoopRangePart) -> Result<LoopRangePart, String> {
     Ok(match part {
         ast::LoopRangePart::Range {
@@ -614,6 +626,7 @@ fn gen_loop_range_part(part: &ast::LoopRangePart) -> Result<LoopRangePart, Strin
     })
 }
 
+/// Lower a `get` expression: prompt, source, flags, and with-clause.
 fn gen_get_expr(get: &ast::GetExpr) -> Result<GetExpr, String> {
     Ok(GetExpr {
         prompt: get
@@ -654,6 +667,7 @@ fn gen_get_expr(get: &ast::GetExpr) -> Result<GetExpr, String> {
     })
 }
 
+/// Lower a type annotation into an IR type.
 fn gen_type(ty: &ast::TypeAnnotation) -> Result<Type, String> {
     Ok(match ty {
         ast::TypeAnnotation::Named(name) => Type::Named(name.clone()),
@@ -693,6 +707,7 @@ fn gen_type(ty: &ast::TypeAnnotation) -> Result<Type, String> {
     })
 }
 
+/// Map an AST binary operator onto its IR equivalent.
 fn gen_binary_op(op: &ast::BinaryOp) -> BinaryOp {
     match op {
         ast::BinaryOp::Add => BinaryOp::Add,

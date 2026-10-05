@@ -136,7 +136,7 @@ backed by a compiler check or a pinned test:
   nested fn/Result, Poly-side error enums with payload matching, all `get`
   flags, file redirects, comment styles, `pad_left`/`repeat`, and typed
   input); all parse, type-check, and compile. The historical-tutorial banner
-  was replaced with a current-for-preview.14 note, the doc index moved the
+  was replaced with a current-for-preview.17 note, the doc index moved the
   tutorial out of the historical list, and the typed-input example was
   aligned to the canonical `get --as i32` form used by the other references.
 - **Inline comments added throughout the tutorial, quick reference, and
@@ -195,7 +195,7 @@ fixed, plus a batch of documentation corrections:
   `#js`/`extern js fn` and Contributing pointed at the deleted `checker.rs`;
   SPEC's philosophy section still advertised `#cpp` as a target and its
   foreign-block rules omitted `extern asm/js fn` and `dep`; stale
-  `preview.12` status stamps refreshed to preview.14 across the four
+  `preview.12` status stamps refreshed to preview.17 across the four
   maintained references and four historical banners.
 - **Verification**: 528 workspace tests green (single-threaded, CI's mode),
   clippy `-D warnings` clean, fmt clean, markdown check 55 files, doc audit 52
@@ -208,7 +208,7 @@ fixed, plus a batch of documentation corrections:
   "Unexpected token: <error>" don't read as the English word or a foreign
   type name; the exception is now documented at the Display impl.
 
-## Release pipeline automated; preview.14 cut through it end-to-end (2026-09-20)
+## Release pipeline automated; preview.17 cut through it end-to-end (2026-09-22)
 
 - **Multi-platform releases**: `release.yml` now builds Linux (amd64),
   macOS (arm64), and Windows (amd64) binaries in a matrix, renames each
@@ -219,15 +219,15 @@ fixed, plus a batch of documentation corrections:
   a tag whose version has no section (guard logic verified for accept
   and reject paths; action inputs checked against
   softprops/action-gh-release v2).
-- **2.0.0-preview.14 is the first release published entirely by the
+- **2.0.0-preview.17 is the latest release published by the
   pipeline** (run `35532172254`, all 4 jobs green): 3 versioned binaries
   + checksums, all verified by downloading and `sha256sum -c`, Linux
   binary runs and reports the right version.
-- **Post-rewrite sanity on preview.13**: after squashing post-release
+- **Post-rewrite sanity on preview.16**: after squashing post-release
   commits, the release page, tag target, checksums, and binary were
   re-verified (the squash deliberately avoided the tag target commit).
 - `prepare_release.py --skip-tests` idempotent against a released tree
-  (zero diff) before preview.14 was cut with it.
+  (zero diff) before preview.17 was cut with it.
 
 ## Documentation audit: backend claims verified; preview.13 released (2026-09-20)
 

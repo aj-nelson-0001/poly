@@ -267,10 +267,17 @@ jobs:
           # src/main.rs must reproduce byte-for-byte too (modulo one trailing
           # newline that only --emit-rust adds).
           diff <(../compiler/target/release/poly tetris.poly --emit-rust | sed -e '$d') rust_output/tetris/src/main.rs
-          # --project does not emit a lockfile (cargo resolves it on first
-          # build), so regenerate it and compare against the committed one.
-          cargo generate-lockfile --manifest-path rust_output/tetris/Cargo.toml
-          diff /tmp/tetris-tracked/Cargo.lock rust_output/tetris/Cargo.lock
+          # --project emits no lockfile, so restore the committed one and check
+          # that it still resolves for the regenerated manifest. Deliberately
+          # NOT a byte-diff against a freshly generated lockfile: cargo
+          # re-resolves to the newest compatible versions on every resolve, so
+          # that comparison went red the moment any transitive dependency
+          # published a patch release, with nothing in this repo having
+          # changed. --locked fails only on real drift (a dependency added to
+          # the generated manifest that the committed lockfile does not cover),
+          # which is the invariant this step exists to guard.
+          cp /tmp/tetris-tracked/Cargo.lock rust_output/tetris/Cargo.lock
+          cargo metadata --locked --format-version 1 --manifest-path rust_output/tetris/Cargo.toml > /dev/null
 
       - name: Build and self-test tetris
         run: |

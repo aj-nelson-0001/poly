@@ -23,6 +23,26 @@ cargo build --locked -p poly-wasm --release --target wasm32-unknown-unknown \
   --config 'profile.release.strip=true' \
   --config 'profile.release.panic="abort"'
 
-cp "target/wasm32-unknown-unknown/release/poly_wasm.wasm" ../playground/poly.wasm
+SRC="target/wasm32-unknown-unknown/release/poly_wasm.wasm"
+OUT="../playground/poly.wasm"
 
-echo "Built ../playground/poly.wasm ($(du -h ../playground/poly.wasm | cut -f1))"
+# Optional second pass. wasm-opt (binaryen) typically shaves a further 10-20% off
+# a Rust-produced module, which matters because the browser downloads the whole
+# file. It is genuinely optional: the build above already sets opt-level="z" and
+# strips, so the module is usable without it. Skip rather than fail when the
+# tool is absent -- on Arch that means `pacman -S binaryen`.
+#
+# -Oz is the size-optimizing pipeline. --enable-bulk-memory and --enable-
+# nontrapping-float-to-int are on because the Rust/LLVM backend already emits
+# those post-MVP opcodes, so leaving them off would fail validation here.
+if command -v wasm-opt >/dev/null 2>&1; then
+  wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int \
+    --enable-sign-ext --enable-mutable-globals \
+    "$SRC" -o "$OUT"
+  echo "wasm-opt: applied (-Oz)"
+else
+  cp "$SRC" "$OUT"
+  echo "wasm-opt: not found, using cargo output as-is"
+fi
+
+echo "Built ../playground/poly.wasm ($(du -h "$OUT" | cut -f1))"

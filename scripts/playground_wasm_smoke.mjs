@@ -4,6 +4,7 @@
 // Instantiates the module exactly as playground/index.html does and checks:
 //   - keyword operator programs transpile to the expected Rust symbols
 //   - retired symbol programs are rejected with migration diagnostics
+//   - over-deep operator chains are rejected instead of overflowing the stack
 //   - transpile_target emits C and JavaScript for the selected backend
 //
 // Runs in CI (see the `wasm` job in .github/workflows/ci.yml) and locally:
@@ -71,6 +72,15 @@ const bad = [
   'fn main()\n    put 5 == 3\nend fn\n',  // -> =
 ];
 
+// Regression: a long left-associative chain (`1 + 1 + ... + 1`) has no nested
+// delimiters, so it once parsed at any length and built a tree one level deep
+// per operand. Every recursive walk over that tree -- the type checker, the
+// backends, and Rust's own `Drop` -- then exhausted the WASM stack and killed
+// the browser tab. The parser now refuses the chain while folding it, so the
+// playground must report a diagnostic instead of trapping.
+const longChain =
+  `fn main()\n    var x i32 := ${Array(200_000).fill('1').join(' + ')}\n    put x\nend fn\n`;
+
 let failures = 0;
 for (const [src, markers] of good) {
   const { out, isError } = transpile(src);
@@ -85,6 +95,41 @@ for (const src of bad) {
   if (!isError) {
     failures += 1;
     console.error(`BAD case was accepted (legacy syntax not rejected):\n${src}\n${out}`);
+  }
+}
+
+// The over-deep chain must come back as a diagnostic, not trap the module.
+// A trap here means the stack overflow is back, so the check is the call
+// returning at all.
+{
+  let trapped = null;
+  let outcome = null;
+  try {
+    outcome = transpile(longChain);
+  } catch (error) {
+    trapped = error;
+  }
+  if (trapped) {
+    failures += 1;
+    console.error(`OVER-DEEP chain trapped the module: ${trapped.message}`);
+  } else if (!outcome.isError) {
+    failures += 1;
+    console.error('OVER-DEEP chain was accepted (depth limit not enforced)');
+  } else if (!outcome.out.includes('operator chain')) {
+    failures += 1;
+    console.error(`OVER-DEEP chain rejected with an unexpected diagnostic:\n${outcome.out}`);
+  }
+}
+
+// A chain well inside the cap must still transpile, so the depth limit cannot
+// silently regress into rejecting legitimate programs.
+{
+  const moderate = `fn main()\n    var x i32 := ${Array(200).fill('1').join(' + ')}\n    put x\nend fn\n`;
+  const { out, isError } = transpile(moderate);
+  // Match the declaration as the Rust backend actually emits it (`let mut x`).
+  if (isError || !/let (mut )?x\b/.test(out)) {
+    failures += 1;
+    console.error(`MODERATE chain rejected (depth limit too aggressive):\n${out}`);
   }
 }
 

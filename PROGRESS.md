@@ -2316,29 +2316,43 @@ PROGRESS.md                                        (this file)
 
 ### Verified working
 
-- `cargo test --workspace -- --test-threads=1` passes across the workspace (260 listed test cases, including parser recovery, checker, IR, LSP, WASM native round trips, and integration tests).
+- `cargo test --workspace -- --test-threads=1` passes across the workspace (260 listed test cases, including parser recovery,
+checker, IR, LSP, WASM native round trips, and integration tests).
 - `cargo clippy --workspace --all-targets -- -D warnings` passes.
 - `cargo fmt --all -- --check` passes.
 - `scripts/check_markdown.py` passes: 35 Markdown files and 1,252 tilde fence markers.
-- `scripts/check_poly_examples.py` passes: 537 Poly blocks, 378 complete examples parsed, 159 marked fragments, and 0 unmarked parse failures.
+- `scripts/check_poly_examples.py` passes: 537 Poly blocks, 378 complete examples parsed, 159 marked fragments, and 0 unmarked
+parse failures.
 - Every current `examples/*.poly` file passes `poly --check`, including `higher_order_functions.poly` and `async_await.poly`.
-- The parser/checker/codegen support explicit loop bindings, inclusive ranges, collection iteration, closures, function-typed parameters and return values, vector/string higher-order methods, `Option`, nested functions, async syntax, LSP features, and the native WASM ABI tests.
+- The parser/checker/codegen support explicit loop bindings, inclusive ranges, collection iteration, closures, function-typed
+parameters and return values, vector/string higher-order methods, `Option`, nested functions, async syntax, LSP features, and
+the native WASM ABI tests.
 
 ### Verified failures and risks
 
-- `cargo test --workspace --all-targets` fails because `poly-cli/benches/performance_benchmarks.rs` still contains retired `=>` match-arm syntax. CI currently runs workspace tests without `--all-targets`, so this regression is not caught.
-- The optimized `--ir` path can emit invalid Rust for closure-returning functions: inlining `make_adder` loses the captured `n`. The optimizer also folds boolean comparisons into integer literals and the IR codegen maps bitwise-not to logical-not.
-- Runtime APIs including `http_get`, `tcp_connect`, `db_execute`, `delay`, `eof`, and `get_line` are placeholder implementations; generated file/input operations use `unwrap()` and can panic. `spawn` lowers to `spawn_task` without a complete visible runtime implementation.
-- Generic type checking is permissive: generic type variables are commonly represented as `Unknown`, generic substitutions are not inferred at call sites, and generic bounds are not semantically validated.
+- `cargo test --workspace --all-targets` fails because `poly-cli/benches/performance_benchmarks.rs` still contains retired `=>`
+match-arm syntax. CI currently runs workspace tests without `--all-targets`, so this regression is not caught.
+- The optimized `--ir` path can emit invalid Rust for closure-returning functions: inlining `make_adder` loses the captured
+`n`.
+The optimizer also folds boolean comparisons into integer literals and the IR codegen maps bitwise-not to logical-not.
+- Runtime APIs including `http_get`, `tcp_connect`, `db_execute`, `delay`, `eof`, and `get_line` are placeholder
+implementations; generated file/input operations use `unwrap()` and can panic. `spawn` lowers to `spawn_task` without a
+complete
+visible runtime implementation.
+- Generic type checking is permissive: generic type variables are commonly represented as `Unknown`, generic substitutions are
+not inferred at call sites, and generic bounds are not semantically validated.
 - Source-map line mappings remain best-effort heuristics, despite precise statement spans being available in the AST.
-- LSP diagnostics convert to UTF-16, but hover/completion position handling still uses character indexes; non-ASCII text can therefore produce incorrect locations. The custom JSON parser also lacks full surrogate-pair escape handling.
+- LSP diagnostics convert to UTF-16, but hover/completion position handling still uses character indexes; non-ASCII text can
+therefore produce incorrect locations. The custom JSON parser also lacks full surrogate-pair escape handling.
 - `README.md` and `playground/index.html` still advertise v1.6.0 while the compiler workspace is v1.7.2.
-- CI does not rebuild/verify the checked-in WASM bundle, run browser tests, package the VS Code extension, or execute benchmark targets.
+- CI does not rebuild/verify the checked-in WASM bundle, run browser tests, package the VS Code extension, or execute benchmark
+targets.
 
 ### Prioritized follow-up
 
 1. Update benchmark fixtures to comma match syntax and add `--all-targets` to CI.
-2. Disable unsafe optimizer inlining for closures/generics/async functions and compile-check optimized output; fix boolean constant folding and bitwise-not codegen.
+2. Disable unsafe optimizer inlining for closures/generics/async functions and compile-check optimized output; fix boolean
+constant folding and bitwise-not codegen.
 3. Decide which runtime APIs are supported versus experimental, then implement them or reject them during checking.
 4. Synchronize version metadata and add WASM/VS Code artifact validation to CI.
 5. Implement generic substitution/bound checking, UTF-16-safe LSP positions, and source-location propagation through the IR.

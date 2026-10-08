@@ -14,12 +14,19 @@ and reading wall-clock time (`chrono` crate) — live in a `#rust` block at the
 top of `dclock.poly` as a small platform layer with five functions:
 
 | Extern function      | Purpose                                            |
+
 |----------------------|----------------------------------------------------|
+
 | `window_open`        | Create the resizable minifb window                 |
+
 | `window_should_close`| True when the window closes or Escape is pressed   |
+
 | `window_resize`      | Returns new `[width, height]`, `[-1, -1]` if same  |
+
 | `window_present`     | Blit the pixel frame (converts `i32` → `u32`)      |
+
 | `clock_seconds_now`  | `[hour, minute, second]`, refreshed once per second|
+
 
 Each has an explicit `extern rust fn ...` declaration, so the program also
 passes `poly --check --strict`.
@@ -42,23 +49,170 @@ poly dclock.poly                 # check + build + run
 poly --project build dclock.poly # regenerate a Cargo project in build/
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Note: `poly --project` generates a dependency-free `Cargo.toml`; if you
+
+
+
+
+
+
+
 regenerate, re-add `chrono = "0.4"` and `minifb = "0.23"` under
+
+
+
+
+
+
+
 `[dependencies]` (as in the checked-in `Cargo.toml`).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Translation notes (Rust → Poly)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - Poly `loop a..b` is **inclusive**, so loops over `0..n` elements are
+
+
+
+
+
+
+
   written `loop i 0..n - 1`.
+
+
+
+
+
+
+
 - Poly's checker requires exact types, and integer literals/consts are
+
+
+
+
+
+
+
   `i32`, so pixel buffers are `Vec<i32>`; `window_present` converts them
+
+
+
+
+
+
+
   to the `Vec<u32>` minifb expects.
+
+
+
+
+
+
+
 - Poly struct values move, and elements cannot be copied out of a
+
+
+
+
+
+
+
   `Vec<struct>` by index, so `draw_time` reads `digit_buffers[d].buffer[...]`
+
+
+
+
+
+
+
   inline instead of cloning a `DigitBuffer` out of the vector.
+
+
+
+
+
+
+
 - The original updated the display only when the second changed; here the
+
+
+
+
+
+
+
   per-second throttle lives in `clock_seconds_now` (foreign side) and the
+
+
+
+
+
+
+
   frame is rebuilt each iteration — Poly's move semantics make "reuse the
+
+
+
+
+
+
+
   old buffer unless changed" awkward, and rebuilding is cheap.
+
+
+
+
+
+
+
 - `DIGITS: [u32; 10]` became a `digit_bits` match function because Poly
+
+
+
+
+
+
+
   currently cannot emit a `const` array/vector.

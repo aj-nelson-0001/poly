@@ -1,13 +1,15 @@
 # Poly v2 Preview Release Checklist
 
-**Applies to:** any `2.0.0-preview.N` release (the checklist is version-agnostic; the verification evidence inside may be dated)
+**Applies to:** any `2.0.0-preview.N` release (the checklist is version-agnostic; the verification evidence inside may be
+dated)
 
 This checklist describes release readiness for the current preview. It does not create a release or tag one automatically.
 
 ## Contract
 
 - [x] Review `POLY_SPEC_v2.md` and `POLY_V2_SUPPORT_MATRIX.md` together.
-- [x] Confirm Rust remains the default, C remains the documented C11 subset, and asm remains the documented Linux x86-64 subset.
+- [x] Confirm Rust remains the default, C remains the documented C11 subset, and asm remains the documented Linux x86-64
+subset.
 - [x] Confirm `#cpp` remains explicitly rejected; do not advertise a C++ backend.
 - [x] Confirm all unsupported constructs have actionable diagnostics.
 - [x] Confirm `extern rust fn`, `extern c fn`, and `extern asm fn` declarations are documented as opt-in interface checking.
@@ -41,7 +43,8 @@ This checklist describes release readiness for the current preview. It does not 
   green. Note: the tagged `v2.0.0-preview.4` run predated this fix and the
   Tetris CI job; its release build succeeded independently.
 - [x] Playground WASM artifact is reproducible locally under the pinned Rust toolchain.
-- [x] Hosted CI rebuilds and validates a non-empty WASM artifact in the canonical Linux environment; byte identity is not required across machines.
+- [x] Hosted CI rebuilds and validates a non-empty WASM artifact in the canonical Linux environment; byte identity is not
+required across machines.
 
 ## Repository Hygiene
 
@@ -75,7 +78,8 @@ Record the following in the release PR:
 - known preview limitations and migration notes
 - links to the support matrix and audit report
 
-A preview tag should be created only after all mandatory checks pass from a clean checkout. This agent does not create or push tags.
+A preview tag should be created only after all mandatory checks pass from a clean checkout. This agent does not create or push
+tags.
 
 The release tag must name the version it releases: `release.yml` refuses to
 publish when `poly --version` does not equal the tag name (minus the `v`).
@@ -86,30 +90,219 @@ The mechanical steps are automated by `scripts/prepare_release.py`; it never
 commits, tags, or pushes.
 
 ~~~sh
+
+
+
+
+
+
+
 # 1. Update the docs that must describe the new version by hand:
+
+
+
+
+
+
+
 #    CHANGELOG.md (date the [Unreleased] section), README.md
+
+
+
+
+
+
+
 #    ("What's New"), POLY_DOCUMENTATION_INDEX.md (baseline),
+
+
+
+
+
+
+
 #    POLY_V2_PREVIEW_RELEASE_NOTES.md (highlights).
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 2. Bump, regenerate, and verify (workspace version, tetris project,
+
+
+
+
+
+
+
 #    lockfiles, tests, fmt, clippy, markdown, doc audit):
+
+
+
+
+
+
+
 python3 scripts/prepare_release.py 2.0.0-preview.N
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 2b. Lint tracked generated files for machine-specific paths (home
+
+
+
+
+
+
+
 #     directories, runner paths) that would break byte-reproducibility:
+
+
+
+
+
+
+
 python3 scripts/check_generated_paths.py
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 3. Review the diff, then commit and tag:
+
+
+
+
+
+
+
 git add -A
+
+
+
+
+
+
+
 git commit -m "chore(release): prepare 2.0.0-preview.N"
+
+
+
+
+
+
+
 git push origin v2.0-dev
+
+
+
+
+
+
+
 git tag -a v2.0.0-preview.N -m "Poly 2.0.0-preview.N"
+
+
+
+
+
+
+
 git push origin v2.0.0-preview.N
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 4. Confirm the results:
+
+
+
+
+
+
+
 #    - .github/workflows/release.yml builds and publishes the binary; tags
+
+
+
+
+
+
+
 #      containing "preview" are marked as prereleases automatically
+
+
+
+
+
+
+
 #      (verified end to end with a throwaway tag on 2026-09-17).
+
+
+
+
+
+
+
 #    - CI on the branch is green for the release commit.
+
+
+
+
+
+
+
 #    - The published release shows the expected asset and prerelease flag.
+
+
+
+
+
+
+
 ~~~

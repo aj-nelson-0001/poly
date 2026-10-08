@@ -6,7 +6,8 @@
 
 This guide covers profiling and performance analysis techniques for Poly programs.
 
-**Note:** Some functions used in this guide (like `time_now()`, `get_memory_usage()`, `num_cpus()`) are standard library functions. See the Standard Library section for details.
+**Note:** Some functions used in this guide (like `time_now()`, `get_memory_usage()`, `num_cpus()`) are standard library
+functions. See the Standard Library section for details.
 
 ---
 
@@ -46,30 +47,208 @@ put "Min: " + result.min_ms.to_string() + "ms"
 put "Max: " + result.max_ms.to_string() + "ms"
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Detect Memory Leaks
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 // Detect memory leaks
+
+
+
+
+
+
+
 fn detect_leaks(iterations: i32)
+
+
+
+
+
+
+
     var initial_memory := get_memory_usage()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     loop iteration in iterations
+
+
+
+
+
+
+
         // Code that might leak memory
+
+
+
+
+
+
+
         var data := allocate_large_array()
+
+
+
+
+
+
+
         // ... process data
+
+
+
+
+
+
+
         // If not properly freed, memory increases
+
+
+
+
+
+
+
     end loop
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     var final_memory := get_memory_usage()
+
+
+
+
+
+
+
     var leaked := final_memory - initial_memory
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     if leaked > 0,
+
+
+
+
+
+
+
         warn "Potential memory leak: " + leaked.to_string() + " bytes"
+
+
+
+
+
+
+
     else
+
+
+
+
+
+
+
         info "No memory leaks detected"
+
+
+
+
+
+
+
     end if
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -110,34 +289,240 @@ put "Total time: " + result.total_time_ms.to_string() + "ms"
 put "Average: " + result.avg_time_ms.to_string() + "ms"
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Detect Hotspots
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 // Detect hotspots
+
+
+
+
+
+
+
 fn detect_hotspots(functions: Vec<(ustring, fn() -> T)>): Vec<Hotspot>
+
+
+
+
+
+
+
     var hotspots Vec<Hotspot> := []
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     loop function in functions
+
+
+
+
+
+
+
         var result := benchmark(name, 100, func)
+
+
+
+
+
+
+
         hotspots.push(Hotspot {
+
+
+
+
+
+
+
             name: name,
+
+
+
+
+
+
+
             avg_ms: result.avg_ms,
+
+
+
+
+
+
+
             percentage: 0.0  // Calculated later
+
+
+
+
+
+
+
         })
+
+
+
+
+
+
+
     end loop
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     // Calculate percentages
+
+
+
+
+
+
+
     var total_time := hotspots.iter().map(|h| h.avg_ms).sum()
+
+
+
+
+
+
+
     loop hotspot in hotspots.iter_mut()
+
+
+
+
+
+
+
         hotspot.percentage := (hotspot.avg_ms as f64) / (total_time as f64) * 100.0
+
+
+
+
+
+
+
     end loop
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Sort by time (descending)
+
+
+
+
+
+
+
     hotspots.sort_by(|a, b| b.avg_ms.compare(a.avg_ms))
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     return hotspots
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -175,32 +560,224 @@ fn profile_file_io(filename: ustring, iterations: i32): FileIOProfile
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Profile Network Operations
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 // Profile network operations
+
+
+
+
+
+
+
 fn profile_network(url: ustring, iterations: i32): NetworkProfile
+
+
+
+
+
+
+
     var times Vec<i64> := []
+
+
+
+
+
+
+
     var errors i32 := 0
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     loop iteration in iterations
+
+
+
+
+
+
+
         var start := time_now()
+
+
+
+
+
+
+
         match get from  url --timeout 5000
+
+
+
+
+
+
+
             Ok(_),
+
+
+
+
+
+
+
                 var duration := time_now() - start
+
+
+
+
+
+
+
                 times.push(duration)
+
+
+
+
+
+
+
             Error(_), errors = errors + 1
+
+
+
+
+
+
+
         end match
+
+
+
+
+
+
+
     end loop
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     return NetworkProfile {
+
+
+
+
+
+
+
         avg_ms: times.iter().sum() / times.len(),
+
+
+
+
+
+
+
         min_ms: times.iter().min(),
+
+
+
+
+
+
+
         max_ms: times.iter().max(),
+
+
+
+
+
+
+
         error_rate: (errors as f64) / (iterations as f64) * 100.0
+
+
+
+
+
+
+
     }
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -231,37 +808,264 @@ fn profile_threads(iterations: i32): ThreadProfile
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Profile Lock Contention
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 // Profile lock contention
+
+
+
+
+
+
+
 fn profile_locks(iterations: i32): LockProfile
+
+
+
+
+
+
+
     var lock := Mutex::new(0)
+
+
+
+
+
+
+
     var contention_count i32 := 0
+
+
+
+
+
+
+
     var wait_times Vec<i64> := []
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     loop iteration in iterations
+
+
+
+
+
+
+
         var start := time_now()
+
+
+
+
+
+
+
         lock.lock()
+
+
+
+
+
+
+
         var duration := time_now() - start
+
+
+
+
+
+
+
         wait_times.push(duration)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         if duration > 10, // Contention threshold
+
+
+
+
+
+
+
             contention_count := contention_count + 1
+
+
+
+
+
+
+
         end if
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         // Critical section
+
+
+
+
+
+
+
         sleep(1)
+
+
+
+
+
+
+
         lock.unlock()
+
+
+
+
+
+
+
     end loop
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     return LockProfile {
+
+
+
+
+
+
+
         avg_wait_ms: wait_times.iter().sum() / iterations,
+
+
+
+
+
+
+
         contention_count: contention_count,
+
+
+
+
+
+
+
         contention_rate: (contention_count as f64) / (iterations as f64) * 100.0
+
+
+
+
+
+
+
     }
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -300,45 +1104,328 @@ fn save_report(report: ustring, filename: ustring)
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Analyze Profiling Results
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 // Analyze profiling results
+
+
+
+
+
+
+
 fn analyze_results(results: Vec<ProfileResult>): Vec<Recommendation>
+
+
+
+
+
+
+
     var recommendations Vec<Recommendation> := []
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     loop result in results
+
+
+
+
+
+
+
         // Check for slow operations
+
+
+
+
+
+
+
         if result.time_ms > 1000,
+
+
+
+
+
+
+
             recommendations.push(Recommendation {
+
+
+
+
+
+
+
                 issue: "Slow operation: " + result.name,
+
+
+
+
+
+
+
                 suggestion: "Consider optimizing or caching",
+
+
+
+
+
+
+
                 priority: "high"
+
+
+
+
+
+
+
             })
+
+
+
+
+
+
+
         end if
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         // Check for memory issues
+
+
+
+
+
+
+
         if result.memory_allocated > 1000000,
+
+
+
+
+
+
+
             recommendations.push(Recommendation {
+
+
+
+
+
+
+
                 issue: "High memory usage: " + result.name,
+
+
+
+
+
+
+
                 suggestion: "Consider streaming or chunking",
+
+
+
+
+
+
+
                 priority: "high"
+
+
+
+
+
+
+
             })
+
+
+
+
+
+
+
         end if
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         // Check for error rates
+
+
+
+
+
+
+
         if result.error_rate > 0.01,
+
+
+
+
+
+
+
             recommendations.push(Recommendation {
+
+
+
+
+
+
+
                 issue: "High error rate: " + result.name,
+
+
+
+
+
+
+
                 suggestion: "Add error handling or retry logic",
+
+
+
+
+
+
+
                 priority: "medium"
+
+
+
+
+
+
+
             })
+
+
+
+
+
+
+
         end if
+
+
+
+
+
+
+
     end loop
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     return recommendations
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 

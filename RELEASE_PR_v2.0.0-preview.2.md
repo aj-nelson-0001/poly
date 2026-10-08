@@ -26,21 +26,37 @@ under "Feature Summary").
 All commands executed locally on the `v1.7.3-audit-fixes` branch at the version-sync pass (release-metadata changes staged):
 
 | Check | Command | Result |
+
 |-------|---------|--------|
+
 | Format | `cargo fmt --all -- --check` | ✅ Pass |
+
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ Pass |
+
 | Tests | `cargo test --workspace -- --test-threads=1` | ✅ 406 tests passed, 0 failed |
+
 | Type check | `cargo check --workspace --all-targets` | ✅ Pass |
+
 | Dependency audit | `cargo audit` | ✅ 0 vulnerabilities (81 dependencies) |
+
 | Markdown | `python3 scripts/check_markdown.py` | ✅ 49 files, 1,310 tilde fence markers, no violations |
-| Doc examples (maintained set) | `python3 scripts/check_poly_examples.py` (9 v2 docs) | ✅ 44 blocks: 18 passed, 26 marked fragments, 0 unmarked failures |
-| Doc examples (full tree) | `python3 scripts/check_poly_examples.py` (all 49 docs) | ✅ 564 blocks: 229 passed, 335 marked fragments, 0 unmarked failures |
+
+| Doc examples (maintained set) | `python3 scripts/check_poly_examples.py` (9 v2 docs) | ✅ 44 blocks: 18 passed, 26 marked
+fragments, 0 unmarked failures |
+| Doc examples (full tree) | `python3 scripts/check_poly_examples.py` (all 49 docs) | ✅ 564 blocks: 229 passed, 335 marked
+fragments, 0 unmarked failures |
 | Rust examples | `poly --target rust --check examples/*.poly` | ✅ All 22 pass |
+
 | C fixture | `--check`, build, execute | ✅ Output `30` / `3` verified |
+
 | Asm fixture | `--check`, `-o` build, assemble, execute | ✅ Output `42` / `10` / `30` / `60` verified |
+
 | Mixed target fixture | `--target rust` / `--target c` checks | ✅ Pass |
+
 | Playground examples | All 9 embedded examples pass `poly --check` | ✅ Pass |
-| Playground wasm | Rebuilt from preview.2 compiler (408K) + `scripts/playground_wasm_smoke.mjs` | ✅ 5 good + 6 rejected cases pass |
+
+| Playground wasm | Rebuilt from preview.2 compiler (408K) + `scripts/playground_wasm_smoke.mjs` | ✅ 5 good + 6 rejected cases
+pass |
 
 ### Test Summary
 
@@ -61,23 +77,35 @@ All commands executed locally on the `v1.7.3-audit-fixes` branch at the version-
 
 ### Rust Backend (Default)
 
-Full v2 baseline — all Poly constructs transpile to valid Rust and compile through `rustc` or a generated Cargo project. Preview.2 adds language-wide `pop()` (type-checks as the element type, lowers to `pop().unwrap_or_default()`).
+Full v2 baseline — all Poly constructs transpile to valid Rust and compile through `rustc` or a generated Cargo project.
+Preview.2 adds language-wide `pop()` (type-checks as the element type, lowers to `pop().unwrap_or_default()`).
 
 ### C Backend
 
 C11 orchestration subset, widened in preview.2:
 
 | Supported | Not Supported (use `#c` helpers) |
+
 |-----------|----------------------------------|
+
 | Scalar declarations | File redirects / file input |
+
 | Plain structs + struct literals (C99 compound literals) | Vectors, maps, sets |
+
 | Tuples (anonymous structs, `.N` access, nesting) | Typed input flags |
+
 | Enum declarations + simple variants in expressions and match | Capturing closures |
+
 | `match` (literal, wildcard, range, identifier arms) | Async/await |
+
 | Non-capturing closures | Payload-carrying enum variants |
+
 | Plain `get` (stdin line, optional prompt) | Guards / structured match patterns |
+
 | Functions, conditions, loops, arithmetic, bitwise ops | Generic functions / structs |
+
 | `put` (stdout), `error`/`warn`/`info` (stderr) | Complex Poly types |
+
 
 ### Asm Backend (New in Preview.2)
 
@@ -85,7 +113,8 @@ Linux x86-64 freestanding subset via `--target asm`:
 
 - `extern asm fn ...` declarations and `#asm` foreign blocks
 - `_start` entry point that calls `fn main` when declared
-- Static descriptor-backed vectors with index access and `for x in <vector>`; `push`/`pop`/`len` switch to a growable in-place runtime (static bump arena, doubling growth, exhaustion exits 42)
+- Static descriptor-backed vectors with index access and `for x in <vector>`; `push`/`pop`/`len` switch to a growable in-place
+runtime (static bump arena, doubling growth, exhaustion exits 42)
 - Pointer dereference, `&T` locals, and `for x in <string>` iteration
 - Integer and char output; general string values are rejected with guidance
 
@@ -100,21 +129,129 @@ Linux x86-64 freestanding subset via `--target asm`:
 ### CLI
 
 ~~~
+
+
+
+
+
+
+
 poly <file.poly>                    # Generate + build (Rust default)
+
+
+
+
+
+
+
 poly --target c <file.poly>         # Generate + build (C)
+
+
+
+
+
+
+
 poly --target asm <file.poly>       # Generate + build (Linux x86-64 asm)
+
+
+
+
+
+
+
 poly --target c --emit-c <file>     # Emit C to stdout
+
+
+
+
+
+
+
 poly --target asm --emit-asm <file> # Emit assembly to stdout
+
+
+
+
+
+
+
 poly --check <file>                 # Validate without building
+
+
+
+
+
+
+
 poly --emit-rust <file>             # Emit Rust to stdout
+
+
+
+
+
+
+
 poly --intermediate-representation  # Show IR pipeline output
+
+
+
+
+
+
+
 poly --source-map <file>            # Show Poly→Rust source map (statement-precise)
+
+
+
+
+
+
+
 poly --format <file>                # Format with rustfmt
+
+
+
+
+
+
+
 poly --diff <file>                  # Show format diff
+
+
+
+
+
+
+
 poly --watch <file>                 # Watch + re-transpile
+
+
+
+
+
+
+
 poly --project <dir> <file>         # Generate Cargo/project dir
+
+
+
+
+
+
+
 poly --repl                         # Interactive REPL
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -122,41 +259,57 @@ poly --repl                         # Interactive REPL
 
 ### Risk 1: Opaque foreign calls remain permissive
 
-**Status:** Accepted for preview. Explicit `extern rust fn` / `extern c fn` / `extern asm fn` declarations are available for stronger diagnostics. The native compiler (rustc/cc/assembler) remains the authoritative validator for foreign code.
+**Status:** Accepted for preview. Explicit `extern rust fn` / `extern c fn` / `extern asm fn` declarations are available for
+stronger diagnostics. The native compiler (rustc/cc/assembler) remains the authoritative validator for foreign code.
 
-**Mitigation path:** Post-preview, consider making `extern` declarations mandatory for all foreign calls or adding a `--strict` flag.
+**Mitigation path:** Post-preview, consider making `extern` declarations mandatory for all foreign calls or adding a `--strict`
+flag.
 
 ### Risk 2: C backend scope is intentionally narrow
 
-**Status:** Widened in preview.2 (tuples, match, struct literals, enum variants, plain `get`, non-capturing closures). Remaining gaps — file redirects, file input, vectors, capturing closures, async — produce clear diagnostics directing users to `#c` helpers or the Rust target.
+**Status:** Widened in preview.2 (tuples, match, struct literals, enum variants, plain `get`, non-capturing closures).
+Remaining
+gaps — file redirects, file input, vectors, capturing closures, async — produce clear diagnostics directing users to `#c`
+helpers or the Rust target.
 
 ### Risk 3: C++ is syntax-only
 
-**Status:** `#cpp` blocks are recognized but explicitly rejected with an actionable diagnostic. No C++ target, codegen, or build path exists.
+**Status:** `#cpp` blocks are recognized but explicitly rejected with an actionable diagnostic. No C++ target, codegen, or
+build
+path exists.
 
 ### Risk 4: The asm target is a narrow Linux-only subset
 
-**Status:** New in preview.2. It emits freestanding x86-64 assembly for Linux syscalls, runs under CI on Linux only, and rejects unsupported constructs (general string values, maps/sets, non-vector methods) with guidance instead of miscompiling. Grow-heap exhaustion exits with status 42 rather than corrupting memory.
+**Status:** New in preview.2. It emits freestanding x86-64 assembly for Linux syscalls, runs under CI on Linux only, and
+rejects
+unsupported constructs (general string values, maps/sets, non-vector methods) with guidance instead of miscompiling. Grow-heap
+exhaustion exits with status 42 rather than corrupting memory.
 
 ### Risk 5: v2 preview has compatibility-oriented parser paths
 
-**Status:** Covered by tests. Legacy syntax (`==`, `&&`, `||`, `!`, `^`, `%`, `&`, `|`, `~`, compound assignments, `add`/`sub`/`inc`/`dec`) is rejected with migration diagnostics. These paths are kept intentionally for v1→v2 migration UX.
+**Status:** Covered by tests. Legacy syntax (`==`, `&&`, `||`, `!`, `^`, `%`, `&`, `|`, `~`, compound assignments,
+`add`/`sub`/`inc`/`dec`) is rejected with migration diagnostics. These paths are kept intentionally for v1→v2 migration UX.
 
 ### Risk 6: Old v1 documentation is historical
 
-**Status:** All v1 docs are indexed in `POLY_DOCUMENTATION_INDEX.md` as explicitly non-normative. The v2 document set (spec, grammar, migration guide, support matrix, audit, roadmap) is the maintained source of truth and was re-synced to the preview.2 implementation in this pass.
+**Status:** All v1 docs are indexed in `POLY_DOCUMENTATION_INDEX.md` as explicitly non-normative. The v2 document set (spec,
+grammar, migration guide, support matrix, audit, roadmap) is the maintained source of truth and was re-synced to the preview.2
+implementation in this pass.
 
 ### Risk 7: Cross-platform C coverage
 
-**Status:** CI exercises Rust + C on `ubuntu-latest`, `macos-latest`, and `windows-latest`. `POLY_CC` allows explicit compiler selection. Platform-specific behavior is a residual risk to monitor when CI images update.
+**Status:** CI exercises Rust + C on `ubuntu-latest`, `macos-latest`, and `windows-latest`. `POLY_CC` allows explicit compiler
+selection. Platform-specific behavior is a residual risk to monitor when CI images update.
 
 ---
 
 ## Compatibility Notes
 
 - `:=` is declaration/assignment; `=` is equality. Legacy `==` is rejected with migration diagnostic.
-- Mutation uses explicit re-assignment (`x := x + 1`); compound assignments (`+=`) and `add`/`inc`-style statements are retired with migration hints.
-- Logical/bitwise/remainder operators are keywords (`and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, `shift left/right`); the symbol forms are rejected with migration diagnostics (`<<`/`>>` remain valid).
+- Mutation uses explicit re-assignment (`x := x + 1`); compound assignments (`+=`) and `add`/`inc`-style statements are retired
+with migration hints.
+- Logical/bitwise/remainder operators are keywords (`and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, `shift
+left/right`); the symbol forms are rejected with migration diagnostics (`<<`/`>>` remain valid).
 - Append output: `put value to "file" -append`
 - `put` always writes a trailing newline.
 - Foreign blocks and `extern` declarations must be top-level.
@@ -213,7 +366,9 @@ evidence is recorded.
 1. **Simple code** (variables, I/O, loops, basic functions): No changes needed
 2. **Complex code** (closures, generics, async, traits): Wrap in `#rust ... #endrust` blocks
 3. **Equality:** Replace `==` with `=`
-4. **Operators:** Logical/bitwise/remainder operators are keywords — `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, `shift left/right`; the symbol forms (`&&`, `||`, `!`, `^`, `%`, `&`, `|`, `~`) are rejected with migration diagnostics (`<<`/`>>` remain valid)
+4. **Operators:** Logical/bitwise/remainder operators are keywords — `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`,
+`bitnot`, `shift left/right`; the symbol forms (`&&`, `||`, `!`, `^`, `%`, `&`, `|`, `~`) are rejected with migration
+diagnostics (`<<`/`>>` remain valid)
 5. **Mutation:** Replace `x += n` with `x := x + n`; replace `add x` / `inc x` with `x := x + 1`
 6. **Unicode strings:** Use `unicode "text"` instead of `u"text"`
 7. **File append:** Use `put value to "file" -append`
@@ -234,6 +389,37 @@ fn process(items: Vec<i32>) -> Vec<i32> {
 #endrust
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
 
-**This agent does not create or push tags.** A preview tag should be created only after all mandatory checks pass from a clean checkout and hosted CI evidence is recorded.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+**This agent does not create or push tags.** A preview tag should be created only after all mandatory checks pass from a
+clean \
+  \
+checkout and hosted CI evidence is recorded.

@@ -52,13 +52,72 @@ var answer i32 := doubleValue(21)
 put answer
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 CLI surface (mirrors the C target):
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~bash
+
+
+
+
+
+
+
 poly --target js --check program.poly
+
+
+
+
+
+
+
 poly --target js --emit-js program.poly
+
+
+
+
+
+
+
 poly --target js program.poly          # node out.js
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 Foreign-block selection: only `#js` blocks are emitted for the JS target;
 `#rust`/`#c`/`#asm` blocks are dropped. `#cpp` stays rejected globally.
@@ -70,17 +129,29 @@ emitted.
 Each place the JS backend must touch, confirmed against the current code:
 
 | Touchpoint | File | Current state | Required change |
+
 |---|---|---|---|
-| Foreign-block lexer | `poly-lexer/src/lexer.rs` (`foreign_block_language_at_current`) | Matches the list `["rust", "cpp", "c", "asm"]` by prefix | Add `"js"` to the list |
-| `extern` target validation | `poly-parser/src/parser.rs` (`parse_extern_function_declaration`) | Accepts `rust`\|`c`\|`asm`, otherwise errors | Add `"js"` and extend the error message |
-| Target filtering | `poly-transpiler/src/codegen.rs` (`select_target`) | Rejects `#cpp`, keeps blocks where `declaration.target == language` | No change — `js` flows through |
-| Target dispatch | `poly-transpiler/src/codegen.rs` (`transpile_target`) | Maps `rust`/`c`/`asm` names | Add `"js"` → `transpile_js_checked` |
-| Checker | `poly-transpiler/src/checker.rs` | Extern declarations for any target register via `register_extern_functions`; non-selected targets are filtered before checking | No change — see strict-mode note below |
+
+| Foreign-block lexer |`poly-lexer/src/lexer.rs` (`foreign_block_language_at_current`) | Matches the list `["rust", "cpp", "c",
+"asm"]` by prefix | Add `"js"` to the list |
+| `extern` target validation | `poly-parser/src/parser.rs` (`parse_extern_function_declaration`) | Accepts `rust`\|`c`\|`asm`,
+otherwise errors | Add `"js"` and extend the error message |
+| Target filtering |`poly-transpiler/src/codegen.rs` (`select_target`) | Rejects `#cpp`, keeps blocks where `declaration.target
+== language` | No change — `js` flows through |
+| Target dispatch | `poly-transpiler/src/codegen.rs` (`transpile_target`) | Maps `rust`/`c`/`asm` names | Add `"js"` →
+`transpile_js_checked` |
+| Checker | `poly-transpiler/src/checker.rs` | Extern declarations for any target register via `register_extern_functions`;
+non-selected targets are filtered before checking | No change — see strict-mode note below |
 | Workspace | `compiler/Cargo.toml` | Members list + `workspace.dependencies` | Add `crates/poly-js-codegen` |
-| CLI target enum | `poly-cli/src/main.rs` (`Target::from_str`, `language_name`, extension) | `rust`/`c`/`asm`/`s`/`S` | Add `js`\|`mjs` → `Target::Js` |
-| CLI validation | `poly-cli/src/main.rs` (`verify_*_compiles`) | `rustc`/`cc`/assembler checks, `POLY_CC` override | Add `verify_js_compiles` via `node --check` (`POLY_NODE` override; Node-absent fallback matches the C target) |
-| CLI emission | `poly-cli/src/main.rs` (`--emit-*` arms, build path, `--project`) | `--emit-rust`/`--emit-c`/`--emit-asm` | Add `--emit-js` arm, JS build path (`node out.js` is a run step, so build = write + syntax check), and `generate_js_project` |
-| CI | `.github/workflows/ci.yml` | C/asm fixture jobs | Add a `js` fixture check/execute step (Node is preinstalled on all runners) |
+
+| CLI target enum | `poly-cli/src/main.rs` (`Target::from_str`, `language_name`, extension) | `rust`/`c`/`asm`/`s`/`S` | Add
+`js`\|`mjs` → `Target::Js` |
+| CLI validation | `poly-cli/src/main.rs` (`verify_*_compiles`) | `rustc`/`cc`/assembler checks, `POLY_CC` override | Add
+`verify_js_compiles` via `node --check` (`POLY_NODE` override; Node-absent fallback matches the C target) |
+| CLI emission |`poly-cli/src/main.rs` (`--emit-*` arms, build path, `--project`) | `--emit-rust`/`--emit-c`/`--emit-asm` | Add
+`--emit-js` arm, JS build path (`node out.js` is a run step, so build = write + syntax check), and `generate_js_project` |
+| CI | `.github/workflows/ci.yml` | C/asm fixture jobs | Add a `js` fixture check/execute step (Node is preinstalled on all
+runners) |
 
 Checker strict mode note: the checker registers foreign function names with a
 line heuristic that already handles JS `function name(...)` declarations (the
@@ -109,15 +180,25 @@ fall back on.
 ## Type Mapping
 
 | Poly | JavaScript | Notes |
+
 |---|---|---|
+
 | `bool` | `boolean` | |
+
 | `i8`…`i64`, `u8`…`u32` | `number` | Exact range below 2^53. |
+
 | `u64` | `bigint` | Emitted as `123n` literals; arithmetic mixes guarded. |
+
 | `f32`/`f64` | `number` | |
+
 | `char` | `string` (length-1) | |
+
 | `string`/`ustring` | `string` | UTF-16 native; no pointer semantics. |
+
 | struct | plain object literal | `{ name: value, ... }`; field access via `.field`. |
+
 | enum | frozen object of variants | String-backed; `match` compiles to `switch`. |
+
 
 Integer division/modulo semantics: Poly's `/` and `%` on integers map to
 `Math.trunc(a / b)` and `a % b` to keep truncation (JS `/` is float division).
@@ -126,36 +207,132 @@ Integer division/modulo semantics: Poly's `/` and `%` on integers map to
 ## Supported Poly Surface (parity with C target)
 
 | Construct | JS target | Notes |
+
 |---|---:|---|
+
 | Scalar declarations, `let`, `const` | Yes | `let`/`const`. |
+
 | Arithmetic/comparison/logical/bitwise | Yes | Integer `/`,`%` guarded as above. |
+
 | Strings and concatenation | Yes | Native — no C-style flattening limits. |
+
 | `put`, `error`, `warn`, `info` | Yes | `console.log/error/warn/info`. |
+
 | `if`/`else`, `while`, loops, `break`/`continue` | Yes | |
+
 | Inclusive numeric loops | Yes | `for (let i = a; i <= b; i++)`. |
+
 | Multi-range loops | Yes | Nested loops, unlike C. |
+
 | Collection loops | Yes | `for..of` over arrays. |
+
 | Simple functions | Yes | Non-async, non-generic → `function`. |
+
 | Structs | Plain only | Object literals; no methods/generics. |
+
 | Enums, traits, impls, modules, aliases | No | Use a `#js` helper or Rust target. |
+
 | Closures / higher-order ops | No | Rejected, as in C. |
+
 | File redirects, stdin, typed input flags | No | Browser-hostile; call a `#js` helper (Node target could add later). |
+
 | Async Poly functions | No | Rejected like C. |
+
 
 ## Output Shape
 
 ~~~js
+
+
+
+
+
+
+
 /* Generated from Poly source code. */
+
+
+
+
+
+
+
 function doubleValue(x) {          // from #js block, verbatim
+
+
+
+
+
+
+
     return x * 2;
+
+
+
+
+
+
+
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function main() {                  // Poly orchestration, in order
+
+
+
+
+
+
+
   const answer = doubleValue(21);
+
+
+
+
+
+
+
   console.log(answer);
+
+
+
+
+
+
+
 }
+
+
+
+
+
+
+
 main();
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 Top-level orchestration statements run inside a `main()` invocation so `const`
 re-declaration is safe when the artifact is imported twice.

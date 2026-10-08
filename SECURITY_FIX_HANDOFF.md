@@ -13,18 +13,31 @@
 ## Files changed
 
 | File | Change |
+
 |---|---|
+
 | `compiler/crates/poly-parser/src/depth_limit.rs` | **NEW** — iterative AST depth validator |
+
 | `compiler/crates/poly-parser/src/ast_dump.rs` | **NEW** — linear AST printer for `--ast` |
+
 | `compiler/crates/poly-parser/src/parser.rs` | operand-chain cap in precedence ladder; 19 fold sites |
+
 | `compiler/crates/poly-parser/src/lib.rs` | module + re-export wiring |
+
 | `compiler/crates/poly-transpiler/src/checker/type_checker.rs` | `MAX_CHECK_EXPRESSION_DEPTH` guard |
+
 | `compiler/crates/poly-lsp/src/json.rs` | `MAX_JSON_DEPTH` guard |
+
 | `compiler/crates/poly-lsp/src/main.rs` | `MAX_MESSAGE_BYTES` frame cap; `read_message` generic over `BufRead` |
+
 | `compiler/crates/poly-cli/src/main.rs` | `--ast` streams via the new printer; bounded `rustfmt` subprocess |
+
 | `compiler/scripts/build_playground_wasm.sh` | apply `wasm-opt -Oz` when available |
+
 | `scripts/playground_wasm_smoke.mjs` | 2 CI regression cases for the depth fix |
+
 | `playground/poly.wasm` | rebuilt (609,080 B) |
+
 
 ---
 
@@ -83,10 +96,41 @@ Root cause was never really "cubic in the printer". Rust's alternate `Debug`
 **quadratic** output:
 
 ~~~
+
+
+
+
+
+
+
 n= 500  {:#?} ->  1,507,503 B,   1.5 s  |  {:?} ->  5,003 B,  61 µs
+
+
+
+
+
+
+
 n=1000  {:#?} ->  6,015,003 B,  13.5 s  |  {:?} -> 10,003 B, 170 µs
+
+
+
+
+
+
+
 n=2000  {:#?} -> 24,030,003 B, 137.5 s  |  {:?} -> 20,003 B, 399 µs
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 Fix: new `ast_dump.rs` — iterative printer, explicit heap worklist, indentation capped
 at `MAX_INDENT_LEVELS = 32`. `--ast` streams to stdout instead of materializing a
@@ -116,15 +160,81 @@ child on a stdin write failure and never drained its pipes; both are fixed.
 ## Verification
 
 ~~~sh
+
+
+
+
+
+
+
 cd compiler
+
+
+
+
+
+
+
 cargo build --release --workspace
+
+
+
+
+
+
+
 cargo clippy --release --workspace --all-targets -- -D warnings
+
+
+
+
+
+
+
 cargo test  --release --workspace -- --test-threads=1
+
+
+
+
+
+
+
 cargo fmt --all -- --check
+
+
+
+
+
+
+
 cargo audit
+
+
+
+
+
+
+
 cd .. && python3 scripts/check_backends.py --poly-bin compiler/target/release/poly
+
+
+
+
+
+
+
 node scripts/playground_wasm_smoke.mjs
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 Last full run from a clean tree: build 0 · clippy `-D warnings` 0 · **571 tests
 passing, 0 failing** · fmt 0 · `cargo audit` no vulnerabilities · all script checks

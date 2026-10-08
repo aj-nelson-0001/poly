@@ -15,7 +15,8 @@ Thank you for your interest in contributing to Poly! This document provides guid
 
 ## Code of Conduct
 
-Please be respectful and inclusive in all interactions. We are committed to providing a welcoming and constructive environment for everyone.
+Please be respectful and inclusive in all interactions. We are committed to providing a welcoming and constructive environment
+for everyone.
 
 ## How to Contribute
 
@@ -61,9 +62,40 @@ cargo build
 cargo test --workspace
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Project Structure
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~
+
+
+
 poly/
 ├── compiler/
 │   ├── crates/
@@ -84,28 +116,192 @@ poly/
 └── *.md                     # Documentation (see POLY_DOCUMENTATION_INDEX.md)
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Making Changes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Branch Naming
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Use descriptive branch names:
+
+
+
+
+
+
+
 - `feature/add-pattern-matching`
+
+
+
+
+
+
+
 - `fix/resolve-parser-error`
+
+
+
+
+
+
+
 - `docs/update-tutorial`
+
+
+
+
+
+
+
 - `test/add-edge-case-tests`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Commit Messages
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Write clear, concise commit messages:
+
+
+
+
+
+
+
 - Prefix with the conventional type this repository uses: `feat:`, `fix:`,
+
+
+
+
+
+
+
   `refactor:`, `docs:`, `ci:`, `test:`, `chore:`, or `chore(release):` for
+
+
+
+
+
+
+
   release preparation
+
+
+
+
+
+
+
 - Use imperative mood after the prefix ("add feature", not "added feature")
+
+
+
+
+
+
+
 - Keep the first line under 72 characters
+
+
+
+
+
+
+
 - Reference issues when applicable
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Example:
+
+
+
+
+
+
+
 ~~~
+
+
+
 feat: add pattern matching support
 
 - Implement match expression parsing
@@ -115,29 +311,200 @@ feat: add pattern matching support
 Closes #123
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Code Style
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - Follow Rust style guidelines
+
+
+
+
+
+
+
 - Use `cargo fmt` to format code
+
+
+
+
+
+
+
 - Use `cargo clippy --workspace --all-targets -- -D warnings` to check for warnings (this is exactly what CI runs)
+
+
+
+
+
+
+
 - Add comments for complex logic
+
+
+
+
+
+
+
 - Keep functions focused and small
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Testing
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Running Tests
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~bash
+
+
+
+
+
+
+
 # Run all tests
+
+
+
+
+
+
+
 cargo test --workspace
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Run specific crate tests
+
+
+
+
+
+
+
 cargo test -p poly-parser
+
+
+
+
+
+
+
 cargo test -p poly-transpiler
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Run with output
+
+
+
+
+
+
+
 cargo test -- --nocapture
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Writing Tests
 
@@ -156,53 +523,392 @@ fn test_parse_if_else_if() {
 }
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Test Coverage
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Aim for high test coverage, especially for:
+
+
+
+
+
+
+
 - Parser edge cases
+
+
+
+
+
+
+
 - Transpiler correctness
+
+
+
+
+
+
+
 - Error handling
+
+
+
+
+
+
+
 - Type checking
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Pull Request Process
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Before Submitting
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 1. ✅ Code compiles without errors
+
+
+
+
+
+
+
 2. ✅ All tests pass
+
+
+
+
+
+
+
 3. ✅ Code is formatted with `cargo fmt`
+
+
+
+
+
+
+
 4. ✅ No clippy warnings
+
+
+
+
+
+
+
 5. ✅ Documentation is updated (if applicable)
+
+
+
+
+
+
+
 6. ✅ Examples work correctly
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### PR Template
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~markdown
+
+
+
+
+
+
+
 ## Description
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 Brief description of changes
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Type of Change
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - [ ] Bug fix
+
+
+
+
+
+
+
 - [ ] New feature
+
+
+
+
+
+
+
 - [ ] Breaking change
+
+
+
+
+
+
+
 - [ ] Documentation update
+
+
+
+
+
+
+
 - [ ] Test improvement
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Testing
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - [ ] Tests pass locally
+
+
+
+
+
+
+
 - [ ] Added tests for new functionality
+
+
+
+
+
+
+
 - [ ] Tested with examples
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Checklist
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - [ ] Code follows style guidelines
+
+
+
+
+
+
+
 - [ ] Self-review completed
+
+
+
+
+
+
+
 - [ ] Documentation updated
+
+
+
+
+
+
+
 - [ ] No breaking changes (or documented)
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Review Process
 
@@ -213,6 +919,18 @@ Brief description of changes
 5. Merge when approved
 
 ## Style Guidelines
+
+### Line Length
+
+- File lines should be 127 characters or less
+- This policy covers every text file in the repository: source and
+  configuration files (Rust, Poly, JavaScript, TypeScript, Python, shell,
+  HTML, CSS, JSON, YAML, TOML, C/assembly) and Markdown documentation
+- When a line cannot fit in 127 characters, split it instead of exceeding the
+  limit: break a Rust string literal with `concat!`, continue a shell command
+  with a trailing `\`, or wrap an expression at an existing delimiter
+- Verify before submitting with a per-file scan, for example
+  `awk 'length($0) > 127' path/to/file.rs` prints any offending line
 
 ### Rust Code
 
@@ -243,7 +961,8 @@ Brief description of changes
 - Use clear, concise language
 - Include code examples
 - Keep formatting consistent
-- Use tilde fences for code blocks: write three tilde characters followed by an optional language label, such as `poly`, and close with three tilde characters
+- Use tilde fences for code blocks: write three tilde characters followed by an optional language label, such as `poly`, and
+close with three tilde characters
 - Leave single backticks available for inline code references
 - Use the current Poly declaration syntax: `var name Type := value` or `var name := value`
 - Update table of contents

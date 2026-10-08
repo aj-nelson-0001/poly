@@ -17,18 +17,34 @@ version correct keeps those two correct for free.
 ## File-by-file map
 
 | File | States | Updated by | Enforced by |
+
 |---|---|---|---|
+
 | `compiler/Cargo.toml` | workspace version | `prepare_release.py` (step 1) | `prepare_release.py` verification |
-| `compiler/Cargo.lock` | workspace member versions | `prepare_release.py` (`cargo update -w`) | lockfile diff in CI tetris job |
-| `tetris/rust_output/tetris/Cargo.toml` | generated project version | `prepare_release.py` regenerates the project | consistency check + CI reproducibility guard |
-| `tetris/rust_output/tetris/Cargo.lock` | resolved dependency versions | `prepare_release.py` (`cargo generate-lockfile`) | CI reproducibility guard |
-| `tetris/rust_output/tetris/.poly-generated` | owning source path (relative) | `poly --project` | CI reproducibility guard; `scripts/check_generated_paths.py` |
-| `tetris/rust_output/tetris/src/main.rs` | (no version; must match source) | `poly --project` / `--emit-rust` | CI reproducibility guard |
-| `playground/index.html` | footer version + dialect comment | `prepare_release.py` (`sync_playground_version`) | consistency check |
-| `CHANGELOG.md` | dated release section | **by hand** before running the script | `DOC_BASELINE_FILES`-style check notes below |
+
+| `compiler/Cargo.lock` | workspace member versions | `prepare_release.py` (`cargo update -w`) | lockfile diff in CI tetris job
+|
+
+| `tetris/rust_output/tetris/Cargo.toml` | generated project version | `prepare_release.py` regenerates the project |
+
+consistency check + CI reproducibility guard |
+| `tetris/rust_output/tetris/Cargo.lock` | resolved dependency versions | `prepare_release.py` (`cargo generate-lockfile`) | CI
+reproducibility guard |
+| `tetris/rust_output/tetris/.poly-generated` | owning source path (relative) | `poly --project` | CI reproducibility guard;
+`scripts/check_generated_paths.py` |
+| `tetris/rust_output/tetris/src/main.rs` | (no version; must match source) | `poly --project` / `--emit-rust` | CI
+reproducibility guard |
+| `playground/index.html` | footer version + dialect comment | `prepare_release.py` (`sync_playground_version`) | consistency
+check |
+| `CHANGELOG.md` | dated release section | **by hand** before running the script | `DOC_BASELINE_FILES`-style check notes below
+|
+
 | `README.md` ("What's New") | release highlights | **by hand** | not mechanical |
+
 | `POLY_DOCUMENTATION_INDEX.md` | baseline statement | **by hand** | consistency check |
+
 | `POLY_V2_PREVIEW_RELEASE_NOTES.md` | intro line + highlights | **by hand** | consistency check |
+
 
 ## What is mechanical vs. manual
 

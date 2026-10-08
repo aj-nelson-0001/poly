@@ -31,16 +31,89 @@ We're thrilled to announce a significant syntax improvement in the Poly language
 
 **Example:**
 ~~~
+
+
+
+
+
+
+
 // Old syntax
+
+
+
+
+
+
+
 if x > 0 then
+
+
+
+
+
+
+
     put x
+
+
+
+
+
+
+
 end if
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // New syntax
+
+
+
+
+
+
+
 if x > 0,
+
+
+
+
+
+
+
     put x
+
+
+
+
+
+
+
 end if
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 This change makes Poly code more concise and aligns with modern language design trends.
 
@@ -75,16 +148,96 @@ else
 end if
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 **After:**
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 if x > 0,
+
+
+
+
+
+
+
     put x
+
+
+
+
+
+
+
 else if x < 0,
+
+
+
+
+
+
+
     put "negative"
+
+
+
+
+
+
+
 else,
+
+
+
+
+
+
+
     put "zero"
+
+
+
+
+
+
+
 end if
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 The comma syntax is:
 - More concise (no `then` keyword needed)
@@ -123,40 +276,256 @@ fn get_grade(score: i32): string
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 This makes Poly code more concise and easier to read!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 Check out the full blog post for more details: [link]
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Facebook Post
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 🎉 **Poly Language Just Got Better!**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 We're excited to announce a new syntax improvement in the Poly programming language!
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 **The Big Change:** If statements now use commas instead of `then`!
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 **Before:**
+
+
+
+
+
+
+
 ~~~
+
+
+
 if x > 0 then
     put x
 end if
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 **After:**
+
+
+
+
+
+
+
 ~~~
+
+
+
 if x > 0,
     put x
 end if
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 **Why we made this change:**
+
+
+
+
+
+
+
 ✅ More concise code
+
+
+
+
+
+
+
 ✅ Familiar to developers from other languages
+
+
+
+
+
+
+
 ✅ Cleaner visual appearance
+
+
+
+
+
+
+
 ✅ Works great with else-if chains
 
-Try it out and let us know what you think! 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Try it out and let us know what you think!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #PolyLang #Programming #LearnToCode #Developer

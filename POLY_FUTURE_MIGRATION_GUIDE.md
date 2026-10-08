@@ -1,6 +1,7 @@
 # Poly Language Future Migration Guide
 
-> **Planning document:** This is non-normative future-work material. The current migration path is [POLY_MIGRATION_GUIDE_v2.md](POLY_MIGRATION_GUIDE_v2.md).
+> **Planning document:** This is non-normative future-work material. The current migration path is
+[POLY_MIGRATION_GUIDE_v2.md](POLY_MIGRATION_GUIDE_v2.md).
 
 ## Overview
 
@@ -37,39 +38,280 @@ fn new_syntax()
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Version Migration Timeline
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 // Migration timeline
+
+
+
+
+
+
+
 struct MigrationTimeline
+
+
+
+
+
+
+
     deprecated_in: ustring
+
+
+
+
+
+
+
     removed_in: ustring
+
+
+
+
+
+
+
     alternative: ustring
+
+
+
+
+
+
+
 end struct
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // Check if feature is deprecated
+
+
+
+
+
+
+
 fn check_deprecation(feature: ustring, current_version: ustring): Option<MigrationTimeline>
+
+
+
+
+
+
+
     var timelines Map<ustring, MigrationTimeline> := {
+
+
+
+
+
+
+
         unicode "putn": MigrationTimeline {
+
+
+
+
+
+
+
             deprecated_in: unicode "1.5",
+
+
+
+
+
+
+
             removed_in: unicode "2.0",
+
+
+
+
+
+
+
             alternative: unicode "put"
+
+
+
+
+
+
+
         },
+
+
+
+
+
+
+
         unicode "pute": MigrationTimeline {
+
+
+
+
+
+
+
             deprecated_in: unicode "1.5",
+
+
+
+
+
+
+
             removed_in: unicode "2.0",
+
+
+
+
+
+
+
             alternative: unicode "error"
+
+
+
+
+
+
+
         },
+
+
+
+
+
+
+
         unicode "Err(e)": MigrationTimeline {
+
+
+
+
+
+
+
             deprecated_in: unicode "1.5",
+
+
+
+
+
+
+
             removed_in: unicode "2.0",
+
+
+
+
+
+
+
             alternative: unicode "Error(e)"
+
+
+
+
+
+
+
         }
+
+
+
+
+
+
+
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     return timelines.get(feature)
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -124,41 +366,296 @@ fn transform_directory(dir: ustring): Result<(), TransformError>
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Migration Script
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 // Migration script
+
+
+
+
+
+
+
 fn migrate_project(version: ustring): Result<(), MigrationError>
+
+
+
+
+
+
+
     put "Migrating to version " + version
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Step 1: Transform syntax
+
+
+
+
+
+
+
     put "Step 1: Transforming syntax..."
+
+
+
+
+
+
+
     try transform_directory(unicode "src/")
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Step 2: Update dependencies
+
+
+
+
+
+
+
     put "Step 2: Updating dependencies..."
+
+
+
+
+
+
+
     try update_dependencies(version)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Step 3: Run tests
+
+
+
+
+
+
+
     put "Step 3: Running tests..."
+
+
+
+
+
+
+
     try run_tests()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Step 4: Verify migration
+
+
+
+
+
+
+
     put "Step 4: Verifying migration..."
+
+
+
+
+
+
+
     try verify_migration()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     put "Migration complete!"
+
+
+
+
+
+
+
     return Ok(())
+
+
+
+
+
+
+
 end fn
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // Update dependencies
+
+
+
+
+
+
+
 fn update_dependencies(version: ustring): Result<(), DependencyError>
+
+
+
+
+
+
+
     var manifest := read_file(unicode "poly.toml")
+
+
+
+
+
+
+
     var updated := manifest.replace(unicode "poly-version = \"1.4\"", unicode "poly-version = \"" + version + unicode "\"")
+
+
+
+
+
+
+
     write_file(unicode "poly.toml", updated)
+
+
+
+
+
+
+
     return Ok(())
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -192,28 +689,192 @@ fn compat_pute(expression: ustring)
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Version Detection
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 // Detect Poly version
+
+
+
+
+
+
+
 fn get_poly_version(): ustring
+
+
+
+
+
+
+
     // This would be provided by the runtime
+
+
+
+
+
+
+
     return unicode "1.5"
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Use version-specific syntax
+
+
+
+
+
+
+
 fn version_specific_code()
+
+
+
+
+
+
+
     var version := get_poly_version()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     if compare_versions(parse_version(version), parse_version(unicode "2.0")) >= 0,
+
+
+
+
+
+
+
         // Use new syntax
+
+
+
+
+
+
+
         put "Loading..."
+
+
+
+
+
+
+
     else
+
+
+
+
+
+
+
         // Use old syntax
+
+
+
+
+
+
+
         putn unicode "Loading..."
+
+
+
+
+
+
+
     end if
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -256,32 +917,224 @@ fn test_syntax_transformation()
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Performance Testing
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 // Test performance impact
+
+
+
+
+
+
+
 fn test_performance_impact()
+
+
+
+
+
+
+
     // Benchmark old syntax
+
+
+
+
+
+
+
     var start := time_now()
+
+
+
+
+
+
+
     loop i 0..10000
+
+
+
+
+
+
+
         putn unicode "test"
+
+
+
+
+
+
+
     end loop
+
+
+
+
+
+
+
     var old_duration := time_now() - start
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Benchmark new syntax
+
+
+
+
+
+
+
     start = time_now()
+
+
+
+
+
+
+
     loop i 0..10000
+
+
+
+
+
+
+
         put unicode "test"
+
+
+
+
+
+
+
     end loop
+
+
+
+
+
+
+
     var new_duration := time_now() - start
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     put "Old syntax: " + old_duration.to_string() + "ms"
+
+
+
+
+
+
+
     put "New syntax: " + new_duration.to_string() + "ms"
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Performance should be similar
+
+
+
+
+
+
+
     assert(new_duration < old_duration * 1.1)  // Allow 10% variance
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -317,35 +1170,248 @@ fn update_documentation()
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Changelog
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly
+
+
+
+
+
+
+
 // Generate changelog
+
+
+
+
+
+
+
 fn generate_changelog(version: ustring): ustring
+
+
+
+
+
+
+
     var changelog ustring := "# Changelog\n\n## " + version + "\n\n"
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Add breaking changes
+
+
+
+
+
+
+
     changelog = changelog + "### Breaking Changes\n\n"
+
+
+
+
+
+
+
     changelog = changelog + "- `putn` replaced with `put`\n"
+
+
+
+
+
+
+
     changelog = changelog + "- `pute` replaced with `error`/`warn`/`info`\n"
+
+
+
+
+
+
+
     changelog = changelog + "- `Err(e)` replaced with `Error(e)`\n"
+
+
+
+
+
+
+
     changelog = changelog + "- Input flags changed from `with` to `--`\n\n"
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Add new features
+
+
+
+
+
+
+
     changelog = changelog + "### New Features\n\n"
+
+
+
+
+
+
+
     changelog = changelog + "- Added `error`, `warn`, `info` commands\n"
+
+
+
+
+
+
+
     changelog = changelog + "- Added input flags: `--timeout`, `--default`, `--mask`, `--as`, `--until`, `--bytes`\n"
+
+
+
+
+
+
+
     changelog = changelog + "- Added Unicode string inference\n\n"
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Add deprecations
+
+
+
+
+
+
+
     changelog = changelog + "### Deprecations\n\n"
+
+
+
+
+
+
+
     changelog = changelog + "- `putn` deprecated, use `put` instead\n"
+
+
+
+
+
+
+
     changelog = changelog + "- `pute` deprecated, use `error`/`warn`/`info` instead\n"
+
+
+
+
+
+
+
     changelog = changelog + "- `Err(e)` deprecated, use `Error(e)` instead\n\n"
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     return changelog
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -410,37 +1476,264 @@ fn revert_syntax(code: ustring): ustring
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## 7. Communication Strategy
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Migration Announcement
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly
+
+
+
+
+
+
+
 // Migration announcement
+
+
+
+
+
+
+
 fn announce_migration(version: ustring)
+
+
+
+
+
+
+
     put "=== Poly Migration Announcement ==="
+
+
+
+
+
+
+
     put ""
+
+
+
+
+
+
+
     put "Version " + version + " introduces syntax changes:"
+
+
+
+
+
+
+
     put ""
+
+
+
+
+
+
+
     put "Breaking Changes:"
+
+
+
+
+
+
+
     put "  - `putn` -> `put`"
+
+
+
+
+
+
+
     put "  - `pute` -> `error`/`warn`/`info`"
+
+
+
+
+
+
+
     put "  - `Err(e)` -> `Error(e)`"
+
+
+
+
+
+
+
     put "  - Input flags changed from `with` to `--`"
+
+
+
+
+
+
+
     put ""
+
+
+
+
+
+
+
     put "Migration Guide: https://poly-lang.org/migration/" + version
+
+
+
+
+
+
+
     put ""
+
+
+
+
+
+
+
     put "Timeline:"
+
+
+
+
+
+
+
     put "  - Deprecation: Version 1.5"
+
+
+
+
+
+
+
     put "  - Removal: Version 2.0"
+
+
+
+
+
+
+
     put ""
+
+
+
+
+
+
+
     put "Tools Available:"
+
+
+
+
+
+
+
     put "  - `poly migrate` - Automated migration tool"
+
+
+
+
+
+
+
     put "  - `poly transform` - Syntax transformer"
+
+
+
+
+
+
+
     put "  - `poly test-migration` - Migration tester"
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Migration Checklist
 
@@ -472,14 +1765,98 @@ fn display_checklist()
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Summary
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 1. **Deprecation Strategy**: Use phased deprecation with clear timelines
+
+
+
+
+
+
+
 2. **Automated Tools**: Provide syntax transformers and migration scripts
+
+
+
+
+
+
+
 3. **Backward Compatibility**: Support compatibility mode during transition
+
+
+
+
+
+
+
 4. **Testing**: Test migration correctness and performance
+
+
+
+
+
+
+
 5. **Documentation**: Update all documentation and examples
+
+
+
+
+
+
+
 6. **Rollback**: Provide rollback strategy for failed migrations
+
+
+
+
+
+
+
 7. **Communication**: Announce changes clearly and provide migration guides

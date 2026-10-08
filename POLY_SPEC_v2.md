@@ -6,14 +6,18 @@
 
 ## 1. Philosophy
 
-Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with an assembly-inspired syntax. For everything else — generics, async, closures, traits, pattern matching — users provide definitions in foreign language blocks (`#rust`, `#c`, `#asm`, `#js`).
+Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with
+an
+assembly-inspired syntax. For everything else — generics, async, closures, traits, pattern matching — users provide definitions
+in foreign language blocks (`#rust`, `#c`, `#asm`, `#js`).
 
 **Core principles:**
 1. Poly provides the orchestration. Foreign blocks provide the definitions.
 2. One Poly source file produces one complete source file in the target language.
 3. No runtime. Poly adds zero overhead — it's just syntax sugar.
 4. Explicit is better than implicit.
-5. Language-agnostic: Poly currently targets Rust, C, assembly, and JavaScript; other backends (such as C++) are reserved for future design.
+5. Language-agnostic: Poly currently targets Rust, C, assembly, and JavaScript; other backends (such as C++) are reserved for
+future design.
 
 ---
 
@@ -48,27 +52,188 @@ fn main()
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 The same model covers `--target c` with `#c` blocks and `extern c fn`
+
+
+
+
+
+
+
 declarations, and `--target asm` with `#asm` blocks and `extern asm fn`
+
+
+
+
+
+
+
 declarations.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Foreign Blocks
 
-Delimited by `#<lang>` and `#end<lang>`. The content contains target-language definitions at file scope — for example functions, structs, enums, constants, type aliases, impl blocks, traits, use statements, and required helper definitions. Poly does not parse or rewrite the content; the selected native compiler validates it.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Delimited by `#<lang>` and `#end<lang>`. The content contains target-language definitions at file scope — for example
+function \
+s, \
+structs, enums, constants, type aliases, impl blocks, traits, use statements, and required helper definitions. Poly does not  \
+parse or rewrite the content; the selected native compiler validates it.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ~~~poly fragment
+
+
+
+
+
+
+
 #rust
+
+
+
+
+
+
+
 fn complex_function(x: &str) -> Result<Vec<u8>, io::Error> {
+
+
+
+
+
+
+
     // This is a function definition — Poly can call it
+
+
+
+
+
+
+
     todo!()
+
+
+
+
+
+
+
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 struct Config {
+
+
+
+
+
+
+
     width: u32,
+
+
+
+
+
+
+
     height: u32,
+
+
+
+
+
+
+
 }
+
+
+
+
+
+
+
 #endrust
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 **Rules for foreign blocks:**
 - Must appear at the top level (not inside Poly function bodies)
@@ -77,7 +242,9 @@ struct Config {
 - No executable statements — only declarations
 - Multiple blocks for the selected language are allowed; they are emitted in order.
 - `#rust` is selected by `--target rust`; `#c` is selected by `--target c`.
-- `#cpp` is reserved for a future backend; any source containing a `#cpp` block is rejected with an explicit unsupported-backend diagnostic.
+- `#cpp` is reserved for a future backend; any source containing a `#cpp` block is rejected with an explicit
+unsupported-backend
+diagnostic.
 - `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, and
   `extern js fn ...` declarations are optional top-level interface contracts
   for foreign calls. They are checked by Poly and are not emitted.
@@ -130,22 +297,144 @@ dep minifb = "0.27"
 dep alsa = "0.9"
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - `poly --project <dir> <file.poly>` writes the declared dependencies into
+
+
+
+
+
+
+
   the generated `Cargo.toml`.
+
+
+
+
+
+
+
 - `--check` (and a default Rust build) resolves `dep` crates through Cargo
+
+
+
+
+
+
+
   in a temporary project, so programs with external crates validate
+
+
+
+
+
+
+
   standalone.
+
+
+
+
+
+
+
 - Dependency declarations carry no runtime semantics; the C, asm, and JS
+
+
+
+
+
+
+
   backends ignore them.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Generated-project marker
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `--project` writes a `.poly-generated` marker file into the output
+
+
+
+
+
+
+
 directory. Its single record names the owning source:
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~text
+
+
+
+
+
+
+
 source=../../tetris.poly
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 The path is recorded **relative to the generated project** whenever a
 stable relative path exists, so committed output is byte-identical across
@@ -163,22 +452,132 @@ poly --target rust program.poly
 poly --target c program.poly
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Explicit Foreign Signatures
 
-Opaque foreign calls remain valid for compatibility, but an explicit signature can make Poly check the interface before invoking the native compiler:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Opaque foreign calls remain valid for compatibility, but an explicit signature can make Poly check the interface before  \
+invoking the native compiler:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ~~~poly fragment
+
+
+
+
+
+
+
 extern rust fn native_value(value: i32): i32
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #rust
+
+
+
+
+
+
+
 fn native_value(value: i32) -> i32 { value * 2 }
+
+
+
+
+
+
+
 #endrust
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 var result i32 := native_value(21)
+
+
+
+
+
+
+
 put result
+
+
+
+
+
+
+
 ~~~
 
-Use `extern c fn` with `#c` blocks in the same way. The target must match the selected backend, declarations must be top-level, and the native compiler remains authoritative for the foreign definition and ABI.
+
+
+
+Use `extern c fn` with `#c` blocks in the same way. The target must match the selected backend, declarations must be top-level,
+and the native compiler remains authoritative for the foreign definition and ABI.
 
 
 `--check` invokes the selected native compiler. The C preview supports scalar
@@ -202,16 +601,96 @@ var name Type := value     # mutable, with type
 var name := value          # mutable, type inferred
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 The initializer may be any expression, including a `match` expression,
+
+
+
+
+
+
+
 which is a concise way to derive an initial value from a scrutinee:
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 var frames i32 := match level
+
+
+
+
+
+
+
     0, 48
+
+
+
+
+
+
+
     1, 43
+
+
+
+
+
+
+
     _, 2
+
+
+
+
+
+
+
 end match
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 Every target supports `match` in value position (C via a ternary chain,
 JS via an IIFE `switch`, asm via jump chains). Literal and wildcard arms
@@ -225,11 +704,56 @@ target's panic). Guarded and block arms remain statement-form features.
 const NAME := value        # immutable, module-scope
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Immutable Binding
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 let name: Type := value   # immutable, block-scope; the type is optional
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Assignment
 
@@ -238,12 +762,64 @@ name := value              # explicit assignment
 name = other               # equality comparison, not assignment
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Mutation
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 name := name + value       # explicit re-assignment
+
+
+
+
+
+
+
 vector.pop()               # remove and yield the last element
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 Compound assignment operators (`+=`, `-=`) and the assembly-style `add` /
 `sub` / `inc` / `dec` statements are retired syntax: the parser rejects them
@@ -254,24 +830,42 @@ and suggests the explicit `name := name + value` form.
 ## 4. Types
 
 | Poly Type | Rust Equivalent | Description |
+
 |-----------|----------------|-------------|
+
 | `bool` | `bool` | Boolean |
+
 | `i8` / `u8` | `i8` / `u8` | 8-bit integer |
+
 | `i16` / `u16` | `i16` / `u16` | 16-bit integer |
+
 | `i32` / `u32` | `i32` / `u32` | 32-bit integer |
+
 | `i64` / `u64` | `i64` / `u64` | 64-bit integer |
+
 | `i128` / `u128` | `i128` / `u128` | 128-bit integer (Rust target only) |
+
 | `f32` | `f32` | 32-bit float |
+
 | `f64` | `f64` | 64-bit float |
+
 | `isize` / `usize` | `isize` / `usize` | Platform integer |
+
 | `char` / `uchar` | `char` | Unicode scalar value (4 bytes) |
+
 | `string` | `String` | Byte-oriented string (grows by appending) |
+
 | `ustring` | `String` | UTF-8 Unicode string |
+
 | `byte` | `u8` | Raw byte |
+
 | `bytes` | `Vec<u8>` | Byte buffer |
+
 | `ptr T` | `*const T` | Raw pointer |
 
-**Complex types** (generics, enums, traits) should be written in `#rust` blocks using native Rust syntax. Tuples (`(i32, i32)`, indexed as `pair.0`) are part of the Poly surface.
+
+**Complex types** (generics, enums, traits) should be written in `#rust` blocks using native Rust syntax. Tuples (`(i32, i32)`,
+indexed as `pair.0`) are part of the Poly surface.
 
 ---
 
@@ -285,12 +879,64 @@ put variable
 put "x = " + x + ", y = " + y
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### File Output
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 put expr to "file.txt"             # write (overwrite)
+
+
+
+
+
+
+
 put expr to "file.txt" -append     # append
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Stderr
 
@@ -300,12 +946,64 @@ warn "deprecated"                  # [WARN] prefix
 info "debug info"                  # [INFO] prefix
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### String Interpolation
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 var name := "Alice"
+
+
+
+
+
+
+
 put "Hello, {name}!"
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
@@ -318,14 +1016,80 @@ var x := get from "file.txt"        # read from file
 var x := get from "file.txt" --bytes 42  # read N bytes
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Flags
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 get --timeout 3000                  # timeout in ms
+
+
+
+
+
+
+
 get --default "fallback"            # default on empty
+
+
+
+
+
+
+
 get --mask "*"                      # hide input (passwords)
+
+
+
+
+
+
+
 get --until ","                     # read until delimiter
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Input Conversion
 
@@ -333,23 +1097,154 @@ get --until ","                     # read until delimiter
 var age i32 := get --as i32
 ~~~
 
-The parser retains `with validate`, `with complete`, and `with encoding` as compatibility forms, but they are not part of the maintained runnable v2 API.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+The parser retains `with validate`, `with complete`, and `with encoding` as compatibility forms, but they are not part of
+the  \
+maintained runnable v2 API.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ---
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 7. Control Flow
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### If/Else
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 if condition,
+
+
+
+
+
+
+
     # do something
+
+
+
+
+
+
+
 else if other_condition,
+
+
+
+
+
+
+
     # do other thing
+
+
+
+
+
+
+
 else,
+
+
+
+
+
+
+
     # default
+
+
+
+
+
+
+
 end if
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 All `else if` arms and the final `else` share one `end if`, which the
 innermost arm owns. An `if` statement nested directly inside an `else`
@@ -366,13 +1261,72 @@ while condition
 end while
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Loop (Infinite)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 loop
+
+
+
+
+
+
+
     # runs forever until break
+
+
+
+
+
+
+
 end loop
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Loop Ranges
 
@@ -394,38 +1348,272 @@ loop i 1..3, 7, 19..20
 end loop
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Range endpoints are inclusive. The range start may be any expression — a
+
+
+
+
+
+
+
 literal, a constant, an index, or a call (`loop i BUF..TOTAL - 1`). The parser
+
+
+
+
+
+
+
 distinguishes a range loop from an infinite loop whose first statement begins
+
+
+
+
+
+
+
 with an identifier: a body statement like `acc := acc + 1` or `tick()` keeps
+
+
+
+
+
+
+
 the loop infinite.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 **Step semantics** (identical on every target — rust, c, asm, js):
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - A **literal** step's sign is known at compile time: a negative step iterates
+
+
+
+
+
+
+
   downward from the start bound, a positive step upward. The direction is fixed
+
+
+
+
+
+
+
   even when the bounds would imply the opposite (`10..1 step 2` visits nothing).
+
+
+
+
+
+
+
   A literal zero step is rejected at compile time (`loop range step must not be
+
+
+
+
+
+
+
   zero`).
+
+
+
+
+
+
+
 - A **non-literal** step (a variable or expression) picks its direction from its
+
+
+
+
+
+
+
   runtime value each iteration: a positive step compares against the upper
+
+
+
+
+
+
+
   bound, a negative step against the lower bound, and a zero step yields zero
+
+
+
+
+
+
+
   iterations (the loop terminates rather than hanging).
+
+
+
+
+
+
+
 - In all cases an iteration runs only while the step has not carried the loop
+
+
+
+
+
+
+
   variable past the terminating bound.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 const TOTAL := 5
+
+
+
+
+
+
+
 const BUF := 2
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 loop i BUF..TOTAL - 1      # start bound may be any expression
+
+
+
+
+
+
+
     put i
+
+
+
+
+
+
+
 end loop
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 loop 0..TOTAL - 1          # var-less form: the counter is discarded
+
+
+
+
+
+
+
     put "x"
+
+
+
+
+
+
+
 end loop
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Collection Iteration
 
@@ -435,19 +1623,120 @@ loop item in collection
 end loop
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## 8. Functions
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly
+
+
+
+
+
+
+
 fn add(a: i32, b: i32): i32
+
+
+
+
+
+
+
     return a + b
+
+
+
+
+
+
+
 end fn
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 fn greet(name: ustring)
+
+
+
+
+
+
+
     put "Hello, " + name + "!"
+
+
+
+
+
+
+
 end fn
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 **Complex functions** (generics, closures, async, trait bounds) go in `#rust` blocks:
 
@@ -463,18 +1752,112 @@ async fn fetch(url: &str) -> Result<String, reqwest::Error> {
 #endrust
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## 9. Structs
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Simple structs with plain fields:
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly
+
+
+
+
+
+
+
 struct Point
+
+
+
+
+
+
+
     x: f32
+
+
+
+
+
+
+
     y: f32
+
+
+
+
+
+
+
 end struct
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 Poly also supports `impl` blocks with methods that take and return `self`:
 
@@ -495,106 +1878,816 @@ c := c.bump()
 put c.n    # 1
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Poly moves values: calling a method consumes the receiver, so methods follow
+
+
+
+
+
+
+
 the take-and-return pattern (`s := s.bump()`) and callers must reassign. Two
+
+
+
+
+
+
+
 corollaries worth knowing:
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - `self.method(self.field, ...)` moves `self` before the arguments evaluate.
+
+
+
+
+
+
+
   Copy fields to locals first, then call.
+
+
+
+
+
+
+
 - A method that only reads state cannot be called repeatedly for its return
+
+
+
+
+
+
+
   value (the receiver is consumed). Stash the answer in a Copy-typed field
+
+
+
+
+
+
+
   instead and read the field.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 **Complex structs (methods, default values, generics)** may also go in
+
+
+
+
+
+
+
 `#rust` blocks when the Poly surface is not enough.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Reserved words
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `spawn` and `step` are reserved words and cannot be used as identifiers or
+
+
+
+
+
+
+
 method names (`spawn expr` launches `expr` as an async task — a Tokio task on
+
+
+
+
+
+
+
 the Rust target — and `step` introduces the loop-range step clause). Rename
+
+
+
+
+
+
+
 such methods (for example `spawn_piece`). `validate` is likewise reserved for
+
+
+
+
+
+
+
 the parser-only `with validate` compatibility clause and cannot name
+
+
+
+
+
+
+
 variables, functions, or methods.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## 10. Removed Assembly-Style Operators
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 The assembly-style mutation statements and compound assignment operators from
+
+
+
+
+
+
+
 earlier versions are retired. The parser rejects them with a migration hint
+
+
+
+
+
+
+
 pointing at the explicit form:
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 | Retired syntax | Replacement |
+
+
+
+
+
+
+
 |------|-------------|
+
+
+
+
+
+
+
 | `add x` | `x := x + 1` |
+
+
+
+
+
+
+
 | `sub x` | `x := x - 1` |
+
+
+
+
+
+
+
 | `inc x` | `x := x + 1` |
+
+
+
+
+
+
+
 | `dec x` | `x := x - 1` |
+
+
+
+
+
+
+
 | `x += n` | `x := x + n` |
+
+
+
+
+
+
+
 | `x -= n` | `x := x - n` |
+
+
+
+
+
+
+
 | `a ^ b` | `a xor b` (symbol spelling retired) |
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Poly has **no exponentiation operator**. `^` is *not* power — it is the
+
+
+
+
+
+
+
 retired spelling of bitwise xor and the parser rejects it. For exponentiation,
+
+
+
+
+
+
+
 compute it in a `#rust` helper (e.g. `i32::pow`) or with repeated
+
+
+
+
+
+
+
 multiplication in a loop.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Bitwise
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 | Poly | Rust |
+
+
+
+
+
+
+
 |------|------|
+
+
+
+
+
+
+
 | `a bitand b` | `a & b` |
+
+
+
+
+
+
+
 | `a bitor b` | `a \| b` |
+
+
+
+
+
+
+
 | `a xor b` | `a ^ b` (write `xor` in Poly; a literal `^` is rejected) |
+
+
+
+
+
+
+
 | `bitnot a` | `!a` |
+
+
+
+
+
+
+
 | `a shift left n` (or `a << n`) | `a << n` |
+
+
+
+
+
+
+
 | `a shift right n` (or `a >> n`) | `a >> n` |
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## 11. Literals
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 | Poly | Description |
+
+
+
+
+
+
+
 |------|-------------|
+
+
+
+
+
+
+
 | `42` | Decimal integer |
+
+
+
+
+
+
+
 | `0xFF` | Hexadecimal |
+
+
+
+
+
+
+
 | `0b1010` | Binary |
+
+
+
+
+
+
+
 | `0o77` | Octal |
+
+
+
+
+
+
+
 | `3.14` | Float |
+
+
+
+
+
+
+
 | `"hello"` | ASCII string |
+
+
+
+
+
+
+
 | `unicode "hello"` | Unicode string |
+
+
+
+
+
+
+
 | `true` / `false` | Boolean |
+
+
+
+
+
+
+
 | `[0x48, 0x65]` | Byte array |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ---
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 12. Operators
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Arithmetic
+
+
+
+
+
+
+
 `+` `-` `*` `/` `mod`
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Comparison
+
+
+
+
+
+
+
 `=` `!=` `<` `>` `<=` `>=`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Strict same-type checking
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Equality (`=` / `!=`) and ordering comparisons are strictly same-type: the
+
+
+
+
+
+
+
 checker rejects mixed integer or numeric comparisons (`u64 = i64`, `f64 =
+
+
+
+
+
+
+
 i64`) with `equality comparison: expected <T>, got <U>`. Arithmetic is the
+
+
+
+
+
+
+
 same: mixing integer and float operands (`1 + 0.5`, `count + total_f64`) is
+
+
+
+
+
+
+
 rejected with a diagnostic telling you to cast one operand with `as`. This
+
+
+
+
+
+
+
 keeps every backend honest — without the rule the rust target rejected the
+
+
+
+
+
+
+
 program outright while c and js silently accepted it with different results.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 const FONT_A := 240            # untyped consts infer i32
+
+
+
+
+
+
+
 var bits u64 := FONT_A as u64  # assignment is also strictly typed
+
+
+
+
+
+
+
 var row i64 := 0
+
+
+
+
+
+
+
 if bits as i64 = row      # explicit cast required for mixed types
+
+
+
+
+
+
+
     put "hit"
+
+
+
+
+
+
+
 end if
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Logical
 `and` `or` `not`
@@ -623,28 +2716,153 @@ migration hint.
 # This is a Poly comment (runs to end of line)
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~rust
+
+
+
+
+
+
+
 #rust
+
+
+
+
+
+
+
 // This is a Rust comment inside a Rust block
+
+
+
+
+
+
+
 /* block comment */
+
+
+
+
+
+
+
 #endrust
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
 ## 14. Transpilation Model
 
 ~~~
+
+
+
+
+
+
+
 source.poly
+
+
+
+
+
+
+
     │
+
+
+
+
+
+
+
     ├── #rust blocks ──→ Declarations emitted at module scope
+
+
+
+
+
+
+
     │
+
+
+
+
+
+
+
     ├── Poly sections ──→ Lexer → Parser → AST → Codegen → fn main() { ... }
+
+
+
+
+
+
+
     │
+
+
+
+
+
+
+
     └── output.rs
+
+
+
+
+
+
+
             │
+
+
+
+
+
+
+
             └──→ rustc (or cargo build)
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ### Example Transpilation
 
@@ -666,60 +2884,293 @@ fn main()
 end fn
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 **Output** (verbatim `--emit-rust`; the foreign block lands after
+
+
+
+
+
+
+
 `fn main`, and `put` of a concatenated string lowers to `format!`):
+
+
+
+
+
+
+
 ~~~rust
+
+
+
+
+
+
+
 // Generated from Poly source code
+
+
+
+
+
+
+
 #![allow(
+
+
+
+
+
+
+
     unused_variables,
+
+
+
+
+
+
+
     unused_mut,
+
+
+
+
+
+
+
     unused_imports,
+
+
+
+
+
+
+
     dead_code,
+
+
+
+
+
+
+
     unused_parens,
+
+
+
+
+
+
+
     unreachable_patterns
+
+
+
+
+
+
+
 )]
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 fn main() {
+
+
+
+
+
+
+
     let mut count: i32 = 0;
+
+
+
+
+
+
+
     for i in 0..=5 {
+
+
+
+
+
+
+
         count = (count).wrapping_add(1_i32);
+
+
+
+
+
+
+
     }
+
+
+
+
+
+
+
     println!("{}", format!("{}{}", String::from("Count: "), count));
+
+
+
+
+
+
+
     println!(
+
+
+
+
+
+
+
         "{}",
+
+
+
+
+
+
+
         format!("{}{}", String::from("Rust says: "), rust_multiply(count, 2))
+
+
+
+
+
+
+
     );
+
+
+
+
+
+
+
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 fn rust_multiply(x: i32, y: i32) -> i32 {
+
+
+
+
+
+
+
     x * y
+
+
+
+
+
+
+
 }
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ---
 
 ## 15. What Belongs Where
 
 | Feature | Poly | `#rust` block (opaque target-language definitions) |
+
 |---------|------|---------------|
+
 | Variables | ✅ | |
+
 | Constants | ✅ | |
+
 | `put` / `get` I/O | ✅ | |
+
 | File I/O (`to` / `from`) | ✅ | |
+
 | `error` / `warn` / `info` | ✅ | |
+
 | Explicit mutation (`x := x + 1`) | ✅ | |
+
 | `if` / `while` / `loop` | ✅ | |
+
 | Tuples (`pair.0`) | ✅ | |
+
 | Simple `fn` (no generics) | ✅ | |
+
 | Simple `struct` (no methods) | ✅ | |
+
 | `impl` methods (take-and-return `self`) | ✅ | |
+
 | Primitives + strings | ✅ | |
+
 | | | `#rust`/`#c` fn (with generics, async, closures) |
+
 | | | `#rust`/`#c` struct (with methods, default values) |
+
 | | | enum (with data, methods) |
+
 | | | trait + impl |
+
 | | | use / mod |
+
 | | | const / type alias |
+
 
 **Rule of thumb:** Poly orchestrates. Foreign blocks define. No executable code in foreign blocks.
 

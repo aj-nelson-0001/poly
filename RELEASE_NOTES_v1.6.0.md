@@ -6,7 +6,7 @@ We're excited to announce **Poly v1.6.0** with a major syntax improvement: **new
 
 ### New If Syntax
 
-**Before:** `if x > 0 then ... end if`  
+**Before:** `if x > 0 then ... end if`\
 **After:** `if x > 0, ... end if`
 
 This change makes Poly code more concise and familiar to developers from other languages.
@@ -46,29 +46,200 @@ else,
 end if
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Transpilation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 The new syntax transpiles to idiomatic Rust:
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ~~~rust
+
+
+
+
+
+
+
 // Poly
+
+
+
+
+
+
+
 if x > 0,
+
+
+
+
+
+
+
     put x
+
+
+
+
+
+
+
 else if x < 0,
+
+
+
+
+
+
+
     put "negative"
+
+
+
+
+
+
+
 else,
+
+
+
+
+
+
+
     put "zero"
+
+
+
+
+
+
+
 end if
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // Transpiles to:
+
+
+
+
+
+
+
 if x > 0 {
+
+
+
+
+
+
+
     println!("{}", x);
+
+
+
+
+
+
+
 } else if x < 0 {
+
+
+
+
+
+
+
     println!("{}", "negative");
+
+
+
+
+
+
+
 } else {
+
+
+
+
+
+
+
     println!("{}", "zero");
+
+
+
+
+
+
+
 }
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ## 📦 What's Included
 
@@ -110,16 +281,96 @@ else
 end if
 ~~~
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 **After:**
+
+
+
+
+
+
+
 ~~~poly fragment
+
+
+
+
+
+
+
 if temperature > 100,
+
+
+
+
+
+
+
     error "Too hot!"
+
+
+
+
+
+
+
 else if temperature < 0,
+
+
+
+
+
+
+
     error "Too cold!"
+
+
+
+
+
+
+
 else,
+
+
+
+
+
+
+
     put "Temperature is OK"
+
+
+
+
+
+
+
 end if
+
+
+
+
+
+
+
 ~~~
+
+
+
 
 ## 📊 Test Results
 
@@ -146,4 +397,5 @@ Thanks to the community for feedback on the syntax design!
 
 ---
 
-**Download:** [Source code (zip)](https://github.com/aj-nelson-0001/poly/archive/refs/tags/v1.6.0.zip) | [Source code (tar.gz)](https://github.com/aj-nelson-0001/poly/archive/refs/tags/v1.6.0.tar.gz)
+**Download:** [Source code (zip)](https://github.com/aj-nelson-0001/poly/archive/refs/tags/v1.6.0.zip) | [Source code
+(tar.gz)](https://github.com/aj-nelson-0001/poly/archive/refs/tags/v1.6.0.tar.gz)

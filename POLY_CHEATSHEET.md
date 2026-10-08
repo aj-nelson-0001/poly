@@ -25,102 +25,12 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Declarations and assignments use `:=`. Equality uses `=`. The legacy `==` spelling is rejected. `put` always writes a
 newline; \
   \
 there is no `-n` flag.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Output
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -268,10 +178,6 @@ end fn
 
 ~~~
 
-
-
-
-
 `error`, `warn`, and `info` write to stderr with `[ERROR]`, `[WARN]`, and `[INFO]` prefixes. File redirects are implemented by
 the Rust backend; the C backend reports an actionable unsupported-feature error.
 
@@ -289,36 +195,6 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `get` is a Rust-backend feature. `--timeout`, `--default`, `--mask`, `--until`, `--bytes`, and `--as` are parsed as
 structured \
   \
@@ -327,67 +203,7 @@ flags; the generated Rust runtime implements the supported forms. The C backend 
 a  \
 line of stdin through an emitted runtime helper) and rejects flags, file sources, and `with` clauses.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Loops
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -711,10 +527,6 @@ end fn
 
 ~~~
 
-
-
-
-
 Range endpoints are inclusive. Collection loops borrow the collection. The C backend supports one numeric range per loop and
 scalar array iteration; complex collection types may require a `#c` helper.
 
@@ -732,99 +544,9 @@ s := s.bump()
 s := s.reset(10)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Inside a method, copy `self` fields to locals before passing them to another
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 method of the same value — `self.shift(self.x)` moves `self` before the
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 argument is evaluated:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -924,10 +646,6 @@ end fn
 
 ~~~
 
-
-
-
-
 Comparisons are strictly same-type: `u64 = i64` or `f64 = i64` is a type
 error. Cast explicitly with `as` (`bits as i64 = row`), and remember untyped
 consts infer `i32` — annotate or cast when assigning into a differently typed
@@ -950,36 +668,6 @@ fn main()
     put result
 end fn
 ~~~
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -1127,10 +815,6 @@ end fn
 
 ~~~
 
-
-
-
-
 Foreign blocks are emitted to the selected target at file scope. The target compiler validates their contents. `#cpp` is
 rejected explicitly; there is no C++ backend yet.
 
@@ -1141,227 +825,17 @@ dep minifb = "0.27"   # program-scope Cargo crates for the Rust target
 dep alsa = "0.9"
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Program-scope `dep name = "version"` declarations name the Cargo crates the
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 foreign blocks use. `--project` emits them into `Cargo.toml`; `--check`
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 resolves them through Cargo so the program validates standalone. They are
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ignored by the C, asm, and JS backends.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `--project` also writes a `.poly-generated` marker recording the owning
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 source path relative to the generated project (e.g. `source=../../tetris.poly`);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 a default build only refreshes directories whose marker resolves to the
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 source being built.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Strings: Concatenation, Length, Interpolation
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -1669,10 +1143,6 @@ end fn
 
 ~~~
 
-
-
-
-
 Rust lowers `s := s + x` in loops to in-place `push_str` (amortized O(1)).
 C materializes concat with an emitted `poly_concat` helper and `.len()` via
 `strlen`; asm uses a static bump arena (`_str_arena`) for concat results.
@@ -1690,185 +1160,20 @@ poly --target asm --emit-asm program.poly  # print the generated x86-64 assembly
 poly --target js --emit-js program.poly    # print the generated JavaScript
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Rust is the default target. The C target is a C11 orchestration subset and supports scalar declarations, calls to foreign C  \
 helpers, numeric control flow, plain stdin `get` with an optional prompt, tuples, struct literals, simple `match` patterns,
 an \
 d  \
 stdout/stderr output. Unsupported C features fail with a diagnostic instead of being silently rewritten.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Common Diagnostics
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Use `:=` to initialize or assign; use `=` to compare.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Close blocks with their matching form, such as `end if`, `end loop`, or `end fn`.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Put foreign blocks at program scope.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Depth-limit messages (`Maximum nested ... depth`) mean generated-style nesting; flatten the structure instead of
 re-chaining \
   \
 `else if` arms.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Use `put value to "file" -append` for Rust file append output.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Use a target-language helper in `#rust` or `#c` when the Poly subset does not express the operation.

@@ -14,43 +14,8 @@ Format your generated Rust code with rustfmt automatically:
 poly --format examples/prime_numbers.poly
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### `--diff` Flag
-
-
-
-
-
-
-
 See the difference between unformatted and formatted code:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -70,9 +35,6 @@ poly --diff examples/prime_numbers.poly
 
 ~~~
 
-
-
-
 ### `--watch` Flag
 Watch a file for changes and re-transpile automatically:
 
@@ -80,43 +42,8 @@ Watch a file for changes and re-transpile automatically:
 poly --watch examples/prime_numbers.poly
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### `--check` Flag
-
-
-
-
-
-
-
 Validate your code and verify that the generated Rust compiles:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -136,26 +63,17 @@ poly --check examples/prime_numbers.poly
 
 ~~~
 
-
-
-
 ## Transpiler Improvements
 
 ### Type Mapping
 Poly types now map correctly to Rust types:
 
 | Poly Type | Rust Type |
-
 |-----------|-----------|
-
 | `ustring` / `string` | `String` |
-
 | `uchar` | `char` |
-
 | `byte` | `u8` |
-
 | `bytes` | `Vec<u8>` |
-
 
 ### File Operations
 File write and append operations now generate correct Rust code:
@@ -170,35 +88,7 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Generates:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~rust
 
@@ -231,9 +121,6 @@ error: {e}"); std::process::exit(1) }); }
 
 ~~~
 
-
-
-
 ### Match Expressions
 Fixed codegen for match arms (removed extra semicolons):
 
@@ -244,35 +131,7 @@ match x
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Now generates valid Rust:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~rust
 
@@ -316,9 +175,6 @@ match x {
 
 ~~~
 
-
-
-
 ### Loop Variables
 Loop variables now work correctly for collection iteration:
 
@@ -328,35 +184,7 @@ loop record in records
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Generates:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~rust
 
@@ -391,9 +219,6 @@ for record in records {
 
 
 ~~~
-
-
-
 
 ## New Examples
 
@@ -443,66 +268,10 @@ cargo build --release
 ../target/release/poly --check ../examples/prime_numbers.poly
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Feedback
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 We'd love to hear your feedback! Open an issue on GitHub or start a discussion.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 *Poly is a minimalist, assembly-inspired systems programming language that transpiles to safe, idiomatic Rust.*

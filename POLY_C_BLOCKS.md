@@ -23,35 +23,7 @@ var answer i32 := double_value(21)
 put answer
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Select the backend explicitly when a file contains multiple foreign blocks:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -95,9 +67,6 @@ poly --target c --project build-dir program.poly
 
 ~~~
 
-
-
-
 Only `#c` blocks are emitted for the C target. `#rust` blocks are ignored by C code generation. `extern c fn ...` declarations
 are checker-only interface contracts and are not emitted. `#cpp` is rejected explicitly because no C++ backend exists.
 
@@ -130,27 +99,16 @@ use the Rust target instead.
 ## Type Mapping
 
 | Poly | C11 |
-
 |---|---|
-
 | `bool` | `bool` |
-
 | `i8`/`u8` | `int8_t`/`uint8_t` |
-
 | `i16`/`u16` | `int16_t`/`uint16_t` |
-
 | `i32`/`u32` | `int32_t`/`uint32_t` |
-
 | `i64`/`u64` | `int64_t`/`uint64_t` |
-
 | `f32`/`f64` | `float`/`double` |
-
 | `char`/`uchar` | `char` |
-
 | `string`/`ustring` | `const char *` |
-
 | `usize` | `size_t` |
-
 
 The mapping is intentionally shallow. Poly does not add ownership, bounds checking, allocation, or Unicode normalization to C
 values. The C program is responsible for the lifetime and encoding rules of foreign data.

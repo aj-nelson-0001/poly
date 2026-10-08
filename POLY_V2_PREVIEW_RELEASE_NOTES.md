@@ -184,19 +184,12 @@ For the 2.0.0-preview.1 highlights, see [CHANGELOG.md](CHANGELOG.md).
 ## Target Contract
 
 | Target | Use | Verification |
-
 |---|---|---|
-
 | Rust | Default target and complete v2 baseline | `rustc` or generated Cargo project |
-
 | C | C11 orchestration subset | `POLY_CC` C compiler |
-
 | Asm | Linux x86-64 assembly subset | GNU assembler and linker (Linux CI) |
-
 | JS | ES2020 orchestration subset, no runtime dependencies | `node --check` plus execution (Linux CI) |
-
 | C++ | Reserved only | Explicitly rejected; no backend exists |
-
 
 For the complete feature boundary, see [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md). For foreign block syntax and C
 type mappings, see [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md); for the JS backend, see [POLY_JS_BLOCKS.md](POLY_JS_BLOCKS.md).
@@ -226,51 +219,9 @@ python3 scripts/check_markdown.py
 python3 scripts/check_poly_examples.py --poly-bin compiler/target/release/poly
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The full-repository documentation audit covers 587 example blocks with 0
-
-
-
-
-
-
-
 unmarked failures; the Tetris example regenerates, builds, and passes its
-
-
-
-
-
-
-
 headless self-test with the release compiler.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Additional target checks passed for the Rust examples, the mixed-target fixture, the C fixture, native C execution, explicit
 C \
@@ -279,162 +230,29 @@ foreign signatures, and unsupported C diagnostics. The asm and JS fixtures were 
 outputs  \
 verified on Linux.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The committed CI workflow runs the same Rust/C test path on `ubuntu-latest`, `macos-latest`, and `windows-latest`.  \
 Hosted-runner results are release evidence that must be recorded after the workflow executes; they are not claimed by this  \
 local verification.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Known Preview Limitations
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - The C backend is not a general Poly-to-C translator. Use `#c` helpers or the Rust target for unsupported constructs.
-
-
-
-
-
-
-
 - Foreign function ABI, pointer, ownership, lifetime, and target-specific type correctness remain the responsibility of the  \
 native compiler.
-
-
-
-
-
-
-
 - `#cpp` has no implementation.
-
-
-
-
-
-
-
 - The playground WASM artifact is reproducible locally under the repository-pinned Rust toolchain. Hosted CI builds and  \
 validates a non-empty artifact in its canonical Linux environment; byte identity is not expected across different build  \
 environments.
-
-
-
-
-
-
-
 - Hosted cross-platform CI evidence is required before tagging or publishing the preview. A final clean-checkout review
 should \
   \
 also be completed before tagging.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Release References
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - [Poly v2 documentation index](POLY_DOCUMENTATION_INDEX.md)
-
-
-
-
-
-
-
 - [Poly v2 specification](POLY_SPEC_v2.md)
-
-
-
-
-
-
-
 - [Poly v2 support matrix](POLY_V2_SUPPORT_MATRIX.md)
-
-
-
-
-
-
-
 - [C11 backend guide](POLY_C_BLOCKS.md)
-
-
-
-
-
-
-
 - [Preview release checklist](POLY_PREVIEW_RELEASE_CHECKLIST.md)
-
-
-
-
-
-
-
 - [v2 audit](POLY_V2_AUDIT.md)

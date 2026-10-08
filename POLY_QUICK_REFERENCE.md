@@ -21,36 +21,6 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Use `:=` for initialization and assignment. Use `=` for equality. `==` is rejected. Logical, bitwise, and remainder
 operators  \
 are keyword-spelled: `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, and `shift left` / `shift right` (`<<`
@@ -62,67 +32,7 @@ operations  \
 the checker rejects them on `bool` operands). The retired symbol spellings `&&`, `||`, `!`, `^`, `%`, `&`, `|`, `~` are  \
 rejected with migration diagnostics. `var` writes an optional type without a colon; `let` type annotations use a colon.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Output
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -270,10 +180,6 @@ end fn
 
 ~~~
 
-
-
-
-
 `put` always adds a newline. Rust supports file redirects. C supports stdout/stderr output and rejects file redirects with a
 diagnostic.
 
@@ -291,101 +197,11 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `get` and its input flags are Rust-backend features. The C backend supports plain `get` — with an optional prompt — reading
 a  \
 line of stdin through an emitted runtime helper; file sources and input flags require a target-language helper in `#c`.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Control Flow
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -629,10 +445,6 @@ end fn
 
 ~~~
 
-
-
-
-
 Range endpoints are inclusive. `while condition ... end while`, `break`, and `continue` are also supported. The range start may
 be any expression (`loop i BUF..TOTAL - 1`); a var-less `loop 0..10` discards the counter. C currently supports one numeric
 range per loop and a limited scalar collection form.
@@ -643,99 +455,9 @@ range per loop and a limited scalar collection form.
 s := s.bump()          # methods take and return self; reassign the result
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `spawn` and `step` are reserved words and cannot name variables or methods.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Functions and Foreign Blocks
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -931,10 +653,6 @@ end fn
 
 ~~~
 
-
-
-
-
 ~~~poly
 #c
 int double_value(int value) { return value * 2; }
@@ -946,36 +664,6 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Foreign blocks must be at program scope and are emitted verbatim for the selected target. Add `extern rust fn ...` or
 `extern  \
 c  \
@@ -984,67 +672,7 @@ rejecte \
 d  \
 because no C++ backend exists.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## CLI
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -1192,10 +820,6 @@ poly --ast program.poly                    # show the parsed AST
 
 ~~~
 
-
-
-
-
 Rust is the default target. `--check` runs parsing, semantic checking, transpilation, and native compilation for the selected
 target.
 
@@ -1221,66 +845,6 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `#` starts a comment unless it names a foreign block: a line beginning `#rust`,
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `#c`, `#asm`, or `#js` opens a foreign block instead. Comments inside a foreign
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 block belong to the target language and are copied verbatim.

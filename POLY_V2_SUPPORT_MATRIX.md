@@ -8,49 +8,27 @@ This matrix is the implementation contract for the current Rust, C, assembly, an
 ## Target Summary
 
 | Area | Rust target | C target | Asm target | JS target | Notes |
-
-
 |---|---|---|---|---|---|
-
-
 | Default target | Yes | No | No | No | Rust is selected unless `--target c`, `--target asm`, or `--target js` is supplied. |
-
-
 | Native validation | `rustc` or temporary Cargo project | C11 compiler | GNU assembler + linker | `node --check` + execution |
-
-
 `POLY_CC` selects the C compiler for CLI checks/builds. The asm target emits and assembles x86-64 `.S` sources on Linux. The JS
 target emits ES2020 with no runtime dependencies. |
 | Foreign block | `#rust` | `#c` | `#asm` | `#js` | Blocks are top-level, opaque, and emitted verbatim. |
-
-
 | Explicit foreign signature | `extern rust fn ...` | `extern c fn ...` | `extern asm fn ...` | `extern js fn ...` | Signature
 is checked by Poly and never emitted. |
 | External dependencies |`dep name = "version"` | Rejected with a warning | Rejected with a warning | Rejected with a warning |
-
-
 `dep` declarations are Rust-target only: `--project` emits them into `Cargo.toml` and `--check` resolves them via a temporary
 Cargo project. The C, asm, and JS backends warn that `dep` statements are ignored. |
 | C++ | Rejected | Rejected | Rejected | Rejected | `#cpp` remains reserved; no C++ backend exists. |
 
-
-
 ## Language Surface
 
 | Construct | Rust | C | Asm | JS | Notes |
-
-
 |---|---:|---:|---:|---:|---|
-
-
 | Scalar declarations and assignment | Yes | Yes | Limited | Yes | Primitive values and inferred scalar declarations. |
-
-
 | Boolean rendering (`put`, `.to_string()`, concat) | Yes | Yes | Yes | Yes | All targets render `true`/`false` text (the C/asm
 1/0 output was normalized to the Rust reference behavior). C uses `poly_bool_str`; asm uses `_print_bool`/`_bool_to_string`. |
 | Constants and `let` | Yes | Yes | Limited | Yes | C uses native `const`/local declarations. |
-
-
 | Arithmetic, comparison, logical, bitwise operators | Yes | Yes | Limited | Yes | C uses C11-compatible scalar expressions;
 integer `/` truncates via `Math.trunc` in JS. Integer overflow is defined on every target: default-width (`i32`) arithmetic
 wraps two's-complement (rust emits `wrapping_*`, JS masks with `\| 0`, C and asm wrap naturally at 32 bits), and
@@ -64,36 +42,22 @@ lowers to concatenation on every target. Asm string method calls beyond `.len()`
 | `put`, `error`, `warn`, `info` |Yes | Yes | Limited | Yes | C supports scalar output and diagnostics; JS maps the diagnostics
 to `console` streams. |
 | File output redirects | Yes | No | No | No | C must call a `#c` helper. |
-
-
 | `get`, stdin, file input | Yes | Limited | No | No | C supports plain `get` (with optional prompt) via an emitted runtime
 helper; file input and input flags need a `#c` helper. JS rejects all stdin input as browser-hostile. |
 | Typed input flags |Yes | No | No | No | `--as`, `--default`, `--mask`, `--until`, `--timeout`, and `--bytes` are Rust runtime
 behavior. |
 | `if`/`else` | Yes | Yes | Limited | Yes | |
-
-
 | `while` | Yes | Yes | Limited | Yes | |
-
-
 | Infinite loops | Yes | Yes | Limited | Yes | |
-
-
 | Inclusive numeric loops | Yes | Yes | Limited | Yes | C currently supports one numeric range per loop. `step` is supported
 everywhere: literal steps fix the direction at compile time, and variable steps dispatch on the step's runtime sign (a zero
 step
 terminates) — identical iteration semantics on all four targets. |
 | Multi-range loops | Yes | No | No | No | C and JS reject multiple range parts. |
-
-
 | Collection loops | Yes | Limited | Limited | Yes | C only supports a shallow C-array form. Asm supports `for x in <vector>`
 and `for x in <string>`. JS lowers both `for x in` and `loop x in` to `for...of`. |
 | `break`/`continue` | Yes | Yes | Limited | Yes | |
-
-
 | Simple Poly functions | Yes | Yes | Limited | Yes | C functions cannot be async or generic. |
-
-
 | Structs | Yes | Plain only | Yes | Plain only | C rejects methods and generics; struct literals lower to C99 compound
 literals. Asm supports program-scope structs: field access, struct-literal variables, struct parameters (passed by reference),
 and struct-returning functions. JS supports plain structs as factory-style constructor functions; methods and generics are
@@ -102,11 +66,7 @@ rejected. |
 simple variants work in expressions and `match` patterns, payload-carrying variants are rejected. Asm supports unit variants in
 expressions and `match`; payload-carrying variants are rejected. |
 | Traits, impls, modules, aliases | Yes | No | No | No | Use a foreign helper or the Rust target. |
-
-
 | Generics | Yes | No | No | No | C rejects generic Poly declarations. |
-
-
 | Closures and higher-order operations | Yes | Limited | No | No | C compiles non-capturing closures (static function + typed
 pointer); capturing closures are rejected with guidance. |
 | Tuples | Yes | Yes | No | Yes | C tuples are anonymous structs with `_N` fields; `.N` index access, nesting, and match over
@@ -120,19 +80,11 @@ the Rust target's panic. JS lowers to an IIFE `switch` (unit-enum patterns subje
 unmatched scrutinee. Asm treats the last arm as always-matching. Block arms and guards are rejected in value position on
 C/JS/asm. |
 | `Option`/`Result` | Yes | No | No | No | |
-
-
 | Vectors | Yes | No | Limited | Limited | Asm vectors are static descriptor-backed data; `push`/`pop`/`len` switch to a
 growable in-place runtime (static bump arena). JS supports array literals and iteration. |
 | Async/await and task spawning | Yes | No | No | No | Rust uses Tokio where required. |
-
-
 | SQLite `db_execute` | Yes | No | No | No | Generated Rust projects add `rusqlite` automatically. |
-
-
 | Network helpers | Yes | No | No | No | Rust helpers use Tokio TCP. |
-
-
 | LSP and VS Code tooling | Target-neutral | — | — | — | The language server analyzes Poly syntax and checker behavior, not
 foreign bodies. |
 
@@ -151,67 +103,7 @@ int double_value(int value) { return value * 2; }
 var result i32 := double_value(21)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Use an explicit declaration when Poly-side argument and return checks are desirable:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -343,10 +235,6 @@ var result i32 := double_value(21)
 
 ~~~
 
-
-
-
-
 Rules:
 
 - `extern rust fn`, `extern c fn`, `extern asm fn`, and `extern js fn` declarations must be top-level.
@@ -380,36 +268,6 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace -- --test-threads=1
 cargo check --workspace --all-targets
 ~~~
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 The C target is additionally checked and executed on every supported CI operating system with `POLY_CC` set to the platform  \
 compiler. The asm target fixture (`tests/extern_asm_deref.poly`) is checked, compiled, executed, and its output verified on  \

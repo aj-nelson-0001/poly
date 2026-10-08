@@ -22,35 +22,7 @@ var answer i32 := double_value(21)
 put answer
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Select the backend explicitly when a file contains multiple foreign blocks:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -93,9 +65,6 @@ poly --target js --project build-dir program.poly
 
 
 ~~~
-
-
-
 
 Only `#js` blocks are emitted for the JS target. `#rust`, `#c`, and `#asm` blocks are ignored by JS code generation. `extern js
 fn ...` declarations are checker-only interface contracts and are not emitted. The generated code has no runtime dependencies
@@ -140,21 +109,13 @@ Unsupported constructs are rejected with guidance rather than miscompiled:
 ## Type Mapping
 
 | Poly | JavaScript |
-
 |---|---|
-
 | `bool` | `boolean` |
-
 | `i8`..`i64`/`u8`..`u64` | `number` (integer division via `Math.trunc`) |
-
 | `f32`/`f64` | `number` |
-
 | `string`/`ustring` | `string` |
-
 | `char` | single-character `string` |
-
 | `(T, U)` tuple | array with `.N` index access |
-
 
 ## Strict Mode
 

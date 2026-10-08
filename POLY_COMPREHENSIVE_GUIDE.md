@@ -46,35 +46,7 @@ the power of Rust's type system and performance.
 put "Hello, World!"
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Transpiles to:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~rust
 
@@ -110,9 +82,6 @@ fn main() {
 
 ~~~
 
-
-
-
 ---
 
 ## Getting Started
@@ -131,51 +100,9 @@ cargo build --release
 ./target/release/poly examples/hello.poly
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Your First Program
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Create a file called `hello.poly`:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -299,92 +226,19 @@ put greet("Alice")
 
 ~~~
 
-
-
-
 Run it:
 
 ~~~bash
 ./target/release/poly hello.poly
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Language Basics
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Variables
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Poly supports mutable and immutable variables:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -484,9 +338,6 @@ const MAX_SIZE := 1024
 
 ~~~
 
-
-
-
 ### Type Annotations
 
 Type annotations are optional but recommended:
@@ -503,139 +354,20 @@ var name := "Alice"  // Inferred as String
 var age := 30        // Inferred as i32
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Basic Types
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Type | Description | Example |
-
-
-
-
-
-
-
 |------|-------------|---------|
-
-
-
-
-
-
-
 | `i8`, `i16`, `i32`, `i64`, `i128` | Signed integers | `42` |
-
-
-
-
-
-
-
 | `u8`, `u16`, `u32`, `u64`, `u128` | Unsigned integers | `42u32` |
-
-
-
-
-
-
-
 | `f32`, `f64` | Floating point | `3.14` |
-
-
-
-
-
-
-
 | `bool` | Boolean | `true`, `false` |
-
-
-
-
-
-
-
 | `String`, `ustring` | Strings | `"hello"` |
-
-
-
-
-
-
-
 | `char` | Character | `'a'` |
-
-
-
-
-
-
-
 | `byte` | Single byte | `0xFF` |
-
-
-
-
-
-
-
 | `bytes` | Byte array | `[0x48, 0x65]` |
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Operators
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -831,9 +563,6 @@ var shift := 1 << 4       // 16
 
 ~~~
 
-
-
-
 ---
 
 ## Type System
@@ -863,35 +592,7 @@ var opt Option<i32> := Some(42)
 var res Result<i32, String> := Ok(42)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Custom Types
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1015,9 +716,6 @@ end enum
 
 ~~~
 
-
-
-
 ### Generic Functions
 
 ~~~poly fragment
@@ -1037,67 +735,11 @@ var map Map<ustring, i32> := []
 var set Set<i32> := []
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Control Flow
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### If/Else
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1181,9 +823,6 @@ end if
 
 ~~~
 
-
-
-
 ### While Loops
 
 ~~~poly fragment
@@ -1194,35 +833,7 @@ while i < 10
 end while
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### For Loops with Ranges
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1346,9 +957,6 @@ end loop
 
 ~~~
 
-
-
-
 ### Match Expressions
 
 ~~~poly fragment
@@ -1362,67 +970,11 @@ match x
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Functions
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Basic Functions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1538,9 +1090,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Multiple Parameters
 
 ~~~poly fragment
@@ -1552,35 +1101,7 @@ put greet("Alice", "Hello")           // "Hello, Alice!"
 put greet("Bob", "Hi")               // "Hi, Bob!"
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Higher-Order Functions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1704,9 +1225,6 @@ put apply(square, 5)   // 25
 
 ~~~
 
-
-
-
 ### Closures
 
 ~~~poly fragment
@@ -1718,67 +1236,11 @@ var add5 := make_adder(5)
 put add5(10)   // 15
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Data Structures
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Arrays
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1958,9 +1420,6 @@ end for
 
 ~~~
 
-
-
-
 ### Tuples
 
 ~~~poly fragment
@@ -1995,35 +1454,7 @@ put items.len()  // collection still usable (loop borrows)
 // var point := (x: 3.0, y: 4.0)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Structs
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2171,9 +1602,6 @@ put p1.distance(p2)  // 5.0
 
 ~~~
 
-
-
-
 ### Enums
 
 ~~~poly fragment
@@ -2200,67 +1628,11 @@ enum Message
 end enum
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Pattern Matching
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Basic Patterns
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2344,9 +1716,6 @@ end match
 
 ~~~
 
-
-
-
 ### Destructuring
 
 ~~~poly fragment
@@ -2360,35 +1729,7 @@ match point
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Guard Conditions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2480,9 +1821,6 @@ end match
 
 ~~~
 
-
-
-
 ### Nested Patterns
 
 ~~~poly fragment
@@ -2504,67 +1842,11 @@ var expr := Add(Num(2.0), Mul(Num(3.0), Num(4.0)))
 put evaluate(expr)  // 14.0
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Error Handling
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Error Statements
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2712,9 +1994,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Try/Catch (Planned)
 
 ~~~poly fragment
@@ -2728,67 +2007,11 @@ catch PermissionError
 end try
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## File I/O
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Reading Files
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2880,9 +2103,6 @@ end try
 
 ~~~
 
-
-
-
 ### Writing Files
 
 ~~~poly fragment
@@ -2893,35 +2113,7 @@ put "Hello, World!" to "output.txt"
 put "New line" to "output.txt" -append
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Command Line Input
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2957,9 +2149,6 @@ put "Hello, " + name + "!"
 
 ~~~
 
-
-
-
 ---
 
 ## Advanced Features
@@ -2985,35 +2174,7 @@ put counter()  // 1
 put counter()  // 2
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Higher-Order Functions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -3297,9 +2458,6 @@ var sum := reduce(numbers, |a, b| a + b, 0)
 
 ~~~
 
-
-
-
 ### Modules
 
 ~~~poly fragment
@@ -3319,35 +2477,7 @@ put Math.add(2, 3)      // 5
 put Math.multiply(2, 3)  // 6
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Traits (Planned)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -3431,9 +2561,6 @@ end impl
 
 ~~~
 
-
-
-
 ---
 
 ## Real-World Examples
@@ -3484,35 +2611,7 @@ end fn
 calculator()
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### File Processor
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -3716,9 +2815,6 @@ process_file("input.txt", "output.txt")
 
 ~~~
 
-
-
-
 ### Simple Game
 
 ~~~poly fragment
@@ -3774,35 +2870,7 @@ end fn
 hangman()
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### HTTP Client (Planned)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -3926,9 +2994,6 @@ put html
 
 ~~~
 
-
-
-
 ---
 
 ## Best Practices
@@ -3947,35 +3012,7 @@ var tp := 99.99
 var b := true
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### 2. Prefer Immutable Variables
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -4043,9 +3080,6 @@ counter := counter + 1
 
 ~~~
 
-
-
-
 ### 3. Use Pattern Matching
 
 ~~~poly fragment
@@ -4069,35 +3103,7 @@ fn process(value: Shape)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### 4. Handle Errors Explicitly
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -4213,9 +3219,6 @@ end fn
 
 ~~~
 
-
-
-
 ### 5. Keep Functions Small
 
 ~~~poly fragment
@@ -4239,67 +3242,11 @@ fn process_user(user: User)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Common Pitfalls
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### 1. Forgetting `end` Keywords
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -4375,9 +3322,6 @@ end fn
 
 ~~~
 
-
-
-
 ### 2. Mutable vs Immutable
 
 ~~~poly fragment
@@ -4390,35 +3334,7 @@ var x := 10
 x := 20  // OK
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### 3. Array Bounds
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -4486,9 +3402,6 @@ end if
 
 ~~~
 
-
-
-
 ### 4. String Comparison
 
 ~~~poly fragment
@@ -4499,67 +3412,11 @@ if a = b
 end if  // This works!
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Performance Tips
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### 1. Use Appropriate Types
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -4619,9 +3476,6 @@ var small_num i64 := 255  // Wastes memory
 
 ~~~
 
-
-
-
 ### 2. Pre-allocate Vectors
 
 ~~~poly fragment
@@ -4635,35 +3489,7 @@ for i in 0..1000
 end for
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### 3. Avoid Unnecessary Clones
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -4747,9 +3573,6 @@ end fn
 
 ~~~
 
-
-
-
 ### 4. Use Iterators
 
 ~~~poly fragment
@@ -4766,171 +3589,24 @@ loop x in numbers
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Conclusion
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Poly provides a clean, expressive syntax while leveraging Rust's powerful type system and performance. By following these  \
 guidelines and examples, you can write efficient, maintainable Poly code that transpiles to optimal Rust.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Resources
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - [Poly Language Specification](POLY_LANGUAGE_SPECIFICATION_EXPANDED.md)
-
-
-
-
-
-
-
 - [API Reference](POLY_API_REFERENCE.md)
-
-
-
-
-
-
-
 - [Tutorial](POLY_TUTORIAL.md)
-
-
-
-
-
-
-
 - [Examples](examples/)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Getting Help
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Open an issue on GitHub
-
-
-
-
-
-
-
 - Join our Discord community
-
-
-
-
-
-
-
 - Check the FAQ section
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Happy coding with Poly! 🚀

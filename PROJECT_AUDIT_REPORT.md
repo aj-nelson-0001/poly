@@ -90,61 +90,38 @@ Also pre-allocates `String::with_capacity(128)` for loop bodies
 ### 4a. Backends Not Implemented
 
 | Feature | Status |
-
 |---|---|
-
 | **JS backend** | Design doc only (`POLY_JS_DESIGN.md`). No `#js` blocks, no codegen, no CLI support. Implementation on hold
 per review decision. |
 | **C++ backend** | `#cpp` syntax reserved and explicitly rejected with diagnostic. No implementation. |
-
 
 ### 4b. C Backend Gaps
 
 The C backend covers the orchestration subset but many features require `#c` helpers:
 
 | Missing Feature | Notes |
-
 |---|---|
-
 | File redirects (`put to`, `get from`) | Must use `#c` helper |
-
 | `get` / stdin / typed input | Must use `#c` helper |
-
 | Multi-range loops | Rejected by C backend |
-
 | Collection loops | Limited to shallow C-array form; vectors unsupported |
-
 | Closures / higher-order operations | Not supported |
-
 | Tuples | Not supported |
-
 | `Option` / `Result` / pattern matching | Not supported |
-
 | Async / generic functions | Not supported |
-
 | Value-position string concatenation | Needs `#c` helper |
-
 | Struct methods / generics | Rejected |
-
 | Enums, traits, impls, modules, aliases | Not supported |
-
 
 ### 4c. ASM Backend Gaps
 
 | Missing Feature | Notes |
-
 |---|---|
-
 | File redirects | Must use `#asm` helper |
-
 | For-in loops | Not implemented |
-
 | Dereferencing | Not implemented |
-
 | Async / generic Poly functions | Not supported |
-
 | Limited type support | Only integer, bool, string, struct, enum |
-
 
 ### 4d. Other Known Limitations
 
@@ -169,392 +146,56 @@ targets
 var age i32 := get with validate |x| x >= 1 and x <= 150
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 However, this is a **parser-only stub**. The syntax is parsed and stored in the AST, but the checker and codegen ignore it  \
 entirely. The validation closure is never executed at runtime. The v2 spec and API reference both state this is "not part of  \
 the maintained runnable v2 API."
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **Resolved:** the tutorial's three `with validate` presentations now show the
-
-
-
-
-
-
-
 working loop-based validation pattern (verified end-to-end with `--check` and a
-
-
-
-
-
-
-
 runtime run) and carry a note pointing to the v2 spec. The tutorial is already
-
-
-
-
-
-
-
 marked historical/non-normative.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## 6. Code Quality Notes
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### No `todo!()` calls in production code
-
-
-
-
-
-
-
 The single `todo!` found in `codegen.rs` line 931 is a string literal in a list of known Rust macros — not an actual
 `todo!()` \
   \
 invocation.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### `unreachable!()` calls are appropriate
-
-
-
-
-
-
-
 All 14 `unreachable!()` calls are defensive assertions in code paths that should never execute.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Stubs resolved
-
-
-
-
-
-
-
 The earlier stubs (`db_execute`, `--mask`, `--until`, `http_get`, `tcp_connect`) have been implemented. Test assertions in  \
 `checker.rs` confirm the old stub warnings no longer fire.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 7. Documentation Status
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - **Maintained v2 docs**: 15 files indexed in `POLY_DOCUMENTATION_INDEX.md`
-
-
-
-
-
-
-
 - **Historical v1 docs**: ~20+ files retained for migration context, marked as non-normative
-
-
-
-
-
-
-
 - **No TODO/FIXME/HACK comments** found in any Markdown documentation files
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## 8. Summary
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Category | Status |
-
-
-
-
-
-
-
 |---|---|
-
-
-
-
-
-
-
 | Build | ✅ Clean |
-
-
-
-
-
-
-
 | Tests | ✅ 383/383 pass |
-
-
-
-
-
-
-
 | Clippy | ✅ 0 warnings (strict CI passes) |
-
-
-
-
-
-
-
 | Codegen optimizations | ✅ Applied (5 changes, all verified) |
-
-
-
-
-
-
-
 | JS backend | 🔴 Not implemented (design only) |
-
-
-
-
-
-
-
 | C++ backend | 🔴 Not implemented (reserved) |
-
-
-
-
-
-
-
 | C backend | 🟡 Core works; many features need `#c` helpers |
-
-
-
-
-
-
-
 | ASM backend | 🟡 Core works; several features missing |
-
-
-
-
-
-
-
 | Generic type checking | 🟡 Permissive, not fully validated |
-
-
-
-
-
-
-
 | LSP | 🟡 Works; UTF-16 fixed, edge cases remain |
-
-
-
-
-
-
-
 | WASM bundle | ✅ Built and tested; not verified in CI |
-
-
-
-
-
-
-
 | VS Code extension | ✅ Built; not packaged in CI |
-
-
-
-
-
-
-
 | Documentation | ✅ Tutorial `with validate` examples corrected |

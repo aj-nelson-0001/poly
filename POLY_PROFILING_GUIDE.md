@@ -47,35 +47,7 @@ put "Min: " + result.min_ms.to_string() + "ms"
 put "Max: " + result.max_ms.to_string() + "ms"
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Detect Memory Leaks
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -247,9 +219,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 2. Advanced Profiling
@@ -289,35 +258,7 @@ put "Total time: " + result.total_time_ms.to_string() + "ms"
 put "Average: " + result.avg_time_ms.to_string() + "ms"
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Detect Hotspots
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -521,9 +462,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 3. I/O Profiling
@@ -560,35 +498,7 @@ fn profile_file_io(filename: ustring, iterations: i32): FileIOProfile
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Profile Network Operations
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -776,9 +686,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 4. Concurrency Profiling
@@ -808,35 +715,7 @@ fn profile_threads(iterations: i32): ThreadProfile
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Profile Lock Contention
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1064,9 +943,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 5. Reporting
@@ -1104,35 +980,7 @@ fn save_report(report: ustring, filename: ustring)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Analyze Profiling Results
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1423,9 +1271,6 @@ end fn
 
 
 ~~~
-
-
-
 
 ---
 

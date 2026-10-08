@@ -112,9 +112,6 @@ end if
 
 ~~~
 
-
-
-
 This change makes Poly code more concise and aligns with modern language design trends.
 
 **Why the change?**
@@ -148,28 +145,7 @@ else
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **After:**
-
-
-
-
-
-
-
 ~~~poly fragment
 
 
@@ -236,9 +212,6 @@ end if
 
 ~~~
 
-
-
-
 The comma syntax is:
 - More concise (no `then` keyword needed)
 - Familiar to developers from Swift, Rust, etc.
@@ -276,140 +249,21 @@ fn get_grade(score: i32): string
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 This makes Poly code more concise and easier to read!
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Check out the full blog post for more details: [link]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Facebook Post
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 🎉 **Poly Language Just Got Better!**
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 We're excited to announce a new syntax improvement in the Poly programming language!
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **The Big Change:** If statements now use commas instead of `then`!
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **Before:**
-
-
-
-
-
-
-
 ~~~
 
 
@@ -419,28 +273,7 @@ if x > 0 then
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **After:**
-
-
-
-
-
-
-
 ~~~
 
 
@@ -450,82 +283,12 @@ if x > 0,
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **Why we made this change:**
-
-
-
-
-
-
-
 ✅ More concise code
-
-
-
-
-
-
-
 ✅ Familiar to developers from other languages
-
-
-
-
-
-
-
 ✅ Cleaner visual appearance
-
-
-
-
-
-
-
 ✅ Works great with else-if chains
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Try it out and let us know what you think!
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #PolyLang #Programming #LearnToCode #Developer

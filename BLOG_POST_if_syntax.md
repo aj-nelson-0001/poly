@@ -22,28 +22,7 @@ else
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### New Syntax
-
-
-
-
-
-
-
 ~~~poly fragment
 
 
@@ -110,9 +89,6 @@ end if
 
 ~~~
 
-
-
-
 ## Key Changes
 
 1. **Comma replaces `then`**: The `then` keyword is no longer needed. Simply use a comma after the condition.
@@ -122,28 +98,7 @@ end if
    if x > 0, put x
    ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 3. **Else-if chains work seamlessly**:
-
-
-
-
-
-
-
    ~~~poly fragment
 
 
@@ -226,9 +181,6 @@ end if
 
    ~~~
 
-
-
-
 4. **Nested conditions**:
    ~~~poly fragment
    if x > 0,
@@ -238,123 +190,18 @@ end if
    end if
    ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Why the Change?
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 The comma syntax offers several advantages:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - **More concise**: Removes unnecessary keyword
-
-
-
-
-
-
-
 - **Familiar**: Similar to other languages like Swift and Rust
-
-
-
-
-
-
-
 - **Cleaner**: Reduces visual clutter in code
-
-
-
-
-
-
-
 - **Consistent**: Aligns with modern language design trends
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Transpilation
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The new syntax transpiles to idiomatic Rust:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~rust
 
@@ -502,9 +349,6 @@ if x > 0 {
 
 ~~~
 
-
-
-
 ## Examples
 
 ### Grade Calculator
@@ -524,28 +368,7 @@ fn calculate_grade(score: i32): string
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Temperature Classifier
-
-
-
-
-
-
-
 ~~~poly
 
 
@@ -660,9 +483,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Nested Conditions
 ~~~poly
 fn categorize_number(n: i32): string
@@ -684,108 +504,17 @@ fn categorize_number(n: i32): string
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Migration Guide
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 To update your existing Poly code:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. Replace `then` with `,` (comma)
-
-
-
-
-
-
-
 2. Keep `else if` and `else` as-is
-
-
-
-
-
-
-
 3. Keep `end if` to close blocks
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Example Migration
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **Before:**
-
-
-
-
-
-
-
 ~~~poly fragment
 
 
@@ -852,9 +581,6 @@ end if
 
 ~~~
 
-
-
-
 **After:**
 ~~~poly fragment
 if temperature > 100,
@@ -866,170 +592,23 @@ else,
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## What's Next?
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 We're continuing to improve the Poly language with:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Pattern matching enhancements
-
-
-
-
-
-
-
 - More expression types
-
-
-
-
-
-
-
 - Better error messages
-
-
-
-
-
-
-
 - Performance optimizations
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Feedback
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 We'd love to hear your thoughts on the new syntax! Join our community:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - GitHub: [poly-lang/poly](https://github.com/poly-lang/poly)
-
-
-
-
-
-
-
 - Discord: [Poly Community](https://discord.gg/poly-lang)
-
-
-
-
-
-
-
 - Twitter: [@PolyLang](https://twitter.com/PolyLang)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 *Happy coding with Poly!*

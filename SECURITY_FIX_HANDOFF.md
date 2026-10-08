@@ -13,31 +13,18 @@
 ## Files changed
 
 | File | Change |
-
 |---|---|
-
 | `compiler/crates/poly-parser/src/depth_limit.rs` | **NEW** — iterative AST depth validator |
-
 | `compiler/crates/poly-parser/src/ast_dump.rs` | **NEW** — linear AST printer for `--ast` |
-
 | `compiler/crates/poly-parser/src/parser.rs` | operand-chain cap in precedence ladder; 19 fold sites |
-
 | `compiler/crates/poly-parser/src/lib.rs` | module + re-export wiring |
-
 | `compiler/crates/poly-transpiler/src/checker/type_checker.rs` | `MAX_CHECK_EXPRESSION_DEPTH` guard |
-
 | `compiler/crates/poly-lsp/src/json.rs` | `MAX_JSON_DEPTH` guard |
-
 | `compiler/crates/poly-lsp/src/main.rs` | `MAX_MESSAGE_BYTES` frame cap; `read_message` generic over `BufRead` |
-
 | `compiler/crates/poly-cli/src/main.rs` | `--ast` streams via the new printer; bounded `rustfmt` subprocess |
-
 | `compiler/scripts/build_playground_wasm.sh` | apply `wasm-opt -Oz` when available |
-
 | `scripts/playground_wasm_smoke.mjs` | 2 CI regression cases for the depth fix |
-
 | `playground/poly.wasm` | rebuilt (609,080 B) |
-
 
 ---
 
@@ -128,9 +115,6 @@ n=2000  {:#?} -> 24,030,003 B, 137.5 s  |  {:?} -> 20,003 B, 399 µs
 
 
 ~~~
-
-
-
 
 Fix: new `ast_dump.rs` — iterative printer, explicit heap worklist, indentation capped
 at `MAX_INDENT_LEVELS = 32`. `--ast` streams to stdout instead of materializing a
@@ -232,9 +216,6 @@ node scripts/playground_wasm_smoke.mjs
 
 
 ~~~
-
-
-
 
 Last full run from a clean tree: build 0 · clippy `-D warnings` 0 · **571 tests
 passing, 0 failing** · fmt 0 · `cargo audit` no vulnerabilities · all script checks

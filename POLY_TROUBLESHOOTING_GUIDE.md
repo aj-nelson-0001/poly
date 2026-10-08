@@ -20,67 +20,11 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The parser retains `==` only to report a migration diagnostic. Replace it rather than adding another compatibility spelling.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Declaration initializer errors
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Use the type without a colon in `var` declarations. `let` may use a type annotation with a colon:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -140,9 +84,6 @@ end fn
 
 ~~~
 
-
-
-
 Do not write `var count: i32 = 0`, `let name = ...`, or `const limit = ...` in v2 examples.
 
 ### Block closure errors
@@ -163,91 +104,14 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The parser can recover from several errors, but a missing `end` often causes
-
-
-
-
-
-
-
 later statements to be reported in the wrong context. Fix the first
-
-
-
-
-
-
-
 diagnostic first.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Depth-limit errors
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Three parse caps keep deeply nested — usually generated — input from
-
-
-
-
-
-
-
 exhausting the parser's stack:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~text
 
@@ -283,9 +147,6 @@ Maximum nested if depth (32) exceeded
 
 ~~~
 
-
-
-
 They all mean the same thing: flatten the structure. Split nested blocks
 into separate functions, remove grouping parens, simplify prefix chains or
 nested tuple types, and break a long `if`/`else if` chain into separate
@@ -307,35 +168,7 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 For file output, use the explicit redirect form:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -379,9 +212,6 @@ end fn
 
 ~~~
 
-
-
-
 The Rust backend implements redirects. The C, asm, and JS backends reject them
 because their contracts are stdout/stderr orchestration only; move file behavior
 into a `#c`, `#asm`, or `#js` helper.
@@ -400,123 +230,18 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The C backend supports plain `get` — with an optional prompt — reading one line
-
-
-
-
-
-
-
 of stdin through an emitted runtime helper; file sources, input flags, and `with`
-
-
-
-
-
-
-
 clauses require a `#c` helper. The asm and JS backends reject input entirely;
-
-
-
-
-
-
-
 move input into a foreign helper when targeting them.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 If a Rust input program appears to hang, it is waiting for stdin. Provide input
-
-
-
-
-
-
-
 through the terminal or redirect a file at the process level. Do not rely on
-
-
-
-
-
-
-
 undocumented `is_input_available`, network, or line-editor helpers.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Type-Checking Problems
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 A declaration type must agree with its initializer. For numeric input, make the conversion explicit:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -560,9 +285,6 @@ end fn
 
 ~~~
 
-
-
-
 Equality and ordering operators require compatible operands. String
 concatenation is supported for strings and scalar values on every target:
 
@@ -576,59 +298,10 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Unknown functions or variables are reported by the semantic checker. Functions in
-
-
-
-
-
-
-
 a selected foreign block are registered as opaque calls; their native signature
-
-
-
-
-
-
-
 is still validated by the target compiler. When earlier Poly diagnostics are
-
-
-
-
-
-
-
 useful, add a top-level explicit declaration:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -647,9 +320,6 @@ extern c fn double_value(value: i32): i32
 
 
 ~~~
-
-
-
 
 The declaration must match the selected target and is not emitted. It checks the
 Poly-visible interface; the C or Rust compiler still validates the foreign
@@ -670,139 +340,20 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Select C with `--target c` and use `#c` instead. A foreign block for another
-
-
-
-
-
-
-
 language is rejected. In particular, `#cpp` is not silently ignored and C++ is
-
-
-
-
-
-
-
 not currently supported. See [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md)
-
-
-
-
-
-
-
 for the complete target boundary.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 When a target feature is unsupported, the compiler should name the feature and
-
-
-
-
-
-
-
 suggest a foreign helper. Treat that diagnostic as a contract boundary rather
-
-
-
-
-
-
-
 than changing the generated source by hand.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### `operator chain has more than 512 operands`
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 A single flat expression cannot chain more than 512 operands. The parser
-
-
-
-
-
-
-
 counts operands per statement, so the fix is to split the work rather than to
-
-
-
-
-
-
-
 shorten it:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -870,9 +421,6 @@ end fn
 
 ~~~
 
-
-
-
 The cap is not arbitrary. The precedence ladder folds a flat chain into a
 tree one level deep per operand, and the type checker, every backend, and even
 Rust's `Drop` then walk that tree recursively — so the parser refuses to build
@@ -893,35 +441,7 @@ or pipe it through `rustfmt` yourself:
 poly --emit-rust program.poly | rustfmt
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## CLI Checks
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -1004,9 +524,6 @@ POLY_CC=clang poly --target c --check program.poly
 
 
 ~~~
-
-
-
 
 `--check` runs lexing, parsing, semantic checking, transpilation, and the
 selected native compiler. `--emit-rust` and `--emit-c` show generated output

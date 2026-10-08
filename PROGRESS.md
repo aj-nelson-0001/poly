@@ -1628,7 +1628,6 @@ symbol forms are rejected with migration diagnostics.
   `--check` (C/ASM fixtures with their targets), keyword ops produce correct
   runtime values end-to-end (mod/xor/bitand/bitor/bitnot/shift/not/and/or).
 
-
 ## Codegen optimizations and project audit (2026-09-06)
 
 Session audit of the full project: build status, test coverage, clippy
@@ -2063,7 +2062,6 @@ All items from the 2026-08-15 project review's prioritized follow-up are address
 - **Version metadata**: README/playground now advertise v1.7.3.
 - Tests: 13 new checker tests, 7 new optimizer tests, 6 new codegen tests, 4 new
   LSP tests; all 20 example files pass `poly --check`; the wasm was rebuilt (364K).
-
 
 ## Explicit loop variables (2026-08-14)
 

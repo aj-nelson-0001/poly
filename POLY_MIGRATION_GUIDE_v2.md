@@ -22,20 +22,6 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ~~~bash
 
 
@@ -78,9 +64,6 @@ poly --target c --emit-c program.poly
 
 ~~~
 
-
-
-
 Only the selected foreign block is emitted. A `#cpp` block is reserved and causes an explicit unsupported-backend error until a
 C++ backend is designed. Optional `extern rust fn ...` and `extern c fn ...` declarations let migrated programs opt into
 Poly-side foreign-call checks.
@@ -104,161 +87,28 @@ var values i32 := 3
 put process(&[values, 0, 0])
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Foreign block delimiters must be on their own lines. Blocks cannot appear inside Poly functions, loops, or other nested
 bodies \
 .  \
 Foreign blocks should contain declarations and definitions at target-language scope; Poly always owns the generated entry
 point.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Syntax Changes Since v1.8
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 The v1.8 syntax migration remains applicable:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Use `loop i 0..10`, without the legacy `loop:` form.
-
-
-
-
-
-
-
 - Use `name := value` for assignment.
-
-
-
-
-
-
-
 - Use `put value to "file" -append` for append output.
-
-
-
-
-
-
-
 - Use `get from "file"` for file input.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 See [POLY_MIGRATION_GUIDE_v1.8.md](POLY_MIGRATION_GUIDE_v1.8.md) for the complete v1.7 to v1.8 syntax table.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## C Preview Scope
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 The C backend currently supports scalar variables, primitive types, plain structs, simple Poly functions, arithmetic,  \
 conditions, loops, plain stdin `get` (with an optional prompt), tuples, simple `match` patterns, non-capturing closures, and  \
 stdout/stderr output through `put`, `error`, `warn`, and `info`.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 File redirects, file input, typed input flags, vectors, capturing closures, async, and complex Poly types are rejected with  \
 diagnostics. Put those operations in a `#c` helper until their C representation is specified.

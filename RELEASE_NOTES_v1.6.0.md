@@ -46,51 +46,9 @@ else,
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Transpilation
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The new syntax transpiles to idiomatic Rust:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~rust
 
@@ -238,9 +196,6 @@ if x > 0 {
 
 ~~~
 
-
-
-
 ## 📦 What's Included
 
 ### New Examples
@@ -281,28 +236,7 @@ else
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **After:**
-
-
-
-
-
-
-
 ~~~poly fragment
 
 
@@ -368,9 +302,6 @@ end if
 
 
 ~~~
-
-
-
 
 ## 📊 Test Results
 

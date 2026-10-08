@@ -49,35 +49,7 @@ fn test_info_output()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Testing File Output
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -225,9 +197,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 2. Unit Testing Input Commands
@@ -257,35 +226,7 @@ fn test_boolean_input()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Testing Input Flags
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -553,9 +494,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Testing File Input
 
 ~~~poly fragment
@@ -585,67 +523,11 @@ fn test_bytes_read()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 3. Unit Testing Error Handling
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Testing Result Type
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -793,9 +675,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Testing Error Propagation
 
 ~~~poly fragment
@@ -825,35 +704,7 @@ fn test_try_unwrap()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Testing Pattern Matching
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1137,9 +988,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 4. Integration Testing
@@ -1196,67 +1044,11 @@ fn test_file_workflow()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 5. Edge Case Testing
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Testing Boundary Conditions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1492,9 +1284,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Testing Special Characters
 
 ~~~poly fragment
@@ -1522,67 +1311,11 @@ Line2")
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 6. Performance Testing
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Testing Output Performance
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1762,9 +1495,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Testing Input Performance
 
 ~~~poly fragment
@@ -1781,67 +1511,11 @@ fn test_input_parsing()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 7. Test Utilities
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Mock Input Functions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1973,9 +1647,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Assertion Functions
 
 `assert`, `pass`, and `fail` are built-in helpers:
@@ -1986,67 +1657,11 @@ pass("Test passed")
 fail("Test failed")   // Prints FAIL and exits non-zero
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 8. Test Organization
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Directory Structure
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~
 
@@ -2071,35 +1686,7 @@ tests/
     └── assertion_functions.poly
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Running Tests
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2246,9 +1833,6 @@ end fn
 
 
 ~~~
-
-
-
 
 ---
 

@@ -25,35 +25,7 @@ var content ustring := get from  path
 set_file_permissions("file.txt", 0o644)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Windows
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -137,9 +109,6 @@ set_file_permissions("file.txt", 0o644)  // Mapped to Windows ACLs
 
 ~~~
 
-
-
-
 ### macOS
 
 ~~~poly fragment
@@ -154,67 +123,11 @@ var content ustring := get from  path
 set_file_permissions("file.txt", 0o644)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 2. Character Encoding
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### UTF-8
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -274,9 +187,6 @@ var content ustring := get from "utf8.txt" with encoding unicode "utf-8"
 
 ~~~
 
-
-
-
 ### ASCII
 
 ~~~poly fragment
@@ -288,35 +198,7 @@ put text
 var content ustring := get from "ascii.txt" with encoding unicode "ascii"
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Latin-1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -376,9 +258,6 @@ var content ustring := get from "latin1.txt" with encoding unicode "latin-1"
 
 ~~~
 
-
-
-
 ---
 
 ## 3. Line Endings
@@ -394,35 +273,7 @@ var content ustring := get from "unix.txt"
 var lines Vec<ustring> := content.split("\n")
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Windows (CRLF)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -482,9 +333,6 @@ var lines Vec<ustring> := content.split("\r\n")
 
 ~~~
 
-
-
-
 ### Cross-Platform
 
 ~~~poly fragment
@@ -497,67 +345,11 @@ var content ustring := get from "any.txt"
 var lines Vec<ustring> := content.split("\r?\n")  // Match either
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 4. File Paths
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Absolute Paths
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -625,9 +417,6 @@ var content ustring := get from  path
 
 ~~~
 
-
-
-
 ### Relative Paths
 
 ~~~poly fragment
@@ -636,35 +425,7 @@ var path ustring := "./data/file.txt"
 var content ustring := get from  path
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Path Separators
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -716,9 +477,6 @@ var content ustring := get from  path
 
 ~~~
 
-
-
-
 ---
 
 ## 5. Error Handling
@@ -749,35 +507,7 @@ fn read_file(path: ustring): Result<ustring, FileError>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Cross-Platform Error Messages
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -861,9 +591,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 6. Input/Output
@@ -883,35 +610,7 @@ else
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Terminal Input
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1003,9 +702,6 @@ end if
 
 ~~~
 
-
-
-
 ### File I/O
 
 ~~~poly fragment
@@ -1021,67 +717,11 @@ else
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 7. Networking
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Cross-Platform Networking
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1165,9 +805,6 @@ end if
 
 ~~~
 
-
-
-
 ### SSL/TLS
 
 ~~~poly fragment
@@ -1182,67 +819,11 @@ else
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 8. Performance
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Cross-Platform Performance
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1350,9 +931,6 @@ end if
 
 ~~~
 
-
-
-
 ### Memory Management
 
 ~~~poly fragment
@@ -1368,67 +946,11 @@ else
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 9. Testing
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Cross-Platform Testing
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1616,9 +1138,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 10. Best Practices
@@ -1638,35 +1157,7 @@ else
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Abstractions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1782,9 +1273,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Test on Multiple Platforms
 
 ~~~poly fragment
@@ -1799,122 +1287,17 @@ fn test_cross_platform()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Summary
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. **Platform Detection**: Use `is_windows()`, `is_macos()`, `is_linux()` for platform-specific code
-
-
-
-
-
-
-
 2. **Character Encoding**: Use UTF-8 by default, support other encodings when needed
-
-
-
-
-
-
-
 3. **Line Endings**: Handle both LF and CRLF
-
-
-
-
-
-
-
 4. **File Paths**: Use path utilities for cross-platform compatibility
-
-
-
-
-
-
-
 5. **Error Handling**: Handle platform-specific errors gracefully
-
-
-
-
-
-
-
 6. **I/O**: Use standard I/O functions that work across platforms
-
-
-
-
-
-
-
 7. **Networking**: Use cross-platform networking libraries
-
-
-
-
-
-
-
 8. **Performance**: Optimize for each platform when necessary
-
-
-
-
-
-
-
 9. **Testing**: Test on multiple platforms
-
-
-
-
-
-
-
 10. **Abstractions**: Use abstractions to hide platform differences

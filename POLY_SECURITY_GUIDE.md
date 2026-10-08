@@ -22,17 +22,11 @@ concern — it is the documented purpose of the tool, and it holds for every mod
 that does more than print output:
 
 | Command | Effect on an untrusted file |
-
 |---|---|
-
 | `poly untrusted.poly` | Generates a Cargo project, runs `cargo build`, **runs the binary** |
-
 | `poly --project out untrusted.poly` | Writes a Cargo project that `cargo build`/`cargo run` will execute |
-
 | `poly --check --strict untrusted.poly` | Hands the generated code to `rustc`/`cargo check`/`cc`/`as`/`node` |
-
 | `poly --repl` | Executes each line as you type it |
-
 
 Three concrete paths to arbitrary code execution, all of them by design:
 
@@ -114,35 +108,7 @@ var email ustring := get  // Could be invalid
 var name ustring := get  // Could be empty or malicious
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Sanitize Input
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -242,9 +208,6 @@ var safe_name ustring := sanitize(name)
 
 ~~~
 
-
-
-
 ### Use Whitelisting
 
 ~~~poly fragment
@@ -258,67 +221,11 @@ end
 var username ustring := get  // No validation
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 2. Password Security
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Always Mask Password Input
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -386,9 +293,6 @@ var password ustring := get  // Visible on screen
 
 ~~~
 
-
-
-
 ### Validate Password Strength
 
 ~~~poly fragment
@@ -405,35 +309,7 @@ end
 var password ustring := get --mask unicode "*"  // Weak password allowed
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Never Store Plain Text Passwords
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -549,9 +425,6 @@ store_user(username, password)  // Insecure!
 
 ~~~
 
-
-
-
 ---
 
 ## 3. File Operations
@@ -582,35 +455,7 @@ var filename ustring := get
 var content ustring := get from  filename  // Could access any file
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Safe File Permissions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -670,9 +515,6 @@ put "sensitive data" to "secret.txt"  // World-readable by default
 
 ~~~
 
-
-
-
 ### Validate File Content
 
 ~~~poly fragment
@@ -687,67 +529,11 @@ end
 var content ustring := get from "config.txt"  // Could be malicious
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 4. Error Handling
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Don't Expose Sensitive Information
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -847,9 +633,6 @@ end match
 
 ~~~
 
-
-
-
 ### Log Errors Securely
 
 ~~~poly fragment
@@ -867,35 +650,7 @@ fn log_error(error: ustring)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Handle Errors Gracefully
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1067,9 +822,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 5. Input/Output Security
@@ -1088,35 +840,7 @@ end match
 var input ustring := get  // Can hang forever, allowing DoS
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Limit Input Size
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1168,9 +892,6 @@ var input ustring := get  // Could be huge, causing memory issues
 
 ~~~
 
-
-
-
 ### Sanitize Output
 
 ~~~poly fragment
@@ -1191,67 +912,11 @@ var user_input ustring := get
 put user_input  // Could contain malicious HTML
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 6. Authentication and Authorization
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Validate Credentials
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1399,9 +1064,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Use Secure Session Management
 
 ~~~poly fragment
@@ -1421,67 +1083,11 @@ fn create_session(user: User): Session
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 7. Data Protection
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Encrypt Sensitive Data
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1597,9 +1203,6 @@ store_plain(sensitive_data)  // Insecure!
 
 ~~~
 
-
-
-
 ### Use Secure Random Generation
 
 ~~~poly fragment
@@ -1620,67 +1223,11 @@ fn generate_token(length: i32): ustring
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 8. Network Security
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use HTTPS
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1748,9 +1295,6 @@ var response := get from  url
 
 ~~~
 
-
-
-
 ### Validate Certificates
 
 ~~~poly fragment
@@ -1761,67 +1305,11 @@ var response := get from "https://api.example.com" with verify_certificate(true)
 var response := get from "https://api.example.com" with verify_certificate(false)  // Insecure
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 9. Code Security
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Avoid Code Injection
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1921,9 +1409,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Validate External Data
 
 ~~~poly fragment
@@ -1954,114 +1439,16 @@ fn process_external_data(data: ustring): Result<ustring, ustring>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Summary
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. **Input Validation**: Always validate and sanitize input
-
-
-
-
-
-
-
 2. **Password Security**: Mask input, validate strength, hash storage
-
-
-
-
-
-
-
 3. **File Operations**: Validate paths, use safe permissions, validate content
-
-
-
-
-
-
-
 4. **Error Handling**: Don't expose sensitive info, log securely
-
-
-
-
-
-
-
 5. **I/O Security**: Use timeouts, limit input size, sanitize output
-
-
-
-
-
-
-
 6. **Authentication**: Validate credentials, use secure sessions
-
-
-
-
-
-
-
 7. **Data Protection**: Encrypt sensitive data, use secure random
-
-
-
-
-
-
-
 8. **Network Security**: Use HTTPS, validate certificates
-
-
-
-
-
-
-
 9. **Code Security**: Avoid injection, validate external data

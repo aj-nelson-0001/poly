@@ -49,35 +49,7 @@ match http_get(unicode "https://api.example.com/data")
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### REST API Client
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -361,9 +333,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 2. Database Integration
@@ -404,35 +373,7 @@ loop user in users
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### ORM Integration
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -740,9 +681,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 3. Authentication Integration
@@ -786,35 +724,7 @@ fn exchange_code(client: OAuth2Client, code: ustring): Result<Token, OAuthError>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### JWT Authentication
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1114,9 +1024,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 4. Cache Integration
@@ -1172,67 +1079,11 @@ fn cache_set(cache: Cache, key: ustring, value: ustring): Result<(), CacheError>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 5. Message Queue Integration
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### RabbitMQ Integration
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1452,9 +1303,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 6. Email Integration
@@ -1497,67 +1345,11 @@ fn send_template_email(smtp: SMTP, to: ustring, template: ustring, data: Map<ust
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 7. Storage Integration
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### S3 Storage
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1857,9 +1649,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 8. Editor Integration (Language Server)
@@ -1880,203 +1669,39 @@ cargo build --release -p poly-lsp
 # binary: target/release/poly-lsp
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 It runs as a stdio server; the editor starts it and keeps the pipe open. No configuration file or network port is involved.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Features
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Feature | LSP method | What it provides |
-
-
-
-
-
-
 
 |---------|------------|------------------|
 
-
-
-
-
-
-
 | Diagnostics | `textDocument/publishDiagnostics` | Lexer, parser, and type-checker errors with precise line/column ranges |
-
-
-
-
-
-
 
 | Completion | `textDocument/completion` | Poly keywords plus symbols declared in the open document |
 
-
-
-
-
-
-
 | Hover | `textDocument/hover` | Declaration detail for functions, structs, and enums |
-
-
-
-
-
-
 
 | Symbols | `textDocument/documentSymbol` | Top-level functions, structs, enums, traits, and impls |
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Diagnostics run every compiler phase (lex → parse with recovery → type check),
-
-
-
-
-
-
 
 so a single save surfaces syntax and semantic errors together. Completion is
 
-
-
-
-
-
-
 triggered by typing and also by `.` and `:` characters.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### VS Code
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The repository ships a ready-made extension in the `vscode/` directory. It
-
-
-
-
-
-
 
 provides a TextMate grammar (`source.poly`), language configuration (comments,
 
-
-
-
-
-
-
 brackets, indentation), and a language-client extension that launches
-
-
-
-
-
-
 
 `poly-lsp` automatically with diagnostics, completion, hover, and document
 
-
-
-
-
-
-
 symbols. To use it:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -2120,9 +1745,6 @@ npm install
 
 ~~~
 
-
-
-
 Set the `poly.lsp.path` setting if `poly-lsp` is not on `PATH`, e.g.
 `compiler/target/release/poly-lsp`. The extension also registers a `Poly:
 Restart Language Server` command.
@@ -2147,35 +1769,7 @@ language. With a custom client extension, the activation looks like:
 }
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 In your extension's `activate()` function, start the server with:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~ts
 
@@ -2195,59 +1789,11 @@ const client = new LanguageClient('polyLsp', 'Poly Language Server', serverOptio
 client.start();
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Neovim (nvim-lspconfig)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Neovim 0.8+ can attach the server with a small `lspconfig`-style config.
 
-
-
-
-
-
-
 Either add a custom config or use `vim.lsp.start` directly:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~lua
 
@@ -2371,9 +1917,6 @@ vim.filetype.add({ extension = { poly = 'poly' } })
 
 ~~~
 
-
-
-
 If `poly-lsp` is not on `PATH`, give the full path to the compiled binary,
 e.g. `cmd = { '/home/you/poly/compiler/target/release/poly-lsp' }`.
 
@@ -2394,170 +1937,34 @@ language-servers = ["poly-lsp"]
 command = "poly-lsp"
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Notes and Limitations
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 - The server is dependency-free and intentionally small: full-text document synchronization only, no incremental sync yet.
 
-
-
-
-
-
-
 - Type-check diagnostics locate the *declaring statement* via the statement
-
-
-
-
-
-
 
 spans now retained in the AST; complex expressions fall back to a text scan
 
-
-
-
-
-
-
 for the offending symbol.
-
-
-
-
-
-
 
 - Unsupported LSP requests are ignored gracefully, so newer clients remain compatible.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Summary
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. **HTTP Client**: Use `get`, `post` with timeout and error handling
-
-
-
-
-
-
 
 2. **Database**: Use connection pooling and parameterized queries
 
-
-
-
-
-
-
 3. **Authentication**: Implement OAuth2 and JWT properly
-
-
-
-
-
-
 
 4. **Cache**: Use Redis for distributed caching
 
-
-
-
-
-
-
 5. **Message Queue**: Use RabbitMQ for async messaging
-
-
-
-
-
-
 
 6. **Email**: Use SMTP for email delivery
 
-
-
-
-
-
-
 7. **Storage**: Use S3 for object storage
-
-
-
-
-
-
 
 8. **Editor Integration**: Run `poly-lsp` from VS Code, Neovim, or Helix for diagnostics, completion, hover, and symbols

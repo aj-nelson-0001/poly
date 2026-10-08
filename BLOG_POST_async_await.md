@@ -24,35 +24,7 @@ async fn fetch_data(url: ustring): Result<ustring, ustring>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 This transpiles to idiomatic Rust async code:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~rust
 
@@ -96,9 +68,6 @@ async fn fetch_data(url: String) -> Result<String, String> {
 
 ~~~
 
-
-
-
 ### Await Expressions
 
 Use the `.await` postfix syntax to wait for async operations:
@@ -107,67 +76,11 @@ Use the `.await` postfix syntax to wait for async operations:
 var data := fetch_data(unicode "https://api.example.com").await
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The postfix notation makes the code read naturally: "fetch data,,await the result."
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Traits with Async Methods
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Traits can now have async method signatures:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -259,9 +172,6 @@ end impl
 
 ~~~
 
-
-
-
 ## Complete Example
 
 Here's a complete example demonstrating the new features:
@@ -300,301 +210,42 @@ async fn process_data<T: DataFetcher>(fetcher: T, url: ustring): ustring
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## How It Transpiles
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Poly's async/await syntax maps directly to Rust's async system:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Poly | Rust |
-
-
-
-
-
-
-
 |------|------|
-
-
-
-
-
-
-
 | `async fn name()` | `async fn name()` |
-
-
-
-
-
-
-
 | `expr.await` | `expr.await` |
-
-
-
-
-
-
-
 | `trait T { async fn m(); }` | `trait T { async fn m(); }` |
-
-
-
-
-
-
-
 | `impl T for X { async fn m() {} }` | `impl T for X { async fn m() {} }` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 The transpiler automatically adds `#[tokio::main]` when async functions are detected, so you don't need to manually
 configure  \
 the runtime.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Why Postfix `.await`?
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 We chose postfix `.await` syntax for several reasons:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. **Natural reading order**: "expression.await" reads as "evaluate expression,,await"
-
-
-
-
-
-
-
 2. **Consistency**: Matches method call syntax (expression.method())
-
-
-
-
-
-
-
 3. **Composability**: Easy to chain: `fetch().await.process().await`
-
-
-
-
-
-
-
 4. **Visual clarity**: The dot makes it clear this is an operation on the expression
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## What's Next?
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 With async/await support, we're planning to add:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - **Async iterators** (async for loops)
-
-
-
-
-
-
-
 - **Channels** for inter-task communication
-
-
-
-
-
-
-
 - **Select expressions** for handling multiple concurrent operations
-
-
-
-
-
-
-
 - **Task spawning** primitives
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Getting Started
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Update your Poly compiler to the latest version and try the new features:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -645,9 +296,6 @@ cargo build --release
 
 
 ~~~
-
-
-
 
 ## Conclusion
 

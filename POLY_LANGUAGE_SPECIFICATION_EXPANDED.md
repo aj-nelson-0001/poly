@@ -67,195 +67,15 @@ name := new_value
 const NAME := value
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Mutability Rules
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Declaration | Mutable | Scope |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 |-------------|---------|-------|
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `var x i32 := 0` | Yes | Block |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `const MAX = 100` | No | Module |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `let x: i32 = 0` | No | Block |
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Examples
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -387,10 +207,6 @@ count := count * 2
 
 ~~~
 
-
-
-
-
 ---
 
 ## 3. Arithmetic Operations
@@ -398,29 +214,13 @@ count := count * 2
 ### Assembly-Style Instructions
 
 | Poly Syntax | Default Step | Transpiled Rust Output |
-
-
 |-------------|--------------|------------------------|
-
-
 | `add counter` | 1 | `counter += 1;` |
-
-
 | `counter := counter + 10` | Explicit (10) | `counter += 10;` |
-
-
 | `sub score` | 1 | `score -= 1;` |
-
-
 | `score := score - 15` | Explicit (15) | `score -= 15;` |
-
-
 | `counter := counter + 1` | Alias for `add` | `counter += 1;` |
-
-
 | `counter := counter - 1` | Alias for `sub` | `counter -= 1;` |
-
-
 
 ### Mutation Commands
 
@@ -434,67 +234,7 @@ x := x - 1          // x -= 1
 x := y     // replace x with y; self-reference is rejected
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Bitwise Operations
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -658,10 +398,6 @@ var result := a >> 1   // Right shift
 
 ~~~
 
-
-
-
-
 ---
 
 ## 4. Data Types: Characters & Strings
@@ -669,29 +405,13 @@ var result := a >> 1   // Right shift
 ### Type Mapping
 
 | Poly Type | Description | Memory Size | Rust Mapping |
-
-
 |-----------|-------------|-------------|--------------|
-
-
 | `char` | Single ASCII character | 1 byte (u8) | `u8` |
-
-
 | `string` | Sequence of ASCII characters | 1 byte/char | `Vec<u8>` / `&[u8]` |
-
-
 | `uchar` | Single UTF-32 Unicode scalar | 4 bytes | `char` |
-
-
 | `ustring` | UTF-8 encoded Unicode text | 1-4 bytes/char | `String` / `&str` |
-
-
 | `byte` | Raw byte value | 1 byte | `u8` |
-
-
 | `bytes` | Byte buffer | Variable | `Vec<u8>` |
-
-
 
 ### String Operations
 
@@ -708,67 +428,7 @@ var char_count i32 := greeting.len()  // Character count
 var byte_count i32 := greeting.byte_len()  // Byte count
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### String Manipulation
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -916,10 +576,6 @@ var parts Vec<ustring> := s.split(unicode " ")  // Split by delimiter
 
 ~~~
 
-
-
-
-
 ---
 
 ## 5. Data Types: Primitives & Compound Types
@@ -927,38 +583,16 @@ var parts Vec<ustring> := s.split(unicode " ")  // Split by delimiter
 ### Primitive Types
 
 | Poly Type | Description | Size | Rust Mapping |
-
-
 |-----------|-------------|------|--------------|
-
-
 | `bool` | Boolean | 1 byte | `bool` |
-
-
 | `i8` / `u8` | Signed/Unsigned 8-bit integer | 1 byte | `i8` / `u8` |
-
-
 | `i16` / `u16` | Signed/Unsigned 16-bit integer | 2 bytes | `i16` / `u16` |
-
-
 | `i32` / `u32` | Signed/Unsigned 32-bit integer | 4 bytes | `i32` / `u32` |
-
-
 | `i64` / `u64` | Signed/Unsigned 64-bit integer | 8 bytes | `i64` / `u64` |
-
-
 | `i128` / `u128` | Signed/Unsigned 128-bit integer | 16 bytes | `i128` / `u128` |
-
-
 | `f32` | 32-bit floating point | 4 bytes | `f32` |
-
-
 | `f64` | 64-bit floating point | 8 bytes | `f64` |
-
-
 | `isize` / `usize` | Platform-dependent integer | Pointer size | `isize` / `usize` |
-
-
 
 ### Compound Types
 
@@ -986,131 +620,11 @@ var result Result<i32, Error> := Ok(42)
 var error Result<i32, Error> := Error(Error.InvalidInput)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 6. Structs & Custom Types
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Basic Struct Definition
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1194,10 +708,6 @@ end struct
 
 ~~~
 
-
-
-
-
 The field `var` prefix is optional:
 
 ~~~poly fragment
@@ -1207,67 +717,7 @@ struct Point
 end struct
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Struct with Methods
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1607,10 +1057,6 @@ end struct
 
 ~~~
 
-
-
-
-
 ### Struct with Default Values
 
 ~~~poly fragment
@@ -1626,67 +1072,7 @@ var config Config := Config { }
 var custom Config := Config { width: 1920, height: 1080 }
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Tuple Structs
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1786,10 +1172,6 @@ var distance Meters := Meters(42.5)
 
 ~~~
 
-
-
-
-
 ### Unit Structs
 
 ~~~poly fragment
@@ -1797,131 +1179,11 @@ struct Marker  // No fields - used for type-level programming
 end struct
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 7. Enums & Sum Types
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Basic Enums
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2037,10 +1299,6 @@ end enum
 
 ~~~
 
-
-
-
-
 ### Enums with Data (Algebraic Data Types)
 
 ~~~poly fragment
@@ -2055,67 +1313,7 @@ var circle Shape := Shape::Circle(5.0)
 var rect Shape := Shape::Rectangle { width: 10.0, height: 20.0 }
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Enums with Methods
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2487,10 +1685,6 @@ end enum
 
 ~~~
 
-
-
-
-
 ### Option and Result Enums (Built-in)
 
 ~~~poly fragment
@@ -2507,131 +1701,11 @@ enum Result<T, E>
 end enum
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 8. Traits & Interfaces
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Trait Definition
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2715,10 +1789,6 @@ end trait
 
 ~~~
 
-
-
-
-
 ### Traits with Default Implementations
 
 ~~~poly fragment
@@ -2733,67 +1803,7 @@ trait Logger
 end trait
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Implementing Traits
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -3149,10 +2159,6 @@ end impl
 
 ~~~
 
-
-
-
-
 ### Trait Bounds (Generics)
 
 ~~~poly fragment
@@ -3178,67 +2184,7 @@ where
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Trait Objects (Dynamic Dispatch)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -3386,10 +2332,6 @@ end loop
 
 ~~~
 
-
-
-
-
 ---
 
 ## 9. Modules & Namespaces
@@ -3424,67 +2366,7 @@ end module
 end module
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Using Modules
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -3856,10 +2738,6 @@ var result := multiply(3.0, 4.0)
 
 ~~~
 
-
-
-
-
 ### Module Visibility
 
 ~~~poly fragment
@@ -3874,355 +2752,25 @@ module mymodule
 end module
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 10. Ownership & Borrowing Model
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Core Principles
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Poly implements a simplified ownership system that transpiles to Rust's ownership model:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. **Each value has exactly one owner**
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 2. **When the owner goes out of scope, the value is dropped**
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 3. **Ownership can be transferred (moved) or borrowed**
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Ownership Transfer (Move Semantics)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The generated Rust uses move semantics for non-`Copy` values such as
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 strings, so a value can be moved out of a variable (the checker does not
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 enforce this at the language level; the borrow checker of the generated
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Rust does). To keep both values valid, build a fresh string with
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 concatenation:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -4274,10 +2822,6 @@ var s2 := s1 + unicode ""   // A fresh copy, s1 remains valid
 
 ~~~
 
-
-
-
-
 ### Borrowing (References)
 
 ~~~poly fragment
@@ -4300,67 +2844,7 @@ append_greeting(&mut greeting)  // Mutable borrow
 // Only one mutable borrow at a time
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Lifetimes (Explicit)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -4700,10 +3184,6 @@ end impl
 
 ~~~
 
-
-
-
-
 ### Smart Pointers
 
 ~~~poly fragment
@@ -4720,339 +3200,24 @@ var clone2 := Rc::clone(&shared)
 var thread_safe Arc<Mutex<Vec<i32>>> := Arc::new(Mutex::new([]))
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Transpilation Rules
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Poly Syntax | Rust Output |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 |-------------|-------------|
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `var s := s1` | `let s = s1;` (move) |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `var s := s1.clone()` | `let s = s1.clone();` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `fn foo(x: &i32)` | `fn foo(x: &i32)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `fn foo(x: &mut i32)` | `fn foo(x: &mut i32)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `&value` | `&value` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `&mut value` | `&mut value` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `Box::new(val)` | `Box::new(val)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `Rc::new(val)` | `Rc::new(val)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## 11. Direct Memory Operations & Raw Pointers
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Raw Pointer Syntax
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -5280,10 +3445,6 @@ var ptr3 ptr i32 := ptr - 1  // Previous i32
 
 ~~~
 
-
-
-
-
 ### Unsafe Blocks
 
 ~~~poly fragment
@@ -5303,67 +3464,7 @@ fn writeHardwareRegister(address: ptr u32, value: u32)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Null Pointer Safety
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -5575,10 +3676,6 @@ end match
 
 ~~~
 
-
-
-
-
 ---
 
 ## 12. Functions & Error Handling
@@ -5602,227 +3699,17 @@ fn greet(name: ustring, greeting: ustring = unicode "Hello"): ustring
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Error Handling
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #### Key Concepts
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. **Result type**: Use `Result<T, E>` for operations that can fail. `Ok(T)` for success, `Error(E)` for failure.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 2. **Error propagation**: Use `try` to propagate errors up the call stack (like Rust's `?` operator).
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 3. **Pattern matching**: Use `match` to handle both success and error cases.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 4. **Custom errors**: Define custom error types using `enum` for specific error conditions.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 5. **Readability**: Poly uses `Error(e)` instead of `Err(e)` for clearer, more readable code.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #### Basic Error Handling
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -6306,10 +4193,6 @@ end fn
 
 ~~~
 
-
-
-
-
 #### Advanced Error Handling Patterns
 
 ~~~poly fragment
@@ -6365,67 +4248,7 @@ fn process_user()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Panic and Unwrap
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -6701,30 +4524,14 @@ end match
 
 ~~~
 
-
-
-
-
 ### Transpilation Rules
 
 | Poly Syntax | Rust Output |
-
-
 |-------------|-------------|
-
-
 | `try expr` | `expr?` |
-
-
 | `panic(msg)` | `panic!("{}", msg)` |
-
-
 | `val.unwrap()` | `val.expect("Poly unwrap() called on None or Err value")` |
-
-
 | `val.expect(msg)` | `val.expect(&msg)` |
-
-
 
 ---
 
@@ -6763,147 +4570,12 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The `else if` arms and the final `else` share one `end if`, which the
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 innermost arm owns. An `if` statement nested directly inside an `else`
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 is not part of the language; express the nested condition as another
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `else if` arm instead.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### While Loops
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -7259,10 +4931,6 @@ end while
 
 ~~~
 
-
-
-
-
 ### Loop (Infinite Loop)
 
 ~~~poly fragment
@@ -7276,67 +4944,7 @@ loop
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Loop Ranges (Inspired by Sinclair QL SuperBASIC)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Poly's `loop` command supports multiple ranges and specific values, borrowing from Sinclair QL SuperBASIC's flexible `FOR`
 loo \
@@ -7344,67 +4952,7 @@ p  \
 design. Loop ranges include both endpoints: `1..3` iterates `1, 2, 3`. Use `loop variable` for range/value iteration, while  \
 bare `loop` remains the infinite loop.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #### Syntax Variants
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -7968,10 +5516,6 @@ end loop
 
 ~~~
 
-
-
-
-
 #### Iterate Over Collections
 
 ~~~poly fragment
@@ -8005,67 +5549,7 @@ loop map
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #### Reverse Ranges
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -8229,36 +5713,16 @@ end loop
 
 ~~~
 
-
-
-
-
 #### Transpilation Examples
 
 | Poly Syntax | Rust Output |
-
-
 |-------------|-------------|
-
-
 | `loop i 0..10` | `for i in 0..=10 {` |
-
-
 | `loop i 1..3, 7, 19..20` | `for i in (1..=3).chain(std::iter::once(7)).chain(19..=20) {` |
-
-
 | `loop i 1..10 step 2` | `for i in (1..=10).step_by(2) {` |
-
-
 | `loop i 10..1 step -1` | `for i in (1..=10).rev() {` |
-
-
 | `loop item in items` | `for item in items {` |
-
-
 | `loop item in items.enumerate()` | `for (index, item) in items.into_iter().enumerate() {` |
-
-
 
 ### Match Expressions
 
@@ -8304,435 +5768,30 @@ match option_value
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Transpilation Rules
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Poly Syntax | Rust Output |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 |-------------|-------------|
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `if x,` | `if x {` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `else if x,` | `} else if x {` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `else,` | `} else {` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `end if` | `}` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `while cond` | `while cond {` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `end while` | `}` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `loop` | `loop {` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `end loop` | `}` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `loop i 0..10` | `for i in 0..=10 {` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `loop item in items` | `for item in items {` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `end loop` | `}` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `match expr` | `match expr {` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `pattern, expr` | `pattern => expr,` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `end match` | `}` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## 14. Closures & Functional Programming
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Closure Syntax
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -9024,10 +6083,6 @@ end
 
 ~~~
 
-
-
-
-
 ### Closure Types
 
 ~~~poly fragment
@@ -9051,67 +6106,7 @@ end
 // data is no longer accessible
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Higher-Order Functions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -9643,10 +6638,6 @@ var result := [1, 2, 3, 4, 5]
 
 ~~~
 
-
-
-
-
 ### Function Pointers
 
 ~~~poly fragment
@@ -9664,725 +6655,50 @@ end fn
 var result := apply_operation(5, 3, add)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Transpilation Rules
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Poly Syntax | Rust Output |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 |-------------|-------------|
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `\|x\| x * 2` | `\|x\| x * 2` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `\|x: i32\| x * 2` | `\|x: i32\| x * 2` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `\|\| body end` | `\|\| { body }` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `move \|\| body end` | `move \|\| { body }` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `vec.map(\|x\| expr)` | `vec.iter().map(\|x\| expr).collect()` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `vec.filter(\|x\| expr)` | `vec.iter().filter(\|x\| expr).collect()` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## 15. Async/Await & Concurrency
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Overview
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Poly supports asynchronous programming through `async fn` and `.await` syntax, which transpiles to Rust's async/await
 system.  \
 This enables non-blocking I/O and concurrent operations while maintaining the language's explicit, readable style.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Key Concepts
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. **Async functions**: Use `async fn` to declare functions that can be paused and resumed
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 2. **Await expressions**: Use `.await` postfix syntax to wait for async operations
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 3. **Tokio runtime**: Async code runs on the Tokio runtime (automatically added `#[tokio::main]`)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 4. **Trait support**: Traits can have async methods
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > **Runtime status:** `delay(ms)` and `sleep(ms)` are implemented (`delay` lowers to
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > `tokio::time::sleep`, `sleep` to `std::thread::sleep`). `http_get` performs a
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > real HTTP/1.1 GET over a tokio TCP connection and returns the response body;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > `tcp_connect` establishes a real TCP connection and returns the peer address;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > `spawn <expr>` runs an async expression as a background `tokio::spawn` task.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > `db_execute(query)` runs SQL against a shared in-memory SQLite database
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > (rusqlite) and returns each row as a `|`-joined string of its `{:?}` values;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > `CREATE TABLE`/`INSERT`/`SELECT` calls within one program share the same
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > connection. Programs using it need the `rusqlite` crate in the generated
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > Cargo project, which `--check`, `--project`, and the CI harness add
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > automatically. `get --timeout`/`--default`/`--as`/`--bytes` are implemented;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > `--mask` suppresses terminal echo while reading (best-effort `stty -echo` on
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > Unix terminals, plain read elsewhere) and `--until` reads stdin until the
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > given delimiter, returning everything before it.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Async Function Declaration
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -10722,10 +7038,6 @@ end fn
 
 ~~~
 
-
-
-
-
 ### Await Expressions
 
 The `.await` syntax is postfix, meaning it comes after the async expression:
@@ -10756,67 +7068,7 @@ var data := transform(
 )
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Async with Structs and Enums
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -11204,10 +7456,6 @@ var data := client.get(unicode "/users").await
 
 ~~~
 
-
-
-
-
 ### Traits with Async Methods
 
 ~~~poly fragment
@@ -11235,67 +7483,7 @@ async fn process_fetcher<T: DataFetcher>(fetcher: T, key: ustring): ustring
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Concurrency Patterns
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -11907,33 +8095,15 @@ end fn
 
 ~~~
 
-
-
-
-
 ### Transpilation Rules
 
 | Poly Syntax | Rust Output |
-
-
 |-------------|-------------|
-
-
 | `async fn name()` | `async fn name()` |
-
-
 | `expr.await` | `expr.await` |
-
-
 | `trait T \n async fn m() \n end trait` | `trait T { async fn m(); }` |
-
-
 | `impl T for X \n async fn m() \n end impl` | `impl T for X { async fn m() {} }` |
-
-
 | (auto-detected) | `#[tokio::main]` on main |
-
-
 
 ### Example: Complete Async Program
 
@@ -11985,131 +8155,11 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 16. Pattern Matching
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Basic Patterns
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -12353,10 +8403,6 @@ end match
 
 ~~~
 
-
-
-
-
 ### Variable Binding
 
 ~~~poly fragment
@@ -12372,67 +8418,7 @@ match data
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Destructuring
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -12820,10 +8806,6 @@ end match
 
 ~~~
 
-
-
-
-
 ### Nested Patterns
 
 ~~~poly fragment
@@ -12836,67 +8818,7 @@ match data
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Match Guards
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -13012,10 +8934,6 @@ end match
 
 ~~~
 
-
-
-
-
 ### Binding Modes
 
 ~~~poly fragment
@@ -13028,341 +8946,26 @@ match age
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 17. Output: The `put` Command
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Overview
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Poly's `put` command outputs to stdout and always appends a newline (`\n`), like Rust's `println!`. Both use shell-like  \
 redirection operators for file output.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Key Concepts
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. **`put`**: Outputs to stdout and always appends a newline (`\n`). This is the primary output command.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 2. **Unicode inference**: The language automatically detects Unicode based on string content.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 3. **Error/Warning commands**: Use `error`, `warn`, and `info` for stderr output. These commands automatically prepend level  \
 indicators.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 4. **File output**: Use `to` for write/truncate and `to ... -append` for append operations.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 > **Note:** The legacy `put -n` and `putl` flags/commands are no longer accepted. Use `put` for all output.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Syntax Variants
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -13670,10 +9273,6 @@ info expression
 
 ~~~
 
-
-
-
-
 ### Basic Examples
 
 ~~~poly fragment
@@ -13723,67 +9322,7 @@ put "Choose: "
 var choice i32 := get
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Formatting Output
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -14059,10 +9598,6 @@ put unicode "{'hello':.10}" // hello*****
 
 ~~~
 
-
-
-
-
 ### File Output
 
 ~~~poly fragment
@@ -14088,67 +9623,7 @@ loop record in records
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Error/Warning Output
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -14488,10 +9963,6 @@ end if
 
 ~~~
 
-
-
-
-
 ### Advanced Output Features
 
 ~~~poly fragment
@@ -14515,492 +9986,41 @@ var output ustring := capture put unicode "Computed: " + (2 + 2)
 // output now contains unicode "Computed: 4"
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Transpilation Rules
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Poly Syntax | Rust Output |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 |-------------|-------------|
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `put expr` | `println!("{}", expr);` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `error expr` | `eprintln!("[ERROR] {}", expr);` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `warn expr` | `eprintln!("[WARN] {}", expr);` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `info expr` | `eprintln!("[INFO] {}", expr);` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `put expr to "file"` |`std::fs::write("file", format!("{}\n", expr)).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e \
 } \
 "); std::process::exit(1) });` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | `put expr to "file" -append` | `use std::io::Write; let mut f = std::fs::OpenOptions::new().append(true).open("file") \
 .unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); writeln!(f, "{}",
 expr).unwrap_or_else(| \
 e| \
 { eprintln!("Poly runtime error: {e}"); std::process::exit(1) });` |
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **Note:** The `error`, `warn`, and `info` commands automatically prepend level indicators (`[ERROR]`, `[WARN]`, `[INFO]`) to  \
 the output. This helps with log filtering and debugging.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Feature | Poly | Rust | Python | Go |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 |---------|------|------|--------|----|
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Basic output | `put x` | `println!("{}", x)` | `print(x)` | `fmt.Println(x)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Error | `error x` | `eprintln!("[ERROR] {}", x)` | `print(x, file=sys.stderr)` | `fmt.Fprintln(os.Stderr, x)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Warning | `warn x` | `eprintln!("[WARN] {}", x)` | `print(x, file=sys.stderr)` | `fmt.Fprintln(os.Stderr, x)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Debug | `info x` | `eprintln!("[INFO] {}", x)` | `print(x, file=sys.stderr)` | `fmt.Fprintln(os.Stderr, x)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | File write | `put x to "f"` | `fs::write("f", x)` | `open("f","w").write(x)` | `os.WriteFile("f", x)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | File append | `put x to "f"` | `OpenOptions::append` | `open("f","a").write(x)` | `os.OpenFile("f", APPEND)` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Formatting | `put "{x:.2f}"` | `println!("{:.2f}", x)` | `print(f"{x:.2f}")` | `fmt.Printf("%.2f", x)` |
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Advanced Examples
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 **Note:** These examples use standard library functions like `sleep()`, `pad_right()`, `repeat()`, and `to_string()`. See
 the  \
 Standard Library section for details.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -16076,10 +11096,6 @@ end fn
 
 ~~~
 
-
-
-
-
 ### Edge Cases
 
 ~~~poly fragment
@@ -16141,67 +11157,7 @@ match risky()
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Accessibility
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -16845,10 +11801,6 @@ put "[SUCCESS] Operation complete"  // Text prefix for color-blind users
 
 ~~~
 
-
-
-
-
 ### Debugging
 
 ~~~poly fragment
@@ -16909,67 +11861,7 @@ debug(y)
 debug(x + y)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Internationalization
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -18221,10 +13113,6 @@ var text_alignment := if is_rtl(locale),unicode "right" else unicode "left" end 
 
 ~~~
 
-
-
-
-
 ### Concurrency
 
 ~~~poly fragment
@@ -18327,179 +13215,14 @@ async fn fetch_with_timeout(url: ustring, timeout_ms: i32): Result<ustring, Time
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Best Practices
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. **Use `error`/`warn`/`info` appropriately**: Reserve for actual errors, warnings, and debug info.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 2. **Use `--default` for optional input**: Provide sensible defaults for better UX.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 3. **Use `--timeout` for interactive input**: Prevent programs from hanging.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 4. **Use `with validate` for data validation**: Catch errors early.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Grammar Addition
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bnf
 
@@ -18583,10 +13306,6 @@ end fn
 
 ~~~
 
-
-
-
-
 **Note:** `put` always appends a newline (like Rust's `println!`). The legacy `put -n` and `putl` are no longer accepted. The
 `error`, `warn`, and `info` commands always output to stderr with a newline.
 
@@ -18656,67 +13375,7 @@ var input i32 := get with validate |x| x > 0
 var input ustring := get with complete [unicode "start", unicode "stop"]
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Basic Examples
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -19392,10 +14051,6 @@ put "Valid age: " + age
 
 ~~~
 
-
-
-
-
 ### File Input
 
 ~~~poly fragment
@@ -19417,67 +14072,7 @@ var header bytes := get from "image.png" with bytes 8
 var text ustring := get from "utf8.txt" with encoding unicode "utf-8"
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Advanced Input Features
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -19993,10 +14588,6 @@ end loop
 
 ~~~
 
-
-
-
-
 ### Error Handling
 
 ~~~poly fragment
@@ -20015,67 +14606,7 @@ fn read_config(): Result<Config, Error>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Additional Examples
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -21135,18 +15666,10 @@ var end ustring := get with validate |d| d.len() = 10 && d[4] = unicode '-' && d
 
 ~~~
 
-
-
-
-
 ### Transpilation Rules
 
 | Poly Syntax | Rust Output |
-
-
 |-------------|-------------|
-
-
 | `var x := get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap_or_else(|e| { eprintln!("Poly runtime
 error: {e}"); std::process::exit(1) }); x = x.trim().to_string();` |
 | `var x i32 := get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap_or_else(|e| {
@@ -21159,65 +15682,27 @@ eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); x = x.trim().to_
 | `var x bytes := get from "file"` | `let x = std::fs::read("file").unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}");
 std::process::exit(1) });` |
 | `get --timeout 5000` | `// Uses std::thread::spawn with timer and channel to implement timeout. See standard library.` |
-
-
 | `get --default unicode "val"` | `// If input empty, returns default value. See standard library.` |
-
-
 | `get --mask unicode "*"` | `// Uses terminal raw mode to mask input characters. See standard library.` |
-
-
 | `get --as i32` | `// Parse as specified type. See standard library.` |
-
-
 | `get --until unicode ","` | `// Reads until delimiter found in input stream. See standard library.` |
-
-
 | `get with validate \|x\| ...` | `// Loops until validation closure returns true. See standard library.` |
-
-
 | `get with complete [...]` | `// Uses line editor library for completion. See standard library.` |
-
-
 
 ### Comparison with Similar Commands
 
 | Feature | Poly `get` | Rust | Python | Go |
-
-
 |---------|------------|------|--------|----|
-
-
 | Basic input | `var x := get` | `stdin().read_line()` | `input()` | `bufio.NewReader()` |
-
-
 | With prompt | `get unicode "prompt"` | `print! + read_line` | `input("prompt")` | `fmt.Print + ReadString` |
-
-
 | Typed input | `var x i32 := get` | `read_line + parse` | `int(input())` | `Scanf("%d", &x)` |
-
-
 | File input | `get from "file"` | `fs::read_to_string` | `open().read()` | `os.ReadFile` |
-
-
 | Binary input | `get from "file"` (bytes) | `fs::read` | `open().read()` | `os.ReadFile` |
-
-
 | Validation | `get with validate` | Built-in | (manual) | (manual) |
-
-
 | Default value | `get --default` | Built-in | (manual) | (manual) |
-
-
 | Timeout | `get --timeout` | Built-in | (manual) | (manual) |
-
-
 | Mask | `get --mask` | Built-in | (manual) | (manual) |
-
-
 | Completion | `get with complete` | Built-in | (manual) | (manual) |
-
-
 
 ### Best Practices
 
@@ -21247,164 +15732,14 @@ std::process::exit(1) });` |
              | "with" "encoding" <ustring> // Encoding
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **Note:** Simple options use flags (`--timeout`, `--default`, etc.). Complex options like validation closures and completion  \
 arrays use `with` syntax for readability.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 18. Standard Library
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Platform Detection
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -21840,10 +16175,6 @@ end fn
 
 ~~~
 
-
-
-
-
 ### Debugging Utilities
 
 ~~~poly fragment
@@ -21881,67 +16212,7 @@ fn set_env(name: ustring, value: ustring)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Internationalization
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -22409,10 +16680,6 @@ end fn
 
 ~~~
 
-
-
-
-
 ### Collections
 
 ~~~poly fragment
@@ -22463,67 +16730,7 @@ queue.dequeue()
 queue.peek()
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### I/O
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -23039,10 +17246,6 @@ var filename := path.filename()
 
 ~~~
 
-
-
-
-
 ### String Operations
 
 ~~~poly fragment
@@ -23064,67 +17267,7 @@ s.bytes()            // Byte iterator
 s.parse::<i32>()     // Parse to integer
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Math Operations
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -23512,10 +17655,6 @@ random_range(1, 10) // Random in range
 
 ~~~
 
-
-
-
-
 ### Iterators
 
 ~~~poly fragment
@@ -23537,67 +17676,7 @@ iter.collect()       // Collect to collection
 (0..10).rev().iter() // 10 down to 0
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Concurrency
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -25105,10 +19184,6 @@ end fn
 
 ~~~
 
-
-
-
-
 ---
 
 ## 19. Transpilation & Target Project Structure
@@ -25373,46 +19448,22 @@ my_poly_project/
 
 ~~~
 
-
-
-
-
 ### Complete Transpilation Mapping
 
 #### Output Commands
 
 | Poly Syntax | Rust Output |
-
-
 |-------------|-------------|
-
-
 | `put expr` | `println!("{}", expr);` |
-
-
 | `put expr` | `print!("{}", expr);` |
-
-
 | `error expr` | `eprintln!("[ERROR] {}", expr);` |
-
-
 | `warn expr` | `eprintln!("[WARN] {}", expr);` |
-
-
 | `info expr` | `eprintln!("[INFO] {}", expr);` |
-
-
 | `put expr to "file"` | `std::fs::write("file", expr.to_string()).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}");
 std::process::exit(1) });` |
 | `put expr to "file"` | Append to file with writeln |
-
-
 | `put "{x}"` | `println!("{}", x);` |
-
-
 | `put "{x:.2f}"` | `println!("{:.2f}", x);` |
-
-
 
 **Note:** The `error`, `warn`, and `info` commands automatically prepend level indicators (`[ERROR]`, `[WARN]`, `[INFO]`) to
 the
@@ -25421,11 +19472,7 @@ output for easier log filtering.
 #### Input Commands
 
 | Poly Syntax | Rust Output |
-
-
 |-------------|-------------|
-
-
 | `var x := get` | `let mut x = String::new(); std::io::stdin().read_line(&mut x).unwrap_or_else(|e| { eprintln!("Poly runtime
 error: {e}"); std::process::exit(1) }); x = x.trim().to_string();` |
 | `var x i32 := get` | `let mut input = String::new(); std::io::stdin().read_line(&mut input).unwrap_or_else(|e| {
@@ -25438,269 +19485,95 @@ eprintln!("Poly runtime error: {e}"); std::process::exit(1) }); x = x.trim().to_
 | `var x bytes := get from "file"` | `let x = std::fs::read("file").unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}");
 std::process::exit(1) });` |
 | `get --timeout 5000` | `// Uses std::thread::spawn with timer and channel to implement timeout. See standard library.` |
-
-
 | `get --default unicode "val"` | `// If input empty, returns default value. See standard library.` |
-
-
 | `get --mask unicode "*"` | `// Uses terminal raw mode to mask input characters. See standard library.` |
-
-
 | `get --as i32` | `// Parse as specified type. See standard library.` |
-
-
 | `get --until unicode ","` | `// Reads until delimiter found in input stream. See standard library.` |
-
-
 | `get --bytes 8` | `// Read specified number of bytes. See standard library.` |
-
-
 | `get with validate \|x\| ...` | `// Loops until validation closure returns true. See standard library.` |
-
-
 | `get with complete [...]` | `// Uses line editor library for completion. See standard library.` |
-
-
 
 #### Other Constructs
 
 | Poly Construct | Rust Output |
-
-
 |----------------|-------------|
-
-
 | **Variables & Constants** | |
-
-
 | `var x i32 := 10` | `let mut x: i32 = 10;` |
-
-
 | `let x: i32 = 10` | `let x: i32 = 10;` |
-
-
 | `const MAX = 100` | `const MAX: i32 = 100;` |
-
-
 | **Arithmetic** | |
-
-
 | `x := x + 5` | `x += 5;` |
-
-
 | `x := x - 3` | `x -= 3;` |
-
-
 | `x += 5` | `x += 5;` |
-
-
 | **Functions** | |
-
-
 | `fn foo() { }` | `fn foo() { }` |
-
-
 | `fn foo(): i32` | `fn foo() -> i32` |
-
-
 | `fn foo(x: i32)` | `fn foo(x: i32)` |
-
-
 | `fn foo(x: &i32)` | `fn foo(x: &i32)` |
-
-
 | `fn foo(x: &mut i32)` | `fn foo(x: &mut i32)` |
-
-
 | **Control Flow** | |
-
-
 | `if x,` | `if x {` |
-
-
 | `else if x,` | `} else if x {` |
-
-
 | `else` | `} else {` |
-
-
 | `end if` | `}` |
-
-
 | `while x` | `while x {` |
-
-
 | `end while` | `}` |
-
-
 | `loop` | `loop {` |
-
-
 | `end loop` | `}` |
-
-
 | `loop i 0..10` | `for i in 0..=10 {` |
-
-
 | `loop item in items` | `for item in items {` |
-
-
 | `end loop` | `}` |
-
-
 | `match x` | `match x {` |
-
-
 | `pattern, expr` | `pattern => expr,` |
-
-
 | `end match` | `}` |
-
-
 | **Structs** | |
-
-
 | `struct Foo { }` | `struct Foo { }` |
-
-
 | `impl Foo { }` | `impl Foo { }` |
-
-
 | **Enums** | |
-
-
 | `enum Foo { A, B }` | `enum Foo { A, B }` |
-
-
 | `Foo::A` | `Foo::A` |
-
-
 | **Traits** | |
-
-
 | `trait Foo { }` | `trait Foo { }` |
-
-
 | `impl Foo for Bar { }` | `impl Foo for Bar { }` |
-
-
 | `fn foo<T: Trait>()` | `fn foo<T: Trait>()` |
-
-
 | **Modules** | |
-
-
 | `module foo` | `mod foo {` |
-
-
 | `use foo::bar` | `use foo::bar;` |
-
-
 | `pub fn foo()` | `pub fn foo()` |
-
-
 | **Error Handling** | |
-
-
 | `try expr` | `expr?` |
-
-
 | `Result<T, E>` | `Result<T, E>` |
-
-
 | `Option<T>` | `Option<T>` |
-
-
 | `Ok(val)` | `Ok(val)` |
-
-
 | `Error(e)` | `Err(e)` |
-
-
 | `Some(val)` | `Some(val)` |
-
-
 | `None` | `None` |
-
-
 | `panic(msg)` | `panic!("{}", msg)` |
-
-
 | **Pointers** | |
-
-
 | `ptr T` | `*const T` / `*mut T` |
-
-
 | `deref ptr` | `unsafe { *ptr }` |
-
-
 | `addr val` | `&val as *const _` |
-
-
 | **Smart Pointers** | |
-
-
 | `Box::new(val)` | `Box::new(val)` |
-
-
 | `Rc::new(val)` | `Rc::new(val)` |
-
-
 | `Arc::new(val)` | `Arc::new(val)` |
-
-
 | **Closures** | |
-
-
 | `\|x\| expr` | `\|x\| expr` |
-
-
 | `\|x\| { body }` | `\|x\| { body }` |
-
-
 | `move \|\| { }` | `move \|\| { }` |
-
-
 | **Collections** | |
-
-
 | `Vec<T>` | `Vec<T>` |
-
-
 | `Map<K, V>` | `HashMap<K, V>` |
-
-
 | `Set<T>` | `HashSet<T>` |
-
-
 | `[1, 2, 3]` | `vec![1, 2, 3]` |
-
-
 | **Output** | |
-
-
 | `put expr` | `println!("{}", expr);` |
-
-
 | `put expr` | `print!("{}", expr);` |
-
-
 | `error expr` | `eprintln!("[ERROR] {}", expr);` |
-
-
 | `warn expr` | `eprintln!("[WARN] {}", expr);` |
-
-
 | `info expr` | `eprintln!("[INFO] {}", expr);` |
-
-
 | `put expr to "f"` | `std::fs::write("f", expr)` |
-
-
 | `put expr to "f"` | `writeln!(f, "{}", expr)` |
-
-
 
 ---
 
@@ -25772,32 +19645,14 @@ std::process::exit(1) });` |
 ## Appendix A: Comparison with Similar Languages
 
 | Feature | Poly | Rust | Go | Zig |
-
-
 |---------|------|------|-----|-----|
-
-
 | Memory Safety | Via Rust | Native | GC | Manual |
-
-
 | Learning Curve | Low | High | Medium | Medium |
-
-
 | Syntax Style | Assembly | Mixed | Simple | C-like |
-
-
 | Transpilation | To Rust | N/A | N/A | N/A |
-
-
 | Pattern Matching | Yes | Yes | Limited | Yes |
-
-
 | Generics | Yes | Yes | Yes | Comptime |
-
-
 | Traits | Yes | Yes (Traits) | Interfaces | N/A |
-
-
 
 ---
 
@@ -25890,98 +19745,8 @@ std::process::exit(1) });` |
          | "&mut" <type>
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **Document Version:** 1.4 Draft
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **Last Updated:** August 6, 2026
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 **Status:** Work in Progress - Major Expansion Complete

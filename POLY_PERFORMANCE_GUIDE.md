@@ -27,35 +27,7 @@ loop item in items
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use String Concatenation Efficiently
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -171,9 +143,6 @@ end loop
 
 ~~~
 
-
-
-
 ### Avoid Unnecessary Formatting
 
 ~~~poly fragment
@@ -184,67 +153,11 @@ put age.to_string()
 put "{age}"  // Slower than direct to_string()
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 2. Input Optimization
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Appropriate Data Types
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -312,9 +225,6 @@ var price ustring := get  // Then convert later
 
 ~~~
 
-
-
-
 ### Validate Early
 
 ~~~poly fragment
@@ -329,35 +239,7 @@ if age < 0 or age > 150,
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Timeouts
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -441,9 +323,6 @@ var input ustring := get  // Can hang forever
 
 ~~~
 
-
-
-
 ### Batch Input Operations
 
 ~~~poly fragment
@@ -462,67 +341,11 @@ while not file.eof()
 end while
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 3. File I/O Optimization
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Buffering
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -622,9 +445,6 @@ end loop
 
 ~~~
 
-
-
-
 ### Read Files Efficiently
 
 ~~~poly fragment
@@ -640,35 +460,7 @@ while not file.eof()
 end while
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Binary Mode When Appropriate
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -720,9 +512,6 @@ var data ustring := get from "image.png"  // May corrupt data
 
 ~~~
 
-
-
-
 ---
 
 ## 4. Error Handling Optimization
@@ -750,35 +539,7 @@ fn process(): Result<ustring, Error>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Pattern Matching
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -886,9 +647,6 @@ end if
 
 ~~~
 
-
-
-
 ### Avoid Unnecessary Error Creation
 
 ~~~poly fragment
@@ -910,67 +668,11 @@ fn validate(input: ustring): Result<ustring, ustring>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 5. Memory Optimization
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use References When Possible
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1054,9 +756,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Reuse Buffers
 
 ~~~poly fragment
@@ -1075,35 +774,7 @@ loop i 0..1000
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Primitive Types
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1171,9 +842,6 @@ var flag Box<bool> := Box::new(true)
 
 ~~~
 
-
-
-
 ---
 
 ## 6. String Optimization
@@ -1190,35 +858,7 @@ put "Name: {name}, Age: {age}"
 put "Name: " + name + ", Age: " + age.to_string()
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Pre-allocate Strings
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1302,9 +942,6 @@ end loop
 
 ~~~
 
-
-
-
 ### Use String Views
 
 ~~~poly fragment
@@ -1319,67 +956,11 @@ fn process(data: ustring)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 7. Collection Optimization
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Appropriate Collection Types
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1455,9 +1036,6 @@ var map Vec<(ustring, i32)> := []  // Vector for map
 
 ~~~
 
-
-
-
 ### Pre-allocate Collections
 
 ~~~poly fragment
@@ -1475,35 +1053,7 @@ loop i 0..1000
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Iterators
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1659,9 +1209,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 8. Parallel Processing
@@ -1679,35 +1226,7 @@ loop item in list
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Async I/O
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1791,9 +1310,6 @@ var data := read_file("large_file.txt")  // Blocks execution
 
 ~~~
 
-
-
-
 ---
 
 ## 9. Profiling and Benchmarking
@@ -1812,35 +1328,7 @@ info "Duration: " + duration.to_string() + "ms"
 // No idea how long it took
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Benchmark Different Approaches
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1979,9 +1467,6 @@ approach2()
 
 
 ~~~
-
-
-
 
 ---
 

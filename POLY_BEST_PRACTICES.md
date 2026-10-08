@@ -35,10 +35,12 @@ fn main()
 end fn
 
 ~~~poly fragment
+
 // Bad: Newlines in progress - creates multiple lines
 loop i 0..10
     put "Loading..."  // Creates multiple lines
 end loop
+
 ~~~
 
 
@@ -97,75 +99,14 @@ being called out, not a runnable program.
 
 ~~~poly fragment
 
-
-
-
-
-
-
 // Good: Use correct levels
-
-
-
-
-
-
-
 error "File not found: " + path           // Actual errors
-
-
-
-
-
-
-
 warn "Deprecated function used"           // Potential issues
-
-
-
-
-
-
-
 info "Processing item " + item.to_string() // Debug info
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: Wrong levels
-
-
-
-
-
-
-
 info "File not found"     // Should be error
-
-
-
-
-
-
-
 error "Loading..."        // Should be info
-
-
-
-
-
-
 
 ~~~
 
@@ -175,6 +116,7 @@ error "Loading..."        // Should be info
 ### Format Output Consistently
 
 ~~~poly fragment
+
 // Good: Consistent formatting
 put "Name: " + name
 put "Age: " + age.to_string()
@@ -184,6 +126,7 @@ put "Email: " + email
 put "Name:" + name
 put "Age is " + age
 put "Email:  " + email
+
 ~~~
 
 
@@ -250,59 +193,11 @@ put "Email:  " + email
 
 ~~~poly
 
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     // Good: Clear prompts
-
-
-
-
-
-
-
     put "Enter your name: "
-
-
-
-
-
-
-
     var name ustring := get
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -329,9 +224,6 @@ var name ustring := get  // User doesn't know what to enter
 
 
 ~~~
-
-
-
 
 ### Use Default Values for Optional Fields
 
@@ -379,84 +271,15 @@ var color ustring := get  // Forces user to enter something
 
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Prevent hanging
-
-
-
-
-
-
-
 match get --timeout 5000
-
-
-
-
-
-
-
     Ok(input), process(input)
-
-
-
-
-
-
-
     Timeout, warn "Input timeout, using default"
-
-
-
-
-
-
-
     Error(e), error "Input error: " + e
-
-
-
-
-
-
-
 end match
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: No timeout
-
-
-
-
-
-
-
 var input ustring := get  // Can hang forever
-
-
-
-
-
-
 
 ~~~
 
@@ -469,6 +292,7 @@ var input ustring := get  // Can hang forever
 Validate input with a loop instead.
 
 ~~~poly
+
 fn main()
     // Good: Validate early with a loop
     var age i32 := 0
@@ -494,35 +318,7 @@ if age < 0 or age > 150,
 end if
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Mask Sensitive Input
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -581,37 +377,9 @@ end fn
 
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Bad: Expose passwords
-
-
-
-
-
-
-
 put "Enter password: "
-
-
-
-
-
-
-
 var password ustring := get  // Visible on screen
-
-
-
-
-
-
-
 ~~~
 
 
@@ -671,156 +439,24 @@ end enum
 
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Propagate errors
-
-
-
-
-
-
-
 fn process_config(): Result<ustring, FileError>
-
-
-
-
-
-
-
     var content := try read_file(unicode "config.txt")
-
-
-
-
-
-
-
     var validated := try validate_config(content)
-
-
-
-
-
-
-
     return Ok(validated)
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Bad: Handle every error manually
-
-
-
-
-
-
-
 fn process_config(): Result<ustring, FileError>
-
-
-
-
-
-
-
     match read_file(unicode "config.txt")
-
-
-
-
-
-
-
         Ok(content),
-
-
-
-
-
-
-
             match validate_config(content)
-
-
-
-
-
-
-
                 Ok(validated), return Ok(validated)
-
-
-
-
-
-
-
                 Error(e), return Error(e)
-
-
-
-
-
-
-
             end match
-
-
-
-
-
-
-
         Error(e), return Error(e)
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
 
 ~~~
 
@@ -832,6 +468,7 @@ end fn
 > **Note:** Poly's `Result` type and pattern matching work on the Rust target. Other backends may require foreign helpers.
 
 ~~~poly fragment
+
 // Good: Pattern matching
 match read_file(unicode "config.txt")
     Ok(content), process(content)
@@ -851,6 +488,7 @@ else if result.error() = FileError::PermissionDenied,
 else
     error "Unexpected error"
 end if
+
 ~~~
 
 
@@ -885,131 +523,21 @@ end if
 
 ~~~poly fragment
 
-
-
-
-
-
-
 // Good: Catch-all for unknown errors
-
-
-
-
-
-
-
 match validate_name(input)
-
-
-
-
-
-
-
     Ok(name), put "Valid: " + name
-
-
-
-
-
-
-
     Error(EmptyInput), error "Name cannot be empty"
-
-
-
-
-
-
-
     Error(TooShort(min)), error "Name too short"
-
-
-
-
-
-
-
     Error(_), error "Validation failed"  // Catches any other error
-
-
-
-
-
-
-
 end match
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Bad: Exhaustive matching without catch-all
-
-
-
-
-
-
-
 match validate_name(input)
-
-
-
-
-
-
-
     Ok(name), put "Valid: " + name
-
-
-
-
-
-
-
     Error(EmptyInput), error "Name cannot be empty"
-
-
-
-
-
-
-
     Error(TooShort(min)), error "Name too short"
-
-
-
-
-
-
-
     // Missing Error(TooLong) and Error(InvalidFormat)
-
-
-
-
-
-
-
 end match
-
-
-
-
-
-
 
 ~~~
 
@@ -1023,6 +551,7 @@ end match
 ### Group Related Output
 
 ~~~poly fragment
+
 // Good: Grouped output
 put "=== User Registration ==="
 put ""
@@ -1034,6 +563,7 @@ put ""
 put "Name: " + name
 // ... 100 lines of code ...
 put "Email: " + email
+
 ~~~
 
 
@@ -1068,139 +598,22 @@ put "Email: " + email
 
 ~~~poly fragment
 
-
-
-
-
-
-
 // Good: Function for complex validation
-
-
-
-
-
-
-
 fn validate_user(name: ustring, email: ustring): Result<(ustring, ustring), ValidationError>
-
-
-
-
-
-
-
     var valid_name := try validate_name(name)
-
-
-
-
-
-
-
     var valid_email := try validate_email(email)
-
-
-
-
-
-
-
     return Ok((valid_name, valid_email))
-
-
-
-
-
-
-
 end fn
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: Inline complex logic
-
-
-
-
-
-
-
 var valid_name := if name.len() == 0,
-
-
-
-
-
-
-
     error "Empty name"
-
-
-
-
-
-
-
 else if name.len() < 2,
-
-
-
-
-
-
-
     error "Name too short"
-
-
-
-
-
-
-
 else
-
-
-
-
-
-
-
     name
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 // ... repeat for email ...
-
-
-
-
-
-
 
 ~~~
 
@@ -1210,6 +623,7 @@ end if
 ### Handle Errors at the Right Level
 
 ~~~poly fragment
+
 // Good: Handle errors at appropriate level (propagate to caller)
 fn read_config(): Result<ustring, FileError>
     return try read_file(unicode "config.txt")  // `read_file` returns Result
@@ -1231,6 +645,7 @@ fn read_config(): Result<ustring, FileError>
             return Error(e)
     end match
 end fn
+
 ~~~
 
 
@@ -1297,99 +712,20 @@ end fn
 
 ~~~poly fragment
 
-
-
-
-
-
-
 // Good: Build output and print once
-
-
-
-
-
-
-
 var output ustring := ""
-
-
-
-
-
-
-
 loop item in items
-
-
-
-
-
-
-
     output := output + item.to_string() + "\n"
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 put output
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Bad: Frequent output - multiple system calls
 
-
-
-
-
-
-
 loop item in items
-
-
-
-
-
-
 
     put item.to_string()  // Multiple system calls
 
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
 
 ~~~
 
@@ -1399,6 +735,7 @@ end loop
 ### Use Appropriate Data Types
 
 ~~~poly
+
 fn main()
     // Good: Use appropriate types
     var count i32 := get --as i32
@@ -1413,67 +750,11 @@ var count ustring := get  // Then parse later
 var price ustring := get  // Then convert later
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 6. Security Best Practices
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Always Mask Sensitive Input
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -1533,35 +814,11 @@ end fn
 
 ~~~poly fragment
 
-
-
-
-
-
-
 // Bad: Expose passwords
-
-
-
-
-
-
 
 put "Enter password: "
 
-
-
-
-
-
-
 var password ustring := get  // Visible on screen
-
-
-
-
-
-
 
 ~~~
 
@@ -1574,6 +831,7 @@ var password ustring := get  // Visible on screen
 Validate input with loops instead.
 
 ~~~poly
+
 fn main()
     // Good: Validate everything with loops
     var age i32 := 0
@@ -1612,35 +870,7 @@ var age i32 := get --as i32  // Could be negative
 var email ustring := get  // Could be invalid
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Timeouts for Interactive Input
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1724,9 +954,6 @@ var input ustring := get  // Can hang forever
 
 ~~~
 
-
-
-
 > **Note:** `--timeout` is a Rust-target feature. Other backends require foreign helpers for timeout behavior.
 
 ---
@@ -1757,35 +984,7 @@ end fn
 user-defined functions.
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Test Edge Cases
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2076,9 +1275,6 @@ end fn
 
 
 ~~~
-
-
-
 
 ---
 

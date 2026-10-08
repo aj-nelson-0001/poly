@@ -298,9 +298,6 @@ boolean       ::= "true" | "false"
 
 ~~~
 
-
-
-
 Outside foreign blocks, `#` starts a Poly comment. Inside a foreign block every character is copied as target-language text
 until a valid end marker is reached.
 
@@ -676,9 +673,6 @@ continue_statement   ::= "continue"
 
 ~~~
 
-
-
-
 Foreign blocks and explicit foreign function declarations are only valid as `top_level_item`s. The parser rejects them inside
 functions, loops, modules, or other nested Poly blocks. `extern rust fn ...` and `extern c fn ...` declarations are
 checker-only
@@ -855,9 +849,6 @@ function_type ::= "|" [ parameters ] "|" type
 
 
 ~~~
-
-
-
 
 The Rust backend supports the broader Poly type system. The C preview intentionally supports only primitive/scalar mappings,
 C-compatible plain structs, and simple pointers/references as documented in [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md).
@@ -1146,9 +1137,6 @@ unary_operator ::= "-" | "not" | "bitnot" | "*"
 
 ~~~
 
-
-
-
 `=` is the equality operator. `:=` is assignment. Logical, bitwise, and
 remainder operators are spelled as keywords: `and`, `or`, `xor`, `mod`,
 `bitand`, `bitor`, `bitnot`, and `shift left` / `shift right`. The `<<` and
@@ -1312,9 +1300,6 @@ match_expression ::= "match" expression { pattern "," expression } "end" "match"
 
 ~~~
 
-
-
-
 Poly loop ranges include both endpoints. A negative step selects descending iteration; a zero step is rejected — a literal zero
 step at parse/check time, a runtime zero step by yielding zero iterations. The range start may be any expression (a constant,
 index, or call as well as a literal); the var-less alternative accepts any start expression (`loop 0..10`, `loop 0 - 5..2`), a
@@ -1451,9 +1436,6 @@ get_flag            ::= "--timeout" expression
 
 ~~~
 
-
-
-
 `put` always writes a trailing newline. `error`, `warn`, and `info` write to stderr with `[ERROR]`, `[WARN]`, and `[INFO]`
 prefixes. File output is implemented by the Rust backend and currently rejected by the C backend.
 
@@ -1468,34 +1450,6 @@ poly --target asm --emit-asm program.poly
 poly --target asm program.poly
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `#rust` blocks are selected for Rust, `#c` blocks for C, and `#asm` blocks for
-
-
-
-
-
-
-
 the Linux x86-64 assembly target. A source containing `#cpp` is rejected
-
-
-
-
-
-
-
 explicitly because no C++ backend exists yet.

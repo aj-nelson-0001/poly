@@ -17,51 +17,9 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `:=` assigns. `=` compares. The legacy `==` spelling is rejected.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Output and Input
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -185,9 +143,6 @@ end fn
 
 ~~~
 
-
-
-
 `put` always adds a newline. Diagnostic commands write `[ERROR]`, `[WARN]`, or
 `[INFO]` to stderr. File redirects and the input flags above are implemented by
 the Rust target; the C target currently rejects redirects and stdin.
@@ -219,51 +174,9 @@ loop item in items
 end loop
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Loop ranges include both endpoints. Collection loops borrow their source collection.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Functions and Data
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -379,9 +292,6 @@ end fn
 
 ~~~
 
-
-
-
 The Rust target supports the broader parser/checker feature set, including enums,
 traits, modules, closures, generic types, async functions, matches, and
 collections. The C target supports scalar orchestration, simple functions, plain
@@ -402,20 +312,6 @@ fn main()
     put result
 end fn
 ~~~
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -491,9 +387,6 @@ end fn
 
 ~~~
 
-
-
-
 Foreign blocks must be top-level and their contents are copied as target-language
 text. Only the block matching the selected target is emitted. Optional `extern
 rust fn ...` and `extern c fn ...` declarations are top-level checker-only
@@ -506,162 +399,22 @@ poly --target c --emit-c program.poly
 poly --target c program.poly
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `#cpp` is reserved and rejected until a C++ backend exists. Set `POLY_CC` when the C compiler is not named `cc`.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## CLI
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 | Command | Effect |
-
-
-
-
-
-
-
 |---|---|
-
-
-
-
-
-
-
 | `poly file.poly` | Generate and build a Rust Cargo project |
-
-
-
-
-
-
-
 | `poly --check file.poly` | Check the default Rust target |
-
-
-
-
-
-
-
 | `poly --target c --check file.poly` | Check generated C with the selected C11 compiler |
-
-
-
-
-
-
-
 | `POLY_CC=clang poly --target c --check file.poly` | Select `clang` explicitly for C checks |
-
-
-
-
-
-
-
 | `poly --emit-rust file.poly` | Print Rust output |
-
-
-
-
-
-
-
 | `poly --target c --emit-c file.poly` | Print C output |
-
-
-
-
-
-
-
 | `poly --project DIR file.poly` | Generate a Rust project |
-
-
-
-
-
-
-
 | `poly --target c --project DIR file.poly` | Generate and build a C project |
-
-
-
-
-
-
-
 | `poly --tokens file.poly` | Print lexer tokens |
-
-
-
-
-
-
-
 | `poly --ast file.poly` | Print the parsed AST |
-
-
-
-
-
-
-
 | `poly --ir file.poly` | Print optimized Rust IR output |
-
-
-
-
-
-
-
 | `poly --source-map file.poly` | Print the best-effort source map summary |
-
-
-
-
-
-
-
 | `poly --repl` | Start the interactive REPL |

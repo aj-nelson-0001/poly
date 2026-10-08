@@ -46,35 +46,7 @@ fn compile_with_optimizations(): Result<ustring, BuildError>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Build Scripts
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -270,9 +242,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 2. Configuration Management
@@ -304,35 +273,7 @@ match load_config()
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Environment-Specific Configuration
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -576,9 +517,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 3. Logging and Monitoring
@@ -625,35 +563,7 @@ fn log_error(error: Error, context: ustring)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Health Checks
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -881,9 +791,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 4. Error Handling in Production
@@ -917,35 +824,7 @@ fn shutdown_handler()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Circuit Breaker Pattern
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1373,9 +1252,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 5. Performance Optimization
@@ -1408,35 +1284,7 @@ fn cache_set<T>(cache: Cache<T>, key: ustring, value: T)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Connection Pooling
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1664,9 +1512,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 6. Security in Production
@@ -1690,35 +1535,7 @@ fn create_https_server(config: Config): Result<Server, ServerError>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Rate Limiting
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -1906,9 +1723,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 7. Deployment Strategies
@@ -1938,35 +1752,7 @@ fn deploy_blue_green(new_version: ustring): Result<(), DeployError>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Rolling Deployment
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2146,9 +1932,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## 8. Monitoring and Alerting
@@ -2183,35 +1966,7 @@ fn collect_metrics(metrics: Metrics)
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Alerting
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -2374,9 +2129,6 @@ end fn
 
 
 ~~~
-
-
-
 
 ---
 

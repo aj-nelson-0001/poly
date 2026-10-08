@@ -41,9 +41,6 @@ rust_output/tetris/src/main.rs   generated Rust (do not edit by hand)
 
 ~~~
 
-
-
-
 ## Build & run
 
 Requires the Poly compiler (`compiler/target/release/poly`) and ALSA headers
@@ -163,9 +160,6 @@ cargo build --release --manifest-path rust_output/tetris/Cargo.toml
 
 ~~~
 
-
-
-
 Note: `poly --project` will not overwrite an existing directory — remove
 `rust_output/tetris` first. The `dep minifb = "0.27"` and `dep alsa = "0.9"`
 declarations at the top of tetris.poly are emitted into Cargo.toml
@@ -174,31 +168,18 @@ automatically.
 ## Controls
 
 | Key            | Action                    |
-
 |----------------|---------------------------|
-
 | ←/→            | Move (with DAS auto-repeat) |
-
 | ↓ or V         | Soft drop                 |
-
 | ↑ or X         | Rotate clockwise          |
-
 | Z              | Rotate counter-clockwise  |
-
 | Space          | Hard drop                 |
-
 | C              | Hold                      |
-
 | P              | Pause                     |
-
 | R              | Restart                   |
-
 | M              | Toggle mute               |
-
 | Enter          | Start / restart after game over |
-
 | Esc            | Quit                      |
-
 
 ## Faithfulness to the original
 

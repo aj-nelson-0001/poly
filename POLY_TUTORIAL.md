@@ -25,35 +25,7 @@ supports three comment styles:
    several lines. */
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 A comment may sit on its own line or trail a line of code:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -105,9 +77,6 @@ end fn
 
 ~~~
 
-
-
-
 Note that `#` only starts a comment when it does not name a foreign code block:
 a line beginning `#rust` or `#c` opens a foreign block instead.
 
@@ -130,51 +99,9 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Output
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Use `put` to print to the console. Each `put` adds a newline:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -218,9 +145,6 @@ end fn
 
 ~~~
 
-
-
-
 Output:
 ~~~
 
@@ -248,9 +172,6 @@ Hello, World!
 
 ~~~
 
-
-
-
 ### File Output
 
 Write to files using redirection operators:
@@ -264,51 +185,9 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Error/Warning Output
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Use `error`, `warn`, and `info` for different output levels:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -368,9 +247,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## Part 2: Input with `get`
@@ -387,51 +263,9 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Typed Input
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Use `--as` to parse the input line as a specific type:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -483,9 +317,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Input with Default Values
 
 Use `--default` for optional input:
@@ -499,59 +330,10 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Password Input
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Use `--mask` to hide input; echo is suppressed while typing on Unix terminals,
-
-
-
-
-
-
-
 and the read falls back to plain input elsewhere:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -611,9 +393,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Input with Timeout
 
 Use `--timeout` to prevent hanging:
@@ -629,83 +408,13 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Input with Validation
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > **Note:** The `with validate` clause is a parser-only compatibility form and
-
-
-
-
-
-
-
 > is not part of the maintained runnable v2 API — the closure is never executed
-
-
-
-
-
-
-
 > at runtime (see the v2 spec). The word `validate` is reserved for it and
-
-
-
-
-
-
-
 > cannot name variables, functions, or methods. Validate input with a loop
-
-
-
-
-
-
-
 > instead:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -829,9 +538,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Delimiter-Based Input
 
 Use `--until` to read until a delimiter; input stops at the delimiter (which is
@@ -846,83 +552,13 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Part 3: Error Handling
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Result Type
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Poly uses `Result<T, E>` for operations that can fail:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -982,9 +618,6 @@ end enum
 
 ~~~
 
-
-
-
 ### Basic Error Handling
 
 ~~~poly
@@ -1005,51 +638,9 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Custom Error Types
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Define specific error types for better error handling:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -1173,9 +764,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Error Propagation
 
 Use `try` to propagate errors up the call stack:
@@ -1189,51 +777,9 @@ fn process_file(): Result<ustring, FileError>
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Pattern Matching with Data
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Extract data from error variants:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -1461,9 +1007,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Wildcard Pattern
 
 Use `_` to catch any error:
@@ -1476,107 +1019,16 @@ match validate_name(input)
 end match
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Part 4: Match Expressions and Enum Payloads
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Match as an Expression
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `match` is not just a statement — it produces a value. Each arm's expression
-
-
-
-
-
-
-
 becomes the result, and arms may group alternatives with a comma-separated
-
-
-
-
-
-
-
 pattern list. A match **expression** must include a wildcard `_` arm so every
-
-
-
-
-
-
-
 possible scrutinee value has a result:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -1668,9 +1120,6 @@ end fn
 
 ~~~
 
-
-
-
 Omitting the wildcard is a compile error — the compiler reports the
 unmatched values (for example `non-exhaustive patterns`).
 
@@ -1700,155 +1149,22 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Which Match Form to Use
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - **Statement form** (Part 3): arms run statements, and guarded arms
-
-
-
-
-
-
-
   (`x if x > 5,`) are available. No wildcard is required when earlier arms
-
-
-
-
-
-
-
   cover every case you care about.
-
-
-
-
-
-
-
 - **Expression form**: arms are single expressions and a `_` arm is
-
-
-
-
-
-
-
   mandatory. Use it wherever a value is expected — declarations,
-
-
-
-
-
-
-
   arguments, returns.
-
-
-
-
-
-
-
 - Payloads bind **positionally in declaration order**, whatever the payload
-
-
-
-
-
-
-
   style: tuple payloads (`Rect(w, h)`), named fields (`Level(n: i32)`, as in
-
-
-
-
-
-
-
   Part 3's error variants), or `Result`'s `Ok(v)` / `Error(e)` arms. The
-
-
-
-
-
-
-
   binder name is yours — `Level(x)` binds the declared field `n` to `x`.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Part 5: Complete Example
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -2220,9 +1536,6 @@ end fn
 
 ~~~
 
-
-
-
 ---
 
 ## Part 6: Loop Ranges (SuperBASIC-inspired)
@@ -2241,51 +1554,9 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Multiple Ranges and Values
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The real power comes from combining multiple ranges and specific values:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -2425,9 +1696,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Steps
 
 Use `step` to control the increment:
@@ -2446,51 +1714,9 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Collection Iteration
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Iterate over collections and with indices:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -2598,9 +1824,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Practical Example
 
 ~~~poly
@@ -2617,91 +1840,14 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Part 7: Structs and Methods
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Defining a Struct
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 A struct groups related fields under one named type. Fields are declared with
-
-
-
-
-
-
-
 a type and no initial value:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -2801,9 +1947,6 @@ end fn
 
 ~~~
 
-
-
-
 ### Adding Methods with `impl`
 
 An `impl` block attaches methods to a struct. Poly moves values into calls,
@@ -2831,171 +1974,24 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Two rules worth remembering:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Method calls are not in-place: `c.bump()` alone discards the result. Always
-
-
-
-
-
-
-
   write `c := c.bump()`.
-
-
-
-
-
-
-
 - `spawn` and `step` are reserved words and cannot name fields or methods.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 For generics, traits, or default field values, put the definition in a
-
-
-
-
-
-
-
 `#rust` (or `#c`) foreign block and call it from Poly.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Part 8: Async and `spawn`
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Await a Future
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 An `async fn` returns a future; attach `.await` to suspend until it completes.
-
-
-
-
-
-
-
 Only async functions can use `.await`, and an async entry point is declared
-
-
-
-
-
-
-
 with `async fn main()`:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -3126,9 +2122,6 @@ end fn
 
 
 ~~~
-
-
-
 
 ### Spawning Independent Tasks
 

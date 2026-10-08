@@ -62,35 +62,7 @@ cargo build
 cargo test --workspace
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Project Structure
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~
 
@@ -116,188 +88,27 @@ poly/
 └── *.md                     # Documentation (see POLY_DOCUMENTATION_INDEX.md)
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Making Changes
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Branch Naming
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Use descriptive branch names:
-
-
-
-
-
-
-
 - `feature/add-pattern-matching`
-
-
-
-
-
-
-
 - `fix/resolve-parser-error`
-
-
-
-
-
-
-
 - `docs/update-tutorial`
-
-
-
-
-
-
-
 - `test/add-edge-case-tests`
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Commit Messages
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Write clear, concise commit messages:
-
-
-
-
-
-
-
 - Prefix with the conventional type this repository uses: `feat:`, `fix:`,
-
-
-
-
-
-
-
   `refactor:`, `docs:`, `ci:`, `test:`, `chore:`, or `chore(release):` for
-
-
-
-
-
-
-
   release preparation
-
-
-
-
-
-
-
 - Use imperative mood after the prefix ("add feature", not "added feature")
-
-
-
-
-
-
-
 - Keep the first line under 72 characters
-
-
-
-
-
-
-
 - Reference issues when applicable
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Example:
-
-
-
-
-
-
-
 ~~~
 
 
@@ -311,115 +122,17 @@ feat: add pattern matching support
 Closes #123
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Code Style
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - Follow Rust style guidelines
-
-
-
-
-
-
-
 - Use `cargo fmt` to format code
-
-
-
-
-
-
-
 - Use `cargo clippy --workspace --all-targets -- -D warnings` to check for warnings (this is exactly what CI runs)
-
-
-
-
-
-
-
 - Add comments for complex logic
-
-
-
-
-
-
-
 - Keep functions focused and small
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Testing
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Running Tests
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -503,9 +216,6 @@ cargo test -- --nocapture
 
 ~~~
 
-
-
-
 ### Writing Tests
 
 - Add tests for new features
@@ -523,187 +233,26 @@ fn test_parse_if_else_if() {
 }
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Test Coverage
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Aim for high test coverage, especially for:
-
-
-
-
-
-
-
 - Parser edge cases
-
-
-
-
-
-
-
 - Transpiler correctness
-
-
-
-
-
-
-
 - Error handling
-
-
-
-
-
-
-
 - Type checking
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Pull Request Process
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Before Submitting
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 1. ✅ Code compiles without errors
-
-
-
-
-
-
-
 2. ✅ All tests pass
-
-
-
-
-
-
-
 3. ✅ Code is formatted with `cargo fmt`
-
-
-
-
-
-
-
 4. ✅ No clippy warnings
-
-
-
-
-
-
-
 5. ✅ Documentation is updated (if applicable)
-
-
-
-
-
-
-
 6. ✅ Examples work correctly
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### PR Template
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~markdown
 
@@ -906,9 +455,6 @@ Brief description of changes
 
 
 ~~~
-
-
-
 
 ### Review Process
 

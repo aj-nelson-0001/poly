@@ -19,67 +19,11 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `:=` initializes declarations and assigns existing bindings. `=` compares values.
-
-
-
-
-
-
-
 The legacy `==` spelling is rejected. `var` types are written without a colon;
-
-
-
-
-
-
-
 `let` type annotations use a colon.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## `put`
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -147,9 +91,6 @@ end fn
 
 ~~~
 
-
-
-
 `put` writes to stdout and always adds a newline. Rust supports `to "file"`
 and `-append`. The C backend supports stdout output but rejects file
 redirects; use a `#c` helper for C file I/O.
@@ -164,84 +105,14 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 All three commands write to stderr. The generated Rust and C backends prefix the messages with `[ERROR]`, `[WARN]`, or
 `[INFO]`.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## `get` and Input Flags
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 `get` is a Rust-backend input operation. The C backend supports plain `get`
-
-
-
-
-
-
-
 (with an optional prompt) reading a line of stdin through an emitted runtime
-
-
-
-
-
-
-
 helper; file sources, flags, and `with` clauses are rejected with diagnostics.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -333,27 +204,16 @@ end fn
 
 ~~~
 
-
-
-
 Supported flags:
 
 | Form | Meaning |
-
 |------|---------|
-
 | `--as TYPE` | Convert input to the requested type |
-
 | `--default VALUE` | Use a fallback when input is empty |
-
 | `--mask VALUE` | Suppress terminal echo on supported Rust Unix terminals |
-
 | `--until VALUE` | Read through stdin until the delimiter or EOF |
-
 | `--bytes N` | Read a fixed number of bytes from a file |
-
 | `--timeout N` | Rust input timeout behavior; target support is backend-specific |
-
 
 The parser also represents `with validate`, `with complete`, and `with encoding`
 clauses for compatibility with the broader language model, but they are not part
@@ -382,59 +242,10 @@ fn main()
 end fn
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Range endpoints are inclusive. `while condition ... end while` is supported by
-
-
-
-
-
-
-
 the parser and lowers to a loop. `break` and `continue` are valid inside loops.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Collection iteration:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -534,9 +345,6 @@ end fn
 
 ~~~
 
-
-
-
 ## Foreign Blocks
 
 Foreign blocks are selected by target and emitted at target-language scope. Keep
@@ -556,20 +364,6 @@ fn main()
     put value
 end fn
 ~~~
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -645,9 +439,6 @@ end fn
 
 ~~~
 
-
-
-
 `#cpp` is explicitly rejected. Foreign calls without declarations remain opaque to
 Poly semantic checking; Rust or C validates the actual call after generation.
 Add an optional target-aware declaration when you want Poly to check the
@@ -657,51 +448,9 @@ interface first:
 extern c fn native_value(value: i32): i32
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The declaration is checker-only, must match the selected target, and does not replace native compiler validation.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Targets and CLI
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~bash
 
@@ -784,9 +533,6 @@ poly --intermediate-representation program.poly
 
 
 ~~~
-
-
-
 
 Rust is the default target. The C backend currently supports scalar declarations,
 numeric expressions and control flow, calls to foreign C helpers, plain stdin

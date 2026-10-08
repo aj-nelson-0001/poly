@@ -26,35 +26,22 @@ under "Feature Summary").
 All commands executed locally on the `v1.7.3-audit-fixes` branch at the version-sync pass (release-metadata changes staged):
 
 | Check | Command | Result |
-
 |-------|---------|--------|
-
 | Format | `cargo fmt --all -- --check` | ✅ Pass |
-
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ Pass |
-
 | Tests | `cargo test --workspace -- --test-threads=1` | ✅ 406 tests passed, 0 failed |
-
 | Type check | `cargo check --workspace --all-targets` | ✅ Pass |
-
 | Dependency audit | `cargo audit` | ✅ 0 vulnerabilities (81 dependencies) |
-
 | Markdown | `python3 scripts/check_markdown.py` | ✅ 49 files, 1,310 tilde fence markers, no violations |
-
 | Doc examples (maintained set) | `python3 scripts/check_poly_examples.py` (9 v2 docs) | ✅ 44 blocks: 18 passed, 26 marked
 fragments, 0 unmarked failures |
 | Doc examples (full tree) | `python3 scripts/check_poly_examples.py` (all 49 docs) | ✅ 564 blocks: 229 passed, 335 marked
 fragments, 0 unmarked failures |
 | Rust examples | `poly --target rust --check examples/*.poly` | ✅ All 22 pass |
-
 | C fixture | `--check`, build, execute | ✅ Output `30` / `3` verified |
-
 | Asm fixture | `--check`, `-o` build, assemble, execute | ✅ Output `42` / `10` / `30` / `60` verified |
-
 | Mixed target fixture | `--target rust` / `--target c` checks | ✅ Pass |
-
 | Playground examples | All 9 embedded examples pass `poly --check` | ✅ Pass |
-
 | Playground wasm | Rebuilt from preview.2 compiler (408K) + `scripts/playground_wasm_smoke.mjs` | ✅ 5 good + 6 rejected cases
 pass |
 
@@ -85,27 +72,16 @@ Preview.2 adds language-wide `pop()` (type-checks as the element type, lowers to
 C11 orchestration subset, widened in preview.2:
 
 | Supported | Not Supported (use `#c` helpers) |
-
 |-----------|----------------------------------|
-
 | Scalar declarations | File redirects / file input |
-
 | Plain structs + struct literals (C99 compound literals) | Vectors, maps, sets |
-
 | Tuples (anonymous structs, `.N` access, nesting) | Typed input flags |
-
 | Enum declarations + simple variants in expressions and match | Capturing closures |
-
 | `match` (literal, wildcard, range, identifier arms) | Async/await |
-
 | Non-capturing closures | Payload-carrying enum variants |
-
 | Plain `get` (stdin line, optional prompt) | Guards / structured match patterns |
-
 | Functions, conditions, loops, arithmetic, bitwise ops | Generic functions / structs |
-
 | `put` (stdout), `error`/`warn`/`info` (stderr) | Complex Poly types |
-
 
 ### Asm Backend (New in Preview.2)
 
@@ -250,9 +226,6 @@ poly --repl                         # Interactive REPL
 
 ~~~
 
-
-
-
 ---
 
 ## Audit Risk Status
@@ -389,35 +362,7 @@ fn process(items: Vec<i32>) -> Vec<i32> {
 #endrust
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 **This agent does not create or push tags.** A preview tag should be created only after all mandatory checks pass from a
 clean \

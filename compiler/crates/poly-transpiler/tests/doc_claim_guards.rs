@@ -42,7 +42,10 @@ const CASES: &[Case] = &[
     // --- corrected claim: JS backend supports structs ----------------------
     Case::with_output(
         "js struct declaration and literal",
-        "struct Point\n    x: i32\n    y: i32\nend struct\n\nfn main()\n    var p := Point { x: 3, y: 4 }\n    put p.x + p.y\nend fn\n",
+        concat!(
+            "struct Point\n    x: i32\n    y: i32\nend struct\n\nfn main()\n    var p := Point { x: 3, y:",
+            " 4 }\n    put p.x + p.y\nend fn\n",
+        ),
         Expect::All,
         ("js", "Point"),
     ),
@@ -87,7 +90,11 @@ const CASES: &[Case] = &[
     // rejected); JS rejects enums entirely.
     Case::accepted(
         "unit enum declaration and qualified match",
-        "enum Color\n    Red\n    Green\nend enum\n\nfn main()\n    var c := Color::Green\n    match c\n        Color::Red, put 1\n        Color::Green, put 2\n        _, put 0\n    end match\nend fn\n",
+        concat!(
+            "enum Color\n    Red\n    Green\nend enum\n\nfn main()\n    var c := Color::Green\n    match ",
+            "c\n        Color::Red, put 1\n        Color::Green, put 2\n        _, put 0\n    end match\n",
+            "end fn\n",
+        ),
         Expect::RustCAsm,
     ),
     // Closures: C compiles non-capturing only; capturing are rejected with
@@ -125,7 +132,10 @@ const CASES: &[Case] = &[
     ),
     Case::accepted(
         "c++-style line comments on every target",
-        "// leading comment\nfn main()\n    var n i32 := 2 // trailing comment\n    // standalone comment\n    put n\nend fn\n",
+        concat!(
+            "// leading comment\nfn main()\n    var n i32 := 2 // trailing comment\n",
+            "    // standalone comment\n    put n\nend fn\n"
+        ),
         Expect::All,
     ),
     Case::accepted(
@@ -138,7 +148,10 @@ const CASES: &[Case] = &[
     // Part 7, POLY_V2_SUPPORT_MATRIX.md).
     Case::accepted(
         "async fn with await and spawn on rust",
-        "async fn compute(x: i32): i32\n    delay(10).await\n    return x * x\nend fn\n\nasync fn main()\n    var a := compute(3).await\n    spawn compute(5)\nend fn\n",
+        concat!(
+            "async fn compute(x: i32): i32\n    delay(10).await\n    return x * x\nend fn\n\nasync fn mai",
+            "n()\n    var a := compute(3).await\n    spawn compute(5)\nend fn\n",
+        ),
         Expect::RustOnly,
     ),
     // --- named-field enum payload matching (regression: E0164) ------------
@@ -148,13 +161,21 @@ const CASES: &[Case] = &[
     // Both unqualified and qualified arms must emit `{ field: binding }`.
     Case::with_output(
         "named-field payload match, unqualified arm",
-        "enum Badge\n    Level(n: i32)\n    Stars(count: i32)\nend enum\n\nfn main()\n    var b := Badge::Level(3)\n    match b\n        Level(n), put \"level \" + n.to_string()\n        Stars(count), put \"stars \" + count.to_string()\n        _, put \"none\"\n    end match\nend fn\n",
+        concat!(
+            "enum Badge\n    Level(n: i32)\n    Stars(count: i32)\nend enum\n\nfn main()\n    var b := Ba",
+            "dge::Level(3)\n    match b\n        Level(n), put \"level \" + n.to_string()\n        Stars(",
+            "count), put \"stars \" + count.to_string()\n        _, put \"none\"\n    end match\nend fn\n",
+        ),
         Expect::RustAsm,
         ("rust", "Badge::Level { n: n }"),
     ),
     Case::with_output(
         "named-field payload match, qualified arm",
-        "enum Badge\n    Level(n: i32)\n    None\nend enum\n\nfn main()\n    var b := Badge::Level(3)\n    match b\n        Badge::Level(n), put \"level \" + n.to_string()\n        _, put \"none\"\n    end match\nend fn\n",
+        concat!(
+            "enum Badge\n    Level(n: i32)\n    None\nend enum\n\nfn main()\n    var b := Badge::Level(3)",
+            "\n    match b\n        Badge::Level(n), put \"level \" + n.to_string()\n        _, put \"non",
+            "e\"\n    end match\nend fn\n",
+        ),
         Expect::RustAsm,
         ("rust", "Badge::Level { n: n }"),
     ),
@@ -203,7 +224,10 @@ fn async_rejection_names_the_foreign_block_escape_hatch() -> Result<(), Box<dyn 
     // C, asm, and JS must refuse async functions with guidance pointing at
     // a foreign block (POLY_TUTORIAL.md Part 7); rust must accept them.
     let transpiler = poly_transpiler::Transpiler::new();
-    let source = "async fn compute(x: i32): i32\n    delay(10).await\n    return x * x\nend fn\n\nfn main()\n    var a := compute(3).await\nend fn\n";
+    let source = concat!(
+        "async fn compute(x: i32): i32\n    delay(10).await\n    return x * x\nend fn\n\nfn main()\n ",
+        "   var a := compute(3).await\nend fn\n",
+    );
     assert!(
         transpiler.transpile_target(source, "rust").is_ok(),
         "async fn should compile on the rust target"

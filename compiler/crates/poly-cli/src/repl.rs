@@ -100,7 +100,10 @@ pub fn run() -> std::io::Result<()> {
         env!("CARGO_PKG_VERSION")
     );
     println!(
-        "{}Type Poly code and press Enter. Variables persist across lines.{}\n{}Commands: :help, :tokens, :ast, :vars, :history, :reset, :quit{}",
+        concat!(
+            "{}Type Poly code and press Enter. Variables persist across lines.{}\n{}Commands: :help, :tok",
+            "ens, :ast, :vars, :history, :reset, :quit{}",
+        ),
         DIM, RESET, DIM, RESET
     );
     println!();

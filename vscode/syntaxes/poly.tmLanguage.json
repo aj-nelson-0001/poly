@@ -224,7 +224,11 @@
         },
         {
           "name": "keyword.other.poly",
-          "match": "\\b(end|set|to|add|sub|inc|dec|as|where|unsafe|async|await|spawn|move|type|macro|try|panic|null|addr|deref|capture|use|pub|module|with|validate|complete|encoding|timeout|default|mask|bytes)\\b"
+          "match": "\\b(end|set|to|add|sub|inc|dec|as|where|unsafe|async|await|spawn|move|type|macro|try|panic|null)\\b"
+        },
+        {
+          "name": "keyword.other.poly",
+          "match": "\\b(addr|deref|capture|use|pub|module|with|validate|complete|encoding|timeout|default|mask|bytes)\\b"
         },
         {
           "name": "keyword.control.poly",
@@ -236,7 +240,11 @@
       "patterns": [
         {
           "name": "storage.type.poly",
-          "match": "\\b(bool|i8|u8|i16|u16|i32|u32|i64|u64|f32|f64|isize|usize|string|ustring|bytes|char|void|Result|Option)\\b"
+          "match": "\\b(bool|i8|u8|i16|u16|i32|u32|i64|u64|f32|f64|isize|usize)\\b"
+        },
+        {
+          "name": "storage.type.poly",
+          "match": "\\b(string|ustring|bytes|char|void|Result|Option)\\b"
         },
         {
           "name": "entity.name.type.poly",

@@ -313,7 +313,10 @@ impl IntermediateRepresentationCodeGen {
             // `CREATE TABLE` / `INSERT` / `SELECT` calls across separate
             // `db_execute(...).await` blocks see the same database.
             result.push_str(
-                "\nstatic __POLY_DB: std::sync::OnceLock<std::sync::Mutex<rusqlite::Connection>> = std::sync::OnceLock::new();\n",
+                concat!(
+                    "\nstatic __POLY_DB: std::sync::OnceLock<std::sync::Mutex<rusqlite::Connection>> = std::sync:",
+                    ":OnceLock::new();\n",
+                ),
             );
         }
         Ok(result)
@@ -1296,7 +1299,10 @@ impl IntermediateRepresentationCodeGen {
                 let path_str = self.gen_expr(path)?;
                 *self.needs_io_write.borrow_mut() = true;
                 self.writeln_fmt(format_args!(
-                    "std::fs::write({}, format!(\"{}\\n\", {})).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }});",
+                    concat!(
+                        "std::fs::write({}, format!(\"{}\\n\", {})).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime er",
+                        "ror: {{e}}\"); std::process::exit(1) }});",
+                    ),
                     path_str, spec, expr_str
                 ))?;
             }
@@ -1304,7 +1310,12 @@ impl IntermediateRepresentationCodeGen {
                 let path_str = self.gen_expr(path)?;
                 *self.needs_io_write.borrow_mut() = true;
                 self.writeln_fmt(format_args!(
-                    "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); writeln!(f, \"{}\", {}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); }}",
+                    concat!(
+                        "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({}).unwrap_or_else",
+                        "(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); writeln!(f, \"{",
+                        "}\", {}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(",
+                        "1) }}); }}",
+                    ),
                     path_str, spec, expr_str
                 ))?;
             }
@@ -1526,7 +1537,10 @@ impl IntermediateRepresentationCodeGen {
                         // be implemented on top of `BufRead`.
                         *self.needs_bufread.borrow_mut() = true;
                         format!(
-                            "std::io::BufReader::new(std::fs::File::open({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}))",
+                            concat!(
+                                "std::io::BufReader::new(std::fs::File::open({}).unwrap_or_else(|e| {{ eprintln!(\"Poly run",
+                                "time error: {{e}}\"); std::process::exit(1) }}))",
+                            ),
                             args_str.join(", ")
                         )
                     }
@@ -1654,7 +1668,11 @@ impl IntermediateRepresentationCodeGen {
                     "get_line" => {
                         *self.needs_bufread.borrow_mut() = true;
                         format!(
-                            "{{ let mut __poly_line = String::new(); let _ = {}.read_line(&mut __poly_line).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); __poly_line.trim_end().to_string() }}",
+                            concat!(
+                                "{{ let mut __poly_line = String::new(); let _ = {}.read_line(&mut __poly_line).unwrap_or_e",
+                                "lse(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); __poly_lin",
+                                "e.trim_end().to_string() }}",
+                            ),
                             object_str
                         )
                     }
@@ -1802,7 +1820,9 @@ impl IntermediateRepresentationCodeGen {
                     // Result test-framework accessors.
                     "is_ok" if args.is_empty() => format!("{}.is_ok()", object_str),
                     "is_error" if args.is_empty() => format!("{}.is_err()", object_str),
-                    "unwrap" if args.is_empty() => format!("{}.clone().expect(\"Poly unwrap() called on None or Err value\")", object_str),
+                    "unwrap" if args.is_empty() => format!(concat!(
+                        "{}.clone().expect(\"Poly unwrap() called on None or Err value\")",
+                    ), object_str),
                     "unwrap_or" if args.len() == 1 => {
                         format!("{}.clone().unwrap_or({})", object_str, args_str[0])
                     }
@@ -2631,7 +2651,14 @@ impl IntermediateRepresentationCodeGen {
                             // terminates.
                             let step_str = self.gen_expr(step)?;
                             format!(
-                                "{{ let __poly_st = ({step_str}); std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if __poly_st > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by(__poly_st as usize).skip(((__poly_sv - {s}) as usize) / (__poly_st as usize))) }} else if __poly_st < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-(__poly_st)) as usize).skip((({s} - __poly_sv) as usize) / ((-(__poly_st)) as usize))) }} else {{ Box::new(std::iter::empty()) }} }}) }}",
+                                concat!(
+                                    "{{ let __poly_st = ({step_str}); std::iter::once({s}).flat_map(move |__poly_sv| -> Box",
+                                    "<dyn Iterator<Item = _>> {{ if __poly_st > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e",
+                                    "}).step_by(__poly_st as usize).skip(((__poly_sv - {s}) as usize) / (__poly_st as usize",
+                                    "))) }} else if __poly_st < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by",
+                                    "((-(__poly_st)) as usize).skip((({s} - __poly_sv) as usize) / ((-(__poly_st)) as usize",
+                                    "))) }} else {{ Box::new(std::iter::empty()) }} }}) }}",
+                                ),
                                 s = s,
                                 e = e,
                                 step_str = step_str
@@ -2734,7 +2761,14 @@ impl IntermediateRepresentationCodeGen {
                                 // branch above; the step is snapshotted once.
                                 let step_str = self.gen_expr(step)?;
                                 format!(
-                                    "{{ let __poly_st = ({step_str}); std::iter::once({s}).flat_map(move |__poly_sv| -> Box<dyn Iterator<Item = _>> {{ if __poly_st > 0 && __poly_sv <= {e} {{ Box::new(({s}..={e}).step_by(__poly_st as usize).skip(((__poly_sv - {s}) as usize) / (__poly_st as usize))) }} else if __poly_st < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s}).rev().step_by((-(__poly_st)) as usize).skip((({s} - __poly_sv) as usize) / ((-(__poly_st)) as usize))) }} else {{ Box::new(std::iter::empty()) }} }}) }}",
+                                    concat!(
+                                        "{{ let __poly_st = ({step_str}); std::iter::once({s}).flat_map(move |__poly_sv| ->",
+                                        " Box<dyn Iterator<Item = _>> {{ if __poly_st > 0 && __poly_sv <= {e} {{ Box::new((",
+                                        "{s}..={e}).step_by(__poly_st as usize).skip(((__poly_sv - {s}) as usize) / (__poly",
+                                        "_st as usize))) }} else if __poly_st < 0 && __poly_sv >= {e} {{ Box::new(({e}..={s",
+                                        "}).rev().step_by((-(__poly_st)) as usize).skip((({s} - __poly_sv) as usize) / ((-(",
+                                        "__poly_st)) as usize))) }} else {{ Box::new(std::iter::empty()) }} }}) }}",
+                                    ),
                                     s = s,
                                     e = e,
                                     step_str = step_str
@@ -2797,7 +2831,26 @@ impl IntermediateRepresentationCodeGen {
     /// The whole block is an `async` block so `.await` works on the result.
     fn gen_http_get(&self, url: &str) -> String {
         format!(
-            "async {{\n\tlet __poly_url = {};\n\tlet __poly_rest = __poly_url.strip_prefix(\"http://\").or_else(|| __poly_url.strip_prefix(\"https://\")).unwrap_or(&__poly_url);\n\tlet (__poly_host, __poly_path) = match __poly_rest.find('/') {{\n\t\tSome(i) => (&__poly_rest[..i], &__poly_rest[i..]),\n\t\tNone => (__poly_rest, \"/\"),\n\t}};\n\tlet (__poly_hostname, __poly_port) = match __poly_host.rsplit_once(':') {{\n\t\tSome((h, p)) if !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()) => (h, p.parse::<u16>().unwrap_or(80)),\n\t\t_ => (__poly_host, 80u16),\n\t}};\n\tlet mut __poly_stream = match tokio::net::TcpStream::connect((__poly_hostname, __poly_port)).await {{\n\t\tOk(stream) => stream,\n\t\tErr(e) => return Err::<String, String>(format!(\"connection failed: {{}}\", e)),\n\t}};\n\tlet __poly_request = format!(\"GET {{}} HTTP/1.1\\r\\nHost: {{}}\\r\\nConnection: close\\r\\n\\r\\n\", __poly_path, __poly_hostname);\n\tif let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut __poly_stream, __poly_request.as_bytes()).await {{\n\t\treturn Err::<String, String>(format!(\"write failed: {{}}\", e));\n\t}}\n\tlet mut __poly_response = Vec::new();\n\tif let Err(e) = tokio::io::AsyncReadExt::read_to_end(&mut __poly_stream, &mut __poly_response).await {{\n\t\treturn Err::<String, String>(format!(\"read failed: {{}}\", e));\n\t}}\n\tlet __poly_text = String::from_utf8_lossy(&__poly_response);\n\tmatch __poly_text.split_once(\"\\r\\n\\r\\n\") {{\n\t\tSome((_, body)) => Ok::<String, String>(body.to_string()),\n\t\tNone => Ok::<String, String>(__poly_text.to_string()),\n\t}}\n}}",
+            concat!(
+                "async {{\n\tlet __poly_url = {};\n\tlet __poly_rest = __poly_url.strip_prefix(\"http://\").o",
+                "r_else(|| __poly_url.strip_prefix(\"https://\")).unwrap_or(&__poly_url);\n\tlet (__poly_host",
+                ", __poly_path) = match __poly_rest.find('/') {{\n\t\tSome(i) => (&__poly_rest[..i], &__poly_",
+                "rest[i..]),\n\t\tNone => (__poly_rest, \"/\"),\n\t}};\n\tlet (__poly_hostname, __poly_port) ",
+                "= match __poly_host.rsplit_once(':') {{\n\t\tSome((h, p)) if !p.is_empty() && p.chars().all(",
+                "|c| c.is_ascii_digit()) => (h, p.parse::<u16>().unwrap_or(80)),\n\t\t_ => (__poly_host, 80u1",
+                "6),\n\t}};\n\tlet mut __poly_stream = match tokio::net::TcpStream::connect((__poly_hostname,",
+                " __poly_port)).await {{\n\t\tOk(stream) => stream,\n\t\tErr(e) => return Err::<String, Strin",
+                "g>(format!(\"connection failed: {{}}\", e)),\n\t}};\n\tlet __poly_request = format!(\"GET {{",
+                "}} HTTP/1.1\\r\\nHost: {{}}\\r\\nConnection: close\\r\\n\\r\\n\", __poly_path, __poly_hostna",
+                "me);\n\tif let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut __poly_stream, __poly_reque",
+                "st.as_bytes()).await {{\n\t\treturn Err::<String, String>(format!(\"write failed: {{}}\", e)",
+                ");\n\t}}\n\tlet mut __poly_response = Vec::new();\n\tif let Err(e) = tokio::io::AsyncReadExt",
+                "::read_to_end(&mut __poly_stream, &mut __poly_response).await {{\n\t\treturn Err::<String, S",
+                "tring>(format!(\"read failed: {{}}\", e));\n\t}}\n\tlet __poly_text = String::from_utf8_loss",
+                "y(&__poly_response);\n\tmatch __poly_text.split_once(\"\\r\\n\\r\\n\") {{\n\t\tSome((_, body",
+                ")) => Ok::<String, String>(body.to_string()),\n\t\tNone => Ok::<String, String>(__poly_text.",
+                "to_string()),\n\t}}\n}}",
+            ),
             url
         )
     }
@@ -2813,7 +2866,20 @@ impl IntermediateRepresentationCodeGen {
     fn gen_db_execute(&self, query: &str) -> String {
         *self.needs_rusqlite.borrow_mut() = true;
         format!(
-            "async {{\n\tlet __poly_conn = __POLY_DB.get_or_init(|| std::sync::Mutex::new(rusqlite::Connection::open_in_memory().expect(\"db_execute: failed to open in-memory database\")));\n\tlet __poly_output: Vec<String> = {{\n\t\tlet __poly_guard = __poly_conn.lock().expect(\"db_execute: database lock poisoned\");\n\t\tlet __poly_query = {};\n\t\tlet mut __poly_stmt = __poly_guard.prepare(__poly_query.as_str()).expect(\"db_execute: failed to prepare query\");\n\t\tlet __poly_cols = __poly_stmt.column_count();\n\t\tlet __poly_result = __poly_stmt.query_map([], |row| {{ \n\t\t\tlet mut __poly_cells: Vec<String> = Vec::new();\n\t\t\tfor __poly_i in 0..__poly_cols {{ \n\t\t\t\tlet __poly_value: rusqlite::types::Value = row.get(__poly_i).unwrap_or(rusqlite::types::Value::Null);\n\t\t\t\t__poly_cells.push(format!(\"{{:?}}\", __poly_value));\n\t\t\t}}\n\t\t\tOk(__poly_cells.join(\" | \"))\n\t\t}});\n\t\tmatch __poly_result {{ \n\t\t\tOk(rows) => rows.filter_map(Result::ok).collect::<Vec<String>>(),\n\t\t\tErr(e) => panic!(\"db_execute: query failed: {{}}\", e),\n\t\t}}\n\t}};\n\t__poly_output\n}}",
+            concat!(
+                "async {{\n\tlet __poly_conn = __POLY_DB.get_or_init(|| std::sync::Mutex::new(rusqlite::Conne",
+                "ction::open_in_memory().expect(\"db_execute: failed to open in-memory database\")));\n\tlet ",
+                "__poly_output: Vec<String> = {{\n\t\tlet __poly_guard = __poly_conn.lock().expect(\"db_execu",
+                "te: database lock poisoned\");\n\t\tlet __poly_query = {};\n\t\tlet mut __poly_stmt = __poly",
+                "_guard.prepare(__poly_query.as_str()).expect(\"db_execute: failed to prepare query\");\n\t\t",
+                "let __poly_cols = __poly_stmt.column_count();\n\t\tlet __poly_result = __poly_stmt.query_map",
+                "([], |row| {{ \n\t\t\tlet mut __poly_cells: Vec<String> = Vec::new();\n\t\t\tfor __poly_i in",
+                " 0..__poly_cols {{ \n\t\t\t\tlet __poly_value: rusqlite::types::Value = row.get(__poly_i).un",
+                "wrap_or(rusqlite::types::Value::Null);\n\t\t\t\t__poly_cells.push(format!(\"{{:?}}\", __poly",
+                "_value));\n\t\t\t}}\n\t\t\tOk(__poly_cells.join(\" | \"))\n\t\t}});\n\t\tmatch __poly_result",
+                " {{ \n\t\t\tOk(rows) => rows.filter_map(Result::ok).collect::<Vec<String>>(),\n\t\t\tErr(e) ",
+                "=> panic!(\"db_execute: query failed: {{}}\", e),\n\t\t}}\n\t}};\n\t__poly_output\n}}",
+            ),
             query
         )
     }
@@ -2823,7 +2889,12 @@ impl IntermediateRepresentationCodeGen {
     /// block is an `async` block so `.await` works on the result.
     fn gen_tcp_connect(&self, address: &str) -> String {
         format!(
-            "async {{\n\tlet __poly_address = {};\n\tmatch tokio::net::TcpStream::connect(__poly_address).await {{\n\t\tOk(stream) => Ok::<String, String>(stream.peer_addr().map(|a| a.to_string()).unwrap_or_default()),\n\t\tErr(e) => Err::<String, String>(format!(\"connection failed: {{}}\", e)),\n\t}}\n}}",
+            concat!(
+                "async {{\n\tlet __poly_address = {};\n\tmatch tokio::net::TcpStream::connect(__poly_address)",
+                ".await {{\n\t\tOk(stream) => Ok::<String, String>(stream.peer_addr().map(|a| a.to_string()).",
+                "unwrap_or_default()),\n\t\tErr(e) => Err::<String, String>(format!(\"connection failed: {{}}",
+                "\", e)),\n\t}}\n}}",
+            ),
             address
         )
     }
@@ -2837,12 +2908,18 @@ impl IntermediateRepresentationCodeGen {
                 if let GetFlag::Bytes(count) = flag {
                     let count_str = self.gen_expr(count)?;
                     return Ok(format!(
-                        "{{ let bytes = std::fs::read({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); bytes.into_iter().take({} as usize).collect::<Vec<u8>>() }}",
+                        concat!(
+                            "{{ let bytes = std::fs::read({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}",
+                            "\"); std::process::exit(1) }}); bytes.into_iter().take({} as usize).collect::<Vec<u8>>() }}",
+                        ),
                         path_str, count_str
                     ));
                 }
             }
-            return Ok(format!("std::fs::read_to_string({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }})", path_str));
+            return Ok(format!(concat!(
+                "std::fs::read_to_string({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); ",
+                "std::process::exit(1) }})",
+            ), path_str));
         }
 
         // No source: optionally display the explicit Unicode prompt, then read stdin.
@@ -2853,7 +2930,10 @@ impl IntermediateRepresentationCodeGen {
             .transpose()?
             .map(|target| {
                 format!(
-                    "print!(\"{{}}\", {}); std::io::Write::flush(&mut std::io::stdout()).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); ",
+                    concat!(
+                        "print!(\"{{}}\", {}); std::io::Write::flush(&mut std::io::stdout()).unwrap_or_else(|e| {{ ep",
+                        "rintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); ",
+                    ),
                     target
                 )
             })
@@ -2911,7 +2991,11 @@ impl IntermediateRepresentationCodeGen {
         // `get --bytes N` on stdin reads up to N raw bytes.
         if let Some(count) = bytes {
             return Ok(format!(
-                "{{ {}let mut __poly_bytes: Vec<u8> = Vec::new(); let _ = std::io::Read::read_to_end(&mut std::io::Read::take(std::io::stdin(), {} as u64), &mut __poly_bytes).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); __poly_bytes }}",
+                concat!(
+                    "{{ {}let mut __poly_bytes: Vec<u8> = Vec::new(); let _ = std::io::Read::read_to_end(&mut std",
+                    "::io::Read::take(std::io::stdin(), {} as u64), &mut __poly_bytes).unwrap_or_else(|e| {{ epri",
+                    "ntln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); __poly_bytes }}",
+                ),
                 prompt, count
             ));
         }
@@ -2935,7 +3019,12 @@ impl IntermediateRepresentationCodeGen {
                 None => "Err::<String, String>(String::from(\"timeout\"))".to_string(),
             };
             return Ok(format!(
-                "{{ {}let (__poly_tx, __poly_rx) = std::sync::mpsc::channel(); std::thread::spawn(move || {{ let __poly_input = {}; let _ = __poly_tx.send(__poly_input.trim().to_string()); }}); match __poly_rx.recv_timeout(std::time::Duration::from_millis({} as u64)) {{ Ok(input) => Ok::<String, String>({}), Err(_) => {} }} }}",
+                concat!(
+                    "{{ {}let (__poly_tx, __poly_rx) = std::sync::mpsc::channel(); std::thread::spawn(move || {{ ",
+                    "let __poly_input = {}; let _ = __poly_tx.send(__poly_input.trim().to_string()); }}); match _",
+                    "_poly_rx.recv_timeout(std::time::Duration::from_millis({} as u64)) {{ Ok(input) => Ok::<Stri",
+                    "ng, String>({}), Err(_) => {} }} }}",
+                ),
                 prompt, read_expr, ms, on_ok, timeout_result
             ));
         }
@@ -2953,17 +3042,32 @@ impl IntermediateRepresentationCodeGen {
     fn gen_stdin_read_expr(&self, until: Option<&str>, mask: Option<&str>) -> String {
         if let Some(delimiter) = until {
             format!(
-                "{{ let mut __poly_buf: Vec<u8> = Vec::new(); let mut __poly_byte = [0u8; 1]; let __poly_delim = {}; loop {{ match std::io::Read::read(&mut std::io::stdin(), &mut __poly_byte) {{ Ok(0) | Err(_) => break, Ok(_) => {{ __poly_buf.push(__poly_byte[0]); if String::from_utf8_lossy(&__poly_buf).ends_with(__poly_delim.as_str()) {{ break; }} }} }} }} String::from_utf8_lossy(&__poly_buf).trim_end_matches(__poly_delim.as_str()).to_string() }}",
+                concat!(
+                    "{{ let mut __poly_buf: Vec<u8> = Vec::new(); let mut __poly_byte = [0u8; 1]; let __poly_deli",
+                    "m = {}; loop {{ match std::io::Read::read(&mut std::io::stdin(), &mut __poly_byte) {{ Ok(0) ",
+                    "| Err(_) => break, Ok(_) => {{ __poly_buf.push(__poly_byte[0]); if String::from_utf8_lossy(&",
+                    "__poly_buf).ends_with(__poly_delim.as_str()) {{ break; }} }} }} }} String::from_utf8_lossy(&",
+                    "__poly_buf).trim_end_matches(__poly_delim.as_str()).to_string() }}",
+                ),
                 delimiter
             )
         } else if mask.is_some() {
             // Best-effort echo suppression via `stty` on Unix terminals; on
             // other platforms (or non-terminal stdin) the command fails
             // silently and the read behaves like plain input.
-            "{{ let __poly_tty = std::io::IsTerminal::is_terminal(&std::io::stdin()); if __poly_tty {{ let _ = std::process::Command::new(\"stty\").arg(\"-echo\").status(); }} let mut __poly_input = String::new(); let _ = std::io::stdin().read_line(&mut __poly_input); if __poly_tty {{ let _ = std::process::Command::new(\"stty\").arg(\"echo\").status(); }} __poly_input }}"
+            concat!(
+                "{{ let __poly_tty = std::io::IsTerminal::is_terminal(&std::io::stdin()); if __poly_tty {{ le",
+                "t _ = std::process::Command::new(\"stty\").arg(\"-echo\").status(); }} let mut __poly_input ",
+                "= String::new(); let _ = std::io::stdin().read_line(&mut __poly_input); if __poly_tty {{ let",
+                " _ = std::process::Command::new(\"stty\").arg(\"echo\").status(); }} __poly_input }}",
+            )
                 .to_string()
         } else {
-            "{ let mut __poly_input = String::new(); std::io::stdin().read_line(&mut __poly_input).unwrap_or_else(|e| { eprintln!(\"Poly runtime error: {e}\"); std::process::exit(1) }); __poly_input }"
+            concat!(
+                "{ let mut __poly_input = String::new(); std::io::stdin().read_line(&mut __poly_input).unwrap",
+                "_or_else(|e| { eprintln!(\"Poly runtime error: {e}\"); std::process::exit(1) }); __poly_inpu",
+                "t }",
+            )
                 .to_string()
         }
     }
@@ -3033,10 +3137,16 @@ impl IntermediateRepresentationCodeGen {
                     Some(Redirect::Write(path)) => {
                         let path_str = self.gen_expr(path)?;
                         if self.is_bytes_expr(expr) {
-                            format!("std::fs::write({}, {}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }});", path_str, expr_str)
+                            format!(concat!(
+                                "std::fs::write({}, {}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std",
+                                "::process::exit(1) }});",
+                            ), path_str, expr_str)
                         } else {
                             format!(
-                                "std::fs::write({}, format!(\"{}\\n\", {})).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }});",
+                                concat!(
+                                    "std::fs::write({}, format!(\"{}\\n\", {})).unwrap_or_else(|e| {{ eprintln!(\"Poly runt",
+                                    "ime error: {{e}}\"); std::process::exit(1) }});",
+                                ),
                                 path_str,
                                 self.put_format_spec(expr),
                                 expr_str
@@ -3047,7 +3157,12 @@ impl IntermediateRepresentationCodeGen {
                         let path_str = self.gen_expr(path)?;
                         *self.needs_io_write.borrow_mut() = true;
                         format!(
-                            "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({0}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); writeln!(f, \"{1}\", {2}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); }}",
+                            concat!(
+                                "{{ let mut f = std::fs::OpenOptions::new().append(true).create(true).open({0}).unwrap_or_e",
+                                "lse(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }}); writeln!(f",
+                                ", \"{1}\", {2}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::proce",
+                                "ss::exit(1) }}); }}",
+                            ),
                             path_str, self.put_format_spec(expr), expr_str
                         )
                     }
@@ -3420,7 +3535,10 @@ impl IntermediateRepresentationCodeGen {
                 if name == "bytes" {
                     if let Some(source) = &get.source {
                         let path = self.gen_expr(source)?;
-                        return Ok(format!("std::fs::read({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }})", path));
+                        return Ok(format!(concat!(
+                            "std::fs::read({}).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\"); std::proce",
+                            "ss::exit(1) }})",
+                        ), path));
                     }
                 }
             }
@@ -3921,7 +4039,10 @@ impl IntermediateRepresentationCodeGen {
                 let first = &params[0].name;
                 let second = &params[1].name;
                 return Ok(format!(
-                    "|{}, {}| {{ let {} = *{}; let {} = *{}; if {} {{ std::cmp::Ordering::Less }} else if ({} == {}) {{ std::cmp::Ordering::Equal }} else {{ std::cmp::Ordering::Greater }} }}",
+                    concat!(
+                        "|{}, {}| {{ let {} = *{}; let {} = *{}; if {} {{ std::cmp::Ordering::Less }} else if ({} == ",
+                        "{}) {{ std::cmp::Ordering::Equal }} else {{ std::cmp::Ordering::Greater }} }}",
+                    ),
                     first,
                     second,
                     first,
@@ -4544,7 +4665,11 @@ mod tests {
         // block rendered by the inline expression path), it must still be
         // emitted as a `while` — not as a one-shot `if`.
         let rust = transpile(
-            "fn main()\n    var n i32 := 0\n    var total i32 := 0\n    if true\n        while n < 4\n            total := total + 3\n            n := n + 1\n        end while\n    end if\n    put total\nend fn",
+            concat!(
+                "fn main()\n    var n i32 := 0\n    var total i32 := 0\n    if true\n        while n < 4\n   ",
+                "         total := total + 3\n            n := n + 1\n        end while\n    end if\n    put ",
+                "total\nend fn",
+            ),
         );
         assert!(
             rust.contains("while (n < 4) {"),
@@ -4556,7 +4681,12 @@ mod tests {
     #[test]
     fn while_nested_inside_match_arm_emits_real_loop() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    var total i32 := 0\n    var n i32 := 0\n    var mode i32 := 1\n    match mode\n        1,\n            while n < 4\n                total := total + 3\n                n := n + 1\n            end while\n        _,\n            put 0\n    end match\n    put total\nend fn",
+            concat!(
+                "fn main()\n    var total i32 := 0\n    var n i32 := 0\n    var mode i32 := 1\n    match mode",
+                "\n        1,\n            while n < 4\n                total := total + 3\n                n",
+                " := n + 1\n            end while\n        _,\n            put 0\n    end match\n    put tota",
+                "l\nend fn",
+            ),
         );
         assert!(
             rust.contains("while (n < 4) {"),
@@ -4586,9 +4716,11 @@ mod tests {
         // `s := s + <string>` on a string variable lowers to in-place
         // `push_str` so repeated appends stay amortized-O(1) instead of
         // allocating a fresh `format!` String per assignment.
-        let rust = transpile(
-            "fn main()\n    var output ustring := \"\"\n    output := output + \"abc\"\n    output := output + \"def\"\nend fn",
-        );
+        let rust = transpile(concat!(
+            "fn main()\n    var output ustring := \"\"\n",
+            "    output := output + \"abc\"\n",
+            "    output := output + \"def\"\nend fn"
+        ));
         assert!(
             rust.contains("output.push_str(&(String::from(\"abc\")));"),
             "expected push_str lowering: {rust}"
@@ -4621,7 +4753,10 @@ mod tests {
     #[test]
     fn string_repeat_and_vec_join_codegen() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    put \"#\".repeat(5)\n    var parts Vec<ustring> := [unicode \"a\"]\n    put parts.join(\", \")\nend fn",
+            concat!(
+                "fn main()\n    put \"#\".repeat(5)\n    var parts Vec<ustring> := [unicode \"a\"]\n    put p",
+                "arts.join(\", \")\nend fn",
+            ),
         );
         assert!(rust.contains("String::from(\"#\").repeat(5 as usize)"));
         assert!(rust.contains("parts.join(String::from(\", \").as_str())"));
@@ -4662,7 +4797,10 @@ mod tests {
         // by `gen_statement_str`) lowers to in-place `push_str`, keeping the
         // append amortized-O(1) inside loops.
         let rust = transpile(
-            "fn main()\n    loop i 1..2\n        var row ustring := \"\"\n        row := row + i.to_string()\n        put row\n    end loop\nend fn",
+            concat!(
+                "fn main()\n    loop i 1..2\n        var row ustring := \"\"\n        row := row + i.to_strin",
+                "g()\n        put row\n    end loop\nend fn",
+            ),
         );
         assert!(
             rust.contains("row.push_str(&(format!(\"{:?}\", i)));"),
@@ -4717,7 +4855,10 @@ mod tests {
     #[test]
     fn infinite_loop_emits_rust_loop() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    var count i32 := 0\n    loop\n        count := count + 1\n        if count = 3,\n            break\n        end if\n    end loop\nend fn",
+            concat!(
+                "fn main()\n    var count i32 := 0\n    loop\n        count := count + 1\n        if count = ",
+                "3,\n            break\n        end if\n    end loop\nend fn",
+            ),
         );
         assert!(rust.contains("loop {"), "missing loop block: {rust}");
         assert!(
@@ -4731,7 +4872,10 @@ mod tests {
     #[test]
     fn multiple_get_flags_parse_and_lower() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    match get --timeout 5000 --default unicode \"0\"\n        Ok(input), put input\n        Error(e), error e\n    end match\nend fn",
+            concat!(
+                "fn main()\n    match get --timeout 5000 --default unicode \"0\"\n        Ok(input), put inpu",
+                "t\n        Error(e), error e\n    end match\nend fn",
+            ),
         );
         assert!(
             rust.contains("Ok::<String, String>"),
@@ -4744,7 +4888,11 @@ mod tests {
     fn collection_loops_borrow_and_destructure_enumerate() -> Result<(), Box<dyn std::error::Error>>
     {
         let rust = transpile(
-            "fn main()\n    var fruits Vec<ustring> := []\n    loop fruit in fruits\n        put fruit\n    end loop\n    loop (index, fruit) in fruits.enumerate()\n        put index\n        put fruit\n    end loop\nend fn",
+            concat!(
+                "fn main()\n    var fruits Vec<ustring> := []\n    loop fruit in fruits\n        put fruit\n ",
+                "   end loop\n    loop (index, fruit) in fruits.enumerate()\n        put index\n        put f",
+                "ruit\n    end loop\nend fn",
+            ),
         );
         assert!(
             rust.contains("for fruit in fruits.iter().cloned() {"),
@@ -4763,7 +4911,10 @@ mod tests {
         // `items.iter().enumerate()` (borrowing the receiver) rather than the
         // broken `items.enumerate().iter()`.
         let rust = transpile(
-            "fn main()\n    var items := [5, 6]\n    for (idx, val) in items.enumerate()\n        put idx\n        put val\n    end for\nend fn",
+            concat!(
+                "fn main()\n    var items := [5, 6]\n    for (idx, val) in items.enumerate()\n        put idx",
+                "\n        put val\n    end for\nend fn",
+            ),
         );
         assert!(
             rust.contains("for (idx, val) in items.iter().cloned().enumerate() {"),
@@ -4828,7 +4979,10 @@ mod tests {
     #[test]
     fn vec_hof_methods_emit_iterator_chains() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    var xs := [1, 2, 3]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x mod 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\nend fn",
+            concat!(
+                "fn main()\n    var xs := [1, 2, 3]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x mo",
+                "d 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\nend fn",
+            ),
         );
         assert!(
             rust.contains("xs.iter().cloned().map(|x| (x * 2)).collect::<Vec<_>>()[(0) as usize]"),
@@ -4848,7 +5002,10 @@ mod tests {
     #[test]
     fn put_of_vectors_uses_debug_formatting() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    var xs := [1, 2, 3]\n    var typed Vec<i32> := [4, 5]\n    put xs\n    put typed\n    put [9, 8]\n    put xs.map(|x| x * 2)\nend fn",
+            concat!(
+                "fn main()\n    var xs := [1, 2, 3]\n    var typed Vec<i32> := [4, 5]\n    put xs\n    put ty",
+                "ped\n    put [9, 8]\n    put xs.map(|x| x * 2)\nend fn",
+            ),
         );
         assert!(
             rust.contains("println!(\"{:?}\", xs);"),
@@ -4874,7 +5031,10 @@ mod tests {
     #[test]
     fn string_hof_methods_emit_chars() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    put \"hello\".map(|c| c)\n    put \"hello\".filter(|c| c != unicode 'l')\n    put \"hello\".reduce(0, |acc, c| acc + (c as i32))\nend fn",
+            concat!(
+                "fn main()\n    put \"hello\".map(|c| c)\n    put \"hello\".filter(|c| c != unicode 'l')\n   ",
+                " put \"hello\".reduce(0, |acc, c| acc + (c as i32))\nend fn",
+            ),
         );
         assert!(
             rust.contains("String::from(\"hello\").chars().map(|c| c).collect::<Vec<_>>()"),
@@ -4897,7 +5057,10 @@ mod tests {
             "fn main()\n    var xs := [3, 1, 2]\n    put xs.sort_by(|a, b| a > b)\nend fn",
         );
         assert!(
-            rust.contains("v.sort_by(|a, b| { let a = *a; let b = *b; if (a > b) { std::cmp::Ordering::Less } else if (a == b) { std::cmp::Ordering::Equal } else { std::cmp::Ordering::Greater } })"),
+            rust.contains(concat!(
+                "v.sort_by(|a, b| { let a = *a; let b = *b; if (a > b) { std::cmp::Ordering::Less } else if (",
+                "a == b) { std::cmp::Ordering::Equal } else { std::cmp::Ordering::Greater } })",
+            )),
             "missing sort wrapper: {rust}"
         );
         assert!(
@@ -4910,7 +5073,11 @@ mod tests {
     #[test]
     fn map_methods_borrow_keys() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    var m Map<ustring, i32> := []\n    m.insert(unicode \"key\", 42)\n    put m.get(unicode \"key\")\n    put m.contains_key(unicode \"key\")\n    m.remove(unicode \"key\")\n    m[unicode \"other\"] := 7\n    var v := m[unicode \"other\"]\n    put v\nend fn",
+            concat!(
+                "fn main()\n    var m Map<ustring, i32> := []\n    m.insert(unicode \"key\", 42)\n    put m.g",
+                "et(unicode \"key\")\n    put m.contains_key(unicode \"key\")\n    m.remove(unicode \"key\")",
+                "\n    m[unicode \"other\"] := 7\n    var v := m[unicode \"other\"]\n    put v\nend fn",
+            ),
         );
         assert!(
             rust.contains("m.insert(String::from(\"key\"), 42);"),
@@ -4958,7 +5125,10 @@ mod tests {
     #[test]
     fn negative_loop_steps_keep_magnitude() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    loop i 10..1 step -2\n        put i\n    end loop\n    loop j 10..1 step 2\n        put j\n    end loop\nend fn",
+            concat!(
+                "fn main()\n    loop i 10..1 step -2\n        put i\n    end loop\n    loop j 10..1 step 2\n ",
+                "       put j\n    end loop\nend fn",
+            ),
         );
         assert!(
             rust.contains("for i in (1..=10).rev().step_by(2 as usize)"),
@@ -5003,7 +5173,10 @@ mod tests {
     #[test]
     fn get_timeout_emits_real_timeout() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    match get --timeout 2000 --default unicode \"fallback\"\n        Ok(input), put input\n        Timeout, put unicode \"too slow\"\n    end match\nend fn",
+            concat!(
+                "fn main()\n    match get --timeout 2000 --default unicode \"fallback\"\n        Ok(input), p",
+                "ut input\n        Timeout, put unicode \"too slow\"\n    end match\nend fn",
+            ),
         );
         assert!(
             rust.contains("std::sync::mpsc::channel()"),
@@ -5023,7 +5196,10 @@ mod tests {
     #[test]
     fn file_read_methods_use_buffered_reader() -> Result<(), Box<dyn std::error::Error>> {
         let rust = transpile(
-            "fn main()\n    var f := open(unicode \"data.txt\")\n    while not f.eof()\n        var line := f.get_line()\n        put line\n    end while\nend fn",
+            concat!(
+                "fn main()\n    var f := open(unicode \"data.txt\")\n    while not f.eof()\n        var line ",
+                ":= f.get_line()\n        put line\n    end while\nend fn",
+            ),
         );
         assert!(
             rust.contains(
@@ -5089,7 +5265,10 @@ mod tests {
         // Rust can resolve the method instead of E0689, and float `pow` uses
         // `powf` (i32::pow takes u32, f64 uses powf).
         let rust = transpile(
-            "fn main()\n    var magnitude i32 := abs(-42)\n    var squared i32 := pow(3, 2)\n    var cubed f64 := pow(2.0, 3.0)\nend fn",
+            concat!(
+                "fn main()\n    var magnitude i32 := abs(-42)\n    var squared i32 := pow(3, 2)\n    var cube",
+                "d f64 := pow(2.0, 3.0)\nend fn",
+            ),
         );
         assert!(rust.contains("(-42_i32).abs()"), "{rust}");
         assert!(rust.contains("(3_i32).pow(2_i32 as u32)"), "{rust}");
@@ -5104,7 +5283,11 @@ mod tests {
         // render `ValidationError::TooShort { min: min }`, not the tuple form
         // `TooShort(min)` (E0164).
         let rust = transpile(
-            "enum ValidationError\n    EmptyInput\n    TooShort(min: i32)\nend enum\n\nfn main()\n    var result Result<ustring, ValidationError> := Error(ValidationError::TooShort(2))\n    match result\n        Error(TooShort(min)), put min\n        Error(_), put 0\n    end match\nend fn",
+            concat!(
+                "enum ValidationError\n    EmptyInput\n    TooShort(min: i32)\nend enum\n\nfn main()\n    var",
+                " result Result<ustring, ValidationError> := Error(ValidationError::TooShort(2))\n    match r",
+                "esult\n        Error(TooShort(min)), put min\n        Error(_), put 0\n    end match\nend fn",
+            ),
         );
         assert!(
             rust.contains("ValidationError::TooShort { min: min }"),

@@ -1099,11 +1099,13 @@ fn cargo_manifest(
     }
 
     format!(
-        "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"2021\"\n\n# Generated projects default to optimized builds: Poly programs are
-# typically run through `cargo run --release`-shaped workflows and the
-# generated code has no debug-specific requirements. An explicit profile
-# keeps `cargo run` fast without depending on the caller to pass --release.
-[profile.release]\nopt-level = 3\n\n[dependencies]\n{}\n[workspace]\n",
+        concat!(
+            "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"2021\"\n\n# Generated projects defau",
+            "lt to optimized builds: Poly programs are\n# typically run through `cargo run --release`-sha",
+            "ped workflows and the\n# generated code has no debug-specific requirements. An explicit prof",
+            "ile\n# keeps `cargo run` fast without depending on the caller to pass --release.\n[profile.r",
+            "elease]\nopt-level = 3\n\n[dependencies]\n{}\n[workspace]\n",
+        ),
         package_name,
         env!("CARGO_PKG_VERSION"),
         dependencies
@@ -1117,7 +1119,10 @@ fn warn_dependencies_ignored(source: &str, target: &Target) {
     let dependencies = source_dependencies(source);
     if !dependencies.is_empty() {
         eprintln!(
-            "Warning: ignoring {} `dep` declaration(s): the {} target has no dependency support; `dep` only applies to the Rust target",
+            concat!(
+                "Warning: ignoring {} `dep` declaration(s): the {} target has no dependency support; `dep` on",
+                "ly applies to the Rust target",
+            ),
             dependencies.len(),
             target.language_name()
         );
@@ -1816,7 +1821,12 @@ fn verify_async_rust_compiles(code: &str) -> Result<()> {
         ""
     };
     let manifest = format!(
-        "[package]\nname = \"poly_check_async\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\", \"net\", \"io-util\"] }}\n{rusqlite}[workspace]\n"
+        concat!(
+            "[package]\nname = \"poly_check_async\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependen",
+            "cies]\ntokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\", \"",
+            "net\", \"io-util\"] }}\n{rusqlite}[workspace]\n",
+        ),
+        rusqlite = rusqlite,
     );
     std::fs::write(project_dir.join("Cargo.toml"), manifest)
         .context("Failed to write temp Cargo.toml")?;

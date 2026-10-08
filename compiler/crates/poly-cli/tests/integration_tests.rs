@@ -572,7 +572,12 @@ fn compile_and_run_async(source: &str) -> Result<String, String> {
         ""
     };
     let manifest = format!(
-        "[package]\nname = \"poly_async_runtime\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\", \"net\", \"io-util\"] }}\n{rusqlite}[workspace]\n"
+        concat!(
+            "[package]\nname = \"poly_async_runtime\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[depend",
+            "encies]\ntokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"time\", ",
+            "\"net\", \"io-util\"] }}\n{rusqlite}[workspace]\n",
+        ),
+        rusqlite = rusqlite,
     );
     std::fs::write(directory.join("Cargo.toml"), manifest).map_err(|e| e.to_string())?;
 

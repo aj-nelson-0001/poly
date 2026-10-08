@@ -1315,7 +1315,10 @@ mod tests {
         // site with no `xs` binding — invalid Rust. The call must be left
         // intact instead.
         let mut program = parse_to_ir(
-            "fn first(xs: Vec<i32>): i32\n    return xs[0]\nend fn\nfn main()\n    var v Vec<i32> := [10, 20, 30]\n    put first(v)\nend fn",
+            concat!(
+                "fn first(xs: Vec<i32>): i32\n    return xs[0]\nend fn\nfn main()\n    var v Vec<i32> := [10,",
+                " 20, 30]\n    put first(v)\nend fn",
+            ),
         );
         Inlining.run(&mut program);
 

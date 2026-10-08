@@ -16,155 +16,155 @@
 # 7
 # 0
 fn main()
-    # Deep grouping parens: 20 levels around plain arithmetic (expression cap 32).
-    var deep i32 := ((((((((((((((((((((1 + 2))))))))))))))))))))
-    # Twenty nested ifs (if cap 32), innermost statement runs once.
-    var hit i32 := 0
+  # Deep grouping parens: 20 levels around plain arithmetic (expression cap 32).
+  var deep i32 := ((((((((((((((((((((1 + 2))))))))))))))))))))
+  # Twenty nested ifs (if cap 32), innermost statement runs once.
+  var hit i32 := 0
+  if true
     if true
+      if true
         if true
+          if true
             if true
+              if true
                 if true
+                  if true
                     if true
+                      if true
                         if true
+                          if true
                             if true
+                              if true
                                 if true
+                                  if true
                                     if true
+                                      if true
                                         if true
-                                            if true
-                                                if true
-                                                    if true
-                                                        if true
-                                                            if true
-                                                                if true
-                                                                    if true
-                                                                        if true
-                                                                            if true
-                                                                                if true
-                                                                                hit := hit + 7
-                                                                                end if
-                                                                            end if
-                                                                        end if
-                                                                    end if
-                                                                end if
-                                                            end if
-                                                        end if
-                                                    end if
-                                                end if
-                                            end if
+                                        hit := hit + 7
                                         end if
+                                      end if
                                     end if
+                                  end if
                                 end if
+                              end if
                             end if
+                          end if
                         end if
+                      end if
                     end if
+                  end if
                 end if
+              end if
             end if
+          end if
         end if
+      end if
     end if
-    put deep
-    put hit
-    # Fifty nested whiles (statement cap 128); bodies never entered, so this
-    # pins parse/codegen depth without runtime cost.
+  end if
+  put deep
+  put hit
+  # Fifty nested whiles (statement cap 128); bodies never entered, so this
+  # pins parse/codegen depth without runtime cost.
+  while false
     while false
+      while false
         while false
+          while false
             while false
+              while false
                 while false
+                  while false
                     while false
+                      while false
                         while false
+                          while false
                             while false
+                              while false
                                 while false
+                                  while false
                                     while false
+                                      while false
                                         while false
+                                          while false
                                             while false
+                                              while false
                                                 while false
+                                                  while false
                                                     while false
+                                                      while false
                                                         while false
+                                                          while false
                                                             while false
+                                                              while false
                                                                 while false
+                                                                  while false
                                                                     while false
+                                                                      while false
                                                                         while false
+                                                                          while false
                                                                             while false
+                                                                              while false
                                                                                 while false
+                                                                                  while false
                                                                                     while false
+                                                                                      while false
                                                                                         while false
+                                                                                          while false
                                                                                             while false
+                                                                                              while false
                                                                                                 while false
+                                                                                                  while false
                                                                                                     while false
-                                                                                                        while false
-                                                                                                            while false
-                                                                                                                while false
-                                                                                                                    while false
-                                                                                                                        while false
-                                                                                                                            while false
-                                                                                                                                while false
-                                                                                                                                    while false
-                                                                                                                                        while false
-                                                                                                                                            while false
-                                                                                                                                                while false
-                                                                                                                                                    while false
-                                                                                                                                                        while false
-                                                                                                                                                            while false
-                                                                                                                                                                while false
-                                                                                                                                                                    while false
-                                                                                                                                                                        while false
-                                                                                                                                                                            while false
-                                                                                                                                                                                while false
-                                                                                                                                                                                    while false
-                                                                                                                                                                                        while false
-                                                                                                                                                                                            while false
-                                                                                                                                                                                                while false
-                                                                                                                                                                                                    while false
-                                                                                                                                                                                                        while false
-                                                                                                                                                                                                        put 99
-                                                                                                                                                                                                        end while
-                                                                                                                                                                                                    end while
-                                                                                                                                                                                                end while
-                                                                                                                                                                                            end while
-                                                                                                                                                                                        end while
-                                                                                                                                                                                    end while
-                                                                                                                                                                                end while
-                                                                                                                                                                            end while
-                                                                                                                                                                        end while
-                                                                                                                                                                    end while
-                                                                                                                                                                end while
-                                                                                                                                                            end while
-                                                                                                                                                        end while
-                                                                                                                                                    end while
-                                                                                                                                                end while
-                                                                                                                                            end while
-                                                                                                                                        end while
-                                                                                                                                    end while
-                                                                                                                                end while
-                                                                                                                            end while
-                                                                                                                        end while
-                                                                                                                    end while
-                                                                                                                end while
-                                                                                                            end while
-                                                                                                        end while
+                                                                                                    put 99
                                                                                                     end while
+                                                                                                  end while
                                                                                                 end while
+                                                                                              end while
                                                                                             end while
+                                                                                          end while
                                                                                         end while
+                                                                                      end while
                                                                                     end while
+                                                                                  end while
                                                                                 end while
+                                                                              end while
                                                                             end while
+                                                                          end while
                                                                         end while
+                                                                      end while
                                                                     end while
+                                                                  end while
                                                                 end while
+                                                              end while
                                                             end while
+                                                          end while
                                                         end while
+                                                      end while
                                                     end while
+                                                  end while
                                                 end while
+                                              end while
                                             end while
+                                          end while
                                         end while
+                                      end while
                                     end while
+                                  end while
                                 end while
+                              end while
                             end while
+                          end while
                         end while
+                      end while
                     end while
+                  end while
                 end while
+              end while
             end while
+          end while
         end while
+      end while
     end while
-    put 0
+  end while
+  put 0
 end fn

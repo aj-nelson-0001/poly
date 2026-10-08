@@ -370,7 +370,8 @@
                     <div class="panel-actions">
                         <button class="btn" onclick="clearEditor()" title="Clear the editor">Clear</button>
                         <button class="btn" onclick="shareCode()" title="Copy a shareable link to this code">Share</button>
-                        <button class="btn btn-primary" onclick="transpile()" title="Transpile (Ctrl+Enter)">Transpile →</button>
+                        <button class="btn btn-primary" onclick="transpile()"
+                            title="Transpile (Ctrl+Enter)">Transpile →</button>
                     </div>
                 </div>
                 <div class="editor-container">
@@ -383,7 +384,8 @@ end fn"></textarea>
                 </div>
                 <div id="poly-error" class="error-output"></div>
                 <div class="status-bar">
-                    <span class="status-item"><span id="status-dot" class="status-dot"></span><span id="status-text">Ready</span></span>
+                    <span class="status-item"><span
+                        id="status-dot" class="status-dot"></span><span id="status-text">Ready</span></span>
                     <span class="status-item" id="status-counts">0 lines • 0 statements</span>
                 </div>
             </div>
@@ -395,7 +397,9 @@ end fn"></textarea>
                         <span id="output-title">Rust Output</span>
                     </span>
                     <div class="panel-actions">
-                        <select id="target-select" onchange="transpile()" title="Target backend" style="margin-right:8px; background:#1e2235; color:#e2e8f0; border:1px solid #2d3550; border-radius:6px; padding:4px 8px; font: inherit; cursor:pointer;">
+                        <select id="target-select" onchange="transpile()" title="Target backend"
+                            style="margin-right:8px; background:#1e2235; color:#e2e8f0;
+                                border:1px solid #2d3550; border-radius:6px; padding:4px 8px; font: inherit; cursor:pointer;">
                             <option value="rust" selected>Rust</option>
                             <option value="c">C</option>
                             <option value="js">JavaScript</option>
@@ -458,19 +462,26 @@ end fn"></textarea>
         <div class="features-section">
             <div class="feature-card">
                 <h3><span class="feature-icon">🎯</span> Clean Syntax</h3>
-                <p>Poly uses a clean, readable syntax: <code>var x i32 := 42</code>, comma-based <code>if</code> conditions, and explicit <code>end</code> keywords. Operators are words — <code>and</code>, <code>or</code>, <code>not</code>, <code>mod</code>, <code>xor</code>, <code>bitand</code>, <code>bitor</code>, <code>bitnot</code>, <code>shift left/right</code>. No semicolons, no curly braces.</p>
+                <p>Poly uses a clean, readable syntax: <code>var x i32 := 42</code>, comma-based <code>if</code> conditions,
+                and explicit <code>end</code> keywords. Operators are words — <code>and</code>,
+                <code>or</code>, <code>not</code>, <code>mod</code>, <code>xor</code>,
+                <code>bitand</code>, <code>bitor</code>, <code>bitnot</code>, <code>shift left/right</code>.
+                No semicolons, no curly braces.</p>
             </div>
             <div class="feature-card">
                 <h3><span class="feature-icon">⚡</span> Fast Transpilation</h3>
-                <p>Poly transpiles to idiomatic Rust through a shared intermediate representation pipeline — constant folding, inlining, and loop optimization included.</p>
+                <p>Poly transpiles to idiomatic Rust through a shared intermediate representation pipeline —
+                constant folding, inlining, and loop optimization included.</p>
             </div>
             <div class="feature-card">
                 <h3><span class="feature-icon">🛡️</span> Type Safety</h3>
-                <p>Full static typing with a semantic checker that runs before code generation. Catch type mismatches at compile time, not runtime.</p>
+                <p>Full static typing with a semantic checker that runs before code generation.
+                Catch type mismatches at compile time, not runtime.</p>
             </div>
             <div class="feature-card">
                 <h3><span class="feature-icon">🔄</span> Shareable Snippets</h3>
-                <p>Click <b>Share</b> to copy a link containing your code. Anyone who opens the link sees exactly what you wrote.</p>
+                <p>Click <b>Share</b> to copy a link containing your code. Anyone who opens the link
+                sees exactly what you wrote.</p>
             </div>
         </div>
 
@@ -819,7 +830,9 @@ end fn`
 
         function updateCounts(polyCode) {
             const lines = polyCode.split('\n').filter(l => l.trim() !== '').length;
-            const statements = (polyCode.match(/^\s*(var|let|const|put|return|error|warn|info|fn|while|for)\b/gm) || []).length;
+            const statements = (polyCode.match(
+                /^\s*(var|let|const|put|return|error|warn|info|fn|while|for)\b/gm
+            ) || []).length;
             document.getElementById('status-counts').textContent = lines + ' lines • ~' + statements + ' statements';
         }
 
@@ -966,12 +979,21 @@ end fn`
                     // fn signatures) to Rust `name: Type`.
                     params = params.replace(/(\w+)\s*:\s*(\w+)/g, (all, name, ty) => name + ': ' + mapType(ty));
                     // Closure-typed params (f: |x: i32| i32) become impl Fn.
-                    params = params.replace(/(\w+)\s*:\s*(\|[^|]*\|\s*[\w<>]+)/g, (all, name, ty) => name + ': ' + mapFnType(ty));
+                    params = params.replace(
+                        /(\w+)\s*:\s*(\|[^|]*\|\s*[\w<>]+)/g,
+                        (all, name, ty) => name + ': ' + mapFnType(ty)
+                    );
                     const ret = fnMatch[4] ? mapFnType(fnMatch[4]) : '';
                     if (isAsync) {
-                        rust.push((ret ? 'async fn ' + fnMatch[2] + params + ' -> ' + ret + ' {' : 'async fn ' + fnMatch[2] + params + ' {'));
+                        rust.push(
+                            (ret ? 'async fn ' + fnMatch[2] + params + ' -> ' + ret + ' {'
+                                : 'async fn ' + fnMatch[2] + params + ' {')
+                        );
                     } else {
-                        rust.push((ret ? 'fn ' + fnMatch[2] + params + ' -> ' + ret + ' {' : 'fn ' + fnMatch[2] + params + ' {'));
+                        rust.push(
+                            (ret ? 'fn ' + fnMatch[2] + params + ' -> ' + ret + ' {'
+                                : 'fn ' + fnMatch[2] + params + ' {')
+                        );
                     }
                     indent += 1;
                     continue;
@@ -1161,7 +1183,8 @@ end fn`
                 rust.push('}');
             }
 
-            const header = '#![allow(unused_variables, unused_mut, unused_imports, dead_code, unused_parens, unreachable_patterns)]\n\n// Generated from Poly source code (playground demo transpiler)';
+            const header = '#![allow(unused_variables, unused_mut, unused_imports, dead_code, unused_parens, '
+                + 'unreachable_patterns)]\n\n// Generated from Poly source code (playground demo transpiler)';
             return header + '\n' + rust.join('\n') + '\n';
         }
 

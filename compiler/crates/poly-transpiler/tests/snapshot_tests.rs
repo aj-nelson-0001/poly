@@ -45,7 +45,11 @@ const SAMPLES: &[(&str, &str)] = &[
     ),
     (
         "control_flow",
-        "fn main()\n    var x i32 := 10\n    if x > 5,\n        put 1\n    else\n        put 0\n    end if\n    var i i32 := 0\n    while i < 3\n        i := i + 1\n    end while\n    loop j 0..3\n        put j\n    end loop\nend fn\n",
+        concat!(
+            "fn main()\n    var x i32 := 10\n    if x > 5,\n        put 1\n    else\n        put 0\n    e",
+            "nd if\n    var i i32 := 0\n    while i < 3\n        i := i + 1\n    end while\n    loop j 0.",
+            ".3\n        put j\n    end loop\nend fn\n",
+        ),
     ),
     (
         "functions",

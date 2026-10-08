@@ -41,7 +41,10 @@ pub fn require_explicit_main(program: &Program) -> Result<(), String> {
     for statement in &program.statements {
         if is_executable_statement(&statement.node) {
             return Err(format!(
-                "program has no `fn main() ... end fn` entry point: top-level executable statements are not allowed (first offender at byte offset {})",
+                concat!(
+                    "program has no `fn main() ... end fn` entry point: top-level executable statements are not a",
+                    "llowed (first offender at byte offset {})",
+                ),
                 statement.span.start
             ));
         }

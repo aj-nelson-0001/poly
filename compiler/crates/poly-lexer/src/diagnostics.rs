@@ -91,7 +91,17 @@ pub fn render_error(source: &str, span: Span, label: &str, message: &str) -> Str
     let caret_padding = " ".repeat(col.saturating_sub(1).min(line_text.chars().count()));
 
     format!(
-        "error: {message}\n  --> {label}:{line}:{col}\n{gutter} |\n{line:>width$} | {line_text}\n{gutter} | {caret_padding}{caret}",
+        concat!(
+            "error: {message}\n  --> {label}:{line}:{col}\n{gutter} |\n{line:>width$} | {line_text}\n{gut",
+            "ter} | {caret_padding}{caret}",
+        ),
+        message = message,
+        label = label,
+        line = line,
+        col = col,
+        gutter = gutter,
+        line_text = line_text,
+        caret_padding = caret_padding,
         width = gutter_width,
         caret = "^".repeat(caret_width),
     )

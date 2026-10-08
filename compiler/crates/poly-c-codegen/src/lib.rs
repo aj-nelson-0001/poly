@@ -447,7 +447,10 @@ impl CGenerator {
             let captures = closure_captures(&params, &body);
             if !captures.is_empty() {
                 return Err(format!(
-                    "C backend supports non-capturing closures only; `{}` is captured from the enclosing scope; use a #c helper",
+                    concat!(
+                        "C backend supports non-capturing closures only; `{}` is captured from the enclosing scope; u",
+                        "se a #c helper",
+                    ),
                     captures.join("`, `")
                 ));
             }
@@ -730,7 +733,10 @@ impl CGenerator {
                         line_prefix_for(output, indent + 1);
                         writeln!(
                             output,
-                            "for (int32_t {} = {}; __poly_step > 0 ? {} {} {} : (__poly_step < 0 && {} {} {}); {} += (int32_t)__poly_step) {{",
+                            concat!(
+                                "for (int32_t {} = {}; __poly_step > 0 ? {} {} {} : (__poly_step < 0 && {} {} {}); {} += (i",
+                                "nt32_t)__poly_step) {{",
+                            ),
                             variable,
                             self.expr(start)?,
                             variable,
@@ -857,7 +863,10 @@ impl CGenerator {
                                 } => {
                                     if inner.is_some() {
                                         return Err(
-                                            "C backend match supports unit enum variants only; use a #c helper for patterns carrying data"
+                                            concat!(
+                                                "C backend match supports unit enum variants only; use a #c helper for patt",
+                                                "erns carrying data",
+                                            )
                                                 .to_string(),
                                         );
                                     }
@@ -872,7 +881,10 @@ impl CGenerator {
                                 other => {
                                     let _ = other;
                                     return Err(
-                                        "C backend match supports literal, range, wildcard, and identifier patterns; use a #c helper for structured patterns"
+                                        concat!(
+                                            "C backend match supports literal, range, wildcard, and identifier patterns; us",
+                                            "e a #c helper for structured patterns",
+                                        )
                                             .to_string(),
                                     );
                                 }
@@ -1320,7 +1332,10 @@ impl CGenerator {
                     other => {
                         let _ = other;
                         return Err(
-                            "C backend match expressions support literal, range, wildcard, and unit-enum patterns in value position; use a #c helper for others"
+                            concat!(
+                                "C backend match expressions support literal, range, wildcard, and unit-enum patterns in va",
+                                "lue position; use a #c helper for others",
+                            )
                                 .to_string(),
                         );
                     }
@@ -1330,7 +1345,10 @@ impl CGenerator {
                 ast::MatchArmBody::Expression(body) => self.expr(body)?,
                 ast::MatchArmBody::Block(_) => {
                     return Err(
-                        "C backend match expressions support expression arms only in value position; use a match statement or a #c helper for block arms"
+                        concat!(
+                            "C backend match expressions support expression arms only in value position; use a match stat",
+                            "ement or a #c helper for block arms",
+                        )
                             .to_string(),
                     );
                 }
@@ -1554,12 +1572,25 @@ impl CGenerator {
         }
         if self.to_string_helper_emitted.get() {
             helpers.push_str(
-                "char *poly_int_to_string(long long value) {\n    char *out = malloc(32);\n    if (out == NULL) {\n        fputs(\"poly_to_string: out of memory\\n\", stderr);\n        exit(1);\n    }\n    snprintf(out, 32, \"%lld\", value);\n    return out;\n}\n\nchar *poly_float_to_string(double value) {\n    char *out = malloc(64);\n    if (out == NULL) {\n        fputs(\"poly_to_string: out of memory\\n\", stderr);\n        exit(1);\n    }\n    snprintf(out, 64, \"%g\", value);\n    return out;\n}\n\n",
+                concat!(
+                    "char *poly_int_to_string(long long value) {\n    char *out = malloc(32);\n    if (out == NUL",
+                    "L) {\n        fputs(\"poly_to_string: out of memory\\n\", stderr);\n        exit(1);\n    }",
+                    "\n    snprintf(out, 32, \"%lld\", value);\n    return out;\n}\n\nchar *poly_float_to_string(",
+                    "double value) {\n    char *out = malloc(64);\n    if (out == NULL) {\n        fputs(\"poly_t",
+                    "o_string: out of memory\\n\", stderr);\n        exit(1);\n    }\n    snprintf(out, 64, \"%g",
+                    "\", value);\n    return out;\n}\n\n",
+                ),
             );
         }
         if self.concat_helper_emitted.get() {
             helpers.push_str(
-                "char *poly_concat(const char *a, const char *b) {\n    if (a == NULL) a = \"\";\n    if (b == NULL) b = \"\";\n    size_t len_a = strlen(a);\n    size_t len_b = strlen(b);\n    char *out = malloc(len_a + len_b + 1);\n    if (out == NULL) {\n        fputs(\"poly_concat: out of memory\\n\", stderr);\n        exit(1);\n    }\n    memcpy(out, a, len_a);\n    memcpy(out + len_a, b, len_b);\n    out[len_a + len_b] = '\\0';\n    return out;\n}\n\n",
+                concat!(
+                    "char *poly_concat(const char *a, const char *b) {\n    if (a == NULL) a = \"\";\n    if (b =",
+                    "= NULL) b = \"\";\n    size_t len_a = strlen(a);\n    size_t len_b = strlen(b);\n    char *o",
+                    "ut = malloc(len_a + len_b + 1);\n    if (out == NULL) {\n        fputs(\"poly_concat: out of",
+                    " memory\\n\", stderr);\n        exit(1);\n    }\n    memcpy(out, a, len_a);\n    memcpy(out ",
+                    "+ len_a, b, len_b);\n    out[len_a + len_b] = '\\0';\n    return out;\n}\n\n",
+                ),
             );
         }
         const MARKER: &str = "#include <string.h>\n\n";
@@ -2164,7 +2195,10 @@ mod tests {
         // printed %d for the same reason. Both paths now classify
         // to_string()-containing chains as string-valued.
         let output = generate(
-            "var n i32 := 42\nvar chain := \"a\" + n.to_string() + \"b\"\nput chain\nvar pure ustring := \"ab\" + \"cd\"\nput pure",
+            concat!(
+                "var n i32 := 42\nvar chain := \"a\" + n.to_string() + \"b\"\nput chain\nvar pure ustring := ",
+                "\"ab\" + \"cd\"\nput pure",
+            ),
         )?;
         assert!(
             output.contains("const char * chain = poly_concat"),
@@ -2213,7 +2247,10 @@ mod tests {
     #[test]
     fn supports_enums_and_enum_variant_matching() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
-            "enum Color\n    Red\n    Green\nend enum\nvar c := Color::Green\nmatch c\n    Color::Red, put 1\n    Color::Green, put 2\n    _, put 0\nend match",
+            concat!(
+                "enum Color\n    Red\n    Green\nend enum\nvar c := Color::Green\nmatch c\n    Color::Red, pu",
+                "t 1\n    Color::Green, put 2\n    _, put 0\nend match",
+            ),
         )?;
         // Enumerators are qualified (Color_Red) so variant references and
         // patterns share one C representation.

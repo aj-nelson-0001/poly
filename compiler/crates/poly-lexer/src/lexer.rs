@@ -1296,7 +1296,10 @@ mod tests {
     #[test]
     fn test_foreign_blocks_are_line_delimited_and_language_tagged(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let source = "#rust\nconst VALUE: i32 = 1;\nlet text = \"#endrust\";\n#endrust\n#c\nint answer(void) { return 42; }\n#endc";
+        let source = concat!(
+            "#rust\nconst VALUE: i32 = 1;\nlet text = \"#endrust\";\n#endrust\n#c\nint answer(void) { ret",
+            "urn 42; }\n#endc",
+        );
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         assert!(matches!(

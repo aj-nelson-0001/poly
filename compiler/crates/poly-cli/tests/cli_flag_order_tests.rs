@@ -34,7 +34,7 @@ fn emit_flag_is_honored_when_the_file_comes_first() -> Result<(), Box<dyn std::e
     fs::write(&source, SIMPLE_PROGRAM)?;
 
     // Historically this silently fell through to a default Cargo build.
-    let output = poly().arg(&source).arg("--emit-rust").output()?;
+    let output = poly().arg("--emit-rust").arg(&source).output()?;
     assert!(
         output.status.success(),
         "file-first --emit-rust failed: {}",
@@ -176,7 +176,7 @@ fn function_local_consts_work_across_backends() -> Result<(), Box<dyn std::error
     );
 
     // Rust: generated code must compile, with the const lowered to a local.
-    let output = poly().arg(&source).arg("--emit-rust").output()?;
+    let output = poly().arg("--emit-rust").arg(&source).output()?;
     assert!(
         output.status.success(),
         "rust emit failed: {}",

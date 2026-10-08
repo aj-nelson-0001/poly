@@ -393,10 +393,16 @@ impl JsGenerator {
                         line_prefix_for(output, indent + 1);
                         writeln!(
                             output,
-                            "for (let {variable} = {}; __poly_step > 0 ? {variable} {cond_up} {} : (__poly_step < 0 && {variable} {cond_down} {}); {variable} += __poly_step) {{",
+                            concat!(
+                                "for (let {variable} = {}; __poly_step > 0 ? {variable} {cond_up} {} : (__poly_step < 0 && ",
+                                "{variable} {cond_down} {}); {variable} += __poly_step) {{",
+                            ),
                             self.expr(start)?,
                             end_value,
-                            end_value
+                            end_value,
+                            variable = variable,
+                            cond_up = cond_up,
+                            cond_down = cond_down,
                         )
                         .map_err(|e| e.to_string())?;
                         self.block_into(output, indent + 2, body)?;
@@ -453,7 +459,10 @@ impl JsGenerator {
                                 } => {
                                     if inner.is_some() {
                                         return Err(
-                                            "JS backend match supports unit enum variants only; use a #js helper for patterns carrying data"
+                                            concat!(
+                                                "JS backend match supports unit enum variants only; use a #js helper for pa",
+                                                "tterns carrying data",
+                                            )
                                                 .to_string(),
                                         );
                                     }
@@ -463,7 +472,10 @@ impl JsGenerator {
                                 other => {
                                     let _ = other;
                                     return Err(
-                                        "JS backend match supports literal, enum-variant, and wildcard patterns; use a #js helper for others"
+                                        concat!(
+                                            "JS backend match supports literal, enum-variant, and wildcard patterns; use a ",
+                                            "#js helper for others",
+                                        )
                                             .to_string(),
                                     );
                                 }
@@ -760,7 +772,10 @@ impl JsGenerator {
                             } => {
                                 if inner.is_some() {
                                     return Err(
-                                        "JS backend match supports unit enum variants only; use a #js helper for patterns carrying data"
+                                        concat!(
+                                            "JS backend match supports unit enum variants only; use a #js helper for patter",
+                                            "ns carrying data",
+                                        )
                                             .to_string(),
                                     );
                                 }
@@ -769,7 +784,10 @@ impl JsGenerator {
                             other => {
                                 let _ = other;
                                 return Err(
-                                    "JS backend match expressions support literal, wildcard, and unit-enum patterns in value position; use a #js helper for others"
+                                    concat!(
+                                        "JS backend match expressions support literal, wildcard, and unit-enum patterns in ",
+                                        "value position; use a #js helper for others",
+                                    )
                                         .to_string(),
                                 );
                             }
@@ -779,7 +797,10 @@ impl JsGenerator {
                         ast::MatchArmBody::Expression(body) => self.expr(body)?,
                         ast::MatchArmBody::Block(_) => {
                             return Err(
-                                "JS backend match expressions support expression arms only in value position; use a match statement or a #js helper for block arms"
+                                concat!(
+                                    "JS backend match expressions support expression arms only in value position; use a mat",
+                                    "ch statement or a #js helper for block arms",
+                                )
                                     .to_string(),
                             );
                         }
@@ -883,7 +904,11 @@ impl JsGenerator {
         if ty.is_some_and(|ty| matches!(ty, TypeAnnotation::Named(n) if n == "i128" || n == "u128"))
         {
             return Err(format!(
-                "JS backend does not support 128-bit integers; `{name}` is declared with a 128-bit type and a JS number cannot hold it exactly. Use i64/u64 (exact up to 2^53) or a #js helper"
+                concat!(
+                    "JS backend does not support 128-bit integers; `{name}` is declared with a 128-bit type and a",
+                    " JS number cannot hold it exactly. Use i64/u64 (exact up to 2^53) or a #js helper",
+                ),
+                name = name,
             ));
         }
         Ok(())
@@ -1129,7 +1154,11 @@ mod tests {
     #[test]
     fn lowers_control_flow_and_functions() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
-            "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nvar i i32 := 0\nwhile i < 3\n    i := i + 1\nend while\nloop j 0..3\n    put j\nend loop\nif 1 > 2,\n    put 1\nelse\n    put 0\nend if\nloop k in [1, 2]\n    put k\nend loop",
+            concat!(
+                "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nvar i i32 := 0\nwhile i < 3\n    i :=",
+                " i + 1\nend while\nloop j 0..3\n    put j\nend loop\nif 1 > 2,\n    put 1\nelse\n    put 0\n",
+                "end if\nloop k in [1, 2]\n    put k\nend loop",
+            ),
         )?;
         assert!(output.contains("function add(a, b) {"));
         // Typed i32 arithmetic masks to 32 bits (defined wrap semantics);

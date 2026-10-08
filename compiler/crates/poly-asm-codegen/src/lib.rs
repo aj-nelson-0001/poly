@@ -943,7 +943,12 @@ impl AsmGenerator {
                         && !self.is_vector_type(ty)
                     {
                         return Err(format!(
-                            "Assembly backend does not support type `{ty:?}` for `{name}`; use integer, bool, string, struct, enum, or Vec<T>"
+                            concat!(
+                                "Assembly backend does not support type `{ty:?}` for `{name}`; use integer, bool, string, s",
+                                "truct, enum, or Vec<T>",
+                            ),
+                            ty = ty,
+                            name = name,
                         ));
                     }
                     // Record vector element types for typed for-in bindings and
@@ -1995,7 +2000,10 @@ impl AsmGenerator {
                     return Ok(result_loc);
                 }
                 Err(
-                    "Assembly backend only supports direct function calls; method calls are limited to vector push/pop/len and string len"
+                    concat!(
+                        "Assembly backend only supports direct function calls; method calls are limited to vector pus",
+                        "h/pop/len and string len",
+                    )
                         .to_string(),
                 )
             }
@@ -2407,7 +2415,10 @@ impl AsmGenerator {
                         }
                         "string" => {
                             return Err(
-                                "Assembly backend `put` of a string vector element is not supported; copy it to a string variable first"
+                                concat!(
+                                    "Assembly backend `put` of a string vector element is not supported; copy it to a strin",
+                                    "g variable first",
+                                )
                                     .to_string(),
                             );
                         }
@@ -3616,7 +3627,10 @@ put name"#,
     fn supports_dereference() -> Result<(), Box<dyn std::error::Error>> {
         // Pointers only arise from #asm helpers; the `*expr` prefix lowers to
         // a single qword load through the pointer.
-        let output = transpile_source("#asm\nget_ptr:\n    leaq val(%rip), %rax\n    retq\n#endasm\nvar p i32 := get_ptr()\nvar v i32 := *p\nput v")?;
+        let output = transpile_source(concat!(
+            "#asm\nget_ptr:\n    leaq val(%rip), %rax\n    retq\n#endasm\nvar p i32 := get_ptr()\nvar v i",
+            "32 := *p\nput v",
+        ))?;
         assert!(output.contains("movq (%rax), %rax"));
         Ok(())
     }

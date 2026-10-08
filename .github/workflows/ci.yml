@@ -257,7 +257,8 @@ jobs:
           # --project refuses to touch an existing directory, so stash the
           # tracked generated files first: they are the baseline we guard.
           mkdir -p /tmp/tetris-tracked
-          cp rust_output/tetris/Cargo.toml rust_output/tetris/Cargo.lock rust_output/tetris/.poly-generated /tmp/tetris-tracked/
+          cp rust_output/tetris/Cargo.toml rust_output/tetris/Cargo.lock \
+            rust_output/tetris/.poly-generated /tmp/tetris-tracked/
           rm -rf rust_output/tetris
           ../compiler/target/release/poly --project rust_output/tetris tetris.poly
           # The regenerated project must match the committed files byte-for-byte.

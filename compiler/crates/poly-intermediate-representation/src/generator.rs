@@ -1,6 +1,7 @@
 //! AST → intermediate representation conversion.
 //!
-//! The generator lowers the parser's AST into the compiler intermediate representation.  Because the intermediate representation
+//! The generator lowers the parser's AST into the compiler intermediate representation.
+//! Because the intermediate representation
 //! intentionally mirrors the AST's statement/expression split, this conversion
 //! is mostly structural; the optimizer and intermediate representation codegen benefit from the stable,
 //! flat intermediate representation form afterwards.

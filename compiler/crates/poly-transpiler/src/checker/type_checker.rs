@@ -1292,7 +1292,11 @@ impl TypeChecker {
                     }
                 } else if self.strict_foreign {
                     self.error(TypeCheckError::new(format!(
-                        "strict mode: call to foreign function `{name}` has no explicit `extern <target> fn {name}(...)` declaration"
+                        concat!(
+                            "strict mode: call to foreign function `{name}` has no explicit `extern <target> fn {name}(..",
+                            ".)` declaration",
+                        ),
+                        name = name,
                     )));
                 }
                 return signature
@@ -1504,7 +1508,11 @@ impl TypeChecker {
         if signature.is_foreign && !signature.has_explicit_signature {
             if self.strict_foreign {
                 self.error(TypeCheckError::new(format!(
-                    "strict mode: call to foreign function `{name}` has no explicit `extern <target> fn {name}(...)` declaration"
+                    concat!(
+                        "strict mode: call to foreign function `{name}` has no explicit `extern <target> fn {name}(..",
+                        ".)` declaration",
+                    ),
+                    name = name,
                 )));
             }
             return;
@@ -2961,7 +2969,10 @@ mod tests {
     #[test]
     fn bare_return_without_value_is_still_fine() -> Result<(), Box<dyn std::error::Error>> {
         // An early `return` in a void function stays legal.
-        let source = "fn maybe(x: i32)\n    if x > 0\n        return\n    end if\n    put x\nend fn\nfn main()\n    maybe(1)\nend fn";
+        let source = concat!(
+            "fn maybe(x: i32)\n    if x > 0\n        return\n    end if\n    put x\nend fn\nfn main()\n  ",
+            "  maybe(1)\nend fn",
+        );
         assert!(check(source).is_ok());
         Ok(())
     }
@@ -2979,7 +2990,10 @@ mod tests {
         // Module bodies were reachable through two collection paths, so a
         // function declared inside a `module` was registered twice and valid
         // programs failed with a bogus "duplicate function declaration".
-        let source = "module math\n    fn helper(x: i32): i32\n        return x * 3\n    end fn\nend module\nfn main()\n    put 42\nend fn";
+        let source = concat!(
+            "module math\n    fn helper(x: i32): i32\n        return x * 3\n    end fn\nend module\nfn ma",
+            "in()\n    put 42\nend fn",
+        );
         let errors = check(source).err().unwrap_or_default();
         assert!(
             !errors
@@ -2995,7 +3009,10 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         // The regression above must not lose the real duplicate diagnostic:
         // two same-named functions inside one module are still an error.
-        let source = "module math\n    fn helper(): i32\n        return 1\n    end fn\n    fn helper(): i32\n        return 2\n    end fn\nend module\nfn main()\n    put 1\nend fn";
+        let source = concat!(
+            "module math\n    fn helper(): i32\n        return 1\n    end fn\n    fn helper(): i32\n     ",
+            "   return 2\n    end fn\nend module\nfn main()\n    put 1\nend fn",
+        );
         let Err(errors) = check(source) else {
             panic!("real duplicates must still error");
         };
@@ -3011,7 +3028,11 @@ mod tests {
     #[test]
     fn accepts_iterator_chains() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
-            "fn main()\n    var xs := [1, 2, 3]\n    var s i32 := xs.iter().sum()\n    var d := xs.iter().map(|x| x * 2).collect()\n    var e := xs.iter().filter(|x| x mod 2 = 0).collect()\n    loop x in xs.iter()\n        put x\n    end loop\nend fn"
+            concat!(
+                "fn main()\n    var xs := [1, 2, 3]\n    var s i32 := xs.iter().sum()\n    var d := xs.iter()",
+                ".map(|x| x * 2).collect()\n    var e := xs.iter().filter(|x| x mod 2 = 0).collect()\n    loo",
+                "p x in xs.iter()\n        put x\n    end loop\nend fn",
+            )
         )
         .is_ok());
         Ok(())
@@ -3070,7 +3091,10 @@ mod tests {
     #[test]
     fn accepts_tuple_destructured_collection_loop() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
-            "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop (index, fruit) in pairs.enumerate()\n        put index\n        put fruit\n    end loop\nend fn"
+            concat!(
+                "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop (index, fruit) in pairs.enumera",
+                "te()\n        put index\n        put fruit\n    end loop\nend fn",
+            )
         )
         .is_ok());
         Ok(())
@@ -3079,7 +3103,10 @@ mod tests {
     #[test]
     fn tuple_destructured_loop_declares_typed_bindings() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
-            "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop (index, fruit) in pairs\n        var n i32 := index\n        var s ustring := fruit\n    end loop\nend fn"
+            concat!(
+                "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    loop (index, fruit) in pairs\n      ",
+                "  var n i32 := index\n        var s ustring := fruit\n    end loop\nend fn",
+            )
         )
         .is_ok());
         Ok(())
@@ -3108,7 +3135,10 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         // `for (a, b) in vec_of_tuples` must declare `a`/`b` with the element
         // types so the body type-checks against them.
-        let source = "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    for (num, label) in pairs\n        var n i32 := num\n        var s ustring := label\n    end for\nend fn";
+        let source = concat!(
+            "fn main()\n    var pairs Vec<(i32, ustring)> := []\n    for (num, label) in pairs\n        v",
+            "ar n i32 := num\n        var s ustring := label\n    end for\nend fn",
+        );
         assert!(check(source).is_ok());
         Ok(())
     }
@@ -3117,7 +3147,10 @@ mod tests {
     fn for_loop_enumerate_single_binding_type_checks() -> Result<(), Box<dyn std::error::Error>> {
         // `for pair in xs.enumerate()` binds a tuple; reading its elements
         // must type-check (the element type is Unknown, so reads are lenient).
-        let source = "fn main()\n    var xs := [1, 2]\n    for pair in xs.enumerate()\n        put pair.0\n    end for\nend fn";
+        let source = concat!(
+            "fn main()\n    var xs := [1, 2]\n    for pair in xs.enumerate()\n",
+            "        put pair.0\n    end for\nend fn"
+        );
         assert!(check(source).is_ok());
         Ok(())
     }
@@ -3162,7 +3195,10 @@ mod tests {
 
     #[test]
     fn nested_tuple_index_access_type_checks() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn main()\n    var nested := (1, (2, 3))\n    var a i32 := nested.1.0\n    var b i32 := nested.1.1\nend fn";
+        let source = concat!(
+            "fn main()\n    var nested := (1, (2, 3))\n    var a i32 := nested.1.0\n    var b i32 := nest",
+            "ed.1.1\nend fn",
+        );
         assert!(check(source).is_ok());
         Ok(())
     }
@@ -3209,7 +3245,11 @@ mod tests {
 
     #[test]
     fn checks_struct_fields_and_methods() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "struct Point\n    var x: i32\n    var y: i32\n    fn length(self): i32\n        return self.x\n    end fn\nend struct\nvar point := Point { x: 1, y: 2 }\nvar value i32 := point.length()";
+        let source = concat!(
+            "struct Point\n    var x: i32\n    var y: i32\n    fn length(self): i32\n        return self.",
+            "x\n    end fn\nend struct\nvar point := Point { x: 1, y: 2 }\nvar value i32 := point.length(",
+            ")",
+        );
         assert!(check(source).is_ok());
         Ok(())
     }
@@ -3228,7 +3268,10 @@ mod tests {
     #[test]
     fn accepts_infinite_loop_with_break() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
-            "fn main()\n    var count i32 := 0\n    loop\n        count := count + 1\n        if count = 3,\n            break\n        end if\n    end loop\nend fn"
+            concat!(
+                "fn main()\n    var count i32 := 0\n    loop\n        count := count + 1\n        if count = ",
+                "3,\n            break\n        end if\n    end loop\nend fn",
+            )
         )
         .is_ok());
         Ok(())
@@ -3255,14 +3298,21 @@ mod tests {
 
     #[test]
     fn accepts_nested_function_calls() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn outer(x: i32): i32\n    fn inner(y: i32): i32\n        return y * 2\n    end fn\n    return inner(x) + 1\nend fn";
+        let source = concat!(
+            "fn outer(x: i32): i32\n    fn inner(y: i32): i32\n        return y * 2\n    end fn\n    retu",
+            "rn inner(x) + 1\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
 
     #[test]
     fn accepts_option_some_none_values_and_patterns() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn main()\n    var maybe Option<i32> := Some(42)\n    var empty Option<i32> := None\n    match maybe\n        Some(v), put v\n        None, put 0\n    end match\n    match empty\n        Some(v), put v\n        None, put 0\n    end match\nend fn";
+        let source = concat!(
+            "fn main()\n    var maybe Option<i32> := Some(42)\n    var empty Option<i32> := None\n    mat",
+            "ch maybe\n        Some(v), put v\n        None, put 0\n    end match\n    match empty\n     ",
+            "   Some(v), put v\n        None, put 0\n    end match\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
@@ -3361,7 +3411,11 @@ mod tests {
 
     #[test]
     fn accepts_vec_higher_order_methods() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn main()\n    var xs := [1, 2, 3, 4, 5]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x| x mod 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\n    put xs.reduce(1, |acc, x| acc * x)\nend fn";
+        let source = concat!(
+            "fn main()\n    var xs := [1, 2, 3, 4, 5]\n    put xs.map(|x| x * 2)[0]\n    put xs.filter(|x",
+            "| x mod 2 = 0)\n    put xs.reduce(0, |acc, x| acc + x)\n    put xs.reduce(1, |acc, x| acc * ",
+            "x)\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
@@ -3413,7 +3467,11 @@ mod tests {
     #[test]
     fn accepts_higher_order_methods_on_strings_and_sort_by(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn main()\n    put \"hello\".map(|c| c)\n    put \"hello\".filter(|c| c != unicode 'l')\n    put \"hello\".reduce(0, |acc, c| acc + (c as i32))\n    var xs := [3, 1, 2]\n    put xs.sort_by(|a, b| a > b)\nend fn";
+        let source = concat!(
+            "fn main()\n    put \"hello\".map(|c| c)\n    put \"hello\".filter(|c| c != unicode 'l')\n   ",
+            " put \"hello\".reduce(0, |acc, c| acc + (c as i32))\n    var xs := [3, 1, 2]\n    put xs.sor",
+            "t_by(|a, b| a > b)\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
@@ -3450,7 +3508,10 @@ mod tests {
     #[test]
     fn rejects_misspelled_enum_variant_in_match() -> Result<(), Box<dyn std::error::Error>> {
         let Err(errors) = check(
-            "enum Color\n    Red\n    Green\n    Blue\nend enum\nfn main()\n    var c := Color::Red\n    match c\n        Red, put 1\n        Gren, put 2\n        Blue, put 3\n    end match\nend fn",
+            concat!(
+                "enum Color\n    Red\n    Green\n    Blue\nend enum\nfn main()\n    var c := Color::Red\n    ",
+                "match c\n        Red, put 1\n        Gren, put 2\n        Blue, put 3\n    end match\nend fn",
+            ),
         )
         else { panic!("expected an Err result") };
         assert!(errors.iter().any(|error| error
@@ -3463,7 +3524,10 @@ mod tests {
     fn rejects_misspelled_enum_variant_with_payload_in_match(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let Err(errors) = check(
-            "enum Shape\n    Circle(i32)\nend enum\nfn main()\n    var s := Shape::Circle(1)\n    match s\n        Gren(x), put x\n    end match\nend fn",
+            concat!(
+                "enum Shape\n    Circle(i32)\nend enum\nfn main()\n    var s := Shape::Circle(1)\n    match s",
+                "\n        Gren(x), put x\n    end match\nend fn",
+            ),
         )
         else { panic!("expected an Err result") };
         assert!(errors
@@ -3497,7 +3561,10 @@ mod tests {
     #[test]
     fn accepts_range_patterns_in_match() -> Result<(), Box<dyn std::error::Error>> {
         assert!(check(
-            "fn main()\n    var n := 42\n    match n\n        0..=9, put unicode \"small\"\n        10..=99, put unicode \"medium\"\n        _, put unicode \"large\"\n    end match\nend fn"
+            concat!(
+                "fn main()\n    var n := 42\n    match n\n        0..=9, put unicode \"small\"\n        10..=",
+                "99, put unicode \"medium\"\n        _, put unicode \"large\"\n    end match\nend fn",
+            )
         )
         .is_ok());
         Ok(())
@@ -3505,14 +3572,22 @@ mod tests {
 
     #[test]
     fn accepts_map_and_set_methods() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn main()\n    var m Map<ustring, i32> := []\n    m.insert(unicode \"key\", 42)\n    var v := m.get(unicode \"key\")\n    put m.contains_key(unicode \"key\")\n    m.remove(unicode \"key\")\n    put m.len()\n    var s Set<i32> := []\n    s.insert(1)\n    put s.contains(1)\n    s.remove(1)\nend fn";
+        let source = concat!(
+            "fn main()\n    var m Map<ustring, i32> := []\n    m.insert(unicode \"key\", 42)\n    var v :",
+            "= m.get(unicode \"key\")\n    put m.contains_key(unicode \"key\")\n    m.remove(unicode \"ke",
+            "y\")\n    put m.len()\n    var s Set<i32> := []\n    s.insert(1)\n    put s.contains(1)\n   ",
+            " s.remove(1)\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
 
     #[test]
     fn accepts_map_indexing_with_key_type() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn main()\n    var m Map<ustring, i32> := []\n    m[unicode \"a\"] = 1\n    var v := m[unicode \"a\"]\n    put v\nend fn";
+        let source = concat!(
+            "fn main()\n    var m Map<ustring, i32> := []\n    m[unicode \"a\"] = 1\n    var v := m[unico",
+            "de \"a\"]\n    put v\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
@@ -3610,10 +3685,16 @@ mod tests {
     #[test]
     fn explicit_extern_signature_checks_arguments_and_return_type(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let valid = "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc\nfn main()\n    var result i32 := double(21)\n    put result\nend fn";
+        let valid = concat!(
+            "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc",
+            "\nfn main()\n    var result i32 := double(21)\n    put result\nend fn",
+        );
         assert!(check(valid).is_ok(), "{:?}", check(valid).err());
 
-        let invalid = "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc\nfn main()\n    var result i32 := double(unicode \"wrong\")\n    put result\nend fn";
+        let invalid = concat!(
+            "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc",
+            "\nfn main()\n    var result i32 := double(unicode \"wrong\")\n    put result\nend fn",
+        );
         let Err(errors) = check(invalid) else {
             panic!("expected an Err result")
         };
@@ -3640,7 +3721,10 @@ mod tests {
         // `identity(42)` must resolve `T = i32` and return `i32`, so assigning
         // the result to a `String` fails instead of silently passing as
         // `Unknown`.
-        let source = "fn identity<T>(value: T): T\n    return value\nend fn\n\nfn main()\n    var s ustring := identity(42)\n    put s\nend fn";
+        let source = concat!(
+            "fn identity<T>(value: T): T\n    return value\nend fn\n\nfn main()\n    var s ustring := ide",
+            "ntity(42)\n    put s\nend fn",
+        );
         let Err(errors) = check(source) else {
             panic!("expected an Err result")
         };
@@ -3654,14 +3738,20 @@ mod tests {
     fn generic_call_infers_nested_container_types() -> Result<(), Box<dyn std::error::Error>> {
         // `first(xs)` with `xs: Vec<i32>` must bind `T = i32` through the
         // container and return `i32`.
-        let source = "fn first<T>(xs: Vec<T>): T\n    return xs[0]\nend fn\n\nfn main()\n    var xs Vec<i32> := [1, 2, 3]\n    var head i32 := first(xs)\n    put head.to_string()\nend fn";
+        let source = concat!(
+            "fn first<T>(xs: Vec<T>): T\n    return xs[0]\nend fn\n\nfn main()\n    var xs Vec<i32> := [1",
+            ", 2, 3]\n    var head i32 := first(xs)\n    put head.to_string()\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
 
     #[test]
     fn generic_call_accepts_correct_argument_type() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn identity<T>(value: T): T\n    return value\nend fn\n\nfn main()\n    var n i32 := identity(42)\n    put n.to_string()\nend fn";
+        let source = concat!(
+            "fn identity<T>(value: T): T\n    return value\nend fn\n\nfn main()\n    var n i32 := identit",
+            "y(42)\n    put n.to_string()\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
@@ -3670,7 +3760,10 @@ mod tests {
     fn mask_and_until_flags_are_implemented() -> Result<(), Box<dyn std::error::Error>> {
         // `--mask` and `--until` are real now: they must type-check without
         // the old "not implemented" warnings.
-        let source = "fn main()\n    var pw := get --mask unicode \"*\"\n    put pw\n    var field := get --until unicode \",\"\n    put field\nend fn";
+        let source = concat!(
+            "fn main()\n    var pw := get --mask unicode \"*\"\n    put pw\n    var field := get --until ",
+            "unicode \",\"\n    put field\nend fn",
+        );
         let (tokens, lexer_errors) = Lexer::lex(source);
         assert!(lexer_errors.is_empty());
         let mut parser = Parser::new(&tokens);
@@ -3709,7 +3802,11 @@ mod tests {
     fn checked_index_get_returns_option() -> Result<(), Box<dyn std::error::Error>> {
         // `xs.get(i)` must resolve to `Option<T>` and reject non-integer
         // indexes, so the result is usable with `match`/`if` patterns.
-        let source = "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    match xs.get(0)\n        Some(value), put value.to_string()\n        None, put \"empty\"\n    end match\n    match unicode \"abc\".get(1)\n        Some(c), put c\n        None, put \"none\"\n    end match\nend fn";
+        let source = concat!(
+            "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    match xs.get(0)\n        Some(value), put v",
+            "alue.to_string()\n        None, put \"empty\"\n    end match\n    match unicode \"abc\".get(",
+            "1)\n        Some(c), put c\n        None, put \"none\"\n    end match\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
@@ -3729,14 +3826,20 @@ mod tests {
 
     #[test]
     fn result_accessors_type_check() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn main()\n    var result := http_get(unicode \"http://example.com\").await\n    assert(result.is_ok())\n    if result.is_ok(),\n        put result.unwrap()\n    end if\nend fn";
+        let source = concat!(
+            "fn main()\n    var result := http_get(unicode \"http://example.com\").await\n    assert(resu",
+            "lt.is_ok())\n    if result.is_ok(),\n        put result.unwrap()\n    end if\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
 
     #[test]
     fn string_interpolation_type_checks() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "fn main()\n    var name ustring := unicode \"Alice\"\n    var age i32 := 30\n    put \"Name: {name}, Age: {age}\"\nend fn";
+        let source = concat!(
+            "fn main()\n    var name ustring := unicode \"Alice\"\n    var age i32 := 30\n    put \"Name:",
+            " {name}, Age: {age}\"\nend fn",
+        );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
@@ -3785,7 +3888,10 @@ mod tests {
 
     #[test]
     fn strict_mode_allows_explicit_extern_declaration() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "extern c fn double_value(value: i32): i32\n#c\nint double_value(int value) { return value * 2; }\n#endc\nvar result i32 := double_value(21)\nput result";
+        let source = concat!(
+            "extern c fn double_value(value: i32): i32\n#c\nint double_value(int value) { return value * ",
+            "2; }\n#endc\nvar result i32 := double_value(21)\nput result",
+        );
         assert!(
             check_strict(source).is_ok(),
             "{:?}",
@@ -3798,7 +3904,10 @@ mod tests {
     fn strict_mode_reports_extern_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
         // An explicit declaration opts into interface checking: strict mode
         // surfaces the arity mismatch instead of silently delegating to cc.
-        let source = "extern c fn double_value(value: i32): i32\n#c\nint double_value(int value) { return value * 2; }\n#endc\nvar result i32 := double_value(21, 22)";
+        let source = concat!(
+            "extern c fn double_value(value: i32): i32\n#c\nint double_value(int value) { return value * ",
+            "2; }\n#endc\nvar result i32 := double_value(21, 22)",
+        );
         let Err(errors) = check_strict(source) else {
             panic!("arity mismatch should be rejected");
         };
@@ -3814,7 +3923,10 @@ mod tests {
     #[test]
     fn strict_mode_allows_poly_and_builtin_calls() -> Result<(), Box<dyn std::error::Error>> {
         // Ordinary Poly declarations and builtins are unaffected by strict mode.
-        let source = "fn add_one(value: i32): i32\n    return value + 1\nend fn\nfn main()\n    var n i32 := add_one(41)\n    put n\n    put abs(-3)\nend fn";
+        let source = concat!(
+            "fn add_one(value: i32): i32\n    return value + 1\nend fn\nfn main()\n    var n i32 := add_o",
+            "ne(41)\n    put n\n    put abs(-3)\nend fn",
+        );
         assert!(
             check_strict(source).is_ok(),
             "{:?}",
@@ -3830,7 +3942,10 @@ mod tests {
         // foreign blocks and their extern declarations before checking, so a
         // #rust call under the c target is an `unknown function` error in
         // permissive mode already — strict mode changes nothing there.
-        let dropped = "#rust\nfn rust_helper(x: i32) -> i32 { x }\n#endrust\n#c\nint c_helper(int x) { return x; }\n#endc\nvar n i32 := rust_helper(1)\nput n";
+        let dropped = concat!(
+            "#rust\nfn rust_helper(x: i32) -> i32 { x }\n#endrust\n#c\nint c_helper(int x) { return x; }",
+            "\n#endc\nvar n i32 := rust_helper(1)\nput n",
+        );
         let program = crate::codegen::Transpiler::parse_target(dropped, "c")?;
         let Err(errors) = TypeChecker::check(&program) else {
             panic!("unknown function");
@@ -3844,7 +3959,10 @@ mod tests {
 
         // A call into the selected target's foreign block is permissive
         // without strict mode and rejected with guidance under it.
-        let selected = "#rust\nfn rust_helper(x: i32) -> i32 { x }\n#endrust\n#c\nint c_helper(int x) { return x; }\n#endc\nvar n i32 := c_helper(1)\nput n";
+        let selected = concat!(
+            "#rust\nfn rust_helper(x: i32) -> i32 { x }\n#endrust\n#c\nint c_helper(int x) { return x; }",
+            "\n#endc\nvar n i32 := c_helper(1)\nput n",
+        );
         let program = crate::codegen::Transpiler::parse_target(selected, "c")?;
         assert!(TypeChecker::check(&program).is_ok());
         let Err(errors) = TypeChecker::check_with_warnings_strict_foreign(&program).0 else {

@@ -1,7 +1,8 @@
 //! Poly intermediate representation (intermediate representation) and optimization passes.
 //!
 //! The intermediate representation is the compiler's middle layer: the parser produces an AST, the
-//! generator lowers it to intermediate representation, optimization passes rewrite the intermediate representation, and the intermediate representation
+//! generator lowers it to intermediate representation, optimization passes rewrite the
+//! intermediate representation, and the intermediate representation
 //! code generator produces Rust.  Keeping a dedicated intermediate representation crate lets each phase
 //! be developed, tested, and benchmarked independently.
 

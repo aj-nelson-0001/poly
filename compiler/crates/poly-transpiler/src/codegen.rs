@@ -382,7 +382,11 @@ mod tests {
     #[test]
     fn target_selection_keeps_only_matching_foreign_blocks(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let source = "extern rust fn rust_value(): i32\nextern c fn c_value(): i32\n#rust\nfn rust_value() -> i32 { 1 }\n#endrust\n#c\nint c_value(void) { return 2; }\n#endc\nfn main()\n    var result i32 := rust_value()\n    put result\nend fn";
+        let source = concat!(
+            "extern rust fn rust_value(): i32\nextern c fn c_value(): i32\n#rust\nfn rust_value() -> i32 ",
+            "{ 1 }\n#endrust\n#c\nint c_value(void) { return 2; }\n#endc\nfn main()\n    var result i32 :",
+            "= rust_value()\n    put result\nend fn",
+        );
         let rust = Transpiler::new().transpile_target(source, "rust")?;
         assert!(rust.contains("rust_value"));
         assert!(!rust.contains("c_value"));

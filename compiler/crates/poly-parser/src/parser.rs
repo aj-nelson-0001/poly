@@ -2384,12 +2384,13 @@ impl<'a> Parser<'a> {
             // Prefix operators recurse into unary parsing so chains such as `!!x`
             // and `*ptr` bind tighter than every binary operator.
             TokenKind::Minus => {
-                if matches!(self.tokens.get(self.pos + 1).map(|token| &token.kind), Some(TokenKind::Identifier(name)) if name == "u")
-                    && matches!(
-                        self.tokens.get(self.pos + 2).map(|token| &token.kind),
-                        Some(TokenKind::StringLiteral(_))
-                    )
-                {
+                if matches!(
+                    self.tokens.get(self.pos + 1).map(|token| &token.kind),
+                    Some(TokenKind::Identifier(name)) if name == "u"
+                ) && matches!(
+                    self.tokens.get(self.pos + 2).map(|token| &token.kind),
+                    Some(TokenKind::StringLiteral(_))
+                ) {
                     return Err(ParseError::with_suggestion(
                         "The `unicode \"...\"` Unicode string syntax has been removed",
                         self.current().span,
@@ -3391,7 +3392,10 @@ impl<'a> Parser<'a> {
                     return Err(ParseError::with_suggestion(
                         "A nested `if` statement cannot directly follow `else`",
                         span,
-                        "`else if` chains share one `end if`; merge the nested condition into the chain, e.g. `else if <condition>` followed by the arm body".to_string(),
+                        concat!(
+                            "`else if` chains share one `end if`; merge the nested condition into the chain, e.g. `else i",
+                            "f <condition>` followed by the arm body",
+                        ).to_string(),
                     ));
                 }
                 vec![Spanned::new(
@@ -4531,7 +4535,10 @@ mod tests {
     #[test]
     fn extern_function_declarations_parse_with_target_and_signature(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let source = "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc\nput double(21)";
+        let source = concat!(
+            "extern c fn double(value: i32): i32\n#c\nint double(int value) { return value * 2; }\n#endc",
+            "\nput double(21)",
+        );
         let program = parse_source(source)?;
         match &program.statements[0].node {
             Statement::ExternFunctionDeclaration(declaration) => {
@@ -4811,7 +4818,11 @@ end match"#
         // Keyword operators produce the same AST variants the retired symbol
         // spellings did, so the checker, optimizer, and backends are unchanged.
         let prog = parse_source(
-            "var a := x and y\nvar b := x or y\nvar c := x xor y\nvar d := x mod y\nvar e := x bitand y\nvar f := x bitor y\nvar g := x shift left 2\nvar h := x shift right 2\nvar i := not x\nvar j := bitnot x",
+            concat!(
+                "var a := x and y\nvar b := x or y\nvar c := x xor y\nvar d := x mod y\nvar e := x bitand y\n",
+                "var f := x bitor y\nvar g := x shift left 2\nvar h := x shift right 2\nvar i := not x\nvar j",
+                " := bitnot x",
+            ),
         )
         ?;
         let expected_ops = [
@@ -5416,7 +5427,10 @@ end match"#
 
     #[test]
     fn test_parse_if_else_if() -> Result<(), Box<dyn std::error::Error>> {
-        let prog = parse_source("if x > 0,\n    put x\nelse if x < 0,\n    put \"negative\"\nelse,\n    put \"zero\"\nend if")?;
+        let prog = parse_source(concat!(
+            "if x > 0,\n    put x\nelse if x < 0,\n",
+            "    put \"negative\"\nelse,\n    put \"zero\"\nend if"
+        ))?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::IfExpression {
@@ -5509,7 +5523,10 @@ end match"#
 
     #[test]
     fn test_parse_multiple_else_if() -> Result<(), Box<dyn std::error::Error>> {
-        let source = "if x > 10,\n    put \"high\"\nelse if x > 5,\n    put \"medium\"\nelse if x > 0,\n    put \"low\"\nelse,\n    put \"zero\"\nend if";
+        let source = concat!(
+            "if x > 10,\n    put \"high\"\nelse if x > 5,\n    put \"medium\"\nelse if x > 0,\n    put \"",
+            "low\"\nelse,\n    put \"zero\"\nend if",
+        );
         let prog = parse_source(source)?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
@@ -5647,7 +5664,10 @@ end fn"#;
     fn test_parse_for_loop_tuple_destructuring() -> Result<(), Box<dyn std::error::Error>> {
         // `for (idx, val) in collection` stores the tuple pattern in the loop
         // variable exactly like `loop: (a, b) in collection`.
-        let source = "fn main()\n    var items := [5, 6]\n    for (idx, val) in items.enumerate()\n        put idx\n        put val\n    end for\nend fn";
+        let source = concat!(
+            "fn main()\n    var items := [5, 6]\n    for (idx, val) in items.enumerate()\n        put idx",
+            "\n        put val\n    end for\nend fn",
+        );
         let prog = parse_source(source)?;
         let Statement::FunctionDeclaration(function) = &prog.statements[0].node else {
             panic!("expected a function declaration");

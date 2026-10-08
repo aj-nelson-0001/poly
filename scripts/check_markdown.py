@@ -15,7 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def markdown_files():
     for path in sorted(ROOT.rglob("*.md")):
-        if ".git" not in path.parts and "target" not in path.parts:
+        if (
+            ".git" not in path.parts
+            and "target" not in path.parts
+            and "node_modules" not in path.parts
+        ):
             yield path
 
 

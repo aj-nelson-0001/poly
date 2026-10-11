@@ -779,6 +779,62 @@ end fn
 }
 
 #[test]
+fn test_runtime_put_prepend_writes_in_front_of_file() -> Result<(), Box<dyn std::error::Error>> {
+    // `put v to "file" -prepend` writes the value in front of the file's
+    // existing contents (the mirror of `-append`) and creates a missing file.
+    let source = r#"
+fn main()
+    put "Hello" to "hi.txt" -prepend
+    put "Line 0" to "hi.txt" -prepend
+    put "Fresh" to "fresh.txt" -prepend
+end fn
+"#;
+    let rust_code = Transpiler::new().transpile(source)?;
+    let scratch = ScratchDir::new("poly_prepend_runtime")?;
+    let directory = scratch.path().to_path_buf();
+    let hi_path = directory.join("hi.txt");
+    std::fs::write(&hi_path, "existing tail\n")?;
+    let source_path = directory.join("main.rs");
+    let binary_path = directory.join("program");
+    std::fs::write(&source_path, &rust_code)?;
+
+    let compile = std::process::Command::new("rustc")
+        .arg("--edition")
+        .arg("2021")
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()?;
+    assert!(
+        compile.status.success(),
+        "generated program failed to compile: {}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+
+    let output = std::process::Command::new(&binary_path)
+        .current_dir(&directory)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "generated program failed to run: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Seeded file: both prepends land in front of the original contents, in
+    // program order.
+    assert_eq!(
+        std::fs::read_to_string(&hi_path)?,
+        "Line 0\nHello\nexisting tail\n"
+    );
+    // Missing file: the first prepend creates it.
+    assert_eq!(
+        std::fs::read_to_string(directory.join("fresh.txt"))?,
+        "Fresh\n"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_runtime_checked_index_returns_option() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 fn main()
@@ -952,6 +1008,34 @@ fn compile_and_run_c(source: &str) -> Result<String, String> {
     Ok(compile_and_run_c_capture(source)?.0)
 }
 
+#[test]
+fn test_c_backend_runtime_power_operator() -> Result<(), Box<dyn std::error::Error>> {
+    // Same semantics as the Rust target (see
+    // test_runtime_power_operator): `^` on ints, 64-bit exactness under an
+    // i64 declaration, runtime-negative exponent -> 0. Compiled with
+    // -Wall -Werror, so this also pins the emitted helper as warning-clean.
+    let source = r#"
+fn main()
+    var square i32 := 7 ^ 2
+    var right_assoc i32 := 2 ^ 3 ^ 2
+    var precedence i32 := 2 * 3 ^ 2
+    var neg_lit i32 := (-2) ^ 3
+    var big i64 := 2 ^ 40
+    var exp i32 := 0 - 3
+    var runtime_neg i32 := 2 ^ exp
+    put square
+    put right_assoc
+    put precedence
+    put neg_lit
+    put big
+    put runtime_neg
+end fn
+"#;
+    let output = compile_and_run_c(source)?;
+    assert_eq!(output, "49\n512\n18\n-8\n1099511627776\n0\n");
+    Ok(())
+}
+
 fn compile_and_run_c_capture(source: &str) -> Result<(String, String), String> {
     let c_code = Transpiler::new().transpile_c_checked(source)?;
     let scratch = ScratchDir::new("poly_c_runtime").map_err(|e| e.to_string())?;
@@ -1112,5 +1196,34 @@ end fn
 "#;
     let output = compile_and_run(source, None)?;
     assert_eq!(output, "99\nfalse\n3\n");
+    Ok(())
+}
+
+#[test]
+fn test_runtime_power_operator() -> Result<(), Box<dyn std::error::Error>> {
+    // `^` is exponentiation: binds tighter than `*`, right-associative,
+    // 64-bit exact when the declaration is i64, and a runtime-negative
+    // integer exponent yields 0 (the shared cross-target rule).
+    let source = r#"
+fn main()
+    var square i32 := 7 ^ 2
+    var right_assoc i32 := 2 ^ 3 ^ 2
+    var precedence i32 := 2 * 3 ^ 2
+    var neg_lit i32 := (-2) ^ 3
+    var grouped i32 := 4 ^ (1 + 1)
+    var big i64 := 2 ^ 40
+    var exp i32 := 0 - 3
+    var runtime_neg i32 := 2 ^ exp
+    put square
+    put right_assoc
+    put precedence
+    put neg_lit
+    put grouped
+    put big
+    put runtime_neg
+end fn
+"#;
+    let output = compile_and_run(source, None)?;
+    assert_eq!(output, "49\n512\n18\n-8\n16\n1099511627776\n0\n");
     Ok(())
 }

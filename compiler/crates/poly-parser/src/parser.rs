@@ -1040,7 +1040,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Assignment { target, value })
     }
 
-    /// Parse `put expr [to "file" [-append]]`, the output statement.
+    /// Parse `put expr [to "file" [-append | -prepend]]`, the output statement.
     fn parse_put_statement(&mut self) -> Result<Statement, ParseError> {
         // `put` always emits an LF at the end (like Rust's println!).
         self.advance(); // consume 'put'
@@ -1063,18 +1063,27 @@ impl<'a> Parser<'a> {
             // Parse only the primary expression for the file path so that
             // `-append` is not consumed as a binary subtraction operator.
             let file_expr = self.parse_primary()?;
-            // Check for `-append` flag after `to "file"`
-            let is_append = self.peek() == &TokenKind::Minus
-                && matches!(
-                    self.tokens.get(self.pos + 1).map(|token| &token.kind),
-                    Some(TokenKind::Identifier(name)) if name == "append"
-                );
-            if is_append {
-                self.advance(); // consume `-`
-                self.advance(); // consume `append`
-                Some(Redirect::Append(file_expr))
+            // Check for an `-append` / `-prepend` flag after `to "file"`
+            let flag = if self.peek() == &TokenKind::Minus {
+                match self.tokens.get(self.pos + 1).map(|token| &token.kind) {
+                    Some(TokenKind::Identifier(name)) if name == "append" => Some("append"),
+                    Some(TokenKind::Identifier(name)) if name == "prepend" => Some("prepend"),
+                    _ => None,
+                }
             } else {
-                Some(Redirect::Write(file_expr))
+                None
+            };
+            match flag {
+                Some(flag) => {
+                    self.advance(); // consume `-`
+                    self.advance(); // consume the flag identifier
+                    Some(if flag == "prepend" {
+                        Redirect::Prepend(file_expr)
+                    } else {
+                        Redirect::Append(file_expr)
+                    })
+                }
+                None => Some(Redirect::Write(file_expr)),
             }
         } else {
             None
@@ -1933,7 +1942,8 @@ impl<'a> Parser<'a> {
     //
     // From lowest to highest precedence the ladder is:
     //   or -> and -> comparison -> bitwise or -> bitwise xor -> bitwise and
-    //   -> shift -> additive -> multiplicative -> unary -> postfix -> primary
+    //   -> shift -> additive -> multiplicative -> power (right-associative)
+    //   -> unary -> postfix -> primary
 
     /// Parse a full expression. `or` is the lowest-precedence operator, so it
     /// sits at the top of the ladder.
@@ -2133,28 +2143,18 @@ impl<'a> Parser<'a> {
         let mut left = self.parse_bitwise_and()?;
         // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
         let mut chain_len = 1usize;
-        loop {
-            match self.peek() {
-                TokenKind::Xor => {
-                    self.advance();
-                    let right = self.parse_bitwise_and()?;
-                    left = self.fold_binary(
-                        left,
-                        BinaryOp::BitXor,
-                        right,
-                        &mut chain_len,
-                        self.current().span,
-                    )?;
-                }
-                // `^` is the retired symbol spelling of `xor`.
-                TokenKind::Caret => {
-                    return Err(self.retired_operator_error(
-                        "`^` is legacy xor syntax and is rejected",
-                        "Use `xor` for bitwise exclusive or",
-                    ));
-                }
-                _ => break,
-            }
+        // `^` is the power operator (see parse_power), handled one level
+        // above multiplication, so it never reaches this level.
+        while let TokenKind::Xor = self.peek() {
+            self.advance();
+            let right = self.parse_bitwise_and()?;
+            left = self.fold_binary(
+                left,
+                BinaryOp::BitXor,
+                right,
+                &mut chain_len,
+                self.current().span,
+            )?;
         }
         Ok(left)
     }
@@ -2308,14 +2308,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mul_div(&mut self) -> Result<Expression, ParseError> {
-        let mut left = self.parse_unary()?;
+        let mut left = self.parse_power()?;
         // Operand cap for this left-associative chain (see MAX_OPERAND_CHAIN).
         let mut chain_len = 1usize;
         loop {
             match self.peek() {
                 TokenKind::Star => {
                     self.advance();
-                    let right = self.parse_unary()?;
+                    // Right operand at the power level: `^` binds tighter
+                    // than `*`, so `2 * 3 ^ 2` is 2 * (3 ^ 2).
+                    let right = self.parse_power()?;
                     left = self.fold_binary(
                         left,
                         BinaryOp::Mul,
@@ -2326,7 +2328,7 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::Slash => {
                     self.advance();
-                    let right = self.parse_unary()?;
+                    let right = self.parse_power()?;
                     left = self.fold_binary(
                         left,
                         BinaryOp::Div,
@@ -2337,7 +2339,7 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::Mod => {
                     self.advance();
-                    let right = self.parse_unary()?;
+                    let right = self.parse_power()?;
                     left = self.fold_binary(
                         left,
                         BinaryOp::Mod,
@@ -2357,6 +2359,33 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(left)
+    }
+
+    /// Parse `a ^ b` (exponentiation). `^` binds tighter than `*` and `/` and
+    /// is right-associative, so `2 ^ 3 ^ 2` means `2 ^ (3 ^ 2) = 512`.
+    /// The base operand is parsed at the unary level, so prefix operators
+    /// still bind tighter than `^` (`-x ^ 2` is `(-x) ^ 2`), matching the
+    /// ladder's rule that unary operators bind tighter than every binary
+    /// operator.
+    fn parse_power(&mut self) -> Result<Expression, ParseError> {
+        let base = self.parse_unary()?;
+        match self.peek() {
+            TokenKind::Caret => {
+                self.advance();
+                // Right-associative: recurse back into this level for the
+                // exponent so `a ^ b ^ c` nests on the right.
+                let right = self.parse_power()?;
+                // A single `^` cannot start a chain cap concern: the fold is
+                // one node per `^`, and deep right-nesting is bounded by the
+                // expression depth guard reached through parse_unary.
+                Ok(Expression::BinaryOp {
+                    op: BinaryOp::Power,
+                    left: Box::new(base),
+                    right: Box::new(right),
+                })
+            }
+            _ => Ok(base),
+        }
     }
 
     /// Parse prefix unary operators (`-`, `not`, `bitnot`, `deref`, `addr`).
@@ -3962,6 +3991,9 @@ fn substitute_statement(
                 Redirect::Append(path) => {
                     Redirect::Append(substitute_expression(path, substitutions))
                 }
+                Redirect::Prepend(path) => {
+                    Redirect::Prepend(substitute_expression(path, substitutions))
+                }
             }),
         },
         Statement::ErrorStatement(expression) => {
@@ -4860,11 +4892,75 @@ end match"#
     }
 
     #[test]
+    fn test_parse_power_operator() -> Result<(), Box<dyn std::error::Error>> {
+        // `^` is exponentiation: it binds tighter than `*` and is
+        // right-associative.
+        let prog = parse_source("var square := x ^ 2")?;
+        match &prog.statements[0].node {
+            Statement::VarDeclaration {
+                value: Some(Expression::BinaryOp { op, .. }),
+                ..
+            } => assert_eq!(op, &BinaryOp::Power),
+            other => panic!("expected power var decl, got {other:?}"),
+        }
+        // `2 ^ 3 ^ 2` nests on the right: 2 ^ (3 ^ 2).
+        let prog = parse_source("var big := 2 ^ 3 ^ 2")?;
+        match &prog.statements[0].node {
+            Statement::VarDeclaration {
+                value: Some(Expression::BinaryOp { op, left, right }),
+                ..
+            } => {
+                assert_eq!(op, &BinaryOp::Power);
+                assert!(matches!(
+                    &**right,
+                    Expression::BinaryOp {
+                        op: BinaryOp::Power,
+                        ..
+                    }
+                ));
+                assert!(matches!(&**left, Expression::IntLiteral(v) if v == "2"));
+            }
+            other => panic!("expected nested power decl, got {other:?}"),
+        }
+        // Power binds tighter than multiplication: `2 * 3 ^ 2` is 2 * (3 ^ 2).
+        let prog = parse_source("var mixed := 2 * 3 ^ 2")?;
+        match &prog.statements[0].node {
+            Statement::VarDeclaration {
+                value:
+                    Some(Expression::BinaryOp {
+                        op: BinaryOp::Mul,
+                        right,
+                        ..
+                    }),
+                ..
+            } => {
+                assert!(matches!(
+                    &**right,
+                    Expression::BinaryOp {
+                        op: BinaryOp::Power,
+                        ..
+                    }
+                ));
+            }
+            other => panic!("expected mul-of-power decl, got {other:?}"),
+        }
+        // `xor` remains the bitwise xor spelling; `^` is no longer xor.
+        let prog = parse_source("var x := a xor b")?;
+        match &prog.statements[0].node {
+            Statement::VarDeclaration {
+                value: Some(Expression::BinaryOp { op, .. }),
+                ..
+            } => assert_eq!(op, &BinaryOp::BitXor),
+            other => panic!("expected xor decl, got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_rejects_retired_operator_symbols() -> Result<(), Box<dyn std::error::Error>> {
         let cases = [
             ("var x := a && b", "legacy and syntax", "Use `and`"),
             ("var x := a || b", "legacy or syntax", "Use `or`"),
-            ("var x := a ^ b", "legacy xor syntax", "Use `xor`"),
             ("var x := a % b", "legacy mod syntax", "Use `mod`"),
             ("var x := a & b", "legacy bitand syntax", "Use `bitand`"),
             ("var x := a | b", "legacy bitor syntax", "Use `bitor`"),
@@ -4934,6 +5030,32 @@ end match"#
                 _ => panic!("Expected string literal"),
             },
             _ => panic!("Expected PutStatement"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_put_append_and_prepend_redirects() -> Result<(), Box<dyn std::error::Error>> {
+        // Both file flags parse after `to <path>`; the path stays the primary
+        // expression so the flag is never read as a binary subtraction.
+        for (flag, expect_prepend) in [("append", false), ("prepend", true)] {
+            let source = format!(r#"put "Hello" to "Hi.txt" -{flag}"#);
+            let prog = parse_source(&source)?;
+            assert_eq!(prog.statements.len(), 1, "{source}");
+            let Statement::PutStatement { redirect, .. } = &prog.statements[0].node else {
+                panic!("Expected PutStatement for {source}");
+            };
+            match redirect {
+                Some(Redirect::Prepend(path)) if expect_prepend => match path {
+                    Expression::StringLiteral(s) => assert_eq!(s, "Hi.txt"),
+                    other => panic!("Expected string literal path, got {other:?}"),
+                },
+                Some(Redirect::Append(path)) if !expect_prepend => match path {
+                    Expression::StringLiteral(s) => assert_eq!(s, "Hi.txt"),
+                    other => panic!("Expected string literal path, got {other:?}"),
+                },
+                other => panic!("Unexpected redirect for {source}: {other:?}"),
+            }
         }
         Ok(())
     }

@@ -28,85 +28,15 @@ set_file_permissions("file.txt", 0o644)
 ### Windows
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Windows-compatible output
-
-
-
-
-
-
-
 put "Hello, World!"  // CRLF line ending handled by OS
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Windows file paths
-
-
-
-
-
-
-
 var path ustring := "C:\\Users\\user\\file.txt"
-
-
-
-
-
-
-
 var content ustring := get from  path
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Windows permissions
-
-
-
-
-
-
-
 set_file_permissions("file.txt", 0o644)  // Mapped to Windows ACLs
-
-
-
-
-
-
-
 ~~~
 
 ### macOS
@@ -130,61 +60,12 @@ set_file_permissions("file.txt", 0o644)
 ### UTF-8
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: UTF-8 encoding
-
-
-
-
-
-
-
 var text ustring := unicode "Hello, World!"
-
-
-
-
-
-
-
 put text
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // UTF-8 file reading
-
-
-
-
-
-
-
 var content ustring := get from "utf8.txt" with encoding unicode "utf-8"
-
-
-
-
-
-
-
 ~~~
 
 ### ASCII
@@ -201,61 +82,12 @@ var content ustring := get from "ascii.txt" with encoding unicode "ascii"
 ### Latin-1
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Latin-1 encoding
-
-
-
-
-
-
-
 var text ustring := unicode "café"  // Latin-1 characters
-
-
-
-
-
-
-
 put text
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Latin-1 file reading
-
-
-
-
-
-
-
 var content ustring := get from "latin1.txt" with encoding unicode "latin-1"
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -276,61 +108,12 @@ var lines Vec<ustring> := content.split("\n")
 ### Windows (CRLF)
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Windows line endings
-
-
-
-
-
-
-
 put "Line 1\r\nLine 2"  // CRLF
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Read Windows file
-
-
-
-
-
-
-
 var content ustring := get from "windows.txt"
-
-
-
-
-
-
-
 var lines Vec<ustring> := content.split("\r\n")
-
-
-
-
-
-
-
 ~~~
 
 ### Cross-Platform
@@ -352,69 +135,13 @@ var lines Vec<ustring> := content.split("\r?\n")  // Match either
 ### Absolute Paths
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Absolute paths
-
-
-
-
-
-
-
 var path ustring := if is_windows(),
-
-
-
-
-
-
-
     "C:\\Users\\user\\file.txt"
-
-
-
-
-
-
-
 else
-
-
-
-
-
-
-
     "/home/user/file.txt"
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 var content ustring := get from  path
-
-
-
-
-
-
-
 ~~~
 
 ### Relative Paths
@@ -428,53 +155,11 @@ var content ustring := get from  path
 ### Path Separators
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Cross-platform path separators
-
-
-
-
-
-
-
 var path ustring := join_path(["data", "file.txt"])
-
-
-
-
-
-
-
 // Returns "/data/file.txt" on Unix
-
-
-
-
-
-
-
 // Returns "\\data\\file.txt" on Windows
-
-
-
-
-
-
-
 var content ustring := get from  path
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -510,85 +195,15 @@ end fn
 ### Cross-Platform Error Messages
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Cross-platform error messages
-
-
-
-
-
-
-
 fn get_error_message(error: FileError): ustring
-
-
-
-
-
-
-
     match error
-
-
-
-
-
-
-
         NotFound, return unicode "File not found"
-
-
-
-
-
-
-
         PermissionDenied, return unicode "Permission denied"
-
-
-
-
-
-
-
         AccessDenied, return unicode "Access denied"  // Windows
-
-
-
-
-
-
-
         TooManyOpenFiles, return unicode "Too many open files"  // Unix
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -613,93 +228,16 @@ end if
 ### Terminal Input
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Cross-platform input
-
-
-
-
-
-
-
 put "Enter your name: "
-
-
-
-
-
-
-
 var name ustring := get  // Works on all platforms
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Platform-specific input handling
-
-
-
-
-
-
-
 if is_windows(),
-
-
-
-
-
-
-
     // Windows-specific input handling
-
-
-
-
-
-
-
 else
-
-
-
-
-
-
-
     // Unix-specific input handling
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 ### File I/O
@@ -724,85 +262,15 @@ end if
 ### Cross-Platform Networking
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Cross-platform networking
-
-
-
-
-
-
-
 var response := get from "https://api.example.com" --timeout 5000
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Platform-specific networking
-
-
-
-
-
-
-
 if is_windows(),
-
-
-
-
-
-
-
     // Windows-specific networking
-
-
-
-
-
-
-
 else
-
-
-
-
-
-
-
     // Unix-specific networking
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 ### SSL/TLS
@@ -826,109 +294,18 @@ end if
 ### Cross-Platform Performance
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Cross-platform performance
-
-
-
-
-
-
-
 var start := time_now()
-
-
-
-
-
-
-
 // Performance-critical code
-
-
-
-
-
-
-
 var duration := time_now() - start
-
-
-
-
-
-
-
 put "Duration: " + duration.to_string() + "ms"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Platform-specific optimizations
-
-
-
-
-
-
-
 if is_windows(),
-
-
-
-
-
-
-
     // Windows-specific optimizations
-
-
-
-
-
-
-
 else
-
-
-
-
-
-
-
     // Unix-specific optimizations
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 ### Memory Management
@@ -953,189 +330,28 @@ end if
 ### Cross-Platform Testing
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Cross-platform tests
-
-
-
-
-
-
-
 fn test_file_operations()
-
-
-
-
-
-
-
     var test_file ustring := if is_windows(),
-
-
-
-
-
-
-
         "test_windows.txt"
-
-
-
-
-
-
-
     else
-
-
-
-
-
-
-
         "test_unix.txt"
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     put "Test content" > test_file
-
-
-
-
-
-
-
     var content ustring := get from  test_file
-
-
-
-
-
-
-
     assert(content == unicode "Test content")
-
-
-
-
-
-
-
     delete_file(test_file)
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Platform-specific tests
-
-
-
-
-
-
-
 fn test_platform_specific()
-
-
-
-
-
-
-
     if is_windows(),
-
-
-
-
-
-
-
         test_windows_specific()
-
-
-
-
-
-
-
     else
-
-
-
-
-
-
-
         test_unix_specific()
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -1160,117 +376,19 @@ end if
 ### Use Abstractions
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Use abstractions
-
-
-
-
-
-
-
 fn read_file(path: ustring): Result<ustring, FileError>
-
-
-
-
-
-
-
     return platform_read(path)  // Platform-specific implementation
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Bad: Platform-specific code everywhere
-
-
-
-
-
-
-
 fn read_file(path: ustring): Result<ustring, FileError>
-
-
-
-
-
-
-
     if is_windows(),
-
-
-
-
-
-
-
         // Windows-specific code
-
-
-
-
-
-
-
     else
-
-
-
-
-
-
-
         // Unix-specific code
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Test on Multiple Platforms

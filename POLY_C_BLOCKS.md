@@ -26,45 +26,10 @@ put answer
 Select the backend explicitly when a file contains multiple foreign blocks:
 
 ~~~bash
-
-
-
-
-
-
-
 poly --target c --check program.poly
-
-
-
-
-
-
-
 poly --target c --emit-c program.poly
-
-
-
-
-
-
-
 poly --target c program.poly
-
-
-
-
-
-
-
 poly --target c --project build-dir program.poly
-
-
-
-
-
-
-
 ~~~
 
 Only `#c` blocks are emitted for the C target. `#rust` blocks are ignored by C code generation. `extern c fn ...` declarations

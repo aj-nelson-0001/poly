@@ -52,285 +52,40 @@ end match
 ### REST API Client
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // REST API client
-
-
-
-
-
-
-
 struct APIClient
-
-
-
-
-
-
-
     base_url: ustring
-
-
-
-
-
-
-
     api_key: ustring
-
-
-
-
-
-
-
     timeout_ms: i32
-
-
-
-
-
-
-
 end struct
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn client_get(client: APIClient, endpoint: ustring): Result<ustring, APIError>
-
-
-
-
-
-
-
     var url := client.base_url + endpoint
-
-
-
-
-
-
-
     var headers := [
-
-
-
-
-
-
-
         (unicode "Authorization", unicode "Bearer " + client.api_key),
-
-
-
-
-
-
-
         (unicode "Content-Type", unicode "application/json")
-
-
-
-
-
-
-
     ]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     match get --timeout client.timeout_ms < url with headers headers
-
-
-
-
-
-
-
         Ok(response), return Ok(response)
-
-
-
-
-
-
-
         Timeout, return Error(APIError::Timeout)
-
-
-
-
-
-
-
         Error(e), return Error(APIError::NetworkError(e))
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn client_post(client: APIClient, endpoint: ustring, body: ustring): Result<ustring, APIError>
-
-
-
-
-
-
-
     var url := client.base_url + endpoint
-
-
-
-
-
-
-
     var headers := [
-
-
-
-
-
-
-
         (unicode "Authorization", unicode "Bearer " + client.api_key),
-
-
-
-
-
-
-
         (unicode "Content-Type", unicode "application/json")
-
-
-
-
-
-
-
     ]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     match post --timeout client.timeout_ms < url with headers headers and body body
-
-
-
-
-
-
-
         Ok(response), return Ok(response)
-
-
-
-
-
-
-
         Timeout, return Error(APIError::Timeout)
-
-
-
-
-
-
-
         Error(e), return Error(APIError::NetworkError(e))
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -376,309 +131,43 @@ end loop
 ### ORM Integration
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // ORM model
-
-
-
-
-
-
-
 struct User
-
-
-
-
-
-
-
     id: i32
-
-
-
-
-
-
-
     name: ustring
-
-
-
-
-
-
-
     email: ustring
-
-
-
-
-
-
-
     age: i32
-
-
-
-
-
-
-
 end struct
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // CRUD operations
-
-
-
-
-
-
-
 fn create_user(db: Database, user: User): Result<User, DBError>
-
-
-
-
-
-
-
     var sql := unicode "INSERT INTO users (name, email, age) VALUES (?, ?, ?)"
-
-
-
-
-
-
-
     var result := try db.execute(sql, [user.name, user.email, user.age.to_string()])
-
-
-
-
-
-
-
     return Ok(User { id: result.last_insert_id, ..user })
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn get_user(db: Database, id: i32): Result<User, DBError>
-
-
-
-
-
-
-
     var sql := unicode "SELECT * FROM users WHERE id = ?"
-
-
-
-
-
-
-
     var rows := try db.query(sql, [id.to_string()])
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     if rows.len() == 0,
-
-
-
-
-
-
-
         return Error(DBError::NotFound)
-
-
-
-
-
-
-
     end if
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     return Ok(rows[0].to_user())
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn update_user(db: Database, user: User): Result<(), DBError>
-
-
-
-
-
-
-
     var sql := unicode "UPDATE users SET name = ?, email = ?, age = ? WHERE id = ?"
-
-
-
-
-
-
-
     try db.execute(sql, [user.name, user.email, user.age.to_string(), user.id.to_string()])
-
-
-
-
-
-
-
     return Ok(())
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn delete_user(db: Database, id: i32): Result<(), DBError>
-
-
-
-
-
-
-
     var sql := unicode "DELETE FROM users WHERE id = ?"
-
-
-
-
-
-
-
     try db.execute(sql, [id.to_string()])
-
-
-
-
-
-
-
     return Ok(())
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -696,7 +185,6 @@ struct OAuth2Client
     auth_url: ustring
     token_url: ustring
 end struct
-
 fn get_authorization_url(client: OAuth2Client, scopes: Vec<ustring>): ustring
     var scope_string := scopes.join(unicode " ")
     return client.auth_url
@@ -705,17 +193,14 @@ fn get_authorization_url(client: OAuth2Client, scopes: Vec<ustring>): ustring
         + unicode "&scope=" + scope_string
         + unicode "&response_type=code"
 end fn
-
 fn exchange_code(client: OAuth2Client, code: ustring): Result<Token, OAuthError>
     var body := unicode "grant_type=authorization_code"
         + unicode "&code=" + code
         + unicode "&redirect_uri=" + client.redirect_uri
         + unicode "&client_id=" + client.client_id
         + unicode "&client_secret=" + client.client_secret
-
     var response := try http_post(client.token_url, body)
     var token := try parse_json(response)
-
     return Ok(Token {
         access_token: token.access_token,
         refresh_token: token.refresh_token,
@@ -727,301 +212,42 @@ end fn
 ### JWT Authentication
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // JWT token handling
-
-
-
-
-
-
-
 fn create_jwt(payload: Map<ustring, ustring>, secret: ustring): ustring
-
-
-
-
-
-
-
     var header := unicode "{\"alg\":\"HS256\",\"typ\":\"JWT\"}"
-
-
-
-
-
-
-
     var payload_json := payload.to_json()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     var header_base64 := base64_encode(header)
-
-
-
-
-
-
-
     var payload_base64 := base64_encode(payload_json)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     var signature := hmac_sha256(header_base64 + "." + payload_base64, secret)
-
-
-
-
-
-
-
     var signature_base64 := base64_encode(signature)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     return header_base64 + "." + payload_base64 + "." + signature_base64
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn verify_jwt(token: ustring, secret: ustring): Result<JWTClaims, JWTError>
-
-
-
-
-
-
-
     var parts := token.split(unicode ".")
-
-
-
-
-
-
-
     if parts.len() != 3,
-
-
-
-
-
-
-
         return Error(JWTError::InvalidFormat)
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     var header := base64_decode(parts[0])
-
-
-
-
-
-
-
     var payload := base64_decode(parts[1])
-
-
-
-
-
-
-
     var signature := base64_decode(parts[2])
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     var expected_signature := hmac_sha256(parts[0] + "." + parts[1], secret)
-
-
-
-
-
-
-
     if signature != expected_signature,
-
-
-
-
-
-
-
         return Error(JWTError::InvalidSignature)
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     var claims := try parse_json(payload)
-
-
-
-
-
-
-
     if claims.exp < get_timestamp() / 1000,
-
-
-
-
-
-
-
         return Error(JWTError::Expired)
-
-
-
-
-
-
-
     end if
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     return Ok(claims)
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -1086,221 +312,32 @@ end fn
 ### RabbitMQ Integration
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // RabbitMQ client
-
-
-
-
-
-
-
 struct RabbitMQ
-
-
-
-
-
-
-
     host: ustring
-
-
-
-
-
-
-
     port: i32
-
-
-
-
-
-
-
     username: ustring
-
-
-
-
-
-
-
     password: ustring
-
-
-
-
-
-
-
 end struct
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn publish_message(rmq: RabbitMQ, queue: ustring, message: ustring): Result<(), MQError>
-
-
-
-
-
-
-
     var connection := try connect(rmq.host, rmq.port, rmq.username, rmq.password)
-
-
-
-
-
-
-
     defer connection.close()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     try connection.publish(queue, message)
-
-
-
-
-
-
-
     return Ok(())
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn consume_messages(rmq: RabbitMQ, queue: ustring, handler: fn(ustring) -> Result<(), MQError>): Result<(), MQError>
-
-
-
-
-
-
-
     var connection := try connect(rmq.host, rmq.port, rmq.username, rmq.password)
-
-
-
-
-
-
-
     defer connection.close()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     while var message := connection.consume(queue)
-
-
-
-
-
-
-
         try handler(message)
-
-
-
-
-
-
-
     end while
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     return Ok(())
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -1352,301 +389,42 @@ end fn
 ### S3 Storage
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // S3 client
-
-
-
-
-
-
-
 struct S3
-
-
-
-
-
-
-
     access_key: ustring
-
-
-
-
-
-
-
     secret_key: ustring
-
-
-
-
-
-
-
     region: ustring
-
-
-
-
-
-
-
     bucket: ustring
-
-
-
-
-
-
-
 end struct
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn s3_upload(s3: S3, key: ustring, data: bytes): Result<(), S3Error>
-
-
-
-
-
-
-
     var url := unicode "https://" + s3.bucket + unicode ".s3." + s3.region + unicode ".amazonaws.com/" + key
-
-
-
-
-
-
-
     var signature := calculate_s3_signature(s3, unicode "PUT", url, data)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     var headers := [
-
-
-
-
-
-
-
         (unicode "Authorization", signature),
-
-
-
-
-
-
-
         (unicode "Content-Type", unicode "application/octet-stream")
-
-
-
-
-
-
-
     ]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     match put --timeout 30000 < url with headers headers and body data
-
-
-
-
-
-
-
         Ok(_), return Ok(())
-
-
-
-
-
-
-
         Error(e), return Error(S3Error::UploadFailed(e))
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn s3_download(s3: S3, key: ustring): Result<bytes, S3Error>
-
-
-
-
-
-
-
     var url := unicode "https://" + s3.bucket + unicode ".s3." + s3.region + unicode ".amazonaws.com/" + key
-
-
-
-
-
-
-
     var signature := calculate_s3_signature(s3, unicode "GET", url, unicode "")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     var headers := [
-
-
-
-
-
-
-
         (unicode "Authorization", signature)
-
-
-
-
-
-
-
     ]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     match get from  url --timeout 30000 with headers headers
-
-
-
-
-
-
-
         Ok(data), return Ok(data)
-
-
-
-
-
-
-
         Error(e), return Error(S3Error::DownloadFailed(e))
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -1704,45 +482,10 @@ brackets, indentation), and a language-client extension that launches
 symbols. To use it:
 
 ~~~bash
-
-
-
-
-
-
-
 cd vscode
-
-
-
-
-
-
-
 npm install
-
-
-
-
-
-
-
 # Run from VS Code (F5, "Extension Development Host") or package:
-
-
-
-
-
-
-
 # npx @vscode/vsce package
-
-
-
-
-
-
-
 ~~~
 
 Set the `poly.lsp.path` setting if `poly-lsp` is not on `PATH`, e.g.
@@ -1772,9 +515,6 @@ language. With a custom client extension, the activation looks like:
 In your extension's `activate()` function, start the server with:
 
 ~~~ts
-
-
-
 import { LanguageClient, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 
 const serverOptions: ServerOptions = {
@@ -1796,125 +536,20 @@ Neovim 0.8+ can attach the server with a small `lspconfig`-style config.
 Either add a custom config or use `vim.lsp.start` directly:
 
 ~~~lua
-
-
-
-
-
-
-
 vim.api.nvim_create_autocmd('FileType', {
-
-
-
-
-
-
-
   pattern = 'poly',
-
-
-
-
-
-
-
   callback = function()
-
-
-
-
-
-
-
     vim.lsp.start({
-
-
-
-
-
-
-
       name = 'poly-lsp',
-
-
-
-
-
-
-
       cmd = { 'poly-lsp' },
-
-
-
-
-
-
-
       root_dir = vim.fs.dirname(vim.fs.find({ 'Cargo.toml', '.git' }, { upward = true })[1]),
-
-
-
-
-
-
-
       capabilities = vim.lsp.protocol.make_client_capabilities(),
-
-
-
-
-
-
-
     })
-
-
-
-
-
-
-
   end,
-
-
-
-
-
-
-
 })
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 -- Associate *.poly with the poly filetype if your distribution lacks it.
-
-
-
-
-
-
-
 vim.filetype.add({ extension = { poly = 'poly' } })
-
-
-
-
-
-
-
 ~~~
 
 If `poly-lsp` is not on `PATH`, give the full path to the compiled binary,

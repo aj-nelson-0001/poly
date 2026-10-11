@@ -538,14 +538,43 @@ fn statement_symbol_range(
         if name.map(String::as_str) != Some(symbol) {
             continue;
         }
-        let (line, character) = byte_to_position(source, spanned.span.start);
-        // The symbol begins at the statement's first token, which for a
-        // declaration is the name itself; end the range after the name in
-        // UTF-16 units.
+        // A statement's span starts at its keyword (`fn`, `var`, ...), not
+        // at the name, so locate the name within the statement first.
+        let name_offset = declaration_name_offset(source, spanned.span.start, symbol)?;
+        let (line, character) = byte_to_position(source, name_offset);
+        // End the range after the name in UTF-16 units.
         let end_character = character + symbol.encode_utf16().count();
         return Some((line, character, end_character));
     }
     None
+}
+
+/// Find `symbol` as a whole word at or after byte offset `from`.
+///
+/// A plain `find` is not enough: the statement's keyword can contain letters
+/// of the name (`var` contains `a`, `struct` contains `ruct`), so every match
+/// must be checked for word boundaries before it is accepted.
+fn declaration_name_offset(source: &str, from: usize, symbol: &str) -> Option<usize> {
+    if symbol.is_empty() {
+        return None;
+    }
+    let rest = source.get(from..)?;
+    let is_word = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
+    let bytes = rest.as_bytes();
+    let mut search = 0usize;
+    loop {
+        let relative = rest[search..].find(symbol)?;
+        let start = search + relative;
+        let end = start + symbol.len();
+        let left_ok = start == 0 || !is_word(bytes[start - 1]);
+        let right_ok = end >= bytes.len() || !is_word(bytes[end]);
+        if left_ok && right_ok {
+            return Some(from + start);
+        }
+        // Advance past this candidate; `symbol` is a non-empty identifier,
+        // so the offset strictly increases and stays on a char boundary.
+        search = end;
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -613,9 +642,10 @@ impl Symbol {
 
 /// Collect top-level declarations by scanning the source text directly.
 ///
-/// The AST does not yet retain spans, so the server locates declarations by
-/// scanning lines for the current `fn`/`struct`/`enum`/`trait`/`const`/`type`
-/// forms.  This is robust for the common one-declaration-per-line style.
+/// The server locates declarations by scanning lines for the current
+/// `fn`/`async fn`/`struct`/`enum`/`trait`/`const`/`type`/`impl` forms and
+/// keeps the whole trimmed declaration line as the symbol's detail.  This is
+/// robust for the common one-declaration-per-line style.
 fn document_symbols(source: &str) -> Vec<Symbol> {
     let mut symbols = Vec::new();
     for (index, line) in source.lines().enumerate() {
@@ -1040,6 +1070,34 @@ mod tests {
             symbols[0].end_character,
             "struct café".encode_utf16().count()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn statement_symbol_range_points_at_the_name_not_the_keyword(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Regression: a statement's span starts at its keyword (`var`, `fn`),
+        // so converting `span.start` directly underlined the keyword instead
+        // of the name. The name must be located within the statement span —
+        // with word boundaries, because `at` also occurs inside `var`.
+        let source = "var at := 1\nfn helper()\nend fn\n";
+        let (tokens, lexer_errors) = Lexer::lex(source);
+        assert!(lexer_errors.is_empty(), "lexer errors: {lexer_errors:?}");
+        let mut parser = Parser::new(&tokens);
+        let program = parser.parse()?;
+
+        // `at` starts at column 4, not column 0 (`var`) and not column 1
+        // (the `a` inside the `var` keyword).
+        assert_eq!(
+            statement_symbol_range(source, &program, "at"),
+            Some((0, 4, 6))
+        );
+        assert_eq!(
+            statement_symbol_range(source, &program, "helper"),
+            Some((1, 3, 9))
+        );
+        // Unknown symbols fall back to a text scan.
+        assert_eq!(statement_symbol_range(source, &program, "missing"), None);
         Ok(())
     }
 

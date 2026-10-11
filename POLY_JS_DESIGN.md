@@ -55,37 +55,9 @@ put answer
 CLI surface (mirrors the C target):
 
 ~~~bash
-
-
-
-
-
-
-
 poly --target js --check program.poly
-
-
-
-
-
-
-
 poly --target js --emit-js program.poly
-
-
-
-
-
-
-
 poly --target js program.poly          # node out.js
-
-
-
-
-
-
-
 ~~~
 
 Foreign-block selection: only `#js` blocks are emitted for the JS target;
@@ -182,93 +154,16 @@ Integer division/modulo semantics: Poly's `/` and `%` on integers map to
 ## Output Shape
 
 ~~~js
-
-
-
-
-
-
-
 /* Generated from Poly source code. */
-
-
-
-
-
-
-
 function doubleValue(x) {          // from #js block, verbatim
-
-
-
-
-
-
-
     return x * 2;
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 function main() {                  // Poly orchestration, in order
-
-
-
-
-
-
-
   const answer = doubleValue(21);
-
-
-
-
-
-
-
   console.log(answer);
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
 main();
-
-
-
-
-
-
-
 ~~~
 
 Top-level orchestration statements run inside a `main()` invocation so `const`

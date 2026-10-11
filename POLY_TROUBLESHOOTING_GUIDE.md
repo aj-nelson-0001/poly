@@ -27,61 +27,12 @@ The parser retains `==` only to report a migration diagnostic. Replace it rather
 Use the type without a colon in `var` declarations. `let` may use a type annotation with a colon:
 
 ~~~poly
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     var count i32 := 0
-
-
-
-
-
-
-
     var inferred := 42
-
-
-
-
-
-
-
     let name: ustring := unicode "Alice"
-
-
-
-
-
-
-
     const limit := 10
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 Do not write `var count: i32 = 0`, `let name = ...`, or `const limit = ...` in v2 examples.
@@ -114,37 +65,9 @@ Three parse caps keep deeply nested — usually generated — input from
 exhausting the parser's stack:
 
 ~~~text
-
-
-
-
-
-
-
 Maximum nested statement depth (128) exceeded
-
-
-
-
-
-
-
 Maximum nested expression depth (32) exceeded
-
-
-
-
-
-
-
 Maximum nested if depth (32) exceeded
-
-
-
-
-
-
-
 ~~~
 
 They all mean the same thing: flatten the structure. Split nested blocks
@@ -171,45 +94,10 @@ end fn
 For file output, use the explicit redirect form:
 
 ~~~poly
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     put unicode "replace" to "output.txt"
-
-
-
-
-
-
-
     put unicode "append" to "output.txt" -append
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 The Rust backend implements redirects. The C, asm, and JS backends reject them
@@ -244,45 +132,10 @@ undocumented `is_input_available`, network, or line-editor helpers.
 A declaration type must agree with its initializer. For numeric input, make the conversion explicit:
 
 ~~~poly
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     var age i32 := get --as i32
-
-
-
-
-
-
-
     var total i32 := age + 10
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 Equality and ordering operators require compatible operands. String
@@ -304,21 +157,7 @@ is still validated by the target compiler. When earlier Poly diagnostics are
 useful, add a top-level explicit declaration:
 
 ~~~poly
-
-
-
-
-
-
-
 extern c fn double_value(value: i32): i32
-
-
-
-
-
-
-
 ~~~
 
 The declaration must match the selected target and is not emitted. It checks the
@@ -357,67 +196,19 @@ shorten it:
 
 ~~~poly
 
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
 
     # Instead of one 600-term sum:
 
-
-
-
-
-
-
     #   put 1 + 1 + 1 + ...
-
-
-
-
-
-
 
     var part1 i32 := 1 + 1 + 1  # ... keep each statement under the cap
 
-
-
-
-
-
-
     var part2 i32 := 1 + 1 + 1
-
-
-
-
-
-
 
     put part1 + part2
 
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
 
 ~~~
 
@@ -444,85 +235,15 @@ poly --emit-rust program.poly | rustfmt
 ## CLI Checks
 
 ~~~bash
-
-
-
-
-
-
-
 poly --target rust --check program.poly
-
-
-
-
-
-
-
 poly --target c --check program.poly
-
-
-
-
-
-
-
 poly --emit-rust program.poly
-
-
-
-
-
-
-
 poly --target c --emit-c program.poly
-
-
-
-
-
-
-
 poly --tokens program.poly
-
-
-
-
-
-
-
 poly --ast program.poly
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Select a compiler explicitly when `cc` is not the desired executable.
-
-
-
-
-
-
-
 POLY_CC=clang poly --target c --check program.poly
-
-
-
-
-
-
-
 ~~~
 
 `--check` runs lexing, parsing, semantic checking, transpilation, and the

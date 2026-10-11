@@ -129,6 +129,8 @@ pub enum Redirect {
     Write(Expression),
     /// Append: `put value to "file" -append`
     Append(Expression),
+    /// Prepend: `put value to "file" -prepend`
+    Prepend(Expression),
 }
 
 /// Type annotation.
@@ -299,7 +301,7 @@ pub enum Expression {
 /// Binary operators.
 ///
 /// The parser's precedence ladder constructs these nodes from low precedence
-/// (`or`) to high precedence (multiplication and unary expressions).
+/// (`or`) to high precedence (power, then unary expressions).
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOp {
     Add,    // +
@@ -307,6 +309,7 @@ pub enum BinaryOp {
     Mul,    // *
     Div,    // /
     Mod,    // mod / %
+    Power,  // ^ (exponentiation; binds tighter than *, right-associative)
     Eq,     // = comparison
     NotEq,  // !=
     Lt,     // <

@@ -29,53 +29,8 @@ cargo build --release -p poly-lsp
 2. Install the language client dependency:
 
 ~~~bash
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 cd vscode
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 npm install
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ~~~
 
 3. In VS Code: **Run > Start Debugging** (F5) with the "Extension Development Host" launch, or package it:

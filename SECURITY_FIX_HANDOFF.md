@@ -84,35 +84,11 @@ Root cause was never really "cubic in the printer". Rust's alternate `Debug`
 
 ~~~
 
-
-
-
-
-
-
 n= 500  {:#?} ->  1,507,503 B,   1.5 s  |  {:?} ->  5,003 B,  61 µs
-
-
-
-
-
-
 
 n=1000  {:#?} ->  6,015,003 B,  13.5 s  |  {:?} -> 10,003 B, 170 µs
 
-
-
-
-
-
-
 n=2000  {:#?} -> 24,030,003 B, 137.5 s  |  {:?} -> 20,003 B, 399 µs
-
-
-
-
-
-
 
 ~~~
 
@@ -145,75 +121,21 @@ child on a stdin write failure and never drained its pipes; both are fixed.
 
 ~~~sh
 
-
-
-
-
-
-
 cd compiler
-
-
-
-
-
-
 
 cargo build --release --workspace
 
-
-
-
-
-
-
 cargo clippy --release --workspace --all-targets -- -D warnings
-
-
-
-
-
-
 
 cargo test  --release --workspace -- --test-threads=1
 
-
-
-
-
-
-
 cargo fmt --all -- --check
-
-
-
-
-
-
 
 cargo audit
 
-
-
-
-
-
-
 cd .. && python3 scripts/check_backends.py --poly-bin compiler/target/release/poly
 
-
-
-
-
-
-
 node scripts/playground_wasm_smoke.mjs
-
-
-
-
-
-
 
 ~~~
 

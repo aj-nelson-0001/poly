@@ -14,6 +14,7 @@ pub mod ast_dump; // Serialises an AST back to a readable text form.
 pub mod depth_limit; // Guards against pathologically deep nested input.
 pub mod entry_point; // Checks that the program declares `fn main`.
 pub mod error; // The `ParseError` type (with helpful suggestions).
+pub mod int_literal; // Radix-aware parsing of integer literal text.
 pub mod parser; // The main `Parser` that builds the AST.
 
 // Re-export the AST node types so callers can use them without a nested path.
@@ -26,6 +27,11 @@ pub use depth_limit::{ast_depth, MAX_AST_DEPTH};
 pub use entry_point::require_explicit_main;
 // The parser error type.
 pub use error::ParseError;
+// Radix-aware integer-literal helpers shared by every later stage.
+pub use int_literal::{
+    int_literal_text, normalize_int_literal, parse_int_literal, parse_int_literal_i32,
+    parse_int_literal_i64,
+};
 // The parser itself plus its limits and dependency-name validators.
 pub use parser::{
     is_valid_dependency_name, is_valid_dependency_version, Parser, MAX_EXPRESSION_DEPTH,

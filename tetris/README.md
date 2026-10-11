@@ -8,37 +8,9 @@ hand-written Rust `#rust` block at the bottom of the same file.
 ## Layout
 
 ~~~
-
-
-
-
-
-
-
 tetris.poly                  the whole program (Poly logic + #rust platform layer)
-
-
-
-
-
-
-
 rust_output/tetris/          generated Cargo project (poly --project)
-
-
-
-
-
-
-
 rust_output/tetris/src/main.rs   generated Rust (do not edit by hand)
-
-
-
-
-
-
-
 ~~~
 
 ## Build & run
@@ -47,117 +19,19 @@ Requires the Poly compiler (`compiler/target/release/poly`) and ALSA headers
 (`libasound2-dev`) for sound.
 
 ~~~sh
-
-
-
-
-
-
-
 # validate (dep declarations resolve minifb/alsa through Cargo)
-
-
-
-
-
-
-
 poly tetris.poly --check
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # regenerate the Rust project from tetris.poly
-
-
-
-
-
-
-
 poly --project rust_output/tetris tetris.poly
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 cargo build --release --manifest-path rust_output/tetris/Cargo.toml
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # play
-
-
-
-
-
-
-
 ./rust_output/tetris/target/release/tetris
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # headless logic self-test (no window)
-
-
-
-
-
-
-
 ./rust_output/tetris/target/release/tetris --test
-
-
-
-
-
-
-
 ~~~
 
 Note: `poly --project` will not overwrite an existing directory — remove

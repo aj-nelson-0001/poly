@@ -102,6 +102,8 @@ use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
+use poly_parser::{int_literal_text, parse_int_literal_i64};
+
 use crate::intermediate_representation::*;
 
 /// Generates Rust source from an intermediate representation program.
@@ -128,6 +130,9 @@ pub struct IntermediateRepresentationCodeGen {
     /// Variables declared `i64` (their arithmetic must stay 64-bit and
     /// out-of-i32 literals in their initializers must not be typed as i32).
     int64_variables: RefCell<HashSet<String>>,
+    /// Whether an integer `^` expression should compute at 64-bit width.
+    /// Set while rendering a declared-`i64` initializer.
+    power_i64_context: Cell<bool>,
     /// True when rendering inside a `u64` context (declared-`u64` function
     /// return/params, or the body of a `var x u64` assignment): big integer
     /// literals suffix `_u64` instead of `_i64` (E0308, e.g. tetris glyphs).
@@ -143,6 +148,12 @@ pub struct IntermediateRepresentationCodeGen {
     enum_variants: HashMap<String, String>,
     /// Named fields for struct-style enum variants.
     enum_struct_fields: HashMap<(String, String), Vec<String>>,
+    /// Payload types per bare variant name (first declaration wins, the same
+    /// convention as `enum_variants`); unit variants are absent.
+    variant_payload_types: HashMap<String, Vec<Type>>,
+    /// Return types of top-level functions: needed to type the payloads a
+    /// `match divide(..)` pattern binds (`Ok(answer)` -> `f64`).
+    function_return_types: HashMap<String, Type>,
     /// Recursive enum fields that require `Box` indirection in Rust.
     recursive_enum_fields: HashSet<(String, String, usize)>,
     /// Whether generated code needs `std::io::Write`.
@@ -184,6 +195,7 @@ impl IntermediateRepresentationCodeGen {
             vec_scopes: RefCell::new(vec![HashSet::new()]),
             vec_element_scopes: RefCell::new(vec![HashMap::new()]),
             string_functions: HashSet::new(),
+            power_i64_context: Cell::new(false),
             int64_variables: RefCell::new(HashSet::new()),
             u64_context: Cell::new(false),
             untyped_closure_params: RefCell::new(Vec::new()),
@@ -191,6 +203,8 @@ impl IntermediateRepresentationCodeGen {
             string_constants: HashSet::new(),
             enum_variants: HashMap::new(),
             enum_struct_fields: HashMap::new(),
+            variant_payload_types: HashMap::new(),
+            function_return_types: HashMap::new(),
             recursive_enum_fields: HashSet::new(),
             needs_io_write: RefCell::new(false),
             needs_bufread: RefCell::new(false),
@@ -324,6 +338,11 @@ impl IntermediateRepresentationCodeGen {
 
     fn collect_metadata(&mut self, program: &Program) {
         for function in &program.functions {
+            if let Some(return_type) = &function.return_type {
+                // Recorded so `match divide(..)` arms can type their payloads.
+                self.function_return_types
+                    .insert(function.name.clone(), return_type.clone());
+            }
             if function
                 .return_type
                 .as_ref()
@@ -346,6 +365,19 @@ impl IntermediateRepresentationCodeGen {
         }
         for enumeration in &program.enums {
             for variant in &enumeration.variants {
+                if !variant.fields.is_empty() {
+                    // Payload types per variant (first declaration wins),
+                    // used to type match-arm bindings like `Rect(w, h)`.
+                    self.variant_payload_types
+                        .entry(variant.name.clone())
+                        .or_insert_with(|| {
+                            variant
+                                .fields
+                                .iter()
+                                .map(|field| field.ty.clone())
+                                .collect()
+                        });
+                }
                 self.enum_variants.insert(
                     variant.name.clone(),
                     format!("{}::{}", enumeration.name, variant.name),
@@ -846,9 +878,11 @@ impl IntermediateRepresentationCodeGen {
                         return Ok(());
                     }
                 }
-                let target_str = self.gen_expr(target)?;
-                let value_str = self.gen_expr(value)?;
-                self.writeln_fmt(format_args!("{} = {};", target_str, value_str))?;
+                let previous_power_i64 = self.power_i64_context.replace(self.is_int64_expr(target));
+                let target_str = self.gen_expr(target);
+                let value_str = self.gen_expr(value);
+                self.power_i64_context.set(previous_power_i64);
+                self.writeln_fmt(format_args!("{} = {};", target_str?, value_str?))?;
             }
             Statement::Mutation { target, op, value } => {
                 let target_str = self.gen_expr(target)?;
@@ -1035,7 +1069,9 @@ impl IntermediateRepresentationCodeGen {
                 };
                 self.writeln_fmt(format_args!("match {} {{", scrutinee_str))?;
                 self.indent += 1;
+                self.enter_scope();
                 for arm in arms {
+                    self.declare_pattern_float_bindings(&arm.pattern, scrutinee);
                     let (pattern_str, pattern_guards) =
                         self.gen_pattern_with_guards(&arm.pattern)?;
                     let mut boxed_bindings = HashSet::new();
@@ -1091,6 +1127,7 @@ impl IntermediateRepresentationCodeGen {
                     self.pattern_aliases.borrow_mut().pop();
                     self.boxed_bindings.borrow_mut().pop();
                 }
+                self.exit_scope();
                 self.indent -= 1;
                 self.writeln("}");
             }
@@ -1319,6 +1356,20 @@ impl IntermediateRepresentationCodeGen {
                     path_str, spec, expr_str
                 ))?;
             }
+            Some(Redirect::Prepend(path)) => {
+                let path_str = self.gen_expr(path)?;
+                self.writeln_fmt(format_args!(
+                    concat!(
+                        "{{ let mut content = std::fs::read_to_string({})",
+                        ".unwrap_or_else(|e| if e.kind() == std::io::ErrorKind::NotFound {{ String::new() }}",
+                        " else {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }});",
+                        " content.insert_str(0, &format!(\"{}\\n\", {}));",
+                        " std::fs::write({}, content).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\");",
+                        " std::process::exit(1) }}); }}",
+                    ),
+                    path_str, spec, expr_str, path_str
+                ))?;
+            }
             None => {
                 self.writeln_fmt(format_args!("println!(\"{}\", {});", spec, expr_str))?;
             }
@@ -1369,6 +1420,9 @@ impl IntermediateRepresentationCodeGen {
                 }
             }
             Expr::BinaryOp { op, left, right } => {
+                if matches!(op, BinaryOp::Power) {
+                    return self.gen_power_expr(left, right);
+                }
                 let l = self.gen_expr(left)?;
                 let r = self.gen_expr(right)?;
                 if matches!(op, BinaryOp::Add)
@@ -1710,7 +1764,11 @@ impl IntermediateRepresentationCodeGen {
                         format!("{}.contains(&{})", object_str, args_str[0])
                     }
                     "to_string" => {
-                        if self.is_string_expr(object) {
+                        // Floats take Display, not Debug: Rust's own
+                        // `12.0_f64.to_string()` is "12", and the C
+                        // (`poly_float_to_string`) and JS (`String(..)`)
+                        // backends print "12" too. Debug would print "12.0".
+                        if self.is_string_expr(object) || self.is_float_valued_expr(object) {
                             format!("{}.to_string()", object_str)
                         } else {
                             format!("format!(\"{{:?}}\", {})", object_str)
@@ -1939,7 +1997,9 @@ impl IntermediateRepresentationCodeGen {
                     scrutinee_str
                 };
                 let mut result = format!("match {} {{\n", scrutinee_str);
+                self.enter_scope();
                 for arm in arms {
+                    self.declare_pattern_float_bindings(&arm.pattern, scrutinee);
                     let (pattern_str, pattern_guards) =
                         self.gen_pattern_with_guards(&arm.pattern)?;
                     let mut boxed_bindings = HashSet::new();
@@ -1987,6 +2047,7 @@ impl IntermediateRepresentationCodeGen {
                     self.pattern_aliases.borrow_mut().pop();
                     self.boxed_bindings.borrow_mut().pop();
                 }
+                self.exit_scope();
                 result.push('}');
                 result
             }
@@ -2209,6 +2270,7 @@ impl IntermediateRepresentationCodeGen {
                         | BinaryOp::Mul
                         | BinaryOp::Div
                         | BinaryOp::Mod
+                        | BinaryOp::Power
                         | BinaryOp::BitAnd
                         | BinaryOp::BitOr
                         | BinaryOp::BitXor
@@ -2254,18 +2316,123 @@ impl IntermediateRepresentationCodeGen {
         }
     }
 
+    /// Register the float payload types a match pattern binds (`Rect(w, h)`,
+    /// `Ok(answer)`) in `type_scopes`, so `is_float_valued_expr` treats those
+    /// names as `f64`. Without this, `.to_string()` on a match-bound float
+    /// lowered to Debug formatting (`12.0`) instead of Display (`12`),
+    /// diverging from Rust's own `f64::to_string` and from the C/JS targets.
+    fn declare_pattern_float_bindings(&self, pattern: &Pattern, scrutinee: &Expr) {
+        let Pattern::Enum {
+            enum_name,
+            variant,
+            inner,
+        } = pattern
+        else {
+            return;
+        };
+        let Some(inner) = inner else { return };
+        let payloads = self.pattern_payload_types(enum_name, variant, scrutinee);
+        for (binding, payload) in inner.iter().zip(payloads.iter()) {
+            self.declare_pattern_binding_type(binding, payload);
+        }
+    }
+
+    /// Payload types one enum pattern binds: the scrutinee's `Result<T, E>`
+    /// generics for `Ok(..)`/`Error(..)` arms, otherwise the variant's
+    /// declared field types.
+    fn pattern_payload_types(&self, enum_name: &str, variant: &str, scrutinee: &Expr) -> Vec<Type> {
+        if matches!(variant, "Ok" | "Error") {
+            if let Some((ok, err)) = self.result_scrutinee_payloads(scrutinee) {
+                return if variant == "Ok" { vec![ok] } else { vec![err] };
+            }
+        }
+        self.enum_payload_types(enum_name, variant)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// The `Result<T, E>` payload types of a scrutinee that calls a function
+    /// annotated `Result<T, E>` (e.g. `match divide(10.0, 2.0)`).
+    fn result_scrutinee_payloads(&self, scrutinee: &Expr) -> Option<(Type, Type)> {
+        let expr = match scrutinee {
+            Expr::Parenthesized(inner) => inner.as_ref(),
+            other => other,
+        };
+        let Expr::Call { func, .. } = expr else {
+            return None;
+        };
+        let Expr::Identifier(name) = func.as_ref() else {
+            return None;
+        };
+        match self.function_return_types.get(name)? {
+            Type::Result(ok, err) => Some(((**ok).clone(), (**err).clone())),
+            Type::Generic {
+                name: generic,
+                args,
+            } if generic == "Result" && args.len() == 2 => Some((args[0].clone(), args[1].clone())),
+            _ => None,
+        }
+    }
+
+    /// Field types of an enum variant, qualified by the pattern's enum name
+    /// when present (`Shape::Rect(..)`) and by the bare variant name for
+    /// unqualified patterns (`Rect(..)`), mirroring `enum_variants`.
+    fn enum_payload_types(&self, enum_name: &str, variant: &str) -> Option<&Vec<Type>> {
+        if !enum_name.is_empty() {
+            let qualified = format!("{enum_name}::{variant}");
+            if self.enum_variants.get(variant).map(String::as_str) != Some(qualified.as_str()) {
+                return None;
+            }
+        }
+        self.variant_payload_types.get(variant)
+    }
+
+    /// Register one pattern binding when its payload type is a float.
+    fn declare_pattern_binding_type(&self, pattern: &Pattern, payload: &Type) {
+        match pattern {
+            Pattern::Identifier(name) => {
+                if let Ok(rendered) = self.gen_type(payload) {
+                    if matches!(rendered.as_str(), "f64" | "f32") {
+                        self.declare_type(name.clone(), rendered);
+                    }
+                }
+            }
+            Pattern::Binding { name, pattern } => {
+                self.declare_pattern_binding_type(&Pattern::Identifier(name.clone()), payload);
+                self.declare_pattern_binding_type(pattern, payload);
+            }
+            Pattern::Tuple(patterns) => {
+                if let Type::Tuple(types) = payload {
+                    for (binding, ty) in patterns.iter().zip(types.iter()) {
+                        self.declare_pattern_binding_type(binding, ty);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Render an expression anchoring bare integer literals to `i32` so an
     /// inferred-typed declaration (`var x := 10`) becomes concretely `i32`
     /// and can later take `wrapping_*` method calls (E0689).
     fn render_anchored_int(&self, expr: &Expr) -> Result<String, String> {
         Ok(match expr {
-            Expr::Literal(Literal::Int(v)) => format!("{v}_i32"),
+            Expr::Literal(Literal::Int(v)) => format!("{}_i32", int_literal_text(v)),
             Expr::Parenthesized(inner) => format!("({})", self.render_anchored_int(inner)?),
             Expr::UnaryOp {
                 op: UnaryOp::Neg,
                 expr,
             } => {
                 format!("(-{})", self.render_anchored_int(expr)?)
+            }
+            Expr::BinaryOp {
+                op: BinaryOp::Power,
+                left,
+                right,
+            } => {
+                // Power is a method call, not an infix operator; keep the
+                // int-literal anchoring semantics of the operands.
+                self.gen_power_expr(left, right)?
             }
             Expr::BinaryOp { op, left, right } => {
                 let op_str = self.gen_binary_op(op);
@@ -2302,13 +2469,18 @@ impl IntermediateRepresentationCodeGen {
     /// literal outside the i32 range gets an explicit `i64` suffix (or `u64`
     /// inside a `u64` context, where the value may exceed i64's range).
     fn gen_int_literal(&self, value: &str) -> String {
-        match value.parse::<i64>() {
-            Ok(v) if (i32::MIN as i64..=i32::MAX as i64).contains(&v) => value.to_string(),
-            Ok(_) if self.u64_context.get() => format!("{value}_u64"),
-            Ok(_) => format!("{value}_i64"),
-            // Literals beyond i64 (u64-level magnitudes) render verbatim;
+        // Normalise to plain decimal first: Rust happens to understand
+        // `0x`/`0b`/`0o` and reads `010` as decimal ten, but every other
+        // target and every width decision below must agree on the same
+        // number, so decimal is the canonical emitted form.
+        let text = int_literal_text(value);
+        match parse_int_literal_i64(value) {
+            Some(v) if (i32::MIN as i64..=i32::MAX as i64).contains(&v) => text,
+            Some(_) if self.u64_context.get() => format!("{text}_u64"),
+            Some(_) => format!("{text}_i64"),
+            // Literals beyond i64 (u64-level magnitudes) render unsuffixed;
             // Rust still types them by context, matching the C target.
-            Err(_) => value.to_string(),
+            None => text,
         }
     }
 
@@ -2327,9 +2499,9 @@ impl IntermediateRepresentationCodeGen {
                 .is_some_and(|ty| ty == "u64"),
             Expr::Literal(Literal::Int(value)) => {
                 self.u64_context.get()
-                    && match value.parse::<i64>() {
-                        Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
-                        Err(_) => true,
+                    && match parse_int_literal_i64(value) {
+                        Some(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                        None => true,
                     }
             }
             Expr::Parenthesized(inner) => self.is_u64_expr(inner),
@@ -2345,6 +2517,7 @@ impl IntermediateRepresentationCodeGen {
                         | BinaryOp::Mul
                         | BinaryOp::Div
                         | BinaryOp::Mod
+                        | BinaryOp::Power
                         | BinaryOp::BitAnd
                         | BinaryOp::BitOr
                         | BinaryOp::BitXor
@@ -2393,9 +2566,9 @@ impl IntermediateRepresentationCodeGen {
                 }
                 self.int64_variables.borrow().contains(name)
             }
-            Expr::Literal(Literal::Int(value)) => match value.parse::<i64>() {
-                Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
-                Err(_) => true,
+            Expr::Literal(Literal::Int(value)) => match parse_int_literal_i64(value) {
+                Some(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                None => true,
             },
             Expr::Parenthesized(inner) => self.is_int64_expr(inner),
             Expr::UnaryOp {
@@ -2406,10 +2579,23 @@ impl IntermediateRepresentationCodeGen {
             // path, so its result is 64-bit too (subtree recursion keeps the
             // enclosing operation from re-narrowing it to i32).
             Expr::BinaryOp { op, left, right } => {
-                matches!(
-                    op,
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
-                ) && (self.is_int64_expr(left) || self.is_int64_expr(right))
+                // Power is value-true to its base only, not to either
+                // operand: `2 ^ 40` an i64 declaration must keep 64-bit
+                // result precision, but the base (2) is ordinary i32-class
+                // — so classify by the base operand, not by either side.
+                match op {
+                    BinaryOp::Power => self.is_int64_expr(left),
+                    _ => {
+                        matches!(
+                            op,
+                            BinaryOp::Add
+                                | BinaryOp::Sub
+                                | BinaryOp::Mul
+                                | BinaryOp::Div
+                                | BinaryOp::Mod
+                        ) && (self.is_int64_expr(left) || self.is_int64_expr(right))
+                    }
+                }
             }
             _ => false,
         }
@@ -2425,9 +2611,9 @@ impl IntermediateRepresentationCodeGen {
     /// which are inference-agnostic.
     fn is_proven_int_expr(&self, expr: &Expr) -> bool {
         match expr {
-            Expr::Literal(Literal::Int(value)) => match value.parse::<i64>() {
-                Ok(v) => (i32::MIN as i64..=i32::MAX as i64).contains(&v),
-                Err(_) => false, // out-of-i32 literals take the i64 path
+            Expr::Literal(Literal::Int(value)) => match parse_int_literal_i64(value) {
+                Some(v) => (i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                None => false, // out-of-i32 literals take the i64 path
             },
             Expr::Identifier(name) => self
                 .type_scopes
@@ -2490,15 +2676,26 @@ impl IntermediateRepresentationCodeGen {
     /// parenthesized/negated literal shells first.
     fn suffix_i32_operand(&self, e: &Expr, rendered: &str) -> String {
         match e {
-            Expr::Literal(Literal::Int(v)) => match v.parse::<i64>() {
-                Ok(x) if (i32::MIN as i64..=i32::MAX as i64).contains(&x) => format!("{v}_i32"),
+            Expr::Literal(Literal::Int(v)) => match parse_int_literal_i64(v) {
+                Some(x) if (i32::MIN as i64..=i32::MAX as i64).contains(&x) => {
+                    format!("{}_i32", int_literal_text(v))
+                }
                 _ => rendered.to_string(),
             },
             Expr::Parenthesized(inner) => self.suffix_i32_operand(inner, rendered),
             Expr::UnaryOp {
                 op: UnaryOp::Neg,
                 expr,
-            } => self.suffix_i32_operand(expr, rendered),
+            } => match expr.as_ref() {
+                // Keep the sign: `-2` must suffix to `-2_i32`, not `2_i32`.
+                Expr::Literal(Literal::Int(v)) => match parse_int_literal_i64(v) {
+                    Some(x) if (i32::MIN as i64..=i32::MAX as i64).contains(&x) => {
+                        format!("-{}_i32", int_literal_text(v))
+                    }
+                    _ => rendered.to_string(),
+                },
+                inner => self.suffix_i32_operand(inner, rendered),
+            },
             _ => rendered.to_string(),
         }
     }
@@ -2509,13 +2706,17 @@ impl IntermediateRepresentationCodeGen {
     /// already carry a concrete type.
     fn gen_numeric_arg(&self, expr: &Expr) -> Result<String, String> {
         Ok(match expr {
-            Expr::Literal(Literal::Int(value)) => format!("{value}_i32"),
+            Expr::Literal(Literal::Int(value)) => {
+                format!("{}_i32", int_literal_text(value))
+            }
             Expr::Literal(Literal::Float(value)) => format!("{value}_f64"),
             Expr::UnaryOp {
                 op: UnaryOp::Neg,
                 expr,
             } => match expr.as_ref() {
-                Expr::Literal(Literal::Int(value)) => format!("-{value}_i32"),
+                Expr::Literal(Literal::Int(value)) => {
+                    format!("-{}_i32", int_literal_text(value))
+                }
                 Expr::Literal(Literal::Float(value)) => format!("-{value}_f64"),
                 _ => self.gen_expr(expr)?,
             },
@@ -2532,7 +2733,7 @@ impl IntermediateRepresentationCodeGen {
                 expr,
             } => self.gen_expr(expr)?,
             Expr::Literal(Literal::Int(value)) => {
-                value.strip_prefix('-').unwrap_or(value).to_string()
+                int_literal_text(value.strip_prefix('-').unwrap_or(value))
             }
             other => self.gen_expr(other)?,
         })
@@ -3012,7 +3213,18 @@ impl IntermediateRepresentationCodeGen {
         // the documented `Timeout` arm.
         if let Some(ms) = timeout {
             let on_ok = self.gen_get_as("input", as_type)?;
-            let timeout_result = match default {
+            // `--default` applies to an empty submission on both paths: a
+            // line that arrived before the deadline (empty input) and the
+            // timeout itself.
+            let ok_arm = match &default {
+                Some(default_expr) => format!(
+                    "Ok(input) => {{ let input = if input.trim().is_empty() {{ {} }} else {{ input }}; \
+                     Ok::<String, String>({}) }}",
+                    default_expr, on_ok
+                ),
+                None => format!("Ok(input) => Ok::<String, String>({})", on_ok),
+            };
+            let timeout_result = match &default {
                 Some(default_expr) => {
                     format!("Ok::<String, String>({})", default_expr)
                 }
@@ -3022,17 +3234,27 @@ impl IntermediateRepresentationCodeGen {
                 concat!(
                     "{{ {}let (__poly_tx, __poly_rx) = std::sync::mpsc::channel(); std::thread::spawn(move || {{ ",
                     "let __poly_input = {}; let _ = __poly_tx.send(__poly_input.trim().to_string()); }}); match _",
-                    "_poly_rx.recv_timeout(std::time::Duration::from_millis({} as u64)) {{ Ok(input) => Ok::<Stri",
-                    "ng, String>({}), Err(_) => {} }} }}",
+                    "_poly_rx.recv_timeout(std::time::Duration::from_millis({} as u64)) {{ {}, Err(_) => {} }} }}",
                 ),
-                prompt, read_expr, ms, on_ok, timeout_result
+                prompt, read_expr, ms, ok_arm, timeout_result
             ));
         }
 
         let finalized = self.gen_get_as("input", as_type)?;
+        // `--default` means "value used when input is empty" (POLY_SPEC):
+        // substitute it before finalizing, so `--as` parsing applies to the
+        // default too. Previously the flag was only honored on the
+        // `--timeout` path and silently ignored otherwise.
+        let default_line = match &default {
+            Some(default_expr) => format!(
+                "let input = if input.trim().is_empty() {{ {} }} else {{ input }}; ",
+                default_expr
+            ),
+            None => String::new(),
+        };
         Ok(format!(
-            "{{ {}let input = {}; {} }}",
-            prompt, read_expr, finalized
+            "{{ {}let input = {}; {}{} }}",
+            prompt, read_expr, default_line, finalized
         ))
     }
 
@@ -3166,6 +3388,22 @@ impl IntermediateRepresentationCodeGen {
                             path_str, self.put_format_spec(expr), expr_str
                         )
                     }
+                    Some(Redirect::Prepend(path)) => {
+                        let path_str = self.gen_expr(path)?;
+                        format!(
+                            concat!(
+                                "{{ let mut content = std::fs::read_to_string({0})",
+                                ".unwrap_or_else(|e| if e.kind() == std::io::ErrorKind::NotFound {{ String::new() }}",
+                                " else {{ eprintln!(\"Poly runtime error: {{e}}\"); std::process::exit(1) }});",
+                                " content.insert_str(0, &format!(\"{1}\\n\", {2}));",
+                                " std::fs::write({0}, content).unwrap_or_else(|e| {{ eprintln!(\"Poly runtime error: {{e}}\");",
+                                " std::process::exit(1) }}); }}",
+                            ),
+                            path_str,
+                            self.put_format_spec(expr),
+                            expr_str
+                        )
+                    }
                     None => {
                         format!(
                             "println!(\"{}\", {});",
@@ -3278,7 +3516,11 @@ impl IntermediateRepresentationCodeGen {
                         return Ok(out);
                     }
                 }
-                format!("{} = {};", self.gen_expr(target)?, self.gen_expr(value)?)
+                let previous_power_i64 = self.power_i64_context.replace(self.is_int64_expr(target));
+                let rendered_target = self.gen_expr(target);
+                let rendered_value = self.gen_expr(value);
+                self.power_i64_context.set(previous_power_i64);
+                format!("{} = {};", rendered_target?, rendered_value?)
             }
             Statement::Mutation { target, op, value } => {
                 let target_str = self.gen_expr(target)?;
@@ -3382,7 +3624,9 @@ impl IntermediateRepresentationCodeGen {
                     scrutinee_str
                 };
                 let mut result = format!("match {} {{\n", scrutinee_str);
+                self.enter_scope();
                 for arm in arms {
+                    self.declare_pattern_float_bindings(&arm.pattern, scrutinee);
                     let (pattern_str, pattern_guards) =
                         self.gen_pattern_with_guards(&arm.pattern)?;
                     let mut boxed_bindings = HashSet::new();
@@ -3430,6 +3674,7 @@ impl IntermediateRepresentationCodeGen {
                     self.pattern_aliases.borrow_mut().pop();
                     self.boxed_bindings.borrow_mut().pop();
                 }
+                self.exit_scope();
                 result.push('}');
                 result
             }
@@ -3498,6 +3743,25 @@ impl IntermediateRepresentationCodeGen {
     }
 
     fn gen_value_expr_inner(
+        &self,
+        name: &str,
+        value: &Expr,
+        declared_type: Option<&Type>,
+    ) -> Result<String, String> {
+        // A declared-`i64` initializer renders inside an i64 context so a
+        // power expression (`var big i64 := 2 ^ 40`) coerces its base and
+        // keeps the result 64-bit instead of narrowing to i32 (E0308).
+        let previous_u64_ctx = self.u64_context.get();
+        let previous_power_i64 = self
+            .power_i64_context
+            .replace(declared_type.is_some_and(|ty| matches!(ty, Type::Named(n) if n == "i64")));
+        let rendered = self.gen_value_expr_deepest(name, value, declared_type);
+        self.power_i64_context.set(previous_power_i64);
+        self.u64_context.set(previous_u64_ctx);
+        rendered
+    }
+
+    fn gen_value_expr_deepest(
         &self,
         name: &str,
         value: &Expr,
@@ -3770,9 +4034,9 @@ impl IntermediateRepresentationCodeGen {
         Ok(match pattern {
             Pattern::Identifier(_) | Pattern::Wildcard => "_".to_string(),
             Pattern::Literal(Expr::Literal(Literal::Int(value)))
-                if value == "0" || value == "1" =>
+                if matches!(parse_int_literal_i64(value), Some(0) | Some(1)) =>
             {
-                format!("{}.0", value)
+                format!("{}.0", int_literal_text(value))
             }
             Pattern::Literal(_) => self.gen_pattern(pattern)?,
             Pattern::Tuple(patterns) => format!(
@@ -4058,6 +4322,76 @@ impl IntermediateRepresentationCodeGen {
         self.gen_expr(arg)
     }
 
+    /// Render `a ^ b` (exponentiation). Floats use `powf`; integers use
+    /// `wrapping_pow` so overflow wraps like the C and asm targets instead
+    /// of panicking. Bare int literals are suffixed (`7_i32`) — a plain
+    /// literal receiver is E0689-ambiguous in Rust (`7.wrapping_pow`), and
+    /// the annotation also keeps a big exponent from re-narrowing to i32.
+    /// A runtime-negative integer exponent yields 0 in every target; the
+    /// guard is emitted only when the exponent is not already a
+    /// non-negative literal, keeping the common `x ^ 2` shape clean.
+    fn gen_power_expr(&self, left: &Expr, right: &Expr) -> Result<String, String> {
+        // The checker requires the same numeric class on both sides, so a
+        // float anywhere means a float power.
+        if self.is_float_valued_expr(left) || self.is_float_valued_expr(right) {
+            let l = self.gen_power_float_operand(left)?;
+            let r = self.gen_expr(right)?;
+            return Ok(format!("({}).powf({})", l, r));
+        }
+        // Power's result type is the base operand's type, so the i64/u64
+        // classification of the whole expression follows the base alone
+        // (unlike Add/Mul, where either side can widen).
+        if self.is_u64_expr(left) {
+            let l = self.gen_u64_operand(left)?;
+            let r = self.gen_u64_operand(right)?;
+            return Ok(format!("({}).wrapping_pow(({}) as u32)", l, r));
+        }
+        let l = self.suffix_i32_operand(left, &self.gen_expr(left)?);
+        let i64_base = self.is_int64_expr(left) || self.power_i64_context.get();
+        let l = if i64_base {
+            // Coerce the base to i64 so the whole result is 64-bit: the
+            // declaration (`var big i64 := 2 ^ 40`) has already registered
+            // this shape as i64-valued (see is_int64_expr's Power arm).
+            format!("(({}) as i64)", l)
+        } else {
+            l
+        };
+        let r = self.gen_expr(right)?;
+        let non_negative_literal = matches!(right, Expr::Literal(Literal::Int(v))
+            if parse_int_literal_i64(v).is_none_or(|value| value >= 0));
+        let exponent = if i64_base {
+            format!("(({}) as i64) as u32", r)
+        } else {
+            format!("({}) as u32", r)
+        };
+        if non_negative_literal || i64_base || self.is_int64_expr(right) || self.is_u64_expr(right)
+        {
+            Ok(format!("({}).wrapping_pow({})", l, exponent))
+        } else {
+            Ok(format!(
+                "(if ({r}) < 0 {{ 0 }} else {{ ({}).wrapping_pow({}) }})",
+                l, exponent
+            ))
+        }
+    }
+
+    /// A bare float-literal receiver is E0689-ambiguous in a method call
+    /// (`(3.0).powf(2.0)`); anchor it with an `_f64` suffix.
+    fn gen_power_float_operand(&self, expr: &Expr) -> Result<String, String> {
+        Ok(match expr {
+            Expr::Literal(Literal::Float(value)) => format!("{value}_f64"),
+            Expr::UnaryOp {
+                op: UnaryOp::Neg,
+                expr: inner,
+            } => match inner.as_ref() {
+                Expr::Literal(Literal::Float(value)) => format!("-{value}_f64"),
+                other => format!("(-{})", self.gen_expr(other)?),
+            },
+            Expr::Parenthesized(inner) => self.gen_power_float_operand(inner)?,
+            other => self.gen_expr(other)?,
+        })
+    }
+
     fn gen_binary_op(&self, op: &BinaryOp) -> String {
         match op {
             BinaryOp::Add => "+",
@@ -4065,6 +4399,9 @@ impl IntermediateRepresentationCodeGen {
             BinaryOp::Mul => "*",
             BinaryOp::Div => "/",
             BinaryOp::Mod => "%",
+            // Power never reaches the infix renderer: gen_expr and
+            // render_anchored_int both route it to gen_power_expr.
+            BinaryOp::Power => unreachable!("power is rendered by gen_power_expr"),
             BinaryOp::Eq => "==",
             BinaryOp::NotEq => "!=",
             BinaryOp::Lt => "<",
@@ -4712,6 +5049,45 @@ mod tests {
     }
 
     #[test]
+    fn prepend_redirect_reads_then_writes_front() -> Result<(), Box<dyn std::error::Error>> {
+        // `-prepend` must read the existing file (missing file -> empty),
+        // insert the new line at the front, then write the whole thing back.
+        let rust = transpile("fn main()\n    put \"Hello\" to \"Hi.txt\" -prepend\nend fn");
+        assert!(
+            rust.contains("std::fs::read_to_string"),
+            "prepend must read existing file contents: {rust}"
+        );
+        assert!(
+            rust.contains("content.insert_str(0,"),
+            "prepend must insert the new content at the front: {rust}"
+        );
+        assert!(
+            rust.contains("std::fs::write("),
+            "prepend must write the file back: {rust}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prepend_redirect_inside_loop_uses_inline_generator() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // The same statement inside a loop body goes through the inline
+        // statement generator instead of `gen_put`; it must lower identically.
+        let rust = transpile(
+            "fn main()\n    loop i 0..3\n        put \"Line \" + i.to_string() to \"out.txt\" -prepend\n    end loop\nend fn",
+        );
+        assert!(
+            rust.contains("std::fs::read_to_string"),
+            "prepend in a loop must read existing file contents: {rust}"
+        );
+        assert!(
+            rust.contains("content.insert_str(0,"),
+            "prepend in a loop must insert the new content at the front: {rust}"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn string_append_emits_in_place_push_str() -> Result<(), Box<dyn std::error::Error>> {
         // `s := s + <string>` on a string variable lowers to in-place
         // `push_str` so repeated appends stay amortized-O(1) instead of
@@ -5293,6 +5669,68 @@ mod tests {
             rust.contains("ValidationError::TooShort { min: min }"),
             "struct-variant pattern must render named fields: {rust}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn float_to_string_uses_display_not_debug() -> Result<(), Box<dyn std::error::Error>> {
+        // Rust's own `12.0_f64.to_string()` is "12", and the C
+        // (`poly_float_to_string`) and JS (`String(..)`) backends print
+        // "12" too; Debug formatting would print "12.0" and diverge.
+        let rust = transpile("fn main()\n    put 12.0.to_string()\nend fn");
+        assert!(rust.contains(".to_string()"), "{rust}");
+        assert!(!rust.contains("{:?}"), "floats must not use Debug: {rust}");
+        Ok(())
+    }
+
+    #[test]
+    fn match_bound_float_to_string_uses_display() -> Result<(), Box<dyn std::error::Error>> {
+        // Enum payload bindings (`Rect(w, h)`) and Result bindings
+        // (`Ok(answer)`) are typed from the declaration/return annotation so
+        // their `.to_string()` takes Display as well.
+        let rust = transpile(concat!(
+            "enum Shape\n    Rect(f64, f64)\nend enum\n\n",
+            "fn divide(a: f64, b: f64): Result<f64, ustring>\n",
+            "    return Ok(a / b)\nend fn\n\n",
+            "fn main()\n    var s := Shape::Rect(3.0, 4.0)\n",
+            "    match s\n        Rect(w, h), put (w * h).to_string()\n    end match\n",
+            "    match divide(10.0, 2.0)\n",
+            "        Ok(answer), put answer.to_string()\n",
+            "        Error(message), error message\n    end match\nend fn",
+        ));
+        assert!(rust.contains("answer.to_string()"), "{rust}");
+        assert!(
+            !rust.contains("format!(\"{:?}\""),
+            "match-bound float must not use Debug: {rust}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn int_literals_are_emitted_as_canonical_decimal() -> Result<(), Box<dyn std::error::Error>> {
+        // Regression: the Rust emitter normalised nothing, so `010` and the
+        // radix spellings reached the generated program verbatim. Rust
+        // happens to read `010` as ten, but the emitted form must be one
+        // canonical decimal string so every target agrees byte-for-byte on
+        // the same number and width decisions see the parsed value.
+        let rust = transpile(
+            "fn main()\n    var a i32 := 010\n    var b i32 := 0xFF\n    var c i32 := 0o755\n    var d i32 := 0b1010\nend fn",
+        );
+        assert!(rust.contains("= 10;"), "got: {rust}");
+        assert!(rust.contains("= 255;"), "got: {rust}");
+        assert!(rust.contains("= 493;"), "got: {rust}");
+        for raw in ["010", "0o755", "0b1010", "0xFF"] {
+            assert!(!rust.contains(raw), "{raw} survived into Rust: {rust}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn big_radix_literals_get_the_i64_suffix() -> Result<(), Box<dyn std::error::Error>> {
+        // Width classification must use the parsed value: a hex literal
+        // above i32 range is as 64-bit as its decimal spelling (E3028).
+        let rust = transpile("fn main()\n    var big i64 := 0x100000000\nend fn");
+        assert!(rust.contains("= 4294967296_i64;"), "got: {rust}");
         Ok(())
     }
 }

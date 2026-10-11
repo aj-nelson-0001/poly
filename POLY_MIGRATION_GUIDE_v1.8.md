@@ -37,69 +37,13 @@ end loop
 
 **After:**
 ~~~poly fragment
-
-
-
-
-
-
-
 loop i 0..10
-
-
-
-
-
-
-
     put i
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 loop item in fruits
-
-
-
-
-
-
-
     put item
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 ~~~
 
 The infinite loop (`loop ... end loop`) is unchanged.
@@ -119,53 +63,11 @@ dec count            # count = 0
 
 **After:**
 ~~~poly fragment
-
-
-
-
-
-
-
 var count := 0
-
-
-
-
-
-
-
 count := count + 1   # count = 1
-
-
-
-
-
-
-
 count := count + 1   # count = 2
-
-
-
-
-
-
-
 count := count - 1   # count = 1
-
-
-
-
-
-
-
 count := count - 1   # count = 0
-
-
-
-
-
-
-
 ~~~
 
 ### 3. Remove `set ... to`
@@ -181,37 +83,9 @@ set result to a + b
 
 **After:**
 ~~~poly fragment
-
-
-
-
-
-
-
 var name := "Alice"
-
-
-
-
-
-
-
 var age := 30
-
-
-
-
-
-
-
 var result := a + b
-
-
-
-
-
-
-
 ~~~
 
 Or if the variable already exists:
@@ -227,45 +101,10 @@ The `+=`, `-=`, `*=`, `/=` operators have been removed. Use `:=` with the full e
 
 **Before:**
 ~~~poly fragment
-
-
-
-
-
-
-
 x += 5
-
-
-
-
-
-
-
 x -= 3
-
-
-
-
-
-
-
 x *= 2
-
-
-
-
-
-
-
 x /= 4
-
-
-
-
-
-
-
 ~~~
 
 **After:**
@@ -282,37 +121,9 @@ Replace `>` / `>>` / `<` with `to` / `to ... -append` / `from`.
 
 **Before:**
 ~~~poly fragment
-
-
-
-
-
-
-
 put "Hello" > "output.txt"      # Write
-
-
-
-
-
-
-
 put "World" >> "output.txt"     # Append
-
-
-
-
-
-
-
 var content := get < "input.txt"  # Read
-
-
-
-
-
-
-
 ~~~
 
 **After:**
@@ -328,21 +139,7 @@ The `=` operator is now **only** for equality checking. Assignment **must** use 
 
 **Before (ambiguous):**
 ~~~poly fragment
-
-
-
-
-
-
-
 x = 5          # Was this assignment or comparison?
-
-
-
-
-
-
-
 ~~~
 
 **After (unambiguous):**

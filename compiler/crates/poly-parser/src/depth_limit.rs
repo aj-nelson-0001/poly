@@ -31,8 +31,8 @@
 //! could report the error.
 
 use crate::ast::{
-    Block, Expression, FunctionDecl, GetExpr, LoopRangePart, MatchArmBody, Parameter, Pattern,
-    Program, Redirect, Statement, TypeAnnotation, WithClause,
+    Block, EnumVariant, Expression, FunctionDecl, GetExpr, GetFlag, LoopRangePart, MatchArmBody,
+    Parameter, Pattern, Program, Redirect, Statement, TypeAnnotation, WithClause,
 };
 
 /// Maximum AST nesting depth accepted for a parsed program.
@@ -86,6 +86,11 @@ pub fn ast_depth(program: &Program) -> Result<usize, usize> {
             Work::Expression(expression) => expression_children(expression, inner, &mut work),
             Work::Pattern(pattern) => pattern_children(pattern, inner, &mut work),
             Work::TypeAnnotation(annotation) => {
+                // `[T; N]` embeds an expression (the array length) alongside
+                // its child type; measure both.
+                if let TypeAnnotation::Array(_, length) = annotation {
+                    work.push((Work::Expression(length.as_ref()), inner));
+                }
                 for child in type_children(annotation) {
                     work.push((Work::TypeAnnotation(child), inner));
                 }
@@ -116,6 +121,9 @@ fn push_block<'a>(block: &'a Block, depth: usize, work: &mut Vec<(Work<'a>, usiz
 
 /// Queue a function's parameters and body for visiting at `depth`.
 fn push_function<'a>(function: &'a FunctionDecl, depth: usize, work: &mut Vec<(Work<'a>, usize)>) {
+    if let Some(return_type) = &function.return_type {
+        work.push((Work::TypeAnnotation(return_type), depth));
+    }
     for parameter in &function.params {
         push_parameter(parameter, depth, work);
     }
@@ -125,6 +133,7 @@ fn push_function<'a>(function: &'a FunctionDecl, depth: usize, work: &mut Vec<(W
 }
 
 fn push_parameter<'a>(parameter: &'a Parameter, depth: usize, work: &mut Vec<(Work<'a>, usize)>) {
+    work.push((Work::TypeAnnotation(&parameter.ty), depth));
     if let Some(default) = &parameter.default {
         work.push((Work::Expression(default), depth));
     }
@@ -146,14 +155,21 @@ fn statement_children<'a>(
     work: &mut Vec<(Work<'a>, usize)>,
 ) {
     match statement {
-        Statement::VarDeclaration { value, .. } => {
+        Statement::VarDeclaration { ty, value, .. } => {
+            if let Some(ty) = ty {
+                work.push((Work::TypeAnnotation(ty), inner));
+            }
             if let Some(value) = value {
                 work.push((Work::Expression(value), inner));
             }
         }
-        Statement::LetDeclaration { value, .. }
-        | Statement::ConstDeclaration { value, .. }
-        | Statement::ExpressionStatement(value) => {
+        Statement::LetDeclaration { ty, value, .. } => {
+            if let Some(ty) = ty {
+                work.push((Work::TypeAnnotation(ty), inner));
+            }
+            work.push((Work::Expression(value), inner));
+        }
+        Statement::ConstDeclaration { value, .. } | Statement::ExpressionStatement(value) => {
             work.push((Work::Expression(value), inner));
         }
         Statement::Assignment { target, value } => {
@@ -167,7 +183,9 @@ fn statement_children<'a>(
         }
         Statement::PutStatement { expr, redirect } => {
             work.push((Work::Expression(expr), inner));
-            if let Some(Redirect::Write(path) | Redirect::Append(path)) = redirect {
+            if let Some(Redirect::Write(path) | Redirect::Append(path) | Redirect::Prepend(path)) =
+                redirect
+            {
                 work.push((Work::Expression(path), inner));
             }
         }
@@ -180,13 +198,31 @@ fn statement_children<'a>(
         Statement::FunctionDeclaration(function) => push_function(function, inner, work),
         Statement::StructDeclaration(decl) => {
             for field in &decl.fields {
+                work.push((Work::TypeAnnotation(&field.ty), inner));
                 if let Some(default) = &field.default {
                     work.push((Work::Expression(default), inner));
                 }
             }
             push_methods(&decl.methods, inner, work);
         }
-        Statement::EnumDeclaration(decl) => push_methods(&decl.methods, inner, work),
+        Statement::EnumDeclaration(decl) => {
+            for variant in &decl.variants {
+                match variant {
+                    EnumVariant::Unit(_) => {}
+                    EnumVariant::Tuple(_, types) => {
+                        for ty in types {
+                            work.push((Work::TypeAnnotation(ty), inner));
+                        }
+                    }
+                    EnumVariant::Struct(_, fields) => {
+                        for (_, ty) in fields {
+                            work.push((Work::TypeAnnotation(ty), inner));
+                        }
+                    }
+                }
+            }
+            push_methods(&decl.methods, inner, work);
+        }
         Statement::TraitDeclaration(decl) => push_methods(&decl.methods, inner, work),
         Statement::ImplDeclaration(decl) => push_methods(&decl.methods, inner, work),
         Statement::ModuleDeclaration(module) => push_block(&module.statements, inner, work),
@@ -194,13 +230,18 @@ fn statement_children<'a>(
             for parameter in &decl.params {
                 push_parameter(parameter, inner, work);
             }
+            if let Some(return_type) = &decl.return_type {
+                work.push((Work::TypeAnnotation(return_type), inner));
+            }
+        }
+        Statement::TypeDeclaration(decl) => {
+            work.push((Work::TypeAnnotation(&decl.ty), inner));
         }
         // No nested nodes.
         Statement::BreakStatement
         | Statement::ContinueStatement
         | Statement::UseDeclaration(_)
         | Statement::DependencyDeclaration(_)
-        | Statement::TypeDeclaration(_)
         | Statement::ForeignBlock { .. } => {}
     }
 }
@@ -317,11 +358,7 @@ fn expression_children<'a>(
             work.push((Work::Expression(expr), inner));
             work.push((Work::TypeAnnotation(ty), inner));
         }
-        Expression::GetExpression(get) => {
-            for child in get_children(get) {
-                work.push((Work::Expression(child), inner));
-            }
-        }
+        Expression::GetExpression(get) => push_get_children(get, inner, work),
         Expression::Range { start, end, .. } => {
             work.push((Work::Expression(start), inner));
             work.push((Work::Expression(end), inner));
@@ -338,33 +375,40 @@ fn expression_children<'a>(
     }
 }
 
-/// Expressions reachable from a `get` expression.
-fn get_children<'a>(get: &'a GetExpr) -> Vec<&'a Expression> {
-    let mut out: Vec<&'a Expression> = Vec::new();
+/// Queue the child nodes reachable from a `get` expression.
+///
+/// Prompt/source/flag expressions nest, and the `as` flag embeds a type
+/// annotation, so both kinds of child must enter the walk.
+fn push_get_children<'a>(get: &'a GetExpr, depth: usize, work: &mut Vec<(Work<'a>, usize)>) {
     if let Some(prompt) = &get.prompt {
-        out.push(prompt.as_ref());
+        work.push((Work::Expression(prompt.as_ref()), depth));
     }
     if let Some(source) = &get.source {
-        out.push(source.as_ref());
+        work.push((Work::Expression(source.as_ref()), depth));
     }
     for flag in &get.flags {
         match flag {
-            crate::ast::GetFlag::Timeout(expression)
-            | crate::ast::GetFlag::Default(expression)
-            | crate::ast::GetFlag::Mask(expression)
-            | crate::ast::GetFlag::Until(expression)
-            | crate::ast::GetFlag::Bytes(expression) => out.push(expression),
-            crate::ast::GetFlag::As(_) => {}
+            GetFlag::Timeout(expression)
+            | GetFlag::Default(expression)
+            | GetFlag::Mask(expression)
+            | GetFlag::Until(expression)
+            | GetFlag::Bytes(expression) => {
+                work.push((Work::Expression(expression), depth));
+            }
+            GetFlag::As(annotation) => {
+                work.push((Work::TypeAnnotation(annotation), depth));
+            }
         }
     }
     if let Some(with_clause) = &get.with_clause {
         match with_clause {
             WithClause::Validate(expression)
             | WithClause::Complete(expression)
-            | WithClause::Encoding(expression) => out.push(expression),
+            | WithClause::Encoding(expression) => {
+                work.push((Work::Expression(expression), depth));
+            }
         }
     }
-    out
 }
 
 /// Queue the child nodes directly contained in a match `pattern`.
@@ -591,5 +635,171 @@ mod tests {
             ),
             Err(depth) => panic!("a 100-deep tree should fit, measured {depth}"),
         }
+    }
+
+    /// Wrap a single statement as a whole program.
+    fn program_with(statement: Statement) -> Program {
+        Program {
+            statements: vec![Spanned::new(statement, Span::new(0, 0))],
+        }
+    }
+
+    /// A type nested `levels` deep: `Option<Option<... i32>>`.
+    fn deep_type(levels: usize) -> TypeAnnotation {
+        let mut ty = TypeAnnotation::Named("i32".to_string());
+        for _ in 0..levels {
+            ty = TypeAnnotation::Option(Box::new(ty));
+        }
+        ty
+    }
+
+    /// An expression nested `levels` deep: `(((1 + 1) + 1) + ...)`.
+    fn deep_expr(levels: usize) -> Expression {
+        let mut expr = Expression::IntLiteral("1".to_string());
+        for _ in 0..levels {
+            expr = Expression::BinaryOp {
+                op: BinaryOp::Add,
+                left: Box::new(expr),
+                right: Box::new(Expression::IntLiteral("1".to_string())),
+            };
+        }
+        expr
+    }
+
+    fn assert_over_deep(program: Program, what: &str) {
+        match ast_depth(&program) {
+            Ok(depth) => panic!("{what}: deep subtree escaped the depth check (measured {depth})"),
+            Err(measured) => assert!(
+                measured > MAX_AST_DEPTH,
+                "{what}: measured {measured}, expected over {MAX_AST_DEPTH}"
+            ),
+        }
+    }
+
+    #[test]
+    fn deep_types_behind_every_declaration_are_measured() {
+        // Regression: type annotations were skipped in several positions
+        // (type aliases, var/let types, signatures, fields, enum payloads),
+        // so a deep type behind them escaped the post-parse check entirely.
+        let levels = MAX_AST_DEPTH + 10;
+
+        assert_over_deep(
+            program_with(Statement::TypeDeclaration(crate::ast::TypeDecl {
+                name: "Deep".into(),
+                ty: deep_type(levels),
+            })),
+            "type alias",
+        );
+        assert_over_deep(
+            program_with(Statement::VarDeclaration {
+                name: "x".into(),
+                ty: Some(deep_type(levels)),
+                value: None,
+            }),
+            "var type",
+        );
+        assert_over_deep(
+            program_with(Statement::LetDeclaration {
+                name: "x".into(),
+                ty: Some(deep_type(levels)),
+                value: Expression::IntLiteral("1".into()),
+            }),
+            "let type",
+        );
+        assert_over_deep(
+            program_with(Statement::FunctionDeclaration(FunctionDecl {
+                name: "f".into(),
+                params: vec![],
+                return_type: Some(deep_type(levels)),
+                body: None,
+                is_async: false,
+                generics: vec![],
+            })),
+            "return type",
+        );
+        assert_over_deep(
+            program_with(Statement::FunctionDeclaration(FunctionDecl {
+                name: "f".into(),
+                params: vec![Parameter {
+                    name: "p".into(),
+                    ty: deep_type(levels),
+                    default: None,
+                }],
+                return_type: None,
+                body: None,
+                is_async: false,
+                generics: vec![],
+            })),
+            "parameter type",
+        );
+        assert_over_deep(
+            program_with(Statement::StructDeclaration(crate::ast::StructDecl {
+                name: "S".into(),
+                fields: vec![crate::ast::StructField {
+                    mutable: false,
+                    name: "f".into(),
+                    ty: deep_type(levels),
+                    default: None,
+                }],
+                methods: vec![],
+                generics: vec![],
+            })),
+            "struct field type",
+        );
+        assert_over_deep(
+            program_with(Statement::EnumDeclaration(crate::ast::EnumDecl {
+                name: "E".into(),
+                variants: vec![EnumVariant::Tuple("V".into(), vec![deep_type(levels)])],
+                methods: vec![],
+            })),
+            "enum variant type",
+        );
+        assert_over_deep(
+            program_with(Statement::ExternFunctionDeclaration(
+                crate::ast::ExternFunctionDecl {
+                    target: "rust".into(),
+                    name: "g".into(),
+                    params: vec![],
+                    return_type: Some(deep_type(levels)),
+                },
+            )),
+            "extern return type",
+        );
+    }
+
+    #[test]
+    fn deep_array_length_expression_is_measured() {
+        // `[T; N]` keeps its length as an expression that the type walk alone
+        // never returned; without a dispatch arm the subtree went unmeasured.
+        let levels = MAX_AST_DEPTH + 10;
+        assert_over_deep(
+            program_with(Statement::TypeDeclaration(crate::ast::TypeDecl {
+                name: "Arr".into(),
+                ty: TypeAnnotation::Array(
+                    Box::new(TypeAnnotation::Named("i32".into())),
+                    Box::new(deep_expr(levels)),
+                ),
+            })),
+            "array length expression",
+        );
+    }
+
+    #[test]
+    fn deep_get_as_flag_type_is_measured() {
+        // The `as` flag of a `get` expression embeds a type annotation the
+        // old expression-only children list skipped.
+        let levels = MAX_AST_DEPTH + 10;
+        let get = GetExpr {
+            prompt: None,
+            source: None,
+            flags: vec![GetFlag::As(deep_type(levels))],
+            with_clause: None,
+        };
+        assert_over_deep(
+            program_with(Statement::ExpressionStatement(
+                Expression::GetExpression(Box::new(get)),
+            )),
+            "get `as` flag type",
+        );
     }
 }

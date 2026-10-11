@@ -65,101 +65,17 @@ structs, enums, constants, type aliases, impl blocks, traits, use statements, an
 parse or rewrite the content; the selected native compiler validates it.
 
 ~~~poly fragment
-
-
-
-
-
-
-
 #rust
-
-
-
-
-
-
-
 fn complex_function(x: &str) -> Result<Vec<u8>, io::Error> {
-
-
-
-
-
-
-
     // This is a function definition — Poly can call it
-
-
-
-
-
-
-
     todo!()
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 struct Config {
-
-
-
-
-
-
-
     width: u32,
-
-
-
-
-
-
-
     height: u32,
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
 #endrust
-
-
-
-
-
-
-
 ~~~
 
 **Rules for foreign blocks:**
@@ -238,21 +154,7 @@ dep alsa = "0.9"
 directory. Its single record names the owning source:
 
 ~~~text
-
-
-
-
-
-
-
 source=../../tetris.poly
-
-
-
-
-
-
-
 ~~~
 
 The path is recorded **relative to the generated project** whenever a
@@ -277,77 +179,14 @@ Opaque foreign calls remain valid for compatibility, but an explicit signature c
 invoking the native compiler:
 
 ~~~poly fragment
-
-
-
-
-
-
-
 extern rust fn native_value(value: i32): i32
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #rust
-
-
-
-
-
-
-
 fn native_value(value: i32) -> i32 { value * 2 }
-
-
-
-
-
-
-
 #endrust
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 var result i32 := native_value(21)
-
-
-
-
-
-
-
 put result
-
-
-
-
-
-
-
 ~~~
 
 Use `extern c fn` with `#c` blocks in the same way. The target must match the selected backend, declarations must be top-level,
@@ -378,53 +217,11 @@ The initializer may be any expression, including a `match` expression,
 which is a concise way to derive an initial value from a scrutinee:
 
 ~~~poly fragment
-
-
-
-
-
-
-
 var frames i32 := match level
-
-
-
-
-
-
-
     0, 48
-
-
-
-
-
-
-
     1, 43
-
-
-
-
-
-
-
     _, 2
-
-
-
-
-
-
-
 end match
-
-
-
-
-
-
-
 ~~~
 
 Every target supports `match` in value position (C via a ternary chain,
@@ -442,21 +239,7 @@ const NAME := value        # immutable, module-scope
 ### Immutable Binding
 
 ~~~poly fragment
-
-
-
-
-
-
-
 let name: Type := value   # immutable, block-scope; the type is optional
-
-
-
-
-
-
-
 ~~~
 
 ### Assignment
@@ -469,29 +252,8 @@ name = other               # equality comparison, not assignment
 ### Mutation
 
 ~~~poly fragment
-
-
-
-
-
-
-
 name := name + value       # explicit re-assignment
-
-
-
-
-
-
-
 vector.pop()               # remove and yield the last element
-
-
-
-
-
-
-
 ~~~
 
 Compound assignment operators (`+=`, `-=`) and the assembly-style `add` /
@@ -538,29 +300,9 @@ put "x = " + x + ", y = " + y
 ### File Output
 
 ~~~poly fragment
-
-
-
-
-
-
-
 put expr to "file.txt"             # write (overwrite)
-
-
-
-
-
-
-
 put expr to "file.txt" -append     # append
-
-
-
-
-
-
-
+put expr to "file.txt" -prepend    # prepend (before existing contents)
 ~~~
 
 ### Stderr
@@ -574,29 +316,8 @@ info "debug info"                  # [INFO] prefix
 ### String Interpolation
 
 ~~~poly fragment
-
-
-
-
-
-
-
 var name := "Alice"
-
-
-
-
-
-
-
 put "Hello, {name}!"
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -613,45 +334,10 @@ var x := get from "file.txt" --bytes 42  # read N bytes
 ### Flags
 
 ~~~poly fragment
-
-
-
-
-
-
-
 get --timeout 3000                  # timeout in ms
-
-
-
-
-
-
-
 get --default "fallback"            # default on empty
-
-
-
-
-
-
-
 get --mask "*"                      # hide input (passwords)
-
-
-
-
-
-
-
 get --until ","                     # read until delimiter
-
-
-
-
-
-
-
 ~~~
 
 ### Input Conversion
@@ -671,69 +357,13 @@ maintained runnable v2 API.
 ### If/Else
 
 ~~~poly fragment
-
-
-
-
-
-
-
 if condition,
-
-
-
-
-
-
-
     # do something
-
-
-
-
-
-
-
 else if other_condition,
-
-
-
-
-
-
-
     # do other thing
-
-
-
-
-
-
-
 else,
-
-
-
-
-
-
-
     # default
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 All `else if` arms and the final `else` share one `end if`, which the
@@ -754,37 +384,9 @@ end while
 ### Loop (Infinite)
 
 ~~~poly fragment
-
-
-
-
-
-
-
 loop
-
-
-
-
-
-
-
     # runs forever until break
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 ~~~
 
 ### Loop Ranges
@@ -828,93 +430,16 @@ the loop infinite.
   variable past the terminating bound.
 
 ~~~poly fragment
-
-
-
-
-
-
-
 const TOTAL := 5
-
-
-
-
-
-
-
 const BUF := 2
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 loop i BUF..TOTAL - 1      # start bound may be any expression
-
-
-
-
-
-
-
     put i
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 loop 0..TOTAL - 1          # var-less form: the counter is discarded
-
-
-
-
-
-
-
     put "x"
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 ~~~
 
 ### Collection Iteration
@@ -930,69 +455,13 @@ end loop
 ## 8. Functions
 
 ~~~poly
-
-
-
-
-
-
-
 fn add(a: i32, b: i32): i32
-
-
-
-
-
-
-
     return a + b
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn greet(name: ustring)
-
-
-
-
-
-
-
     put "Hello, " + name + "!"
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 **Complex functions** (generics, closures, async, trait bounds) go in `#rust` blocks:
@@ -1016,45 +485,10 @@ async fn fetch(url: &str) -> Result<String, reqwest::Error> {
 Simple structs with plain fields:
 
 ~~~poly
-
-
-
-
-
-
-
 struct Point
-
-
-
-
-
-
-
     x: f32
-
-
-
-
-
-
-
     y: f32
-
-
-
-
-
-
-
 end struct
-
-
-
-
-
-
-
 ~~~
 
 Poly also supports `impl` blocks with methods that take and return `self`:
@@ -1114,12 +548,26 @@ pointing at the explicit form:
 | `dec x` | `x := x - 1` |
 | `x += n` | `x := x + n` |
 | `x -= n` | `x := x - n` |
-| `a ^ b` | `a xor b` (symbol spelling retired) |
 
-Poly has **no exponentiation operator**. `^` is *not* power — it is the
-retired spelling of bitwise xor and the parser rejects it. For exponentiation,
-compute it in a `#rust` helper (e.g. `i32::pow`) or with repeated
-multiplication in a loop.
+### Exponentiation
+
+`a ^ b` raises `a` to the power `b`. It binds tighter than `*` and `/` and
+is right-associative: `2 * 3 ^ 2` is `2 * (3 ^ 2)`, and `2 ^ 3 ^ 2` is
+`2 ^ (3 ^ 2)`. The result keeps the numeric class of its operands (the
+checker rejects mixed integer/float operands without an explicit `as`
+cast, like every other arithmetic operator):
+
+| Poly | Meaning | Rust equivalent |
+|------|---------|-----------------|
+| `x ^ 2` | `x` squared (int) | `x.wrapping_pow(2 as u32)` |
+| `f ^ 2.0` | float power | `f.powf(2.0)` |
+
+Integer overflow wraps identically on all four targets. An exponent that
+is negative at runtime yields `0` on every target (a negative exponent
+has no integer result). Constant expressions fold at compile time when
+the exponent is in `0..=63` and the result fits `i64` (`3 ^ 4` becomes
+`81`); anything else stays a runtime computation. For fractional powers,
+use a float base (`2.0 ^ 0.5`).
 
 ### Bitwise
 
@@ -1127,7 +575,7 @@ multiplication in a loop.
 |------|------|
 | `a bitand b` | `a & b` |
 | `a bitor b` | `a \| b` |
-| `a xor b` | `a ^ b` (write `xor` in Poly; a literal `^` is rejected) |
+| `a xor b` | `a ^ b` (write `xor` in Poly; a literal `^` in Poly means power) |
 | `bitnot a` | `!a` |
 | `a shift left n` (or `a << n`) | `a << n` |
 | `a shift right n` (or `a >> n`) | `a >> n` |
@@ -1147,6 +595,9 @@ multiplication in a loop.
 | `unicode "hello"` | Unicode string |
 | `true` / `false` | Boolean |
 | `[0x48, 0x65]` | Byte array |
+
+Decimal digits with leading zeros are still decimal: `010` is ten, not
+octal. Octal needs the `0o` prefix (`0o10` is eight).
 
 ---
 
@@ -1169,61 +620,12 @@ keeps every backend honest — without the rule the rust target rejected the
 program outright while c and js silently accepted it with different results.
 
 ~~~poly fragment
-
-
-
-
-
-
-
 const FONT_A := 240            # untyped consts infer i32
-
-
-
-
-
-
-
 var bits u64 := FONT_A as u64  # assignment is also strictly typed
-
-
-
-
-
-
-
 var row i64 := 0
-
-
-
-
-
-
-
 if bits as i64 = row      # explicit cast required for mixed types
-
-
-
-
-
-
-
     put "hit"
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 ### Logical
@@ -1254,45 +656,10 @@ migration hint.
 ~~~
 
 ~~~rust
-
-
-
-
-
-
-
 #rust
-
-
-
-
-
-
-
 // This is a Rust comment inside a Rust block
-
-
-
-
-
-
-
 /* block comment */
-
-
-
-
-
-
-
 #endrust
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -1300,85 +667,15 @@ migration hint.
 ## 14. Transpilation Model
 
 ~~~
-
-
-
-
-
-
-
 source.poly
-
-
-
-
-
-
-
     │
-
-
-
-
-
-
-
     ├── #rust blocks ──→ Declarations emitted at module scope
-
-
-
-
-
-
-
     │
-
-
-
-
-
-
-
     ├── Poly sections ──→ Lexer → Parser → AST → Codegen → fn main() { ... }
-
-
-
-
-
-
-
     │
-
-
-
-
-
-
-
     └── output.rs
-
-
-
-
-
-
-
             │
-
-
-
-
-
-
-
             └──→ rustc (or cargo build)
-
-
-
-
-
-
-
 ~~~
 
 ### Example Transpilation
@@ -1404,213 +701,31 @@ end fn
 **Output** (verbatim `--emit-rust`; the foreign block lands after
 `fn main`, and `put` of a concatenated string lowers to `format!`):
 ~~~rust
-
-
-
-
-
-
-
 // Generated from Poly source code
-
-
-
-
-
-
-
 #![allow(
-
-
-
-
-
-
-
     unused_variables,
-
-
-
-
-
-
-
     unused_mut,
-
-
-
-
-
-
-
     unused_imports,
-
-
-
-
-
-
-
     dead_code,
-
-
-
-
-
-
-
     unused_parens,
-
-
-
-
-
-
-
     unreachable_patterns
-
-
-
-
-
-
-
 )]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn main() {
-
-
-
-
-
-
-
     let mut count: i32 = 0;
-
-
-
-
-
-
-
     for i in 0..=5 {
-
-
-
-
-
-
-
         count = (count).wrapping_add(1_i32);
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
     println!("{}", format!("{}{}", String::from("Count: "), count));
-
-
-
-
-
-
-
     println!(
-
-
-
-
-
-
-
         "{}",
-
-
-
-
-
-
-
         format!("{}{}", String::from("Rust says: "), rust_multiply(count, 2))
-
-
-
-
-
-
-
     );
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn rust_multiply(x: i32, y: i32) -> i32 {
-
-
-
-
-
-
-
     x * y
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
 ~~~
 
 ---

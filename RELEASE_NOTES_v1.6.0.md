@@ -51,149 +51,23 @@ end if
 The new syntax transpiles to idiomatic Rust:
 
 ~~~rust
-
-
-
-
-
-
-
 // Poly
-
-
-
-
-
-
-
 if x > 0,
-
-
-
-
-
-
-
     put x
-
-
-
-
-
-
-
 else if x < 0,
-
-
-
-
-
-
-
     put "negative"
-
-
-
-
-
-
-
 else,
-
-
-
-
-
-
-
     put "zero"
-
-
-
-
-
-
-
 end if
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Transpiles to:
-
-
-
-
-
-
-
 if x > 0 {
-
-
-
-
-
-
-
     println!("{}", x);
-
-
-
-
-
-
-
 } else if x < 0 {
-
-
-
-
-
-
-
     println!("{}", "negative");
-
-
-
-
-
-
-
 } else {
-
-
-
-
-
-
-
     println!("{}", "zero");
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
 ~~~
 
 ## 📦 What's Included
@@ -238,69 +112,13 @@ end if
 
 **After:**
 ~~~poly fragment
-
-
-
-
-
-
-
 if temperature > 100,
-
-
-
-
-
-
-
     error "Too hot!"
-
-
-
-
-
-
-
 else if temperature < 0,
-
-
-
-
-
-
-
     error "Too cold!"
-
-
-
-
-
-
-
 else,
-
-
-
-
-
-
-
     put "Temperature is OK"
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 ## 📊 Test Results

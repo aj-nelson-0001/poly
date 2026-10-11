@@ -1,0 +1,72 @@
+# primes.poly — compute, display, and time the first 1000 primes.
+#
+# Poly has no builtin clock, so timing goes through Poly's own Rust
+# interop: one `extern rust fn` declared up top, implemented in a
+# `#rust` block that is pasted verbatim into the generated Rust.
+# Everything else is pure Poly, mirroring benches/primes.rs.
+
+extern rust fn now_micros(): u64
+
+#rust
+use std::time::{SystemTime, UNIX_EPOCH};
+
+fn now_micros() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is before the unix epoch")
+        .as_micros() as u64
+}
+#endrust
+
+fn is_prime(n: i32): bool
+    if n < 2,
+        return false
+    end if
+    if n = 2,
+        return true
+    end if
+    if n mod 2 = 0,
+        return false
+    end if
+    var d i32 := 3
+    while d * d <= n
+        if n mod d = 0,
+            return false
+        end if
+        d := d + 2
+    end while
+    return true
+end fn
+
+fn main()
+    var start u64 := now_micros()
+    var primes Vec<i32> := []
+    var candidate i32 := 2
+    while primes.len() < 1000
+        if is_prime(candidate),
+            primes.push(candidate)
+        end if
+        candidate := candidate + 1
+    end while
+    var elapsed u64 := now_micros() - start
+
+    put "First 1000 primes (10 per line):"
+    var line ustring := ""
+    var col i32 := 0
+    loop p in primes
+        line := line + p.to_string().pad_left(6)
+        col := col + 1
+        if col = 10,
+            put line
+            line := ""
+            col := 0
+        end if
+    end loop
+    if line != "",
+        put line
+    end if
+
+    put ""
+    put "1000th prime: " + primes[999].to_string()
+    put "Time taken: " + elapsed.to_string() + " microseconds"
+end fn

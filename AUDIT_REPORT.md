@@ -50,59 +50,17 @@ Findings are ranked by severity. Every "confirmed" item was reproduced empirical
   `format_for_expression` (line 1446):
   ~~~rust
 
-
-
-
-
-
-
   fn format_for_expression(&self, expression: &Expression) -> String {
-
-
-
-
-
-
 
       match expression {
 
-
-
-
-
-
-
           Expression::FloatLiteral(_) => "%f".to_string(),
-
-
-
-
-
-
 
           _ => "%d".to_string(),
 
-
-
-
-
-
-
       }
 
-
-
-
-
-
-
   }
-
-
-
-
-
-
 
   ~~~
   Float *literals* print with `%f`, but **any float-typed variable or computed float**

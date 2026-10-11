@@ -27,45 +27,10 @@ end fn
 This transpiles to idiomatic Rust async code:
 
 ~~~rust
-
-
-
-
-
-
-
 async fn fetch_data(url: String) -> Result<String, String> {
-
-
-
-
-
-
-
     let response = http_get(url).await;
-
-
-
-
-
-
-
     return Ok(response);
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
 ~~~
 
 ### Await Expressions
@@ -83,93 +48,16 @@ The postfix notation makes the code read naturally: "fetch data,,await the resul
 Traits can now have async method signatures:
 
 ~~~poly fragment
-
-
-
-
-
-
-
 trait DataFetcher
-
-
-
-
-
-
-
     async fn fetch(self, key: ustring): Result<ustring, ustring>
-
-
-
-
-
-
-
 end trait
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 impl DataFetcher for HttpClient
-
-
-
-
-
-
-
     async fn fetch(self, key: ustring): Result<ustring, ustring>
-
-
-
-
-
-
-
         var response := self.http_get(key).await
-
-
-
-
-
-
-
         return Ok(response)
-
-
-
-
-
-
-
     end fn
-
-
-
-
-
-
-
 end impl
-
-
-
-
-
-
-
 ~~~
 
 ## Complete Example
@@ -248,53 +136,11 @@ With async/await support, we're planning to add:
 Update your Poly compiler to the latest version and try the new features:
 
 ~~~bash
-
-
-
-
-
-
-
 cd compiler
-
-
-
-
-
-
-
 cargo build --release
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Try the async example
-
-
-
-
-
-
-
 ./target/release/poly ../examples/async_await.poly
-
-
-
-
-
-
-
 ~~~
 
 ## Conclusion

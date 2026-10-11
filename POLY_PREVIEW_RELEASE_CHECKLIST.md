@@ -90,219 +90,30 @@ The mechanical steps are automated by `scripts/prepare_release.py`; it never
 commits, tags, or pushes.
 
 ~~~sh
-
-
-
-
-
-
-
 # 1. Update the docs that must describe the new version by hand:
-
-
-
-
-
-
-
 #    CHANGELOG.md (date the [Unreleased] section), README.md
-
-
-
-
-
-
-
 #    ("What's New"), POLY_DOCUMENTATION_INDEX.md (baseline),
-
-
-
-
-
-
-
 #    POLY_V2_PREVIEW_RELEASE_NOTES.md (highlights).
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # 2. Bump, regenerate, and verify (workspace version, tetris project,
-
-
-
-
-
-
-
 #    lockfiles, tests, fmt, clippy, markdown, doc audit):
-
-
-
-
-
-
-
 python3 scripts/prepare_release.py 2.0.0-preview.N
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # 2b. Lint tracked generated files for machine-specific paths (home
-
-
-
-
-
-
-
 #     directories, runner paths) that would break byte-reproducibility:
-
-
-
-
-
-
-
 python3 scripts/check_generated_paths.py
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # 3. Review the diff, then commit and tag:
-
-
-
-
-
-
-
 git add -A
-
-
-
-
-
-
-
 git commit -m "chore(release): prepare 2.0.0-preview.N"
-
-
-
-
-
-
-
 git push origin v2.0-dev
-
-
-
-
-
-
-
 git tag -a v2.0.0-preview.N -m "Poly 2.0.0-preview.N"
-
-
-
-
-
-
-
 git push origin v2.0.0-preview.N
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # 4. Confirm the results:
-
-
-
-
-
-
-
 #    - .github/workflows/release.yml builds and publishes the binary; tags
-
-
-
-
-
-
-
 #      containing "preview" are marked as prereleases automatically
-
-
-
-
-
-
-
 #      (verified end to end with a throwaway tag on 2026-09-17).
-
-
-
-
-
-
-
 #    - CI on the branch is green for the release commit.
-
-
-
-
-
-
-
 #    - The published release shows the expected asset and prerelease flag.
-
-
-
-
-
-
-
 ~~~

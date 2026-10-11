@@ -31,6 +31,7 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Write;
 
+use poly_parser::{int_literal_text, parse_int_literal_i64};
 use poly_parser::ast::{
     self, BinaryOp, Expression, FunctionDecl, Statement, TypeAnnotation, UnaryOp,
 };
@@ -78,6 +79,14 @@ struct CGenerator {
     /// `&mut self`) after body rendering completes.
     concat_helper_emitted: Cell<bool>,
     to_string_helper_emitted: Cell<bool>,
+    /// Requested when an integer `^` (power) is rendered; gates the
+    /// poly_pow_ll / poly_pow_ull runtime helpers (see insert_concat_helper).
+    power_helper_emitted: Cell<bool>,
+    /// Set while rendering a declared-`i64`/`i64_t` initializer so an
+    /// integer `^` keeps 64-bit precision instead of the int32_t truncation
+    /// cast (the operand may be an ordinary i32-range literal, so operand
+    /// classification alone cannot see the declaration type).
+    power_i64_context: Cell<bool>,
     /// Declared function name -> declared C return type. Collected from both
     /// program-scope and struct/impl methods so `var q := make(3, 4)` can
     /// infer a struct type from a call instead of defaulting to `int32_t`.
@@ -115,6 +124,8 @@ impl CGenerator {
             late_definitions: Vec::new(),
             concat_helper_emitted: Cell::new(false),
             to_string_helper_emitted: Cell::new(false),
+            power_helper_emitted: Cell::new(false),
+            power_i64_context: Cell::new(false),
             fn_return_types: std::collections::HashMap::new(),
             var_widths: RefCell::new(std::collections::HashMap::new()),
             float_variables: RefCell::new(std::collections::HashSet::new()),
@@ -225,7 +236,9 @@ impl CGenerator {
         self.output.push_str("#include <inttypes.h>\n");
         self.output.push_str("#include <stdio.h>\n");
         self.output.push_str("#include <stdlib.h>\n");
-        self.output.push_str("#include <string.h>\n\n");
+        self.output.push_str("#include <string.h>\n");
+        // pow() for float `^`; linked with -lm by `poly --target c`.
+        self.output.push_str("#include <math.h>\n\n");
         for block in &self.c_blocks {
             self.output.push_str(block.trim_matches('\n'));
             self.output.push_str("\n\n");
@@ -551,7 +564,12 @@ impl CGenerator {
                 }
                 let value = value
                     .as_ref()
-                    .map(|value| self.expr(value))
+                    .map(|value| {
+                        let previous = self.power_i64_context.replace(type_name == "int64_t");
+                        let rendered = self.expr(value);
+                        self.power_i64_context.set(previous);
+                        rendered
+                    })
                     .transpose()?
                     .unwrap_or_else(|| "0".to_string());
                 writeln!(output, "{} {} = {};", type_name, name, value)
@@ -572,7 +590,13 @@ impl CGenerator {
                 if type_name == "double" {
                     self.float_variables.borrow_mut().insert(name.clone());
                 }
-                writeln!(output, "{} {} = {};", type_name, name, self.expr(value)?)
+                let value = {
+                    let previous = self.power_i64_context.replace(type_name == "int64_t");
+                    let rendered = self.expr(value);
+                    self.power_i64_context.set(previous);
+                    rendered
+                }?;
+                writeln!(output, "{} {} = {};", type_name, name, value)
                     .map_err(|e| e.to_string())?;
             }
             Statement::ConstDeclaration { name, value } => {
@@ -588,7 +612,16 @@ impl CGenerator {
             }
             Statement::Assignment { target, value } => {
                 line_prefix(output);
-                writeln!(output, "{} = {};", self.expr(target)?, self.expr(value)?)
+                // Assignment to a declared-`i64_t` variable keeps an integer
+                // `^` RHS at 64-bit width (same rule as the declaration).
+                let previous = self
+                    .power_i64_context
+                    .replace(matches!(target, Expression::Identifier(name)
+                        if self.var_widths.borrow().get(name).is_some_and(|w| w == "int64_t")));
+                let rendered_target = self.expr(target);
+                let rendered_value = self.expr(value);
+                self.power_i64_context.set(previous);
+                writeln!(output, "{} = {};", rendered_target?, rendered_value?)
                     .map_err(|e| e.to_string())?;
             }
             Statement::PutStatement { expr, redirect } => {
@@ -994,14 +1027,20 @@ impl CGenerator {
             // the C type is at least 64-bit: matches the i64-typed Rust
             // lowering and prints through PRId64 (see printf_parts).
             Expression::IntLiteral(value) => {
-                let is_big = match value.parse::<i64>() {
-                    Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
-                    Err(_) => true,
+                // Emit plain decimal so C's own literal rules never
+                // re-interpret the number: C reads `010` as octal 8 and has
+                // no `0o`/`0b` prefixes at all, while Poly defines `010` as
+                // decimal ten and accepts every prefix.
+                let decimal = int_literal_text(value);
+                let is_big = match parse_int_literal_i64(value) {
+                    Some(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                    // Not parseable or outside i64: promote to 64-bit.
+                    None => true,
                 };
                 if is_big {
-                    Ok(format!("(int64_t)({value}LL)"))
+                    Ok(format!("(int64_t)({decimal}LL)"))
                 } else {
-                    Ok(value.clone())
+                    Ok(decimal)
                 }
             }
             Expression::FloatLiteral(value) => Ok(value.clone()),
@@ -1022,6 +1061,9 @@ impl CGenerator {
             )),
             Expression::Identifier(name) => Ok(name.clone()),
             Expression::BinaryOp { op, left, right } => {
+                if matches!(op, BinaryOp::Power) {
+                    return self.gen_power(left, right);
+                }
                 // is_string_valued (not is_string_expression) so chains like
                 // `x + n.to_string()` where the left spine bottoms out in a
                 // to_string() call still classify as concat. With the plain
@@ -1558,11 +1600,30 @@ impl CGenerator {
     fn insert_concat_helper(&mut self) {
         if !(self.concat_helper_emitted.get()
             || self.to_string_helper_emitted.get()
-            || self.bool_str_emitted.get())
+            || self.bool_str_emitted.get()
+            || self.power_helper_emitted.get())
         {
             return;
         }
         let mut helpers = String::new();
+        if self.power_helper_emitted.get() {
+            // Integer power. Negative exponents yield 0 in every target
+            // (a negative int power has no integer value); overflow wraps,
+            // matching the Rust target's wrapping_pow and the asm loop.
+            helpers.push_str(
+                concat!(
+                    "long long poly_pow_ll(long long base, long long exp) {\n",
+                    "    if (exp < 0) return 0;\n",
+                    "    long long result = 1;\n",
+                    "    for (long long i = 0; i < exp; i++) result *= base;\n",
+                    "    return result;\n}\n\n",
+                    "unsigned long long poly_pow_ull(unsigned long long base, unsigned long long exp) {\n",
+                    "    unsigned long long result = 1;\n",
+                    "    for (unsigned long long i = 0; i < exp; i++) result *= base;\n",
+                    "    return result;\n}\n\n",
+                ),
+            );
+        }
         if self.bool_str_emitted.get() {
             // bool -> "true"/"false", matching the Rust target's Display
             // rendering of bools so all targets print the same text.
@@ -1593,7 +1654,7 @@ impl CGenerator {
                 ),
             );
         }
-        const MARKER: &str = "#include <string.h>\n\n";
+        const MARKER: &str = "#include <math.h>\n\n";
         if let Some(pos) = self.output.find(MARKER) {
             let insert_at = pos + MARKER.len();
             self.output.insert_str(insert_at, &helpers);
@@ -1793,9 +1854,9 @@ impl CGenerator {
     /// or a literal outside the i32 range (rendered with the LL suffix).
     fn is_i64_valued(&self, expression: &Expression) -> bool {
         match expression {
-            Expression::IntLiteral(value) => match value.parse::<i64>() {
-                Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
-                Err(_) => true,
+            Expression::IntLiteral(value) => match parse_int_literal_i64(value) {
+                Some(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                None => true,
             },
             Expression::Identifier(name) => self
                 .var_widths
@@ -1808,10 +1869,52 @@ impl CGenerator {
             Expression::BinaryOp { op, left, right } => {
                 matches!(
                     op,
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                    BinaryOp::Add
+                        | BinaryOp::Sub
+                        | BinaryOp::Mul
+                        | BinaryOp::Div
+                        | BinaryOp::Mod
+                        | BinaryOp::Power
                 ) && (self.is_i64_valued(left) || self.is_i64_valued(right))
             }
             _ => false,
+        }
+    }
+
+    /// Render `a ^ b` (exponentiation). Floats use libm `pow` (the checker
+    /// requires the same numeric class on both sides, so a float anywhere
+    /// means a float power); integers use the poly_pow runtime helpers.
+    /// A negative integer exponent yields 0 in every target; overflow wraps.
+    fn gen_power(&self, left: &Expression, right: &Expression) -> Result<String, String> {
+        if self.is_float_valued(left) || self.is_float_valued(right) {
+            return Ok(format!("pow({}, {})", self.expr(left)?, self.expr(right)?));
+        }
+        self.power_helper_emitted.set(true);
+        let l = self.expr(left)?;
+        let r = self.expr(right)?;
+        // Declared-u64 involvement stays unsigned (mirrors the is_i64_valued
+        // var_widths model); everything else computes through the signed
+        // 64-bit helper and lets the assignment context truncate.
+        let unsigned = |expression: &Expression| {
+            matches!(expression, Expression::Identifier(name)
+                if self.var_widths.borrow().get(name).is_some_and(|w| w == "uint64_t"))
+        };
+        if unsigned(left) || unsigned(right) {
+            Ok(format!(
+                "poly_pow_ull((unsigned long long)({l}), (unsigned long long)({r}))"
+            ))
+        } else if self.is_i64_valued(left)
+            || self.is_i64_valued(right)
+            || self.power_i64_context.get()
+        {
+            Ok(format!("poly_pow_ll((long long)({l}), (long long)({r}))"))
+        } else {
+            // 32-bit context: truncate explicitly so the result type is
+            // int32_t even in printf/argument position (implicit long long
+            // -> int conversion would print as garbage through %lld paths).
+            Ok(format!(
+                "((int32_t)poly_pow_ll((long long)({l}), (long long)({r})))"
+            ))
         }
     }
 
@@ -1822,6 +1925,9 @@ impl CGenerator {
             BinaryOp::Mul => "*",
             BinaryOp::Div => "/",
             BinaryOp::Mod => "%",
+            // Power never reaches the infix renderer: the BinaryOp arm
+            // routes it to gen_power.
+            BinaryOp::Power => unreachable!("power is rendered by gen_power"),
             BinaryOp::Eq => "==",
             BinaryOp::NotEq => "!=",
             BinaryOp::Lt => "<",
@@ -2358,6 +2464,38 @@ mod tests {
         assert!(output.contains("else if (__poly_match == 3) {"));
         // The wildcard arm is a plain else (always matches).
         assert!(output.contains("else {\n"));
+        Ok(())
+    }
+
+    #[test]
+    fn integer_literals_are_emitted_as_plain_decimal() -> Result<(), Box<dyn std::error::Error>> {
+        // Regression: the emitter passed the source text through verbatim,
+        // so C re-read `010` as octal 8 and could not parse `0o755`/`0b1010`
+        // at all. Every literal must reach C as the same number Poly means.
+        let output = generate(
+            "var a i32 := 010\nvar b i32 := 0xFF\nvar c i32 := 0o755\nvar d i32 := 0b1010\nput a\nput b\nput c\nput d",
+        )?;
+        assert!(output.contains("int32_t a = 10;"), "got: {output}");
+        assert!(output.contains("int32_t b = 255;"), "got: {output}");
+        assert!(output.contains("int32_t c = 493;"), "got: {output}");
+        assert!(output.contains("int32_t d = 10;"), "got: {output}");
+        // The raw spellings must never survive into the C text: `010` would
+        // silently mean 8, and `0o`/`0b` are not C syntax at all.
+        for raw in ["010", "0o755", "0b1010", "0xFF"] {
+            assert!(!output.contains(raw), "{raw} survived into C: {output}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn big_radix_literals_get_the_ll_suffix() -> Result<(), Box<dyn std::error::Error>> {
+        // A hex literal above i32 range must be widened exactly like its
+        // decimal spelling: 64-bit, PRId64-printed, no re-interpretation.
+        let output = generate("var big i64 := 0x100000000\nput big")?;
+        assert!(
+            output.contains("int64_t big = (int64_t)(4294967296LL);"),
+            "got: {output}"
+        );
         Ok(())
     }
 

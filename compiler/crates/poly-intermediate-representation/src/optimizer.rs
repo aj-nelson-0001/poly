@@ -6,6 +6,8 @@
 
 use std::collections::HashMap;
 
+use poly_parser::parse_int_literal_i64;
+
 use crate::intermediate_representation::*;
 
 /// A single optimization pass over the intermediate representation.
@@ -104,7 +106,9 @@ fn fold_statements(statements: &mut [Statement]) -> bool {
                 changed |= fold_expr(expr);
                 if let Some(redirect) = redirect {
                     let path = match redirect {
-                        Redirect::Write(path) | Redirect::Append(path) => path,
+                        Redirect::Write(path)
+                        | Redirect::Append(path)
+                        | Redirect::Prepend(path) => path,
                     };
                     changed |= fold_expr(path);
                 }
@@ -172,6 +176,13 @@ fn fold_expr(expr: &mut Expr) -> bool {
                     BinaryOp::Div if right_value != 0 => left_value.checked_div(right_value),
                     BinaryOp::Mod if right_value != 0 => left_value.checked_rem(right_value),
                     BinaryOp::Div | BinaryOp::Mod => None, // division by zero
+                    // Power folds only for exponents the checked i64 pow can
+                    // represent; anything else (negative, huge) stays for the
+                    // backends, which agree on the runtime result.
+                    BinaryOp::Power if (0..=63).contains(&right_value) => {
+                        left_value.checked_pow(right_value as u32)
+                    }
+                    BinaryOp::Power => None,
                     BinaryOp::BitAnd => Some(left_value & right_value),
                     BinaryOp::BitOr => Some(left_value | right_value),
                     BinaryOp::BitXor => Some(left_value ^ right_value),
@@ -237,6 +248,12 @@ fn fold_expr(expr: &mut Expr) -> bool {
                 return true;
             }
             if matches!(op, BinaryOp::Mul) && is_int_one(right) {
+                *expr = (**left).clone();
+                return true;
+            }
+            // `x ^ 1` is `x` for every numeric type (the literal 1 must be
+            // an int literal for the rewrite to be type-preserving).
+            if matches!(op, BinaryOp::Power) && is_int_one(right) {
                 *expr = (**left).clone();
                 return true;
             }
@@ -386,7 +403,7 @@ fn fold_expr(expr: &mut Expr) -> bool {
 
 fn as_i64(expr: &Expr) -> Option<i64> {
     match expr {
-        Expr::Literal(Literal::Int(value)) => value.parse().ok(),
+        Expr::Literal(Literal::Int(value)) => parse_int_literal_i64(value),
         _ => None,
     }
 }
@@ -403,10 +420,11 @@ fn as_bool(expr: &Expr) -> Option<bool> {
         // Only integer literals 0 and 1 are treated as booleans; other
         // integers are not semantically boolean even though they are
         // numerically coercible — folding `2 == 2` to `true` would silently
-        // change the type of the result from `i32` to `bool`.
-        Expr::Literal(Literal::Int(value)) => match value.as_str() {
-            "0" => Some(false),
-            "1" => Some(true),
+        // change the type of the result from `i32` to `bool`. Radix-prefixed
+        // spellings (`0b1`, `0o0`, `0x1`) count as 1/0 too.
+        Expr::Literal(Literal::Int(value)) => match parse_int_literal_i64(value) {
+            Some(0) => Some(false),
+            Some(1) => Some(true),
             _ => None,
         },
         _ => None,
@@ -417,12 +435,12 @@ fn as_bool(expr: &Expr) -> Option<bool> {
 /// Used by the identity simplifications so `x + 0.0` and `x + ""` are
 /// never rewritten away.
 fn is_int_zero(expr: &Expr) -> bool {
-    matches!(expr, Expr::Literal(Literal::Int(value)) if value == "0")
+    matches!(expr, Expr::Literal(Literal::Int(value)) if parse_int_literal_i64(value) == Some(0))
 }
 
 /// True for the Poly integer literal `1`.
 fn is_int_one(expr: &Expr) -> bool {
-    matches!(expr, Expr::Literal(Literal::Int(value)) if value == "1")
+    matches!(expr, Expr::Literal(Literal::Int(value)) if parse_int_literal_i64(value) == Some(1))
 }
 
 // =============================================================================
@@ -612,7 +630,7 @@ fn optimize_loops(statements: &mut Vec<Statement>) -> bool {
                         end,
                     } = part
                     {
-                        if matches!(step, Expr::Literal(Literal::Int(value)) if value == "1") {
+                        if matches!(step, Expr::Literal(Literal::Int(value)) if parse_int_literal_i64(value) == Some(1)) {
                             *part = LoopRangePart::Range {
                                 start: start.clone(),
                                 end: end.clone(),
@@ -740,7 +758,9 @@ fn inline_in_statements(
                 changed |= inline_in_expr(expr, inlinable);
                 if let Some(redirect) = redirect {
                     let path = match redirect {
-                        Redirect::Write(path) | Redirect::Append(path) => path,
+                        Redirect::Write(path)
+                        | Redirect::Append(path)
+                        | Redirect::Prepend(path) => path,
                     };
                     changed |= inline_in_expr(path, inlinable);
                 }
@@ -1083,9 +1103,8 @@ mod tests {
 
     fn int_value(expr: &Expr) -> Result<i64, String> {
         Ok(match expr {
-            Expr::Literal(Literal::Int(value)) => {
-                value.parse::<i64>().map_err(|e| e.to_string())?
-            }
+            Expr::Literal(Literal::Int(value)) => parse_int_literal_i64(value)
+                .ok_or_else(|| format!("invalid integer literal {value:?}"))?,
             other => panic!("expected int literal, got {other:?}"),
         })
     }
@@ -1342,6 +1361,42 @@ mod tests {
                 );
             }
             other => panic!("expected a put statement, got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn power_is_folded_for_representable_exponents() -> Result<(), Box<dyn std::error::Error>> {
+        let mut program = parse_to_ir("var square := 3 ^ 4");
+        ConstantFolding.run(&mut program);
+
+        match &program.main_body[0] {
+            Statement::VarDecl {
+                value: Some(Expr::Literal(Literal::Int(value))),
+                ..
+            } => assert_eq!(value, "81"),
+            other => panic!("expected the power to fold, got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn power_overflow_is_not_folded() -> Result<(), Box<dyn std::error::Error>> {
+        // `2 ^ 100` overflows an i64, so the fold must refuse (mirroring the
+        // shift/mul overflow guards) and let the target language decide.
+        let mut program = parse_to_ir("var big := 2 ^ 100");
+        ConstantFolding.run(&mut program);
+
+        match &program.main_body[0] {
+            Statement::VarDecl {
+                value:
+                    Some(Expr::BinaryOp {
+                        op: BinaryOp::Power,
+                        ..
+                    }),
+                ..
+            } => {}
+            other => panic!("expected the power to survive unfused, got {other:?}"),
         }
         Ok(())
     }

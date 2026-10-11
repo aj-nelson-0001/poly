@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use poly_parser::ast::*;
+use poly_parser::parse_int_literal_i64;
 use poly_types::PolyType;
 
 use super::helpers::*;
@@ -573,9 +574,9 @@ impl TypeChecker {
                 self.check_expression(expr);
                 if let Some(redirect) = redirect {
                     let path = match redirect {
-                        Redirect::Write(path) | Redirect::Append(path) => {
-                            self.check_expression(path)
-                        }
+                        Redirect::Write(path)
+                        | Redirect::Append(path)
+                        | Redirect::Prepend(path) => self.check_expression(path),
                     };
                     self.require_compatible(
                         &path,
@@ -1002,7 +1003,7 @@ impl TypeChecker {
                                 // panic in the generated `step_by(0)`); reject
                                 // it up front.
                                 if let Expression::IntLiteral(value) = step {
-                                    if value.parse::<i64>().ok() == Some(0) {
+                                    if parse_int_literal_i64(value) == Some(0) {
                                         self.error(TypeCheckError::new(
                                             "loop range step must not be zero",
                                         ));
@@ -1151,7 +1152,7 @@ impl TypeChecker {
                     PolyType::Unknown
                 }
             }
-            BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+            BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod | BinaryOp::Power => {
                 if is_numeric(left) && is_numeric(right) {
                     self.require_same_numeric_class(left, right, "arithmetic");
                     numeric_join(left, right)
@@ -2646,7 +2647,9 @@ impl TypeChecker {
             }
             TypeAnnotation::Array(inner, size) => {
                 let length = match size.as_ref() {
-                    Expression::IntLiteral(value) => value.parse().unwrap_or(0),
+                    Expression::IntLiteral(value) => parse_int_literal_i64(value)
+                        .and_then(|len| usize::try_from(len).ok())
+                        .unwrap_or(0),
                     _ => 0,
                 };
                 PolyType::Array(
@@ -3632,6 +3635,28 @@ mod tests {
         assert!(errors
             .iter()
             .any(|error| error.message.contains("loop range step must not be zero")));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_zero_loop_step_written_in_any_radix() -> Result<(), Box<dyn std::error::Error>> {
+        // Regression: the guard used `str::parse`, which only reads decimal,
+        // so `step 0x0` slipped past it and the generated Rust panicked in
+        // `step_by(0)` at runtime. Every spelling of zero must be caught.
+        for step in ["0x0", "0b0", "0o0", "000"] {
+            let source = format!(
+                "fn main()\n    loop i 0..10 step {step}\n        put i\n    end loop\nend fn"
+            );
+            let Err(errors) = check(&source) else {
+                panic!("expected {step} to be rejected");
+            };
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error.message.contains("loop range step must not be zero")),
+                "missing zero-step error for {step}: {errors:?}"
+            );
+        }
         Ok(())
     }
 

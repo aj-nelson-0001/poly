@@ -23,45 +23,10 @@ end fn
 ~~~
 
 ~~~bash
-
-
-
-
-
-
-
 poly --target rust program.poly
-
-
-
-
-
-
-
 poly --target c program.poly
-
-
-
-
-
-
-
 poly --target c --check program.poly
-
-
-
-
-
-
-
 poly --target c --emit-c program.poly
-
-
-
-
-
-
-
 ~~~
 
 Only the selected foreign block is emitted. A `#cpp` block is reserved and causes an explicit unsupported-backend error until a

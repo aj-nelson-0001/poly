@@ -26,69 +26,13 @@ The legacy `==` spelling is rejected. `var` types are written without a colon;
 ## `put`
 
 ~~~poly
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     put unicode "Hello"
-
-
-
-
-
-
-
     put 42
-
-
-
-
-
-
-
     put "value = " + 42
-
-
-
-
-
-
-
     put unicode "replace" to "output.txt"
-
-
-
-
-
-
-
     put unicode "append" to "output.txt" -append
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 `put` writes to stdout and always adds a newline. Rust supports `to "file"`
@@ -115,93 +59,16 @@ All three commands write to stderr. The generated Rust and C backends prefix the
 helper; file sources, flags, and `with` clauses are rejected with diagnostics.
 
 ~~~poly
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     var line ustring := get
-
-
-
-
-
-
-
     var prompted ustring := get unicode "Name: "
-
-
-
-
-
-
-
     var from_file ustring := get from "input.txt"
-
-
-
-
-
-
-
     var number i32 := get --as i32
-
-
-
-
-
-
-
     var fallback ustring := get --default unicode "fallback"
-
-
-
-
-
-
-
     var hidden ustring := get --mask unicode "*"
-
-
-
-
-
-
-
     var field ustring := get --until unicode ","
-
-
-
-
-
-
-
     var header bytes := get from "input.bin" --bytes 8
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 Supported flags:
@@ -248,101 +115,17 @@ the parser and lowers to a loop. `break` and `continue` are valid inside loops.
 Collection iteration:
 
 ~~~poly
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     var values := [10, 20, 30]
-
-
-
-
-
-
-
     loop value in values
-
-
-
-
-
-
-
         put value
-
-
-
-
-
-
-
     end loop
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     loop (index, value) in values.enumerate()
-
-
-
-
-
-
-
         put index
-
-
-
-
-
-
-
         put value
-
-
-
-
-
-
-
     end loop
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ## Foreign Blocks
@@ -366,77 +149,14 @@ end fn
 ~~~
 
 ~~~poly
-
-
-
-
-
-
-
 #c
-
-
-
-
-
-
-
 int native_value(void) { return 42; }
-
-
-
-
-
-
-
 #endc
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     var value i32 := native_value()
-
-
-
-
-
-
-
     put value
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 `#cpp` is explicitly rejected. Foreign calls without declarations remain opaque to
@@ -453,85 +173,15 @@ The declaration is checker-only, must match the selected target, and does not re
 ## Targets and CLI
 
 ~~~bash
-
-
-
-
-
-
-
 poly --target rust --check program.poly
-
-
-
-
-
-
-
 poly --target c --check program.poly
-
-
-
-
-
-
-
 poly --emit-rust program.poly
-
-
-
-
-
-
-
 poly --target c --emit-c program.poly
-
-
-
-
-
-
-
 poly --target asm --emit-asm program.poly
-
-
-
-
-
-
-
 poly --target js --emit-js program.poly
-
-
-
-
-
-
-
 poly --tokens program.poly
-
-
-
-
-
-
-
 poly --ast program.poly
-
-
-
-
-
-
-
 poly --intermediate-representation program.poly
-
-
-
-
-
-
-
 ~~~
 
 Rust is the default target. The C backend currently supports scalar declarations,

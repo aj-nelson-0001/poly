@@ -24,69 +24,13 @@ end if
 
 ### New Syntax
 ~~~poly fragment
-
-
-
-
-
-
-
 if x > 0,
-
-
-
-
-
-
-
     put x
-
-
-
-
-
-
-
 else if x < 0,
-
-
-
-
-
-
-
     put "negative"
-
-
-
-
-
-
-
 else,
-
-
-
-
-
-
-
     put "zero"
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 ## Key Changes
@@ -101,83 +45,23 @@ end if
 3. **Else-if chains work seamlessly**:
    ~~~poly fragment
 
-
-
-
-
-
-
    if score >= 90,
-
-
-
-
-
-
 
        grade := "A"
 
-
-
-
-
-
-
    else if score >= 80,
-
-
-
-
-
-
 
        grade := "B"
 
-
-
-
-
-
-
    else if score >= 70,
-
-
-
-
-
-
 
        grade := "C"
 
-
-
-
-
-
-
    else,
-
-
-
-
-
-
 
        grade := "F"
 
-
-
-
-
-
-
    end if
-
-
-
-
-
-
 
    ~~~
 
@@ -204,149 +88,23 @@ The comma syntax offers several advantages:
 The new syntax transpiles to idiomatic Rust:
 
 ~~~rust
-
-
-
-
-
-
-
 // Poly
-
-
-
-
-
-
-
 if x > 0,
-
-
-
-
-
-
-
     put x
-
-
-
-
-
-
-
 else if x < 0,
-
-
-
-
-
-
-
     put "negative"
-
-
-
-
-
-
-
 else,
-
-
-
-
-
-
-
     put "zero"
-
-
-
-
-
-
-
 end if
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Transpiles to:
-
-
-
-
-
-
-
 if x > 0 {
-
-
-
-
-
-
-
     println!("{}", x);
-
-
-
-
-
-
-
 } else if x < 0 {
-
-
-
-
-
-
-
     println!("{}", "negative");
-
-
-
-
-
-
-
 } else {
-
-
-
-
-
-
-
     println!("{}", "zero");
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
 ~~~
 
 ## Examples
@@ -370,117 +128,19 @@ end fn
 
 ### Temperature Classifier
 ~~~poly
-
-
-
-
-
-
-
 fn classify_temperature(temp: f64): string
-
-
-
-
-
-
-
     if temp > 40.0,
-
-
-
-
-
-
-
         return "Extremely Hot"
-
-
-
-
-
-
-
     else if temp > 30.0,
-
-
-
-
-
-
-
         return "Hot"
-
-
-
-
-
-
-
     else if temp > 20.0,
-
-
-
-
-
-
-
         return "Warm"
-
-
-
-
-
-
-
     else if temp > 10.0,
-
-
-
-
-
-
-
         return "Cool"
-
-
-
-
-
-
-
     else,
-
-
-
-
-
-
-
         return "Cold"
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Nested Conditions
@@ -516,69 +176,13 @@ To update your existing Poly code:
 
 **Before:**
 ~~~poly fragment
-
-
-
-
-
-
-
 if temperature > 100 then
-
-
-
-
-
-
-
     error "Too hot!"
-
-
-
-
-
-
-
 else if temperature < 0 then
-
-
-
-
-
-
-
     error "Too cold!"
-
-
-
-
-
-
-
 else
-
-
-
-
-
-
-
     put "Temperature is OK"
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 **After:**

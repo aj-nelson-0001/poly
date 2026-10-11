@@ -43,59 +43,11 @@ end loop
 
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 The "Bad" variant above is intentionally a fragment: it is the anti-pattern
-
-
-
-
-
-
 
 being called out, not a runnable program.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Appropriate Error Levels
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -109,9 +61,6 @@ info "File not found"     // Should be error
 error "Loading..."        // Should be info
 
 ~~~
-
-
-
 
 ### Format Output Consistently
 
@@ -129,67 +78,11 @@ put "Email:  " + email
 
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 2. Input Best Practices
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Always Provide Prompts
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly
 
@@ -201,27 +94,9 @@ end fn
 
 ~~~poly fragment
 
-
-
-
-
-
-
 // Bad: No prompt
 
-
-
-
-
-
-
 var name ustring := get  // User doesn't know what to enter
-
-
-
-
-
-
 
 ~~~
 
@@ -240,35 +115,7 @@ put "Enter color: "
 var color ustring := get  // Forces user to enter something
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Set Timeouts for Interactive Input
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 // Good: Prevent hanging
@@ -282,9 +129,6 @@ end match
 var input ustring := get  // Can hang forever
 
 ~~~
-
-
-
 
 ### Validate Input Immediately
 
@@ -322,68 +166,21 @@ end if
 
 ~~~poly
 
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
 
     // Good: Mask passwords
 
-
-
-
-
-
-
     put "Enter password: "
-
-
-
-
-
-
 
     var password ustring := get --mask unicode "*"
 
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 // Bad: Expose passwords
 put "Enter password: "
 var password ustring := get  // Visible on screen
 ~~~
-
-
-
 
 ---
 
@@ -408,35 +205,7 @@ enum Error
 end enum
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use `try` for Error Propagation
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 // Good: Propagate errors
@@ -459,9 +228,6 @@ fn process_config(): Result<ustring, FileError>
 end fn
 
 ~~~
-
-
-
 
 ### Use Pattern Matching for Error Handling
 
@@ -491,35 +257,7 @@ end if
 
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Wildcard for Catch-All
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -540,9 +278,6 @@ match validate_name(input)
 end match
 
 ~~~
-
-
-
 
 ---
 
@@ -566,35 +301,7 @@ put "Email: " + email
 
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Use Functions for Complex Logic
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -616,9 +323,6 @@ end if
 // ... repeat for email ...
 
 ~~~
-
-
-
 
 ### Handle Errors at the Right Level
 
@@ -648,67 +352,11 @@ end fn
 
 ~~~
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 5. Performance Best Practices
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### Buffer Output When Possible
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -728,9 +376,6 @@ loop item in items
 end loop
 
 ~~~
-
-
-
 
 ### Use Appropriate Data Types
 
@@ -758,59 +403,15 @@ var price ustring := get  // Then convert later
 
 ~~~poly
 
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
 
     // Good: Mask passwords
 
-
-
-
-
-
-
     put "Enter password: "
-
-
-
-
-
-
 
     var password ustring := get --mask unicode "*"
 
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ~~~poly fragment
 
@@ -821,9 +422,6 @@ put "Enter password: "
 var password ustring := get  // Visible on screen
 
 ~~~
-
-
-
 
 ### Validate All Input
 
@@ -874,83 +472,21 @@ var email ustring := get  // Could be invalid
 
 ~~~poly fragment
 
-
-
-
-
-
-
 // Good: Timeout for interactive input (Rust target)
-
-
-
-
-
-
 
 match get --timeout 5000
 
-
-
-
-
-
-
     Ok(input), process(input)
-
-
-
-
-
-
 
     Timeout, warn "Input timeout, using default"
 
-
-
-
-
-
-
     Error(e), error "Input error: " + e
-
-
-
-
-
-
 
 end match
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: No timeout - can hang forever on interactive input
 
-
-
-
-
-
-
 var input ustring := get  // Can hang forever
-
-
-
-
-
-
 
 ~~~
 
@@ -988,291 +524,67 @@ user-defined functions.
 
 ~~~poly fragment
 
-
-
-
-
-
-
 // Good: Test edge cases (Rust target)
-
-
-
-
-
-
 
 fn test_boundaries()
 
-
-
-
-
-
-
     // Test minimum valid age
-
-
-
-
-
-
 
     var age := validate_age(1)
 
-
-
-
-
-
-
     if age.is_ok()
-
-
-
-
-
-
 
         pass("Minimum age accepted")
 
-
-
-
-
-
-
     else
-
-
-
-
-
-
 
         fail("Minimum age rejected")
 
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     // Test maximum valid age
 
-
-
-
-
-
-
     age := validate_age(150)
-
-
-
-
-
-
 
     if age.is_ok()
 
-
-
-
-
-
-
         pass("Maximum age accepted")
 
-
-
-
-
-
-
     else
-
-
-
-
-
-
 
         fail("Maximum age rejected")
 
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     // Test out of bounds
 
-
-
-
-
-
-
     age := validate_age(0)
 
-
-
-
-
-
-
     if age.is_error()
-
-
-
-
-
-
 
         pass("Zero age rejected")
 
-
-
-
-
-
-
     else
-
-
-
-
-
-
 
         fail("Zero age accepted")
 
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     age := validate_age(151)
 
-
-
-
-
-
-
     if age.is_error()
-
-
-
-
-
-
 
         pass("Over-limit age rejected")
 
-
-
-
-
-
-
     else
-
-
-
-
-
-
 
         fail("Over-limit age accepted")
 
-
-
-
-
-
-
     end if
-
-
-
-
-
-
 
 end fn
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 > **Note:** `is_ok()` and `is_error()` are Rust-target Result methods. Other backends require foreign helpers.
-
-
-
-
-
-
 
 ~~~
 

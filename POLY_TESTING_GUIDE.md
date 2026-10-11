@@ -52,149 +52,23 @@ end fn
 ### Testing File Output
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Test file write
-
-
-
-
-
-
-
 fn test_file_write()
-
-
-
-
-
-
-
     put "Test content" to "test_output.txt"
-
-
-
-
-
-
-
     var content ustring := get from "test_output.txt"
-
-
-
-
-
-
-
     assert(content = "Test content")
-
-
-
-
-
-
-
     delete_file("test_output.txt")
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test file append
-
-
-
-
-
-
-
 fn test_file_append()
-
-
-
-
-
-
-
     put "Line 1" to "test_append.txt"
-
-
-
-
-
-
-
     put "Line 2" to "test_append.txt" -append
-
-
-
-
-
-
-
     var content ustring := get from "test_append.txt"
-
-
-
-
-
-
-
     assert(content = "Line 1
-
-
-
-
-
-
-
 Line 2")
-
-
-
-
-
-
-
     delete_file("test_append.txt")
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -229,269 +103,38 @@ end fn
 ### Testing Input Flags
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Test default value
-
-
-
-
-
-
-
 fn test_default_value()
-
-
-
-
-
-
-
     var input := mock_input("")  // Empty input
-
-
-
-
-
-
-
     var color ustring := get --default unicode "blue"
-
-
-
-
-
-
-
     assert(color = "blue")
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test timeout
-
-
-
-
-
-
-
 fn test_timeout()
-
-
-
-
-
-
-
     var input := mock_timeout(100)  // Timeout after 100ms
-
-
-
-
-
-
-
     match get --timeout 50
-
-
-
-
-
-
-
         Ok(_), fail("Should have timed out")
-
-
-
-
-
-
-
         Timeout, pass("Correctly timed out")
-
-
-
-
-
-
-
         Error(e), fail("Unexpected error: " + e)
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test validation
-
-
-
-
-
-
-
 fn test_validation()
-
-
-
-
-
-
-
     var input := mock_input("150")
-
-
-
-
-
-
-
     var age i32 := get with validate |x| x >= 1 && x <= 150
-
-
-
-
-
-
-
     assert(age = 150)
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test validation failure
-
-
-
-
-
-
-
 fn test_validation_failure()
-
-
-
-
-
-
-
     var input := mock_input("200")
-
-
-
-
-
-
-
     match get with validate |x| x >= 1 && x <= 150
-
-
-
-
-
-
-
         Ok(_), fail("Should have failed validation")
-
-
-
-
-
-
-
         Error(_), pass("Correctly failed validation")
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Testing File Input
@@ -530,149 +173,23 @@ end fn
 ### Testing Result Type
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Test Ok value
-
-
-
-
-
-
-
 fn test_ok_value()
-
-
-
-
-
-
-
     var result Result<i32, ustring> := Ok(42)
-
-
-
-
-
-
-
     match result
-
-
-
-
-
-
-
         Ok(value), assert(value = 42)
-
-
-
-
-
-
-
         Error(_), fail("Should be Ok")
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test Error value
-
-
-
-
-
-
-
 fn test_error_value()
-
-
-
-
-
-
-
     var result Result<i32, ustring> := Error(unicode "Something went wrong")
-
-
-
-
-
-
-
     match result
-
-
-
-
-
-
-
         Ok(_), fail("Should be Error")
-
-
-
-
-
-
-
         Error(e), assert(e = unicode "Something went wrong")
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Testing Error Propagation
@@ -707,285 +224,40 @@ end fn
 ### Testing Pattern Matching
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Test specific error patterns
-
-
-
-
-
-
-
 enum TestError
-
-
-
-
-
-
-
     NotFound
-
-
-
-
-
-
-
     PermissionDenied
-
-
-
-
-
-
-
     InvalidData(message: ustring)
-
-
-
-
-
-
-
 end enum
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn test_specific_patterns()
-
-
-
-
-
-
-
     var result Result<ustring, TestError> := Error(TestError::NotFound)
-
-
-
-
-
-
-
     match result
-
-
-
-
-
-
-
         Ok(_), fail("Should be Error")
-
-
-
-
-
-
-
         Error(NotFound), pass("Correctly matched NotFound")
-
-
-
-
-
-
-
         Error(_), fail("Wrong error type")
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test wildcard pattern
-
-
-
-
-
-
-
 fn test_wildcard_pattern()
-
-
-
-
-
-
-
     var result Result<ustring, TestError> := Error(TestError::InvalidData(unicode "bad"))
-
-
-
-
-
-
-
     match result
-
-
-
-
-
-
-
         Ok(_), fail("Should be Error")
-
-
-
-
-
-
-
         Error(_), pass("Correctly matched any error")
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test pattern with data extraction
-
-
-
-
-
-
-
 fn test_pattern_with_data()
-
-
-
-
-
-
-
     var result Result<ustring, TestError> := Error(TestError::InvalidData(unicode "bad data"))
-
-
-
-
-
-
-
     match result
-
-
-
-
-
-
-
         Ok(_), fail("Should be Error")
-
-
-
-
-
-
-
         Error(InvalidData(message)), assert(message = unicode "bad data")
-
-
-
-
-
-
-
         Error(_), fail("Wrong error type")
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -1051,237 +323,34 @@ end fn
 ### Testing Boundary Conditions
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Test minimum values
-
-
-
-
-
-
-
 fn test_minimum_values()
-
-
-
-
-
-
-
     var age i32 := get with validate |x| x >= 1
-
-
-
-
-
-
-
     // Input: 1
-
-
-
-
-
-
-
     assert(age = 1)
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test maximum values
-
-
-
-
-
-
-
 fn test_maximum_values()
-
-
-
-
-
-
-
     var age i32 := get with validate |x| x <= 150
-
-
-
-
-
-
-
     // Input: 150
-
-
-
-
-
-
-
     assert(age = 150)
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test empty input
-
-
-
-
-
-
-
 fn test_empty_input()
-
-
-
-
-
-
-
     var input := mock_input("")
-
-
-
-
-
-
-
     var name ustring := get --default unicode "Anonymous"
-
-
-
-
-
-
-
     assert(name = unicode "Anonymous")
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test very long input
-
-
-
-
-
-
-
 fn test_long_input()
-
-
-
-
-
-
-
     var long_string ustring := "a".repeat(10000)
-
-
-
-
-
-
-
     var input := mock_input(long_string)
-
-
-
-
-
-
-
     var result ustring := get
-
-
-
-
-
-
-
     assert(result.len() = 10000)
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Testing Special Characters
@@ -1318,181 +387,27 @@ end fn
 ### Testing Output Performance
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Test frequent output
-
-
-
-
-
-
-
 fn test_frequent_output()
-
-
-
-
-
-
-
     var start := time_now()
-
-
-
-
-
-
-
     loop i 0..1000
-
-
-
-
-
-
-
         put "."
-
-
-
-
-
-
-
     end loop
-
-
-
-
-
-
-
     put ""
-
-
-
-
-
-
-
     var duration := time_now() - start
-
-
-
-
-
-
-
     assert(duration < 1000)  // Should complete in under 1 second
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test file write performance
-
-
-
-
-
-
-
 fn test_file_write_performance()
-
-
-
-
-
-
-
     var start := time_now()
-
-
-
-
-
-
-
     loop i 0..1000
-
-
-
-
-
-
-
         put "Line " + i.to_string() to "perf_test.txt" -append
-
-
-
-
-
-
-
     end loop
-
-
-
-
-
-
-
     var duration := time_now() - start
-
-
-
-
-
-
-
     delete_file("perf_test.txt")
-
-
-
-
-
-
-
     assert(duration < 5000)  // Should complete in under 5 seconds
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Testing Input Performance
@@ -1518,133 +433,21 @@ end fn
 ### Mock Input Functions
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Mock single input
-
-
-
-
-
-
-
 fn mock_input(value: ustring): ustring
-
-
-
-
-
-
-
     // Implementation depends on test framework
-
-
-
-
-
-
-
     return value
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Mock input sequence
-
-
-
-
-
-
-
 fn mock_input_sequence(values: Vec<ustring>)
-
-
-
-
-
-
-
     // Implementation depends on test framework
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Mock timeout
-
-
-
-
-
-
-
 fn mock_timeout(ms: i32)
-
-
-
-
-
-
-
     // Implementation depends on test framework
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Assertion Functions
@@ -1664,9 +467,6 @@ fail("Test failed")   // Prints FAIL and exits non-zero
 ### Directory Structure
 
 ~~~
-
-
-
 tests/
 ├── unit/
 │   ├── output_tests.poly
@@ -1689,149 +489,23 @@ tests/
 ### Running Tests
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Run all tests
-
-
-
-
-
-
-
 fn run_all_tests()
-
-
-
-
-
-
-
     run_unit_tests()
-
-
-
-
-
-
-
     run_integration_tests()
-
-
-
-
-
-
-
     run_edge_case_tests()
-
-
-
-
-
-
-
     run_performance_tests()
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Run specific test suite
-
-
-
-
-
-
-
 fn run_unit_tests()
-
-
-
-
-
-
-
     test_basic_output()
-
-
-
-
-
-
-
     test_put_n()
-
-
-
-
-
-
-
     test_error_output()
-
-
-
-
-
-
-
     test_typed_input()
-
-
-
-
-
-
-
     test_default_value()
-
-
-
-
-
-
-
     // ... more tests
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---

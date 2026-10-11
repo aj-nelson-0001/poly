@@ -187,6 +187,11 @@ const CASES: &[Case] = &[
         Expect::RustOnly,
     ),
     Case::accepted(
+        "file prepend redirect",
+        "fn main()\n    put \"x\" to \"out.txt\" -prepend\nend fn\n",
+        Expect::RustOnly,
+    ),
+    Case::accepted(
         "file input via get from",
         "fn main()\n    var d bytes := get from \"data.bin\" --bytes 8\n    put d.len()\nend fn\n",
         Expect::RustOnly,

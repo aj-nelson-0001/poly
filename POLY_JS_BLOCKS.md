@@ -25,45 +25,10 @@ put answer
 Select the backend explicitly when a file contains multiple foreign blocks:
 
 ~~~bash
-
-
-
-
-
-
-
 poly --target js --check program.poly
-
-
-
-
-
-
-
 poly --target js --emit-js program.poly
-
-
-
-
-
-
-
 poly --target js program.poly
-
-
-
-
-
-
-
 poly --target js --project build-dir program.poly
-
-
-
-
-
-
-
 ~~~
 
 Only `#js` blocks are emitted for the JS target. `#rust`, `#c`, and `#asm` blocks are ignored by JS code generation. `extern js

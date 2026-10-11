@@ -4,6 +4,28 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- **The `-prepend` flag on `put ... to "file"`.**
+  `put "Hello" to "Hi.txt" -prepend` writes the value in *front* of the
+  file's existing contents (where `-append` adds after them), creating the
+  file when it does not exist, with the same runtime error reporting as the
+  other file redirects. The C, asm, and JS targets reject it exactly as they
+  reject `-append`.
+
+- **The `^` exponentiation operator.** `var square i32 := x ^ 2` raises a
+  value to a power on all four targets. `^` binds tighter than `*` and `/`
+  and is right-associative (`2 ^ 3 ^ 2` = `2 ^ (3 ^ 2)` = 512). Integer
+  powers wrap on overflow and a runtime-negative exponent yields `0`,
+  identically across rust/c/asm/js; float powers lower to `powf`/`pow`/`**`.
+  The checker applies the same mixed-class rule as `*` (explicit `as` cast
+  for int/float mixes). Constant powers fold at compile time when the
+  exponent is in `0..=63` and the result fits `i64`. This repurposes `^`,
+  which was the retired symbol spelling of `xor` and previously rejected
+  with a migration diagnostic; `xor` remains the bitwise-exclusive-or
+  keyword and is unaffected. The C target now links `-lm` (for `pow`), and
+  the emitted C includes `<math.h>`.
+
 ### Security
 
 - **`dep` version strings can no longer inject TOML into the generated
@@ -47,6 +69,51 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Fixed
 
+- **An integer literal now means the same number in every backend.** The
+  lexer keeps each literal as its exact source text (`42`, `010`, `0xFF`,
+  `0b1010`, `0o755`, `-0x10`), but every later stage that needed a value
+  used Rust's `str::parse`, which accepts only plain decimal. The C backend
+  re-emitted `010` and C read it as octal 8 (Poly defines it as decimal
+  ten), the JS backend emitted the text verbatim — a strict-mode
+  `SyntaxError` in every module — and the asm backend rejected `0xFF`
+  outright. `0x0` also slipped past the type checker's "step must not be
+  zero" guard. A shared radix-aware parser (`poly_parser::parse_int_literal`
+  / `int_literal_text`) now backs constant folding, width classification,
+  loop-step checks, array lengths, bool folds and all four backends: C and
+  JS emit plain decimal, asm parses every prefix, and `-0x10` keeps its
+  sign.
+- **rustfmt success could silently produce an empty program.** The drain
+  threads signalled completion with an empty sentinel message that raced the
+  reader thread's own send; whenever the sentinel arrived first, `recv`
+  returned an empty buffer, so `--format`, `--emit-rust` and `--diff`
+  printed nothing for a successful format. The threads are now joined
+  before the buffer is read, so a genuine success can only observe the
+  formatted output.
+- **The REPL's `:history` was always one session behind.** The session
+  loaded a frozen snapshot of `~/.poly_repl_history`, so `:history` never
+  showed anything typed since launch, ↑ recall started empty every launch,
+  and each save rewrote the file as "startup history + the line just
+  typed", silently dropping everything else. Every recorded line now
+  updates the session list, the line editor and the file together, and
+  `:clear-history` clears all three.
+- **LSP diagnostics underlined the keyword, not the name.** A statement's
+  span starts at its keyword (`var`, `fn`, `struct`), so converting
+  `span.start` directly underlined `var` when the error was about `at`, and
+  the text-scan fallback could match a different occurrence of the name.
+  The range is now located inside the statement's span with word-boundary
+  checks, so the diagnostic lands on the declaration's name.
+- **`get --default` was ignored without `--timeout`.** The fallback value only
+  fired on the timeout path, so `var color ustring := get --default unicode
+  "blue"` printed an empty string when the user pressed Enter. `--default` now
+  substitutes on empty input on both paths (the documented "value used when
+  input is empty"), and `--as` parsing applies to the default before the
+  conversion.
+- **Float `.to_string()` printed Debug, not Display.** The Rust backend
+  lowered every non-string receiver to `format!("{:?}", value)`, so
+  `(3.0 * 4.0).to_string()` produced `12.0` while Rust's own `f64::to_string`,
+  the C backend (`poly_float_to_string`), and JS all produce `12`. Float
+  receivers — including match bindings typed from enum payload and `Result`
+  return annotations — now lower to `.to_string()`.
 - **A deeply nested expression could exhaust the stack.** `MAX_EXPRESSION_DEPTH`
   bounds *syntactic* nesting, so a flat `1 + 1 + … + 1` has no delimiters for it
   to count — yet the precedence ladder folds it into a tree one level deep per
@@ -93,6 +160,12 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Documentation
 
+- The Poly Language Guide lists output after **every complete example**: 31
+  examples that previously showed none now carry their real run output
+  (interactive examples note what to type), and every listed block was
+  captured from an actual run of the current compiler — which caught two
+  stale float outputs (`rectangle area 12`, `Answer: 5`) that predated the
+  `.to_string()` fix above.
 - [POLY_SECURITY_GUIDE.md](POLY_SECURITY_GUIDE.md) gains section 0,
   "Running the compiler on untrusted files": what each CLI mode actually
   does, the three paths from a `.poly` file to arbitrary code execution

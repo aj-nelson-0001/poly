@@ -272,7 +272,7 @@
         },
         {
           "name": "keyword.operator.arithmetic.poly",
-          "match": "\\+|-|\\*|/"
+          "match": "\\+|-|\\*|/|\\^"
         },
         {
           "name": "keyword.operator.word.poly",

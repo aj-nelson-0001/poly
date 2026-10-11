@@ -49,37 +49,9 @@ put "Hello, World!"
 Transpiles to:
 
 ~~~rust
-
-
-
-
-
-
-
 fn main() {
-
-
-
-
-
-
-
     println!("{}", "Hello, World!");
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -105,125 +77,20 @@ cargo build --release
 Create a file called `hello.poly`:
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Variables
-
-
-
-
-
-
-
 var name := "World"
-
-
-
-
-
-
-
 var age := 25
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // String interpolation
-
-
-
-
-
-
-
 put "Hello, " + name + "!"
-
-
-
-
-
-
-
 put "You are " + age + " years old."
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Functions
-
-
-
-
-
-
-
 fn greet(person: String): String
-
-
-
-
-
-
-
     return "Hello, " + person + "!"
-
-
-
-
-
-
-
 end fn
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 put greet("Alice")
-
-
-
-
-
-
-
 ~~~
 
 Run it:
@@ -241,101 +108,17 @@ Run it:
 Poly supports mutable and immutable variables:
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Mutable variables (can be changed)
-
-
-
-
-
-
-
 var x := 10
-
-
-
-
-
-
-
 x := 20// OK
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Immutable variables (cannot be changed)
-
-
-
-
-
-
-
 let y := 10
-
-
-
-
-
-
-
 // y = 20  // Error!
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Constants (compile-time constants)
-
-
-
-
-
-
-
 const PI := 3.14159
-
-
-
-
-
-
-
 const MAX_SIZE := 1024
-
-
-
-
-
-
-
 ~~~
 
 ### Type Annotations
@@ -370,197 +153,26 @@ var age := 30        // Inferred as i32
 ### Operators
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Arithmetic
-
-
-
-
-
-
-
 var sum := 10 + 5      // 15
-
-
-
-
-
-
-
 var diff := 10 - 5     // 5
-
-
-
-
-
-
-
 var product := 10 * 5   // 50
-
-
-
-
-
-
-
 var quotient := 10 / 5  // 2
-
-
-
-
-
-
-
 var remainder := 10 % 3  // 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Comparison
-
-
-
-
-
-
-
 var equal := 10 == 10   // true
-
-
-
-
-
-
-
 var not_equal := 10 != 5  // true
-
-
-
-
-
-
-
 var less := 10 < 20     // true
-
-
-
-
-
-
-
 var greater := 10 > 5   // true
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Logical
-
-
-
-
-
-
-
 var and := true && false  // false
-
-
-
-
-
-
-
 var or := true || false   // true
-
-
-
-
-
-
-
 var not := !true          // false
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bitwise
-
-
-
-
-
-
-
 var band := 0xFF & 0x0F  // 0x0F
-
-
-
-
-
-
-
 var bor := 0xF0 | 0x0F   // 0xFF
-
-
-
-
-
-
-
-var bxor := 0xFF ^ 0x0F  // 0xF0
-
-
-
-
-
-
-
+var bxor := 0xFF xor 0x0F  // 0xF0
 var shift := 1 << 4       // 16
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -595,125 +207,20 @@ var res Result<i32, String> := Ok(42)
 ### Custom Types
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Type aliases
-
-
-
-
-
-
-
 type UserId := i32
-
-
-
-
-
-
-
 type Email := String
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Generic structs
-
-
-
-
-
-
-
 struct Wrapper<T>
-
-
-
-
-
-
-
     var value: T
-
-
-
-
-
-
-
 end struct
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Enums (Option and Result are built-in generics)
-
-
-
-
-
-
-
 enum Shape
-
-
-
-
-
-
-
     Circle(f32)
-
-
-
-
-
-
-
     Rectangle(f32, f32)
-
-
-
-
-
-
-
 end enum
-
-
-
-
-
-
-
 ~~~
 
 ### Generic Functions
@@ -742,85 +249,15 @@ var set Set<i32> := []
 ### If/Else
 
 ~~~poly fragment
-
-
-
-
-
-
-
 var age := 25
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 if age >= 18
-
-
-
-
-
-
-
     put "You are an adult."
-
-
-
-
-
-
-
 else if age >= 13
-
-
-
-
-
-
-
     put "You are a teenager."
-
-
-
-
-
-
-
 else
-
-
-
-
-
-
-
     put "You are a child."
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 ### While Loops
@@ -836,125 +273,20 @@ end while
 ### For Loops with Ranges
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Simple range (inclusive endpoints)
-
-
-
-
-
-
-
 loop i 0..10
-
-
-
-
-
-
-
     put i
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // With step
-
-
-
-
-
-
-
 loop i 0..100 step 2
-
-
-
-
-
-
-
     put i
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Descending (negative step)
-
-
-
-
-
-
-
 loop i 10..0 step -1
-
-
-
-
-
-
-
     put i
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 ~~~
 
 ### Match Expressions
@@ -977,117 +309,19 @@ end match
 ### Basic Functions
 
 ~~~poly fragment
-
-
-
-
-
-
-
 fn add(a: i32, b: i32): i32
-
-
-
-
-
-
-
     return a + b
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Single expression body
-
-
-
-
-
-
-
 fn double(x: i32): i32
-
-
-
-
-
-
-
     return x * 2
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // No return value
-
-
-
-
-
-
-
 fn greet(name: String)
-
-
-
-
-
-
-
     put "Hello, " + name + "!"
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Multiple Parameters
@@ -1104,125 +338,20 @@ put greet("Bob", "Hi")               // "Hi, Bob!"
 ### Higher-Order Functions
 
 ~~~poly fragment
-
-
-
-
-
-
-
 fn apply(f: fn(i32) -> i32, x: i32): i32
-
-
-
-
-
-
-
     return f(x)
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn double(x: i32): i32
-
-
-
-
-
-
-
     return x * 2
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn square(x: i32): i32
-
-
-
-
-
-
-
     return x * x
-
-
-
-
-
-
-
 end fn
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 put apply(double, 5)   // 10
-
-
-
-
-
-
-
 put apply(square, 5)   // 25
-
-
-
-
-
-
-
 ~~~
 
 ### Closures
@@ -1243,181 +372,27 @@ put add5(10)   // 15
 ### Arrays
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Vectors (dynamic arrays)
-
-
-
-
-
-
-
 var arr Vec<i32> := [1, 2, 3, 4, 5]
-
-
-
-
-
-
-
 put arr[0]      // 1
-
-
-
-
-
-
-
 put arr.len()   // 5
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Multi-dimensional (element type inferred)
-
-
-
-
-
-
-
 var matrix := [
-
-
-
-
-
-
-
     [1, 2, 3],
-
-
-
-
-
-
-
     [4, 5, 6],
-
-
-
-
-
-
-
     [7, 8, 9]
-
-
-
-
-
-
-
 ]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Dynamic operations
-
-
-
-
-
-
-
 var vec Vec<i32> := [1, 2, 3]
-
-
-
-
-
-
-
 vec.push(4)
-
-
-
-
-
-
-
 put vec.len()  // 4
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Iteration
-
-
-
-
-
-
-
 for item in vec
-
-
-
-
-
-
-
     put item
-
-
-
-
-
-
-
 end for
-
-
-
-
-
-
-
 ~~~
 
 ### Tuples
@@ -1457,149 +432,23 @@ put items.len()  // collection still usable (loop borrows)
 ### Structs
 
 ~~~poly fragment
-
-
-
-
-
-
-
 struct Point
-
-
-
-
-
-
-
     var x: f64
-
-
-
-
-
-
-
     var y: f64
-
-
-
-
-
-
-
 end struct
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Methods
-
-
-
-
-
-
-
 impl Point
-
-
-
-
-
-
-
     fn distance(self, other: Point): f64
-
-
-
-
-
-
-
         var dx := self.x - other.x
-
-
-
-
-
-
-
         var dy := self.y - other.y
-
-
-
-
-
-
-
         return (dx * dx + dy * dy)
-
-
-
-
-
-
-
     end fn
-
-
-
-
-
-
-
 end impl
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 var p1 := Point { x: 0.0, y: 0.0 }
-
-
-
-
-
-
-
 var p2 := Point { x: 3.0, y: 4.0 }
-
-
-
-
-
-
-
 put p1.distance(p2)  // 5.0
-
-
-
-
-
-
-
 ~~~
 
 ### Enums
@@ -1635,85 +484,15 @@ end enum
 ### Basic Patterns
 
 ~~~poly fragment
-
-
-
-
-
-
-
 var x := 42
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 match x
-
-
-
-
-
-
-
     0, put "Zero"
-
-
-
-
-
-
-
     1, put "One"
-
-
-
-
-
-
-
     2..=9, put "Small"
-
-
-
-
-
-
-
     10..=99, put "Medium"
-
-
-
-
-
-
-
     _, put "Large"
-
-
-
-
-
-
-
 end match
-
-
-
-
-
-
-
 ~~~
 
 ### Destructuring
@@ -1732,93 +511,16 @@ end match
 ### Guard Conditions
 
 ~~~poly fragment
-
-
-
-
-
-
-
 var age := 25
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 match age
-
-
-
-
-
-
-
     n if n < 0, put "Invalid"
-
-
-
-
-
-
-
     0, put "Just born"
-
-
-
-
-
-
-
     n if n < 13, put "Child"
-
-
-
-
-
-
-
     n if n < 18, put "Teenager"
-
-
-
-
-
-
-
     n if n < 65, put "Adult"
-
-
-
-
-
-
-
     _, put "Senior"
-
-
-
-
-
-
-
 end match
-
-
-
-
-
-
-
 ~~~
 
 ### Nested Patterns
@@ -1849,149 +551,23 @@ put evaluate(expr)  // 14.0
 ### Error Statements
 
 ~~~poly fragment
-
-
-
-
-
-
-
 fn divide(a: f64, b: f64): f64
-
-
-
-
-
-
-
     if b = 0.0
-
-
-
-
-
-
-
         error "Division by zero"
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
     return a / b
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn validate_age(age: i32): bool
-
-
-
-
-
-
-
     if age < 0
-
-
-
-
-
-
-
         error "Age cannot be negative"
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
     if age > 150
-
-
-
-
-
-
-
         warn "Age seems unrealistic"
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
     info "Age validated: " + age
-
-
-
-
-
-
-
     return true
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Try/Catch (Planned)
@@ -2014,93 +590,16 @@ end try
 ### Reading Files
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Read entire file
-
-
-
-
-
-
-
 var content := get from "file.txt"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Read with error handling
-
-
-
-
-
-
-
 try
-
-
-
-
-
-
-
     var content := get from "file.txt"
-
-
-
-
-
-
-
     put content
-
-
-
-
-
-
-
 catch
-
-
-
-
-
-
-
     error "Could not read file"
-
-
-
-
-
-
-
 end try
-
-
-
-
-
-
-
 ~~~
 
 ### Writing Files
@@ -2108,45 +607,18 @@ end try
 ~~~poly fragment
 // Write to file (overwrite)
 put "Hello, World!" to "output.txt"
-
 // Append to file
 put "New line" to "output.txt" -append
+// Prepend to file (adds before the existing contents)
+put "First" to "output.txt" -prepend
 ~~~
 
 ### Command Line Input
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Read from stdin
-
-
-
-
-
-
-
 var name := get
-
-
-
-
-
-
-
 put "Hello, " + name + "!"
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -2159,7 +631,6 @@ put "Hello, " + name + "!"
 // Simple closure
 var add := |x, y| x + y
 put add(2, 3)  // 5
-
 // Closure with capture
 fn make_counter()
     var count := 0
@@ -2168,7 +639,6 @@ fn make_counter()
         return count
     end fn
 end fn
-
 var counter := make_counter()
 put counter()  // 1
 put counter()  // 2
@@ -2177,285 +647,40 @@ put counter()  // 2
 ### Higher-Order Functions
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Map
-
-
-
-
-
-
-
 fn map(arr: Vec<i32>, f: fn(i32) -> i32): Vec<i32>
-
-
-
-
-
-
-
     var result := vec![]
-
-
-
-
-
-
-
     for item in arr
-
-
-
-
-
-
-
         result.push(f(item))
-
-
-
-
-
-
-
     end for
-
-
-
-
-
-
-
     return result
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Filter
-
-
-
-
-
-
-
 fn filter(arr: Vec<i32>, pred: fn(i32) -> bool): Vec<i32>
-
-
-
-
-
-
-
     var result := vec![]
-
-
-
-
-
-
-
     for item in arr
-
-
-
-
-
-
-
         if pred(item)
-
-
-
-
-
-
-
             result.push(item)
-
-
-
-
-
-
-
         end if
-
-
-
-
-
-
-
     end for
-
-
-
-
-
-
-
     return result
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Reduce
-
-
-
-
-
-
-
 fn reduce(arr: Vec<i32>, f: fn(i32, i32) -> i32, init: i32): i32
-
-
-
-
-
-
-
     var acc := init
-
-
-
-
-
-
-
     for item in arr
-
-
-
-
-
-
-
         acc := f(acc, item)
-
-
-
-
-
-
-
     end for
-
-
-
-
-
-
-
     return acc
-
-
-
-
-
-
-
 end fn
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Usage
-
-
-
-
-
-
-
 var numbers := [1, 2, 3, 4, 5]
-
-
-
-
-
-
-
 var doubled := map(numbers, |x| x * 2)
-
-
-
-
-
-
-
 var evens := filter(numbers, |x| x % 2 == 0)
-
-
-
-
-
-
-
 var sum := reduce(numbers, |a, b| a + b, 0)
-
-
-
-
-
-
-
 ~~~
 
 ### Modules
@@ -2480,85 +705,15 @@ put Math.multiply(2, 3)  // 6
 ### Traits (Planned)
 
 ~~~poly fragment
-
-
-
-
-
-
-
 trait Printable
-
-
-
-
-
-
-
     fn to_string(self): String
-
-
-
-
-
-
-
 end trait
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 impl Printable for Point
-
-
-
-
-
-
-
     fn to_string(self): String
-
-
-
-
-
-
-
         return "(" + self.x + ", " + self.y + ")"
-
-
-
-
-
-
-
     end fn
-
-
-
-
-
-
-
 end impl
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -2614,205 +769,30 @@ calculator()
 ### File Processor
 
 ~~~poly fragment
-
-
-
-
-
-
-
 fn process_file(input_path: String, output_path: String)
-
-
-
-
-
-
-
     put "Processing " + input_path + "..."
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     try
-
-
-
-
-
-
-
         var content := get from  input_path
-
-
-
-
-
-
-
         var lines := content.split("\n")
-
-
-
-
-
-
-
         var processed := vec![]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         for line in lines
-
-
-
-
-
-
-
             // Simple processing: convert to uppercase
-
-
-
-
-
-
-
             var upper := line.to_uppercase()
-
-
-
-
-
-
-
             processed.push(upper)
-
-
-
-
-
-
-
         end for
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         var output := processed.join("\n")
-
-
-
-
-
-
-
         put output > output_path
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         put "Done! Output written to " + output_path
-
-
-
-
-
-
-
     catch
-
-
-
-
-
-
-
         error "Failed to process file"
-
-
-
-
-
-
-
     end try
-
-
-
-
-
-
-
 end fn
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 process_file("input.txt", "output.txt")
-
-
-
-
-
-
-
 ~~~
 
 ### Simple Game
@@ -2873,125 +853,20 @@ hangman()
 ### HTTP Client (Planned)
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Future syntax with standard library
-
-
-
-
-
-
-
 use http
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn fetch_url(url: String): String
-
-
-
-
-
-
-
     var response := http.get(url)
-
-
-
-
-
-
-
     if response.status = 200
-
-
-
-
-
-
-
         return response.body
-
-
-
-
-
-
-
     else
-
-
-
-
-
-
-
         error "HTTP " + response.status
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
 end fn
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 var html := fetch_url("https://example.com")
-
-
-
-
-
-
-
 put html
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -3015,69 +890,13 @@ var b := true
 ### 2. Prefer Immutable Variables
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good - immutable when possible
-
-
-
-
-
-
-
 let config := load_config()
-
-
-
-
-
-
-
 let user := get_current_user()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Mutable only when needed
-
-
-
-
-
-
-
 var counter := 0
-
-
-
-
-
-
-
 counter := counter + 1
-
-
-
-
-
-
-
 ~~~
 
 ### 3. Use Pattern Matching
@@ -3106,117 +925,19 @@ end fn
 ### 4. Handle Errors Explicitly
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good
-
-
-
-
-
-
-
 fn read_config(path: String): String
-
-
-
-
-
-
-
     try
-
-
-
-
-
-
-
         return get from  path
-
-
-
-
-
-
-
     catch
-
-
-
-
-
-
-
         error "Failed to read config: " + path
-
-
-
-
-
-
-
     end try
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Bad - ignoring errors
-
-
-
-
-
-
-
 fn read_config(path: String): String
-
-
-
-
-
-
-
     return get from  path  // Might panic!
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### 5. Keep Functions Small
@@ -3249,77 +970,14 @@ end fn
 ### 1. Forgetting `end` Keywords
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Wrong
-
-
-
-
-
-
-
 fn add(a, b)
-
-
-
-
-
-
-
     return a + b
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Correct
-
-
-
-
-
-
-
 fn add(a, b)
-
-
-
-
-
-
-
     return a + b
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### 2. Mutable vs Immutable
@@ -3337,69 +995,13 @@ x := 20  // OK
 ### 3. Array Bounds
 
 ~~~poly fragment
-
-
-
-
-
-
-
 var arr := [1, 2, 3]
-
-
-
-
-
-
-
 put arr[5]  // Panic!
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Safe access
-
-
-
-
-
-
-
 if arr.len() > 5
-
-
-
-
-
-
-
     put arr[5]
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 ### 4. String Comparison
@@ -3419,61 +1021,12 @@ end if  // This works!
 ### 1. Use Appropriate Types
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good - use smallest type that fits
-
-
-
-
-
-
-
 var small_num u8 := 255 as u8
-
-
-
-
-
-
-
 var big_num u64 := 18446744073709551615 as u64
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad - using i64 for small values
-
-
-
-
-
-
-
 var small_num i64 := 255  // Wastes memory
-
-
-
-
-
-
-
 ~~~
 
 ### 2. Pre-allocate Vectors
@@ -3492,85 +1045,15 @@ end for
 ### 3. Avoid Unnecessary Clones
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good - borrow when possible
-
-
-
-
-
-
-
 fn print_length(s: &ustring)
-
-
-
-
-
-
-
     put s.len()
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Bad - cloning
-
-
-
-
-
-
-
 fn print_length(s: ustring)
-
-
-
-
-
-
-
     put s.len()  // s is dropped after
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### 4. Use Iterators

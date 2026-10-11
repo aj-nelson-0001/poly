@@ -30,117 +30,19 @@ end loop
 ### Use String Concatenation Efficiently
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Build string efficiently
-
-
-
-
-
-
-
 var parts Vec<ustring> := []
-
-
-
-
-
-
-
 loop i 0..1000
-
-
-
-
-
-
-
     parts.push(i.to_string())
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 var result ustring := parts.join(", ")
-
-
-
-
-
-
-
 put result
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: String concatenation in loop
-
-
-
-
-
-
-
 var result ustring := ""
-
-
-
-
-
-
-
 loop i 0..1000
-
-
-
-
-
-
-
     result := result + i.to_string() + ", "// O(n²) complexity
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 ~~~
 
 ### Avoid Unnecessary Formatting
@@ -160,69 +62,13 @@ put "{age}"  // Slower than direct to_string()
 ### Use Appropriate Data Types
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Use appropriate types
-
-
-
-
-
-
-
 var count i32 := get --as i32
-
-
-
-
-
-
-
 var price f64 := get --as f64
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: Wrong types
-
-
-
-
-
-
-
 var count ustring := get  // Then parse later
-
-
-
-
-
-
-
 var price ustring := get  // Then convert later
-
-
-
-
-
-
-
 ~~~
 
 ### Validate Early
@@ -242,85 +88,15 @@ end if
 ### Use Timeouts
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Prevent hanging
-
-
-
-
-
-
-
 match get --timeout 5000
-
-
-
-
-
-
-
     Ok(input), process(input)
-
-
-
-
-
-
-
     Timeout, warn "Timeout, using default"
-
-
-
-
-
-
-
     Error(e), error e
-
-
-
-
-
-
-
 end match
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: No timeout
-
-
-
-
-
-
-
 var input ustring := get  // Can hang forever
-
-
-
-
-
-
-
 ~~~
 
 ### Batch Input Operations
@@ -348,101 +124,17 @@ end while
 ### Use Buffering
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Buffered writes
-
-
-
-
-
-
-
 var buffer Vec<ustring> := []
-
-
-
-
-
-
-
 loop i 0..10000
-
-
-
-
-
-
-
     buffer.push("Line " + i.to_string())
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 put buffer.join("\n") to "output.txt"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: Unbuffered writes
-
-
-
-
-
-
-
 loop i 0..10000
-
-
-
-
-
-
-
     put "Line " + i.to_string() to "output.txt" -append  // 10000 file operations
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 ~~~
 
 ### Read Files Efficiently
@@ -463,53 +155,11 @@ end while
 ### Use Binary Mode When Appropriate
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Binary read for binary files
-
-
-
-
-
-
-
 var data bytes := get from "image.png"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: Text read for binary files
-
-
-
-
-
-
-
 var data ustring := get from "image.png"  // May corrupt data
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -542,109 +192,18 @@ end fn
 ### Use Pattern Matching
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Pattern matching
-
-
-
-
-
-
-
 match result
-
-
-
-
-
-
-
     Ok(value), process(value)
-
-
-
-
-
-
-
     Error(e), handle_error(e)
-
-
-
-
-
-
-
 end match
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: If-else chains
-
-
-
-
-
-
-
 if result.is_ok(),
-
-
-
-
-
-
-
     process(result.unwrap())
-
-
-
-
-
-
-
 else
-
-
-
-
-
-
-
     handle_error(result.error())
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 ### Avoid Unnecessary Error Creation
@@ -675,85 +234,15 @@ end fn
 ### Use References When Possible
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Pass by reference
-
-
-
-
-
-
-
 fn process(data: &ustring)
-
-
-
-
-
-
-
     // Use data without copying
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Bad: Pass by value
-
-
-
-
-
-
-
 fn process(data: ustring)
-
-
-
-
-
-
-
     // Copies data
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Reuse Buffers
@@ -777,69 +266,13 @@ end loop
 ### Use Primitive Types
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Use primitive types
-
-
-
-
-
-
-
 var count i32 := 42
-
-
-
-
-
-
-
 var flag bool := true
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: Use wrapper types
-
-
-
-
-
-
-
 var count Box<i32> := Box::new(42)  // Unnecessary boxing
-
-
-
-
-
-
-
 var flag Box<bool> := Box::new(true)
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -861,85 +294,15 @@ put "Name: " + name + ", Age: " + age.to_string()
 ### Pre-allocate Strings
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Pre-allocate
-
-
-
-
-
-
-
 var result ustring := "".repeat(1000)
-
-
-
-
-
-
-
 // Fill result...
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: Dynamic growth
-
-
-
-
-
-
-
 var result ustring := ""
-
-
-
-
-
-
-
 loop i 0..1000
-
-
-
-
-
-
-
     result := result + "a"// Multiple reallocations
-
-
-
-
-
-
-
 end loop
-
-
-
-
-
-
-
 ~~~
 
 ### Use String Views
@@ -963,77 +326,14 @@ end fn
 ### Use Appropriate Collection Types
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Use appropriate types
-
-
-
-
-
-
-
 var list Vec<i32> := [1, 2, 3]  // Dynamic array
-
-
-
-
-
-
-
 var map Map<ustring, i32> := []  // Hash map
-
-
-
-
-
-
-
 var set Set<ustring> := []  // Hash set
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: Wrong types
-
-
-
-
-
-
-
 var list Vec<ustring> := ["1", "2", "3"]  // Strings for numbers
-
-
-
-
-
-
-
 var map Vec<(ustring, i32)> := []  // Vector for map
-
-
-
-
-
-
-
 ~~~
 
 ### Pre-allocate Collections
@@ -1056,157 +356,24 @@ end loop
 ### Use Iterators
 
 ~~~poly fragment
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     var list Vec<i32> := [1, 2, 3, 4]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Good: Use iterator chains
-
-
-
-
-
-
-
     var sum := list.iter().sum()
-
-
-
-
-
-
-
     put sum
-
-
-
-
-
-
-
     var doubled := list.iter().map(|x| x * 2).collect()
-
-
-
-
-
-
-
     put doubled
-
-
-
-
-
-
-
     var evens := list.iter().filter(|x| x mod 2 = 0).collect()
-
-
-
-
-
-
-
     put evens
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Bad: Manual iteration
-
-
-
-
-
-
-
     var sum2 i32 := 0
-
-
-
-
-
-
-
     for item in list
-
-
-
-
-
-
-
         sum2 := sum2 + item
-
-
-
-
-
-
-
     end for
-
-
-
-
-
-
-
     put sum2
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -1229,85 +396,15 @@ end loop
 ### Use Async I/O
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Async file operations
-
-
-
-
-
-
-
 var content := async read_file("large_file.txt")
-
-
-
-
-
-
-
 // Do other work while reading
-
-
-
-
-
-
-
 process_other_data()
-
-
-
-
-
-
-
 // Wait for read to complete
-
-
-
-
-
-
-
 var data := await content
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: Synchronous file operations
-
-
-
-
-
-
-
 var data := read_file("large_file.txt")  // Blocks execution
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -1331,141 +428,22 @@ info "Duration: " + duration.to_string() + "ms"
 ### Benchmark Different Approaches
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Good: Benchmark approaches
-
-
-
-
-
-
-
 var start1 := time_now()
-
-
-
-
-
-
-
 approach1()
-
-
-
-
-
-
-
 var duration1 := time_now() - start1
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 var start2 := time_now()
-
-
-
-
-
-
-
 approach2()
-
-
-
-
-
-
-
 var duration2 := time_now() - start2
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 put "Approach 1: " + duration1.to_string() + "ms"
-
-
-
-
-
-
-
 put "Approach 2: " + duration2.to_string() + "ms"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Bad: No benchmarking
-
-
-
-
-
-
-
 approach1()
-
-
-
-
-
-
-
 approach2()
-
-
-
-
-
-
-
 // No idea which is faster
-
-
-
-
-
-
-
 ~~~
 
 ---

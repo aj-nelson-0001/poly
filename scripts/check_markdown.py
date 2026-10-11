@@ -19,6 +19,7 @@ def markdown_files():
             ".git" not in path.parts
             and "target" not in path.parts
             and "node_modules" not in path.parts
+            and ".agents" not in path.parts  # vendored third-party skills keep their own conventions
         ):
             yield path
 

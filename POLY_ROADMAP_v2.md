@@ -20,85 +20,15 @@ generated entry point. The selected native compiler validates foreign code.
 ## Architecture
 
 ~~~
-
-
-
-
-
-
-
 source.poly
-
-
-
-
-
-
-
     │
-
-
-
-
-
-
-
     ├── #rust blocks ──→ Declarations emitted at module scope
-
-
-
-
-
-
-
     │
-
-
-
-
-
-
-
     ├── Poly sections ──→ Lexer → Parser → AST → IR → Codegen → fn main() { ... }
-
-
-
-
-
-
-
     │
-
-
-
-
-
-
-
     └── output.rs
-
-
-
-
-
-
-
             │
-
-
-
-
-
-
-
             └──→ rustc (or cargo build)
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -331,69 +261,13 @@ remain |
 
 **Before (Poly 1.x):**
 ~~~poly fragment
-
-
-
-
-
-
-
 fn process(items: Vec<i32>): Vec<i32>
-
-
-
-
-
-
-
     return items.filter(|x| x > 0).map(|x| x * 2)
-
-
-
-
-
-
-
 end fn
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 var data := [1, -2, 3, 4]
-
-
-
-
-
-
-
 var result := process(data)
-
-
-
-
-
-
-
 put result
-
-
-
-
-
-
-
 ~~~
 
 **After (Poly 2.0):**

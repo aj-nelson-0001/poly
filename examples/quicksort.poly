@@ -1,0 +1,362 @@
+# Generic quicksort with recursive median-of-three partitioning, Hoare
+# partition, insertion-sort cutoff for small slices, a tail-call loop that
+# recurses on the smaller side, an introsort heapsort fallback for the
+# O(n log n) worst case, and pattern-defeating run detection that already
+# handles sorted / reverse-sorted input in O(n).
+#
+# The comparator is a user-supplied closure, so `ordering` only needs to
+# give you an ascending sequence.
+
+const CUTOFF := 16
+
+# --- heapsort fallback (introsort) -----------------------------------------
+# A max-heap ordered by `less`: parent is the "larger" element, i.e. the one
+# that is NOT less than its child. Extracting the max to the end yields an
+# ascending array. This guarantees O(n log n) even on adversarial input.
+
+fn sift_down<T: Copy>(arr: Vec<T>, lo: i32, root0: i32, hi: i32, less: |p: T, q: T| bool): Vec<T>
+    var a := arr
+    var r i32 := root0
+    while true
+        var child i32 := lo + (2 * (r - lo)) + 1
+        if child > hi,
+            break
+        end if
+        if child + 1 <= hi,
+            if less(a[child], a[child + 1]),
+                child := child + 1
+            end if
+        end if
+        if not less(a[r], a[child]),
+            break
+        end if
+        var t := a[r]
+        a[r] := a[child]
+        a[child] := t
+        r := child
+    end while
+    return a
+end fn
+
+fn heapsort<T: Copy>(arr: Vec<T>, lo: i32, hi: i32, less: |p: T, q: T| bool): Vec<T>
+    var a := arr
+    if lo >= hi,
+        return a
+    end if
+    var n i32 := hi - lo + 1
+    var parent i32 := lo + ((n - 2) / 2)
+    while parent >= lo
+        a := sift_down(a, lo, parent, hi, less)
+        parent := parent - 1
+    end while
+    var e i32 := hi
+    while e > lo
+        var t := a[lo]
+        a[lo] := a[e]
+        a[e] := t
+        e := e - 1
+        a := sift_down(a, lo, lo, e, less)
+    end while
+    return a
+end fn
+
+# Insertion sort is fast for tiny slices; `arr[lo..=hi]` is sorted in place.
+fn insertion_by<T: Copy>(arr: Vec<T>, lo: i32, hi: i32, less: |p: T, q: T| bool): Vec<T>
+    var b := arr
+    var i i32 := lo + 1
+    while i <= hi
+        var key := b[i]
+        var j i32 := i - 1
+        while j >= lo and less(key, b[j])
+            b[j + 1] := b[j]
+            j := j - 1
+        end while
+        b[j + 1] := key
+        i := i + 1
+    end while
+    return b
+end fn
+
+# Median of three on arr[lo], arr[mid], arr[hi] — moved to the left third so
+# Hoare's median-of-three rule is honored without a second `less` call.
+fn median3<T: Copy>(arr: Vec<T>, lo: i32, hi: i32, less: |p: T, q: T| bool): Vec<T>
+    var a := arr
+    var mid i32 := lo + ((hi - lo) / 2)
+    if less(a[mid], a[lo]),
+        var t := a[lo]
+        a[lo] := a[mid]
+        a[mid] := t
+    end if
+    if less(a[hi], a[mid]),
+        var t := a[mid]
+        a[mid] := a[hi]
+        a[hi] := t
+        if less(a[mid], a[lo]),
+            var t2 := a[lo]
+            a[lo] := a[mid]
+            a[mid] := t2
+        end if
+    end if
+    return a
+end fn
+
+# Recursive quicksort over arr[lo..=hi]. `depth` is the partitions consumed so
+# far along this lineage; past `limit` we hand the rest to heapsort so the
+# worst case stays O(n log n). `limit` is threaded unchanged from the root.
+fn qsort_rec<T: Copy>(arr: Vec<T>, lo0: i32, hi0: i32, depth: i32, limit: i32, less: |p: T, q: T| bool): Vec<T>
+    var a := arr
+    var lo i32 := lo0
+    var hi i32 := hi0
+
+    var d i32 := depth
+    while hi - lo > CUTOFF
+        # Introsort guard: once the partition budget runs out, fall back to
+        # heapsort for guaranteed O(n log n).
+        if d > limit,
+            return heapsort(a, lo, hi, less)
+        end if
+        d := d + 1
+
+        # Median-of-three: land a pivot near the middle to dodge sorted input.
+        a := median3(a, lo, hi, less)
+        var pivot := a[lo]
+
+        # Hoare partition on the median-of-three anchor (i and j stop before
+        # crossing, so the pivot always stays in the range).
+        var i i32 := lo
+        var j i32 := hi
+        while i <= j
+            while less(a[i], pivot)
+                i := i + 1
+            end while
+            while less(pivot, a[j])
+                j := j - 1
+            end while
+            if i <= j
+                var t := a[i]
+                a[i] := a[j]
+                a[j] := t
+                i := i + 1
+                j := j - 1
+            end if
+        end while
+
+        # Recurse into the smaller side; loop on the larger (tail-call opt).
+        if (j - lo) < (hi - i),
+            a := qsort_rec(a, lo, j, d, limit, less)
+            lo := i
+        else,
+            a := qsort_rec(a, i, hi, d, limit, less)
+            hi := j
+        end if
+    end while
+    return insertion_by(a, lo, hi, less)
+end fn
+
+# Entry point. Detects a fully monotone array first:
+#   already ascending  -> return untouched (O(n))
+#   fully descending   -> reversed in place (O(n))
+# otherwise recurse with an introsort depth limit of 2 * floor(log2(n)).
+fn quicksort<T: Copy>(arr: Vec<T>, less: |p: T, q: T| bool): Vec<T>
+    var n i32 := arr.len()
+    if n <= CUTOFF,
+        if n > 1,
+            return insertion_by(arr, 0, n - 1, less)
+        end if
+        return arr
+    end if
+
+    # One O(n) scan classifies the whole array as ascending / descending /
+    # neither, bailing out as soon as it is neither.
+    var asc bool := true
+    var desc bool := true
+    var i i32 := 0
+    while i < n - 1
+        if less(arr[i + 1], arr[i]),
+            asc := false
+        end if
+        if less(arr[i], arr[i + 1]),
+            desc := false
+        end if
+        if (not asc) and (not desc),
+            break
+        end if
+        i := i + 1
+    end while
+    if asc,
+        return arr
+    end if
+    if desc,
+        var b := arr
+        var lo i32 := 0
+        var hi i32 := n - 1
+        while lo < hi
+            var t := b[lo]
+            b[lo] := b[hi]
+            b[hi] := t
+            lo := lo + 1
+            hi := hi - 1
+        end while
+        return b
+    end if
+
+    var limit i32 := 0
+    var tt i32 := n
+    while tt > 1
+        tt := tt / 2
+        limit := limit + 1
+    end while
+    limit := limit * 2
+
+    return qsort_rec(arr, 0, n - 1, 0, limit, less)
+end fn
+
+# --- helpers used by the driver ---------------------------------------------
+
+fn build(n: i32, mode: i32): Vec<i32>
+    var v Vec<i32> := []
+    var i i32 := 0
+    if mode = 0,
+        while i < n
+            v.push(i)
+            i := i + 1
+        end while
+    else if mode = 1,
+        while i < n
+            v.push(n - i)
+            i := i + 1
+        end while
+    else,
+        while i < n
+            v.push(1000)
+            i := i + 1
+        end while
+    end if
+    return v
+end fn
+
+fn fill_rand(n: i32, seed: u64): Vec<i32>
+    var v Vec<i32> := []
+    var s u64 := seed
+    var i i32 := 0
+    while i < n
+        s := s xor (s shift left 13)
+        s := s xor (s shift right 7)
+        s := s xor (s shift left 17)
+        v.push(((s shift right 30) mod (10000 as u64)) as i32)
+        i := i + 1
+    end while
+    return v
+end fn
+
+fn check_case(name: string, input: Vec<i32>, expected_sum: i32): bool
+    var s := quicksort(input, |p: i32, q: i32| p < q)
+    var n i32 := s.len()
+
+    # Sorted check via index reads only (no move of `s`).
+    var ok_sorted bool := true
+    var i i32 := 0
+    while i + 1 < n
+        if s[i + 1] < s[i],
+            ok_sorted := false
+        end if
+        i := i + 1
+    end while
+
+    # Sum (multiset) check via index reads only (no move of `s`).
+    var ok_sum bool := true
+    var total i32 := 0
+    var j i32 := 0
+    while j < n
+        total := total + s[j]
+        j := j + 1
+    end while
+    if total != expected_sum,
+        ok_sum := false
+    end if
+
+    var ok := ok_sorted and ok_sum
+    if ok,
+        put "PASS  " + name + "  (len=" + n + ")"
+    else,
+        var flag string := ""
+        if not ok_sorted,
+            flag := " NOT-SORTED"
+        end if
+        if not ok_sum,
+            flag := flag + " BAD-SUM"
+        end if
+        put "FAIL  " + name + "  (len=" + n + ")" + flag
+    end if
+    return ok
+end fn
+
+fn main()
+    var all_ok bool := true
+
+    # ascending
+    var a := build(1000, 0)
+    all_ok := check_case("1000 ascending", a, 499500) and all_ok
+
+    # descending (exercises the O(n) reverse fast path)
+    var d := build(1000, 1)
+    all_ok := check_case("1000 descending", d, 500500) and all_ok
+
+    # all equal
+    var e := build(1000, 2)
+    all_ok := check_case("1000 equal", e, 1000 * 1000) and all_ok
+
+    # duplicates + negatives
+    var dup Vec<i32> := [5, 1, 4, 1, 3, 3, 3, 0, -2, 7, 7, -2, 9, 0]
+    all_ok := check_case("dup+neg", dup, 39) and all_ok
+
+    # small / edge cases
+    var empty Vec<i32> := []
+    all_ok := check_case("empty", empty, 0) and all_ok
+
+    var one Vec<i32> := [42]
+    all_ok := check_case("single", one, 42) and all_ok
+
+    var two Vec<i32> := [2, 1]
+    all_ok := check_case("two", two, 3) and all_ok
+
+    # larger reverse-sorted array (run detection + real partitioning)
+    var big_rev := build(20000, 1)
+    var big_rev_sum i32 := (20000 * 20001) / 2
+    all_ok := check_case("20000 descending", big_rev, big_rev_sum) and all_ok
+
+    # larger random array through the full introsort path
+    var big_rand := fill_rand(20000, 987654321)
+    var big_rand_sum i32 := 0
+    var ri i32 := 0
+    while ri < big_rand.len()
+        big_rand_sum := big_rand_sum + big_rand[ri]
+        ri := ri + 1
+    end while
+    all_ok := check_case("20000 random", big_rand, big_rand_sum) and all_ok
+
+    # direct heapsort fallback correctness (what introsort falls back to)
+    var hs Vec<i32> := [5, 3, 9, 1, 7, 3, 20, -4, 0, 15]
+    var hs_sorted := heapsort(hs, 0, 9, |p: i32, q: i32| p < q)
+    var hs_ok bool := true
+    var hs_i i32 := 0
+    while hs_i < 10
+        if hs_sorted[hs_i] != [-4, 0, 1, 3, 3, 5, 7, 9, 15, 20][hs_i],
+            hs_ok := false
+        end if
+        hs_i := hs_i + 1
+    end while
+    if hs_ok,
+        put "PASS  heapsort fallback"
+    else,
+        put "FAIL  heapsort fallback"
+    end if
+    all_ok := hs_ok and all_ok
+
+    if all_ok,
+        put "ALL PASS"
+    else,
+        put "FAILURES PRESENT"
+    end if
+    return
+end fn

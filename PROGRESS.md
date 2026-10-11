@@ -1,7 +1,83 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-10-03.
+Last updated: 2026-10-10.
+
+## Integer literals unified across every stage, plus REPL history, rustfmt race and LSP ranges (2026-10-10)
+
+The lexer keeps an integer literal as its exact source text (`42`, `010`,
+`0xFF`, `0b1010`, `0o755`, `-0x10`), but every stage that needed a number
+used Rust's `str::parse` — decimal only. That single divergence produced a
+cluster of bugs, each reproduced before fixing:
+
+- **C re-emitted the text verbatim, so `010` became octal 8** in the
+  generated C (Poly defines leading zeros as decimal). **JS emitted it
+  verbatim too, a strict-mode `SyntaxError` in every module. asm rejected
+  `0xFF` outright.** `0x0` slipped past the type checker's "step must not
+  be zero" guard, and width classification fell through to the i64 path
+  for every radix literal.
+- **Fix: one shared radix-aware parser** (`poly_parser::int_literal`,
+  re-exported as `parse_int_literal` / `int_literal_text`) now backs
+  constant folding, i32/i64 width classification, the zero-step check,
+  array lengths, bool folds and all four backends. C and JS emit plain
+  decimal, asm parses every prefix, `-0x10` keeps its sign. Regression
+  tests cover each backend plus the checker guard.
+- **rustfmt success could silently produce empty output** (`--format`,
+  `--emit-rust`, `--diff`): the drain threads' empty sentinel message
+  raced the reader's own send, and a losing race returned an empty buffer.
+  Threads are now joined before the buffer is read.
+- **REPL `:history` was always one session behind**: the session loaded a
+  frozen snapshot, so current-session lines never appeared, ↑ recall
+  started empty every launch, and each save rewrote the file as
+  "startup history + the line just typed", dropping the rest. Lines are
+  now recorded to the session list, the line editor and the file together;
+  `:clear-history` clears all three.
+- **LSP diagnostics underlined the keyword, not the name**: a statement's
+  span starts at `var`/`fn`/`struct`, so `span.start` converted directly
+  underlined the keyword (and the text-scan fallback could match a
+  different occurrence). Ranges are now located inside the statement span
+  with word-boundary checks.
+- **Docs**: CHANGELOG entries for all four; the spec's Literals section
+  now states that leading zeros are decimal (`010` is ten, octal needs
+  `0o`); `-prepend` added to the spec's File Output and the guide's
+  Writing Files.
+
+## Rust-parity sorting verified end-to-end: `sort_by` builtin and adaptive radix via `#rust` (2026-10-10)
+
+Answered "can Poly match or beat Rust sorting" with measured evidence instead of
+claims. A benchmark harness (`/tmp/qsgap`, separate Rust crate) compared three
+approaches on identical workloads — Poly's introsort with a function-pointer
+comparator, the `sort_by` builtin, and an adaptive LSD radix sort in a `#rust`
+block — against native Rust baselines:
+
+- **`sort_by` builtin reaches ~1.6-1.7x of native Rust** on random/structured
+  integer keys. The generated code confirms the root cause of the gap: the
+  comparator lowers to a `fn(T, T) -> bool` function pointer
+  (`rust_output/quicksort/src/main.rs`), so introsort's comparisons all go
+  through an uninlined indirect call, while Rust's `sort_by` inlines the
+  closure. Lowering site confirmed at `codegen.rs:1850`.
+- **Adaptive radix sort in a `#rust` block hits exact parity with Rust's own
+  radix** (it *is* Rust — foreign blocks are copied verbatim) and beats
+  comparison sorts: ~4.35x faster on a small-span counter workload, 1.6-1.7x
+  on random i32 keys, 0.83-0.89x of the comparison-sort baseline. It is
+  **1.15x slower on nearly-sorted input** — the answer states this openly;
+  the radix path is chosen per workload, not unconditionally.
+- **Correctness verified by execution, not reasoning**: the exact `#rust`
+  snippet from the answer was wrapped in an `extern rust fn` declaration,
+  compiled with the real toolchain (`poly --project` → `cargo build --release`)
+  and run — all three tests pass (mixed negatives + duplicates via
+  `wrapping_sub(min)` bias, an 8-bit-span adaptive 1-pass case, single
+  element). The harness itself asserts every output is sorted in-process.
+- **Three Poly-syntax fixes were needed in the *test wrapper* only** (the
+  `#rust` block was accepted verbatim, since `#rust` regions are raw Rust):
+  `=` for equality (not `==`), `.len()` as a method (not `len()`), and caching
+  `c.len()` before a call because Poly moves Vec arguments by value. Worth
+  remembering when writing Poly-side harnesses for foreign code.
+- **Known-open / follow-up offered, not done**: specializing higher-order
+  functions at codegen (turning the `sort_by` function-pointer comparator
+  into a monomorphized/inlined one) was root-caused in the generated code but
+  not implemented — it would close much of the 1.6x gap without any user-side
+  `#rust` block.
 
 ## Deep security audit: `dep` TOML injection fixed (confirmed RCE), escape and temp-dir hardening, CI locked down (2026-10-03)
 

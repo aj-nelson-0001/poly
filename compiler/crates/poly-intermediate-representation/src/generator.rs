@@ -322,6 +322,7 @@ fn gen_statement(statement: &ast::Statement) -> Result<Statement, String> {
             redirect: match redirect.as_ref() {
                 Some(ast::Redirect::Write(path)) => Some(Redirect::Write(gen_expr(path)?)),
                 Some(ast::Redirect::Append(path)) => Some(Redirect::Append(gen_expr(path)?)),
+                Some(ast::Redirect::Prepend(path)) => Some(Redirect::Prepend(gen_expr(path)?)),
                 None => None,
             },
         },
@@ -716,6 +717,7 @@ fn gen_binary_op(op: &ast::BinaryOp) -> BinaryOp {
         ast::BinaryOp::Mul => BinaryOp::Mul,
         ast::BinaryOp::Div => BinaryOp::Div,
         ast::BinaryOp::Mod => BinaryOp::Mod,
+        ast::BinaryOp::Power => BinaryOp::Power,
         ast::BinaryOp::Eq => BinaryOp::Eq,
         ast::BinaryOp::NotEq => BinaryOp::NotEq,
         ast::BinaryOp::Lt => BinaryOp::Lt,

@@ -73,261 +73,37 @@ end fn
 ### Version String Format
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Version string format: MAJOR.MINOR.PATCH
-
-
-
-
-
-
-
 var version ustring := unicode "1.2.3"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Pre-release versions
-
-
-
-
-
-
-
 var pre_release ustring := unicode "1.2.3-alpha.1"
-
-
-
-
-
-
-
 var beta ustring := unicode "1.2.3-beta.2"
-
-
-
-
-
-
-
 var rc ustring := unicode "1.2.3-rc.1"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Build metadata
-
-
-
-
-
-
-
 var build ustring := unicode "1.2.3+build.123"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Parse version with pre-release and build
-
-
-
-
-
-
-
 fn parse_full_version(version_str: ustring): Result<FullVersion, VersionError>
-
-
-
-
-
-
-
     // Split on + for build metadata
-
-
-
-
-
-
-
     var build_parts := version_str.split(unicode "+")
-
-
-
-
-
-
-
     var version_part := build_parts[0]
-
-
-
-
-
-
-
     var build_metadata := if build_parts.len() > 1,build_parts[1] else unicode "" end if
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Split on - for pre-release
-
-
-
-
-
-
-
     var pre_parts := version_part.split(unicode "-")
-
-
-
-
-
-
-
     var core_version := pre_parts[0]
-
-
-
-
-
-
-
     var pre_release := if pre_parts.len() > 1,pre_parts[1] else unicode "" end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     var version := try parse_version(core_version)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     return Ok(FullVersion {
-
-
-
-
-
-
-
         version: version,
-
-
-
-
-
-
-
         pre_release: pre_release,
-
-
-
-
-
-
-
         build_metadata: build_metadata
-
-
-
-
-
-
-
     })
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -352,261 +128,37 @@ end fn
 ### Version Routing
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Route based on API version
-
-
-
-
-
-
-
 fn route_request(request: Request): Response
-
-
-
-
-
-
-
     var version := get_api_version(request)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     match version
-
-
-
-
-
-
-
         unicode "1.0", return handle_v1(request)
-
-
-
-
-
-
-
         unicode "1.1", return handle_v1_1(request)
-
-
-
-
-
-
-
         unicode "2.0", return handle_v2(request)
-
-
-
-
-
-
-
         _,
-
-
-
-
-
-
-
             var response := Response()
-
-
-
-
-
-
-
             response.status = 400
-
-
-
-
-
-
-
             response.body = unicode "Unsupported API version"
-
-
-
-
-
-
-
             return response
-
-
-
-
-
-
-
     end match
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Version-specific handlers
-
-
-
-
-
-
-
 fn handle_v1(request: Request): Response
-
-
-
-
-
-
-
     // V1 logic
-
-
-
-
-
-
-
     return Response { status: 200, body: unicode "V1 response" }
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn handle_v1_1(request: Request): Response
-
-
-
-
-
-
-
     // V1.1 logic (backward compatible with V1)
-
-
-
-
-
-
-
     return Response { status: 200, body: unicode "V1.1 response" }
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn handle_v2(request: Request): Response
-
-
-
-
-
-
-
     // V2 logic (may not be backward compatible)
-
-
-
-
-
-
-
     return Response { status: 200, body: unicode "V2 response" }
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -636,205 +188,30 @@ end fn
 ### Version Compatibility Layer
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Compatibility layer for older versions
-
-
-
-
-
-
-
 fn compatibility_layer(request: Request, target_version: ustring): Request
-
-
-
-
-
-
-
     var current_version := get_api_version(request)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     if compare_versions(parse_version(current_version), parse_version(target_version)) < 0,
-
-
-
-
-
-
-
         // Transform request to target version format
-
-
-
-
-
-
-
         return transform_request(request, current_version, target_version)
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     return request
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Request transformation
-
-
-
-
-
-
-
 fn transform_request(request: Request, from_version: ustring, to_version: ustring): Request
-
-
-
-
-
-
-
     var transformed := request.clone()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Transform based on version difference
-
-
-
-
-
-
-
     if from_version == unicode "1.0" && to_version == unicode "2.0",
-
-
-
-
-
-
-
         // V1 to V2 transformation
-
-
-
-
-
-
-
         transformed.body = transform_v1_to_v2(request.body)
-
-
-
-
-
-
-
     end if
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     return transformed
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -880,117 +257,19 @@ end fn
 ### URL Versioning
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // URL-based versioning
-
-
-
-
-
-
-
 fn route_by_url(request: Request): Response
-
-
-
-
-
-
-
     var path := request.path
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Extract version from URL
-
-
-
-
-
-
-
     if path.starts_with(unicode "/api/v2/"),
-
-
-
-
-
-
-
         return handle_v2(request)
-
-
-
-
-
-
-
     else if path.starts_with(unicode "/api/v1/"),
-
-
-
-
-
-
-
         return handle_v1(request)
-
-
-
-
-
-
-
     else
-
-
-
-
-
-
-
         return handle_v1(request)  // Default to V1
-
-
-
-
-
-
-
     end if
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -1049,285 +328,40 @@ end fn
 ### Automated Migration
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Automated migration script
-
-
-
-
-
-
-
 fn migrate_api(old_version: ustring, new_version: ustring): Result<(), MigrationError>
-
-
-
-
-
-
-
     put "Migrating from " + old_version + " to " + new_version
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Backup current data
-
-
-
-
-
-
-
     try backup_data()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Run migration steps
-
-
-
-
-
-
-
     match (old_version, new_version)
-
-
-
-
-
-
-
         (unicode "1.0", unicode "2.0"), try migrate_v1_to_v2()
-
-
-
-
-
-
-
         (unicode "1.1", unicode "2.0"), try migrate_v1_1_to_v2()
-
-
-
-
-
-
-
         _, return Error(MigrationError::UnsupportedMigration)
-
-
-
-
-
-
-
     end match
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Verify migration
-
-
-
-
-
-
-
     try verify_migration()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     put "Migration complete"
-
-
-
-
-
-
-
     return Ok(())
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Migration steps
-
-
-
-
-
-
-
 fn migrate_v1_to_v2(): Result<(), MigrationError>
-
-
-
-
-
-
-
     put "Step 1: Migrating user data..."
-
-
-
-
-
-
-
     try migrate_user_data()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     put "Step 2: Migrating order data..."
-
-
-
-
-
-
-
     try migrate_order_data()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     put "Step 3: Updating indexes..."
-
-
-
-
-
-
-
     try update_indexes()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     return Ok(())
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Rollback Strategy
@@ -1366,213 +400,31 @@ end fn
 ### Version Tests
 
 ~~~poly fragment
-
-
-
-
-
-
-
 // Test version compatibility
-
-
-
-
-
-
-
 fn test_version_compatibility()
-
-
-
-
-
-
-
     // Test V1 compatibility
-
-
-
-
-
-
-
     var v1_request := create_request(unicode "1.0")
-
-
-
-
-
-
-
     var v1_response := handle_request(v1_request)
-
-
-
-
-
-
-
     assert(v1_response.status == 200)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Test V2 compatibility
-
-
-
-
-
-
-
     var v2_request := create_request(unicode "2.0")
-
-
-
-
-
-
-
     var v2_response := handle_request(v2_request)
-
-
-
-
-
-
-
     assert(v2_response.status == 200)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Test backward compatibility
-
-
-
-
-
-
-
     var v1_1_request := create_request(unicode "1.1")
-
-
-
-
-
-
-
     var v1_1_response := handle_request(v1_1_request)
-
-
-
-
-
-
-
     assert(v1_1_response.status == 200)
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Test deprecation warnings
-
-
-
-
-
-
-
 fn test_deprecation_warnings()
-
-
-
-
-
-
-
     var output := capture warn_deprecated(unicode "old_function()", unicode "1.5", unicode "new_function()")
-
-
-
-
-
-
-
     assert(output.contains(unicode "DEPRECATED"))
-
-
-
-
-
-
-
     assert(output.contains(unicode "old_function()"))
-
-
-
-
-
-
-
     assert(output.contains(unicode "new_function()"))
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ---

@@ -17,29 +17,8 @@ The binary will be at `target/release/poly`.
 ### 2. Compile a Poly File
 
 ~~~bash
-
-
-
-
-
-
-
 poly hello.poly
-
-
-
-
-
-
-
 cargo run --manifest-path rust_output/hello/Cargo.toml
-
-
-
-
-
-
-
 ~~~
 
 This generates and builds `rust_output/hello/` as an isolated Cargo project. The generated Rust is in
@@ -54,21 +33,7 @@ poly --emit-rust hello.poly
 ### 3. Run the Generated Rust Code
 
 ~~~bash
-
-
-
-
-
-
-
 cargo run --manifest-path rust_output/hello/Cargo.toml
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -104,37 +69,9 @@ end fn
 ### Variables
 
 ~~~poly fragment
-
-
-
-
-
-
-
 var x i32 := 42
-
-
-
-
-
-
-
 var name ustring := "Alice"
-
-
-
-
-
-
-
 var pi := 3.14
-
-
-
-
-
-
-
 ~~~
 
 ### Functions
@@ -152,53 +89,11 @@ put result
 
 **If/Else:**
 ~~~poly fragment
-
-
-
-
-
-
-
 if x > 0
-
-
-
-
-
-
-
     put "positive"
-
-
-
-
-
-
-
 else
-
-
-
-
-
-
-
     put "non-positive"
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 **While Loop:**
@@ -212,37 +107,9 @@ end while
 
 **For Loop (Range):**
 ~~~poly fragment
-
-
-
-
-
-
-
 for i in 0..10
-
-
-
-
-
-
-
     put i
-
-
-
-
-
-
-
 end for
-
-
-
-
-
-
-
 ~~~
 
 ### Increment
@@ -255,53 +122,11 @@ x := x + 1   # increment x by one
 ### Pattern Matching
 
 ~~~poly fragment
-
-
-
-
-
-
-
 match direction
-
-
-
-
-
-
-
     North, put "up"
-
-
-
-
-
-
-
     South, put "down"
-
-
-
-
-
-
-
     _, put "other"
-
-
-
-
-
-
-
 end match
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -320,45 +145,10 @@ end fn
 ### Read a File
 
 ~~~poly
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     var content := get from "data.txt"
-
-
-
-
-
-
-
     put content
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 ### Write to a File
@@ -373,37 +163,9 @@ end fn
 ### Error Handling
 
 ~~~poly fragment
-
-
-
-
-
-
-
 error "Something went wrong!"
-
-
-
-
-
-
-
 warn "This might be a problem"
-
-
-
-
-
-
-
 info "Debug: x = " + x
-
-
-
-
-
-
-
 ~~~
 
 ---
@@ -433,9 +195,6 @@ history navigation, and cursor movement; elsewhere it falls back to plain line r
 
 **Example Session:**
 ~~~
-
-
-
 poly> var x := 42
 poly> put x
 
@@ -465,40 +224,12 @@ Goodbye!
 Validate without transpiling:
 
 ~~~bash
-
-
-
-
-
-
-
 poly --check file.poly
-
-
-
-
-
-
-
 ~~~
 
 Output on success:
 ~~~
-
-
-
-
-
-
-
 OK: 5 statements parsed
-
-
-
-
-
-
-
 ~~~
 
 ---

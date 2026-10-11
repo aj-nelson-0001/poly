@@ -12,6 +12,7 @@ use std::fmt::Write;
 use poly_parser::ast::{
     self, BinaryOp, Expression, FunctionDecl, Statement, TypeAnnotation, UnaryOp,
 };
+use poly_parser::parse_int_literal_i64;
 
 /// Generate a complete x86-64 assembly translation unit from a Poly program.
 pub fn transpile(program: &ast::Program) -> Result<String, String> {
@@ -167,6 +168,9 @@ struct AsmGenerator {
     /// struct: struct-returning functions copy the whole struct through
     /// caller-allocated stack space addressed by %rdi, not through %rax.
     current_return_struct: Option<String>,
+    /// Set while rendering a declared-`i64`/`u64` initializer (or an
+    /// assignment to one) so an integer `^` computes at 64-bit width.
+    power_i64_context: std::cell::Cell<bool>,
 }
 
 impl AsmGenerator {
@@ -187,6 +191,7 @@ impl AsmGenerator {
             uses_bool_helpers: false,
             uses_print_nobuf: false,
             current_return_struct: None,
+            power_i64_context: std::cell::Cell::new(false),
         }
     }
 
@@ -986,7 +991,17 @@ impl AsmGenerator {
                     }
                 }
                 if let Some(val) = value {
-                    let expr_loc = self.emit_expr(val, frame)?;
+                    // A declared-`i64`/`u64` initializer renders in an i64
+                    // context so an integer `^` (`var big i64 := 2 ^ 40`)
+                    // stays 64-bit: neither operand is 64-bit-classified on
+                    // its own, so operand classification alone would let the
+                    // default-width path truncate the result.
+                    let previous_power_i64 = self.power_i64_context.replace(
+                        matches!(ty, Some(TypeAnnotation::Named(n)) if n == "i64" || n == "u64"),
+                    );
+                    let expr_loc = self.emit_expr(val, frame);
+                    self.power_i64_context.set(previous_power_i64);
+                    let expr_loc = expr_loc?;
                     // For struct types, copy field-by-field.
                     if let Some(TypeAnnotation::Named(type_name)) = ty {
                         if let Some(layout) = self.structs.get(type_name) {
@@ -1086,7 +1101,17 @@ impl AsmGenerator {
                 let dest = frame
                     .get(&target_name)
                     .ok_or_else(|| format!("Undefined variable `{target_name}`"))?;
-                let expr_loc = self.emit_expr(value, frame)?;
+                // Assignment to a declared-`i64`/`u64` variable keeps an
+                // integer `^` RHS at 64-bit width (same as the declaration).
+                let previous_power_i64 = self.power_i64_context.replace(
+                    frame
+                        .var_types
+                        .get(&target_name)
+                        .is_some_and(|ty| ty == "i64" || ty == "u64"),
+                );
+                let expr_loc = self.emit_expr(value, frame);
+                self.power_i64_context.set(previous_power_i64);
+                let expr_loc = expr_loc?;
                 // For struct types, copy field-by-field.
                 if let Some(type_name) = frame.var_types.get(&target_name).cloned() {
                     if let Some(layout) = self.structs.get(&type_name) {
@@ -1261,12 +1286,14 @@ impl AsmGenerator {
                     // negation and SUBTRACT the magnitude; the comparison
                     // above already flipped for descending loops.
                     let step_val: i64 = match step {
-                        Some(Expression::IntLiteral(v)) => v.parse().unwrap_or(1),
+                        Some(Expression::IntLiteral(v)) => parse_int_literal_i64(v).unwrap_or(1),
                         Some(Expression::UnaryOp {
                             op: UnaryOp::Neg,
                             expr,
                         }) => match expr.as_ref() {
-                            Expression::IntLiteral(v) => -v.parse::<i64>().unwrap_or(1),
+                            Expression::IntLiteral(v) => {
+                                -parse_int_literal_i64(v).unwrap_or(1)
+                            }
                             _ => 1,
                         },
                         _ => 1,
@@ -1559,9 +1586,11 @@ impl AsmGenerator {
     fn emit_expr(&mut self, expr: &Expression, frame: &mut StackFrame) -> Result<Location, String> {
         match expr {
             Expression::IntLiteral(value) => {
-                let v: i64 = value
-                    .parse()
-                    .map_err(|_| format!("Invalid integer literal: {value}"))?;
+                // Radix-aware: `0xFF`/`0b1010`/`0o755` are valid Poly literals
+                // (and `010` is decimal ten, as this target has always
+                // treated it), so plain `str::parse` would reject them.
+                let v: i64 = parse_int_literal_i64(value)
+                    .ok_or_else(|| format!("Invalid integer literal: {value}"))?;
                 let loc = frame.allocate(&format!("__imm_{v}"));
                 self.emit_store_const(loc, v);
                 Ok(loc)
@@ -1605,7 +1634,9 @@ impl AsmGenerator {
                 // arithmetic happens at 32 bits and the result is sign-extended
                 // to keep the value canonical (matches the wrapping i32 targets).
                 // Declared-i64 variables keep exact 64-bit arithmetic.
-                let wide = self.is_i64_expr(left, frame) || self.is_i64_expr(right, frame);
+                let wide = self.is_i64_expr(left, frame)
+                    || self.is_i64_expr(right, frame)
+                    || (matches!(op, BinaryOp::Power) && self.power_i64_context.get());
                 if !wide {
                     self.output.push_str("    movslq %eax, %rax\n");
                     self.output.push_str("    movslq %ecx, %rcx\n");
@@ -1697,6 +1728,30 @@ impl AsmGenerator {
                         self.output.push_str("    xorl %edx, %edx\n");
                         let _ = writeln!(self.output, "{done}:");
                         self.output.push_str("    movq %rdx, %rax\n");
+                    }
+                    BinaryOp::Power => {
+                        // Exponentiation loop: %rax = base, %rcx = exponent.
+                        // exp == 0 -> 1; exp < 0 -> 0 (matching the C/Rust/JS
+                        // targets' integer-power rule); otherwise the result
+                        // is exp wrap-multiplies of the base. The qword loop
+                        // is correct for both widths: the !wide path below
+                        // truncates via movslq, giving i32 wrap semantics.
+                        let loop_label = self.fresh_label("pow_loop");
+                        let neg_label = self.fresh_label("pow_neg");
+                        let done_label = self.fresh_label("pow_done");
+                        self.output.push_str("    movq %rax, %r8\n"); // base
+                        self.output.push_str("    movq $1, %rax\n"); // result
+                        self.output.push_str("    testq %rcx, %rcx\n");
+                        let _ = writeln!(self.output, "    js {neg_label}");
+                        let _ = writeln!(self.output, "    jz {done_label}");
+                        let _ = writeln!(self.output, "{loop_label}:");
+                        self.output.push_str("    imulq %r8, %rax\n");
+                        self.output.push_str("    subq $1, %rcx\n");
+                        let _ = writeln!(self.output, "    jnz {loop_label}");
+                        let _ = writeln!(self.output, "    jmp {done_label}");
+                        let _ = writeln!(self.output, "{neg_label}:");
+                        self.output.push_str("    xorq %rax, %rax\n");
+                        let _ = writeln!(self.output, "{done_label}:");
                     }
                     BinaryOp::Eq => {
                         self.output.push_str("    cmpq %rcx, %rax\n");
@@ -2246,9 +2301,8 @@ impl AsmGenerator {
                 for element in elements {
                     match element {
                         Expression::IntLiteral(v) => {
-                            let parsed: i64 = v
-                                .parse()
-                                .map_err(|_| format!("Invalid integer literal: {v}"))?;
+                            let parsed: i64 = parse_int_literal_i64(v)
+                                .ok_or_else(|| format!("Invalid integer literal: {v}"))?;
                             values.push(parsed);
                         }
                         Expression::BoolLiteral(b) => values.push(if *b { 1 } else { 0 }),
@@ -3075,9 +3129,11 @@ impl AsmGenerator {
     /// or a literal outside the i32 range (matches the C target's promotion).
     fn is_i64_expr(&self, expression: &Expression, frame: &StackFrame) -> bool {
         match expression {
-            Expression::IntLiteral(value) => match value.parse::<i64>() {
-                Ok(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
-                Err(_) => true,
+            Expression::IntLiteral(value) => match parse_int_literal_i64(value) {
+                Some(v) => !(i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                // Not parseable or outside i64: classify as wide, matching
+                // the C target's promotion of oversized literals.
+                None => true,
             },
             Expression::Identifier(name) => frame
                 .var_types
@@ -3088,10 +3144,23 @@ impl AsmGenerator {
             // Arithmetic with a 64-bit operand widens the result (matches
             // the C target's is_i64_valued classification).
             Expression::BinaryOp { op, left, right } => {
-                matches!(
-                    op,
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
-                ) && (self.is_i64_expr(left, frame) || self.is_i64_expr(right, frame))
+                // Power is value-true to its base only: `2 ^ 40` under a
+                // 64-bit classification must keep 64-bit precision, which
+                // the qword pow loop already provides (the !wide truncation
+                // via movslq is skipped when wide).
+                match op {
+                    BinaryOp::Power => self.is_i64_expr(left, frame),
+                    _ => {
+                        matches!(
+                            op,
+                            BinaryOp::Add
+                                | BinaryOp::Sub
+                                | BinaryOp::Mul
+                                | BinaryOp::Div
+                                | BinaryOp::Mod
+                        ) && (self.is_i64_expr(left, frame) || self.is_i64_expr(right, frame))
+                    }
+                }
             }
             _ => false,
         }
@@ -3683,6 +3752,23 @@ put name"#,
         assert!(output.contains(".globl double"));
         assert!(output.contains("double:"));
         assert!(output.contains("retq"));
+        Ok(())
+    }
+
+    #[test]
+    fn radix_literals_emit_decimal_immediates() -> Result<(), Box<dyn std::error::Error>> {
+        // Regression: plain `str::parse` rejected `0xFF`/`0b1010`/`0o755`
+        // outright ("Invalid integer literal") even though the lexer and
+        // spec accept them, while `010` was always decimal ten here.
+        let output = transpile_source(
+            "var a i32 := 010\nvar b i32 := 0xFF\nvar c i32 := 0o755\nvar d i32 := 0b1010\nput a\nput b\nput c\nput d",
+        )?;
+        assert!(output.contains("movq $10,"), "got: {output}");
+        assert!(output.contains("movq $255,"), "got: {output}");
+        assert!(output.contains("movq $493,"), "got: {output}");
+        for raw in ["010", "0o755", "0b1010", "0xFF"] {
+            assert!(!output.contains(raw), "{raw} survived into asm: {output}");
+        }
         Ok(())
     }
 

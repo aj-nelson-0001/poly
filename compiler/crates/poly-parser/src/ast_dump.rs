@@ -612,7 +612,9 @@ impl<W: std::io::Write> Printer<'_, W> {
                 if let Some(redirect) = redirect {
                     children.push(Step::Raw(depth + 1, "redirect:".to_string()));
                     match redirect {
-                        Redirect::Write(path) | Redirect::Append(path) => {
+                        Redirect::Write(path)
+                        | Redirect::Append(path)
+                        | Redirect::Prepend(path) => {
                             children.push(Step::Expression(path, depth + 2));
                         }
                     }

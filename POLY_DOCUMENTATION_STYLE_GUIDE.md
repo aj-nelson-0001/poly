@@ -23,29 +23,8 @@ Use single backticks for short inline references such as `var`, `:=`, or
 Mark a non-standalone Poly snippet explicitly:
 
 ~~~poly fragment
-
-
-
-
-
-
-
 if condition
-
-
-
-
-
-
-
     ...
-
-
-
-
-
-
-
 ~~~
 
 A complete Poly block must parse independently; a block labeled `poly fragment`
@@ -68,45 +47,10 @@ end fn
 Use `:=` for declarations and assignment, and `=` for equality comparisons. The legacy `==` spelling is rejected:
 
 ~~~poly fragment
-
-
-
-
-
-
-
 count := count + 1
-
-
-
-
-
-
-
 if count = 1
-
-
-
-
-
-
-
     put greeting
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 Prefer the current delimiter-free conditional form. A comma after the condition
@@ -159,37 +103,9 @@ expression at an existing delimiter.
 Before submitting documentation changes, run:
 
 ~~~bash
-
-
-
-
-
-
-
 python3 scripts/check_markdown.py
-
-
-
-
-
-
-
 python3 scripts/check_poly_examples.py
-
-
-
-
-
-
-
 cd compiler && cargo test --workspace
-
-
-
-
-
-
-
 ~~~
 
 The Markdown checker enforces tilde fences and rejects retired Unicode spellings.

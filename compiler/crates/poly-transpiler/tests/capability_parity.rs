@@ -78,6 +78,26 @@ const CASES: &[Case] = &[
         "fn main()\n    var v Vec<i32> := [1, 2]\n    v.push(3)\n    put v.len()\nend fn\n",
         Expect::RustAsm,
     ),
+    // --- exponentiation (`^`) --------------------------------------------
+    Case::with_output(
+        "int power",
+        "fn main()\n    var x i32 := 7\n    var square i32 := x ^ 2\n    put square\nend fn\n",
+        Expect::All,
+        ("rust", "wrapping_pow"),
+    ),
+    Case::accepted(
+        "float power",
+        "fn main()\n    var base f64 := 2.0\n    put base ^ 10.0\nend fn\n",
+        // The asm backend has no floating-point support at all.
+        Expect::RustCJs,
+    ),
+    Case::accepted(
+        "mixed int/float power",
+        "fn main()\n    var f f64 := 2.0\n    put f ^ 2\nend fn\n",
+        // Same rule as `*`: the Rust target rejects mixed arithmetic, so
+        // every target demands an explicit `as` cast.
+        Expect::AllReject,
+    ),
     // --- rejection set (same error on every target that refuses) ----------
     Case::accepted(
         "unknown method",
@@ -109,6 +129,13 @@ fn rejection_errors_name_the_backend_or_limitation() -> Result<(), Box<dyn std::
             "fn main()\n    var s ustring := \"ab\"\n    put s.reverse()\nend fn\n",
             "rust",
             &["no method"],
+        ),
+        (
+            // The checker's mixed-class rule fires before codegen.
+            "mixed int/float power",
+            "fn main()\n    var f f64 := 2.0\n    put f ^ 2\nend fn\n",
+            "rust",
+            &["explicit cast"],
         ),
         (
             "vector push on c",

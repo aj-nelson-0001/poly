@@ -18,21 +18,7 @@ poly --format examples/prime_numbers.poly
 See the difference between unformatted and formatted code:
 
 ~~~bash
-
-
-
-
-
-
-
 poly --diff examples/prime_numbers.poly
-
-
-
-
-
-
-
 ~~~
 
 ### `--watch` Flag
@@ -46,21 +32,7 @@ poly --watch examples/prime_numbers.poly
 Validate your code and verify that the generated Rust compiles:
 
 ~~~bash
-
-
-
-
-
-
-
 poly --check examples/prime_numbers.poly
-
-
-
-
-
-
-
 ~~~
 
 ## Transpiler Improvements
@@ -91,34 +63,13 @@ end fn
 Generates:
 
 ~~~rust
-
-
-
-
-
-
-
 std::fs::write("output.txt", format!("{}", "Hello, World!")).unwrap_or_else(|e| { eprintln!("Poly runtime error: {e}");  \
 std::process::exit(1) });
-
-
-
-
-
-
-
 { let mut f = std::fs::OpenOptions::new().append(true).create(true).open("output.txt").unwrap_or_else(|e| { eprintln!("Poly  \
 runtime error: {e}"); std::process::exit(1) });
 writeln!(f, "{}", "More content").unwrap_or_else(|e| { eprintln!("Poly runtime \
   \
 error: {e}"); std::process::exit(1) }); }
-
-
-
-
-
-
-
 ~~~
 
 ### Match Expressions
@@ -134,45 +85,10 @@ end match
 Now generates valid Rust:
 
 ~~~rust
-
-
-
-
-
-
-
 match x {
-
-
-
-
-
-
-
     1 => println!("{}", "One"),
-
-
-
-
-
-
-
     _ => println!("{}", "Other"),
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
 ~~~
 
 ### Loop Variables
@@ -187,37 +103,9 @@ end loop
 Generates:
 
 ~~~rust
-
-
-
-
-
-
-
 for record in records {
-
-
-
-
-
-
-
     println!("{}", record);
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
 ~~~
 
 ## New Examples

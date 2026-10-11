@@ -125,7 +125,7 @@ The C backend covers the orchestration subset but many features require `#c` hel
 
 ### 4d. Other Known Limitations
 
-- **`^` is bitwise XOR**, not exponentiation — float powers need a library call or `sqrt`-style helper
+- **`^` is exponentiation** (added 2026-10-08, v2.0); it was bitwise XOR before — float powers now lower to `powf`/`pow`/`**` on all targets
 - **`Type::method()` call syntax** has confusing error messages (hits associated-function arity path)
 - **Generic type checking is permissive** — type variables often resolve to `Unknown`; bounds not validated semantically
 - **Source-map line mappings are best-effort** heuristics, despite precise statement spans being available in the AST

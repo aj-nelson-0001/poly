@@ -1247,10 +1247,18 @@ fn format_with_rustfmt_timeout(code: &str, timeout: std::time::Duration) -> Opti
         return None;
     };
 
-    let _ = sender.send(Vec::new());
-    let buffer = receiver.recv().ok();
+    // Wait for the drain thread to finish *before* taking its buffer. The
+    // previous sentinel-message design (`sender.send(Vec::new())` + `recv`)
+    // raced with the reader: whenever the sentinel arrived first, `recv`
+    // returned an empty buffer and a successful format produced an empty
+    // string, silently dropping the formatted program (`poly --format`,
+    // `--emit-rust` and `--diff` all print that result). Joining first means
+    // the reader has already sent its buffer, so `try_recv` can only observe
+    // that buffer -- or a genuine reader failure, which correctly degrades to
+    // the unformatted code.
     let _ = reader.join();
     let _ = stderr_reader.join();
+    let buffer = receiver.try_recv().ok();
 
     if status.success() {
         String::from_utf8(buffer?).ok()
@@ -1683,6 +1691,9 @@ fn compile_c_binary(source_path: &Path, output_path: &Path) -> Result<()> {
         // `poly --target c file.poly` executables competitive with the Rust
         // target's own optimized builds.
         .arg("-O2")
+        // libm: float `^` lowers to pow(). (Modern glibc merges libm into
+        // libc, but the explicit flag keeps the link portable.)
+        .arg("-lm")
         .arg(source_path)
         .arg("-o")
         .arg(output_path)

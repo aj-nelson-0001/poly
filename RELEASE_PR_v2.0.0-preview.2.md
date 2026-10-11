@@ -105,125 +105,20 @@ runtime (static bump arena, doubling growth, exhaustion exits 42)
 ### CLI
 
 ~~~
-
-
-
-
-
-
-
 poly <file.poly>                    # Generate + build (Rust default)
-
-
-
-
-
-
-
 poly --target c <file.poly>         # Generate + build (C)
-
-
-
-
-
-
-
 poly --target asm <file.poly>       # Generate + build (Linux x86-64 asm)
-
-
-
-
-
-
-
 poly --target c --emit-c <file>     # Emit C to stdout
-
-
-
-
-
-
-
 poly --target asm --emit-asm <file> # Emit assembly to stdout
-
-
-
-
-
-
-
 poly --check <file>                 # Validate without building
-
-
-
-
-
-
-
 poly --emit-rust <file>             # Emit Rust to stdout
-
-
-
-
-
-
-
 poly --intermediate-representation  # Show IR pipeline output
-
-
-
-
-
-
-
 poly --source-map <file>            # Show Poly→Rust source map (statement-precise)
-
-
-
-
-
-
-
 poly --format <file>                # Format with rustfmt
-
-
-
-
-
-
-
 poly --diff <file>                  # Show format diff
-
-
-
-
-
-
-
 poly --watch <file>                 # Watch + re-transpile
-
-
-
-
-
-
-
 poly --project <dir> <file>         # Generate Cargo/project dir
-
-
-
-
-
-
-
 poly --repl                         # Interactive REPL
-
-
-
-
-
-
-
 ~~~
 
 ---

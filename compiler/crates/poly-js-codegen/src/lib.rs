@@ -7,6 +7,7 @@
 
 use std::fmt::Write;
 
+use poly_parser::{int_literal_text, parse_int_literal_i64};
 use poly_parser::ast::{
     self, BinaryOp, Expression, FunctionDecl, Statement, TypeAnnotation, UnaryOp,
 };
@@ -33,6 +34,10 @@ struct JsGenerator {
     /// (double precision holds them exactly up to 2^53; beyond that the
     /// JS target's precision limit applies, as documented).
     int64_variables: std::cell::RefCell<std::collections::HashSet<String>>,
+    /// Set while rendering a declared-`i64`/`u64` initializer (or an
+    /// assignment to one) so an integer `^` stays unmasked: the operands
+    /// alone (`2 ^ 40`) are i32-range and would be masked to 32 bits.
+    power_i64_context: std::cell::Cell<bool>,
     main_statements: Vec<ast::Spanned<Statement>>,
 }
 
@@ -46,6 +51,7 @@ impl JsGenerator {
             js_blocks: Vec::new(),
             string_variables: std::cell::RefCell::new(std::collections::HashSet::new()),
             int64_variables: std::cell::RefCell::new(std::collections::HashSet::new()),
+            power_i64_context: std::cell::Cell::new(false),
             main_statements: Vec::new(),
         }
     }
@@ -218,7 +224,14 @@ impl JsGenerator {
                     self.string_variables.borrow_mut().insert(name.clone());
                 }
                 let value = match value {
-                    Some(value) => self.expr(value)?,
+                    Some(value) => {
+                        let previous = self.power_i64_context.replace(ty.as_ref().is_some_and(
+                            |ty| matches!(ty, TypeAnnotation::Named(n) if n == "i64" || n == "u64"),
+                        ));
+                        let rendered = self.expr(value);
+                        self.power_i64_context.set(previous);
+                        rendered?
+                    }
                     None => "undefined".to_string(),
                 };
                 writeln!(output, "let {} = {};", name, value).map_err(|e| e.to_string())?;
@@ -232,8 +245,15 @@ impl JsGenerator {
                 {
                     self.string_variables.borrow_mut().insert(name.clone());
                 }
-                writeln!(output, "const {} = {};", name, self.expr(value)?)
-                    .map_err(|e| e.to_string())?;
+                let value = {
+                    let previous = self.power_i64_context.replace(ty.as_ref().is_some_and(
+                        |ty| matches!(ty, TypeAnnotation::Named(n) if n == "i64" || n == "u64"),
+                    ));
+                    let rendered = self.expr(value);
+                    self.power_i64_context.set(previous);
+                    rendered?
+                };
+                writeln!(output, "const {} = {};", name, value).map_err(|e| e.to_string())?;
             }
             Statement::ConstDeclaration { name, value } => {
                 line_prefix(output);
@@ -245,7 +265,16 @@ impl JsGenerator {
             }
             Statement::Assignment { target, value } => {
                 line_prefix(output);
-                writeln!(output, "{} = {};", self.expr(target)?, self.expr(value)?)
+                // Assignment to a declared-`i64` variable keeps an integer
+                // `^` RHS unmasked (same rule as the declaration).
+                let previous = self
+                    .power_i64_context
+                    .replace(matches!(target, Expression::Identifier(name)
+                        if self.int64_variables.borrow().contains(name)));
+                let rendered_target = self.expr(target);
+                let rendered_value = self.expr(value);
+                self.power_i64_context.set(previous);
+                writeln!(output, "{} = {};", rendered_target?, rendered_value?)
                     .map_err(|e| e.to_string())?;
             }
             Statement::PutStatement { expr, redirect } => {
@@ -564,7 +593,12 @@ impl JsGenerator {
     /// Keeping unsupported variants as errors prevents silently incorrect JS.
     fn expr(&self, expression: &Expression) -> Result<String, String> {
         match expression {
-            Expression::IntLiteral(value) => Ok(value.clone()),
+            // Normalise to plain decimal: JS rejects octal-looking literals
+            // such as `010` in strict mode (and every module/script the
+            // emitted code lands in is strict), and `0o755`/`0b1010` are the
+            // only radix forms JS also understands. Decimal is valid
+            // everywhere and always means the same number.
+            Expression::IntLiteral(value) => Ok(int_literal_text(value)),
             Expression::FloatLiteral(value) => Ok(value.clone()),
             Expression::StringLiteral(value) | Expression::UnicodeStringLiteral(value) => {
                 Ok(format!("\"{}\"", js_escape(value)))
@@ -603,6 +637,9 @@ impl JsGenerator {
                 // unmasked so they still produce real JS booleans (masking
                 // would turn `a != b` into the number 0/1 and print `0`
                 // instead of `false`), and `| 0` would break string `===`.
+                if matches!(op, BinaryOp::Power) {
+                    return self.gen_power(left, right);
+                }
                 let maskable = matches!(
                     op,
                     BinaryOp::Add
@@ -865,9 +902,9 @@ impl JsGenerator {
         match expression {
             // Big literals take the i64 class: masking them to 32 bits would
             // corrupt the value before the operation.
-            Expression::IntLiteral(value) => match value.parse::<i64>() {
-                Ok(v) => (i32::MIN as i64..=i32::MAX as i64).contains(&v),
-                Err(_) => false,
+            Expression::IntLiteral(value) => match parse_int_literal_i64(value) {
+                Some(v) => (i32::MIN as i64..=i32::MAX as i64).contains(&v),
+                None => false,
             },
             Expression::FloatLiteral(_) => false,
             Expression::StringLiteral(_) | Expression::UnicodeStringLiteral(_) => false,
@@ -938,6 +975,24 @@ impl JsGenerator {
         }
     }
 
+    /// Render `a ^ b` (exponentiation). JS numbers are all doubles, so
+    /// `**` alone covers every numeric case — but for 32-bit int-class
+    /// operands the result must wrap like the other targets, so it is
+    /// re-masked with `| 0` (ToInt32 also truncates, which implements the
+    /// shared "negative integer exponent yields 0" rule: 0.125 -> 0).
+    /// Declared-int64 and float operands stay unmasked: 64-bit powers are
+    /// exact in doubles up to 2^53 and floats must not be truncated.
+    fn gen_power(&self, left: &Expression, right: &Expression) -> Result<String, String> {
+        let l = self.expr(left)?;
+        let r = self.expr(right)?;
+        if self.is_int_operand(left) && self.is_int_operand(right) && !self.power_i64_context.get()
+        {
+            Ok(format!("((({l}) ** ({r})) | 0)"))
+        } else {
+            Ok(format!("(({l}) ** ({r}))"))
+        }
+    }
+
     fn binary_op(&self, op: &BinaryOp) -> &'static str {
         match op {
             BinaryOp::Add => "+",
@@ -948,6 +1003,9 @@ impl JsGenerator {
             // dividend). For positive operands they agree; the first cut
             // documents this rather than emitting a helper.
             BinaryOp::Mod => "%",
+            // Power never reaches the infix renderer: the BinaryOp arm
+            // routes it to gen_power.
+            BinaryOp::Power => unreachable!("power is rendered by gen_power"),
             BinaryOp::Eq => "===",
             BinaryOp::NotEq => "!==",
             BinaryOp::Lt => "<",
@@ -1192,6 +1250,25 @@ mod tests {
         assert!(output.contains("this.x = fields.x;"));
         assert!(output.contains("let p = new Point({ x: 3, y: 4 });"));
         assert!(output.contains("String(p.x)"));
+        Ok(())
+    }
+
+    #[test]
+    fn integer_literals_never_reach_js_verbatim() -> Result<(), Box<dyn std::error::Error>> {
+        // Regression: literals were passed through verbatim, so JS saw a
+        // strict-mode SyntaxError for `010` (octal-looking) and had no idea
+        // what `0o755`/`0b1010` meant. Every spelling must normalise to the
+        // same decimal number (JS understands `0xFF`, but we emit decimal
+        // anyway so all spellings of a value render identically).
+        let output = generate(
+            "var a i32 := 010\nvar b i32 := 0xFF\nvar c i32 := 0o755\nvar d i32 := 0b1010\nput a\nput b\nput c\nput d",
+        )?;
+        for raw in ["010", "0o755", "0b1010", "0xFF"] {
+            assert!(!output.contains(raw), "{raw} survived into JS: {output}");
+        }
+        assert!(output.contains("= 10;"), "got: {output}");
+        assert!(output.contains("= 255;"), "got: {output}");
+        assert!(output.contains("= 493;"), "got: {output}");
         Ok(())
     }
 

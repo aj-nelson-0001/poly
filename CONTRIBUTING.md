@@ -65,9 +65,6 @@ cargo test --workspace
 ### Project Structure
 
 ~~~
-
-
-
 poly/
 ├── compiler/
 │   ├── crates/
@@ -110,9 +107,6 @@ Write clear, concise commit messages:
 
 Example:
 ~~~
-
-
-
 feat: add pattern matching support
 
 - Implement match expression parsing
@@ -135,85 +129,15 @@ Closes #123
 ### Running Tests
 
 ~~~bash
-
-
-
-
-
-
-
 # Run all tests
-
-
-
-
-
-
-
 cargo test --workspace
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Run specific crate tests
-
-
-
-
-
-
-
 cargo test -p poly-parser
-
-
-
-
-
-
-
 cargo test -p poly-transpiler
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Run with output
-
-
-
-
-
-
-
 cargo test -- --nocapture
-
-
-
-
-
-
-
 ~~~
 
 ### Writing Tests
@@ -255,205 +179,30 @@ Aim for high test coverage, especially for:
 ### PR Template
 
 ~~~markdown
-
-
-
-
-
-
-
 ## Description
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Brief description of changes
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Type of Change
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - [ ] Bug fix
-
-
-
-
-
-
-
 - [ ] New feature
-
-
-
-
-
-
-
 - [ ] Breaking change
-
-
-
-
-
-
-
 - [ ] Documentation update
-
-
-
-
-
-
-
 - [ ] Test improvement
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Testing
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - [ ] Tests pass locally
-
-
-
-
-
-
-
 - [ ] Added tests for new functionality
-
-
-
-
-
-
-
 - [ ] Tested with examples
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Checklist
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 - [ ] Code follows style guidelines
-
-
-
-
-
-
-
 - [ ] Self-review completed
-
-
-
-
-
-
-
 - [ ] Documentation updated
-
-
-
-
-
-
-
 - [ ] No breaking changes (or documented)
-
-
-
-
-
-
-
 ~~~
 
 ### Review Process

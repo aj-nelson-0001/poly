@@ -228,6 +228,7 @@ pub enum MutationOp {
 pub enum Redirect {
     Write(Expr),
     Append(Expr),
+    Prepend(Expr),
 }
 
 /// intermediate representation match arm.
@@ -384,6 +385,7 @@ pub enum BinaryOp {
     Mul,
     Div,
     Mod,
+    Power,
     Eq,
     NotEq,
     Lt,

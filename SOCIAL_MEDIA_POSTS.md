@@ -31,85 +31,15 @@ We're thrilled to announce a significant syntax improvement in the Poly language
 
 **Example:**
 ~~~
-
-
-
-
-
-
-
 // Old syntax
-
-
-
-
-
-
-
 if x > 0 then
-
-
-
-
-
-
-
     put x
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // New syntax
-
-
-
-
-
-
-
 if x > 0,
-
-
-
-
-
-
-
     put x
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 This change makes Poly code more concise and aligns with modern language design trends.
@@ -147,69 +77,13 @@ end if
 
 **After:**
 ~~~poly fragment
-
-
-
-
-
-
-
 if x > 0,
-
-
-
-
-
-
-
     put x
-
-
-
-
-
-
-
 else if x < 0,
-
-
-
-
-
-
-
     put "negative"
-
-
-
-
-
-
-
 else,
-
-
-
-
-
-
-
     put "zero"
-
-
-
-
-
-
-
 end if
-
-
-
-
-
-
-
 ~~~
 
 The comma syntax is:
@@ -265,9 +139,6 @@ We're excited to announce a new syntax improvement in the Poly programming langu
 
 **Before:**
 ~~~
-
-
-
 if x > 0 then
     put x
 end if
@@ -275,9 +146,6 @@ end if
 
 **After:**
 ~~~
-
-
-
 if x > 0,
     put x
 end if

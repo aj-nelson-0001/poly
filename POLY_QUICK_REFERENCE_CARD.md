@@ -22,125 +22,20 @@ end fn
 ## Output and Input
 
 ~~~poly
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     put "hello"
-
-
-
-
-
-
-
     put "log entry" to "app.log"
-
-
-
-
-
-
-
     put "more" to "app.log" -append
-
-
-
-
-
-
-
     error "failure"
-
-
-
-
-
-
-
     warn "warning"
-
-
-
-
-
-
-
     info "details"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     var name ustring := get
-
-
-
-
-
-
-
     var age i32 := get --as i32
-
-
-
-
-
-
-
     var field ustring := get --until unicode ","
-
-
-
-
-
-
-
     var password ustring := get --mask unicode "*"
-
-
-
-
-
-
-
     var header bytes := get from "data.bin" --bytes 8
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 `put` always adds a newline. Diagnostic commands write `[ERROR]`, `[WARN]`, or
@@ -179,117 +74,19 @@ Loop ranges include both endpoints. Collection loops borrow their source collect
 ## Functions and Data
 
 ~~~poly
-
-
-
-
-
-
-
 fn add(a: i32, b: i32): i32
-
-
-
-
-
-
-
     return a + b
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 struct Point
-
-
-
-
-
-
-
     var x: i32
-
-
-
-
-
-
-
     var y: i32
-
-
-
-
-
-
-
 end struct
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     var result := add(2, 3)
-
-
-
-
-
-
-
     put result
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 The Rust target supports the broader parser/checker feature set, including enums,
@@ -314,77 +111,14 @@ end fn
 ~~~
 
 ~~~poly fragment
-
-
-
-
-
-
-
 #c
-
-
-
-
-
-
-
 int helper(int x) { return x * 2; }
-
-
-
-
-
-
-
 #endc
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn main()
-
-
-
-
-
-
-
     var result i32 := helper(21)
-
-
-
-
-
-
-
     put result
-
-
-
-
-
-
-
 end fn
-
-
-
-
-
-
-
 ~~~
 
 Foreign blocks must be top-level and their contents are copied as target-language

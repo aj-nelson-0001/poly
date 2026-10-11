@@ -465,7 +465,7 @@ macro_declaration ::= "macro" <identifier> "(" [<parameters>] ")"
 ### I/O Statements
 
 ```
-put_statement   ::= "put" <expression> ["to" <expression> ["-append"]]
+put_statement   ::= "put" <expression> ["to" <expression> ["-append" | "-prepend"]]
 
 error_statement ::= "error" <expression>
 

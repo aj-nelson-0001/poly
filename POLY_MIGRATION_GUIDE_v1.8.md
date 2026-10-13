@@ -20,6 +20,11 @@ removing SuperBASIC and assembly-style commands that were hard to read.
 | `put "hello" >> "file.txt"` | `put "hello" to "file.txt" -append` | Append to file |
 | `get < "file.txt"` | `get from "file.txt"` | Read from file |
 
+> **Poly v2 note:** v2 restored the comma forms as **live** commands —
+> `add x, 5` and `sub x, 3` are valid again and lower to `x := x + 5` /
+> `x := x - 3`. Only `inc` / `dec` and the comma-less `add x 5` shapes
+> stay retired.
+
 ## Detailed Changes
 
 ### 1. Loop Syntax (remove colon)
@@ -51,6 +56,11 @@ The infinite loop (`loop ... end loop`) is unchanged.
 ### 2. Remove `add`, `sub`, `inc`, `dec`
 
 These assembly-style mutation commands have been removed. Use the `:=` assignment operator with arithmetic expressions instead.
+
+> **Poly v2 note:** the comma forms `add count, 1` / `sub count, 1` are
+> **live** again in v2 — they lower to `count := count + 1` /
+> `count := count - 1`. `inc` / `dec` (and the comma-less `add count 1`
+> shapes) remain retired.
 
 **Before:**
 ~~~poly fragment

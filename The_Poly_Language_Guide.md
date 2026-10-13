@@ -762,6 +762,45 @@ fn main() {
 > symbol `%` is retired. But `^` **is** "to the power of": `x ^ 2` is `x`
 > squared. Need it? It is built in — see the next section.
 
+## Mutation commands: `add` and `sub`
+
+**What they do:** `add x, n` adds `n` to `x`, and `sub x, n` subtracts it.
+Each is a shortcut that lowers to an ordinary assignment — `x := x + n`
+and `x := x - n`. The target must be a plain variable, and **the comma is
+required**: `add x n` (no comma) is rejected as retired syntax.
+
+**How to use it:**
+
+~~~poly
+fn main()
+    var total i32 := 10
+    add total, 5      # total is now 15  (total := total + 5)
+    sub total, 3      # total is now 12  (total := total - 3)
+    put total         # 12
+end fn
+~~~
+
+Output:
+
+~~~text
+12
+~~~
+
+**The same thing in Rust:**
+
+~~~rust
+fn main() {
+    let mut total: i32 = 10;
+    total += 5;   // add total, 5
+    total -= 3;   // sub total, 3
+    println!("{}", total);
+}
+~~~
+
+> **Remember:** `add` and `sub` are live commands only in this comma form.
+> The old bare spellings — `add x n`, `sub x n`, and `inc x` / `dec x` —
+> are retired (see the retired-syntax table at the end of the book).
+
 ## The `^` power operator
 
 **What it does:** `a ^ b` raises `a` to the power `b` (exponentiation).
@@ -3564,18 +3603,13 @@ Every opener needs its own closer:
 | Old (rejected) | New (correct) |
 |----------------|---------------|
 | `x += 3` | `x := x + 3` |
-| `add x` / `inc x` | `x := x + 1` |
-| `sub x` / `dec x` | `x := x - 1` |
+| `inc x` | `x := x + 1` |
+| `dec x` | `x := x - 1` |
 | `set x to y` | `x := y` |
 | `a % b` | `a mod b` |
 | `a && b`, `a \|\| b`, `!a` | `a and b`, `a or b`, `not a` |
 | `var x = 5` | `var x := 5` |
 | `loop i: 0..10` | `loop i 0..10` (no colon) |
-
-**Note on `add` / `sub`:** the *bare* forms above (`add x`, `sub x`) are retired,
-but `add` and `sub` are also **live commands** when written with a comma:
-`add x, n` adds `n` to `x` and `sub x, n` subtracts it, each lowering to
-`x := x ± n`. The comma is required — `add x n` (no comma) is rejected.
 
 ## Reserved words — names you cannot use
 

@@ -545,22 +545,21 @@ variables, functions, or methods.
 
 ## 10. Removed Assembly-Style Operators
 
-The assembly-style mutation statements and compound assignment operators from
-earlier versions are retired. The parser rejects them with a migration hint
-pointing at the explicit form:
+The bare, comma-less assembly-style mutation statements and compound
+assignment operators from earlier versions are retired. The parser rejects
+them with a migration hint pointing at the explicit form:
 
 | Retired syntax | Replacement |
 |------|-------------|
-| `add x` | `x := x + 1` |
-| `sub x` | `x := x - 1` |
 | `inc x` | `x := x + 1` |
 | `dec x` | `x := x - 1` |
 | `x += n` | `x := x + n` |
 | `x -= n` | `x := x - n` |
 
-The retired forms above are the bare, comma-less statements. The comma
-command forms `add x, n` / `sub x, n` are live syntax and desugar to
-`x := x + n` / `x := x - n` (see §3, Mutation).
+`add` and `sub` are live commands, not retired: only the bare,
+comma-less statement shapes (`add x n`, `sub x n`) are rejected. Their
+comma forms `add x, n` / `sub x, n` desugar to `x := x + n` /
+`x := x - n` (see §3, Mutation).
 
 ### Exponentiation
 

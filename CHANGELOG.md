@@ -6,6 +6,13 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Added
 
+- **The `add x, n` / `sub x, n` mutation commands.**
+  `add x, n` adds `n` to `x` and `sub x, n` subtracts it, each lowering to
+  `x := x ± n`. The target is a plain variable and the comma is required
+  (`add x n` with no comma is rejected). This is the comma form of the
+  `add`/`sub` keywords; the bare, comma-less shapes (`add x`, `sub x`, and
+  `inc`/`dec`) remain retired and still produce migration diagnostics.
+
 - **The `-prepend` flag on `put ... to "file"`.**
   `put "Hello" to "Hi.txt" -prepend` writes the value in *front* of the
   file's existing contents (where `-append` adds after them), creating the

@@ -21,7 +21,8 @@ fn main()
 end fn
 ~~~
 
-Use `:=` for initialization and assignment. Use `=` for equality. `==` is rejected. Logical, bitwise, and remainder
+Use `:=` for initialization and assignment. Use `=` for equality. `==` is rejected. `add x, n` / `sub x, n` are
+mutation commands that add/subtract `n`, lowering to `x := x ± n`; the comma is required (`add x n` is rejected). Logical, bitwise, and remainder
 operators  \
 are keyword-spelled: `and`, `or`, `not`, `xor`, `mod`, `bitand`, `bitor`, `bitnot`, and `shift left` / `shift right` (`<<`
 and \

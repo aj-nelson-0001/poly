@@ -645,6 +645,27 @@ Complete async programs live in `examples/async_await.poly` and
 
 ---
 
+## Mutation Commands: `add` and `sub`
+
+For a plain variable, `add x, n` adds `n` and `sub x, n` subtracts it. Each is
+shorthand that lowers to the explicit re-assignment `x := x ± n`, so the type
+checker and every backend treat it like any other assignment. The target must
+be a single variable name (not a field or an index) and the comma is required.
+
+~~~poly
+fn main()
+    var count i32 := 10
+    add count, 5        # count := count + 5  -> 15
+    sub count, 3        # count := count - 3  -> 12
+    put count           # 12
+end fn
+~~~
+
+The bare, comma-less forms (`add count 5`, and the old `inc`/`dec`) are retired
+and rejected — always separate the value with a comma.
+
+---
+
 ## Summary
 
 - **Output**: Use `put` for console output (always adds a newline)
@@ -660,6 +681,8 @@ Complete async programs live in `examples/async_await.poly` and
 - **Enum Payloads**: Tuple payloads bind positionally in match arms
 - **Structs**: Define data with `struct`, attach methods with `impl`
 - **Methods**: Mutating methods take and return `self`; write `c := c.bump()`
+- **Mutation Commands**: `add x, n` / `sub x, n` add/subtract `n` on a plain
+  variable (lower to `x := x ± n`); the comma is required
 - **Async**: Declare `async fn`, run with `.await`; `spawn` for fire-and-forget
   tasks (Rust target only)
 

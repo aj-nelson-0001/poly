@@ -63,6 +63,7 @@ statement ::= variable_declaration
             | let_declaration
             | const_declaration
             | assignment
+            | mutation_command
             | function_declaration
             | struct_declaration
             | enum_declaration
@@ -86,6 +87,10 @@ let_declaration      ::= "let" identifier [ ":" type ] ":=" expression
 const_declaration    ::= "const" identifier ":=" expression
 assignment           ::= assignment_target ":=" expression
 assignment_target    ::= identifier { "." identifier | "." integer | "[" expression "]" }
+mutation_command     ::= ( "add" | "sub" ) identifier "," expression
+// `add x, n` / `sub x, n` desugar to `x := x + n` / `x := x - n`; the target
+// is a plain variable name and the comma is required. The bare, comma-less
+// `add x n` / `sub x n` shapes remain retired.
 
 function_declaration ::= [ "async" ] "fn" identifier [ generic_parameters ]
                          "(" [ parameters ] ")" [ ":" type ] function_body

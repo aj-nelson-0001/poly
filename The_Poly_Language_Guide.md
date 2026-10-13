@@ -3572,6 +3572,11 @@ Every opener needs its own closer:
 | `var x = 5` | `var x := 5` |
 | `loop i: 0..10` | `loop i 0..10` (no colon) |
 
+**Note on `add` / `sub`:** the *bare* forms above (`add x`, `sub x`) are retired,
+but `add` and `sub` are also **live commands** when written with a comma:
+`add x, n` adds `n` to `x` and `sub x, n` subtracts it, each lowering to
+`x := x ± n`. The comma is required — `add x n` (no comma) is rejected.
+
 ## Reserved words — names you cannot use
 
 - `spawn` — launches background tasks (so it cannot be a variable or

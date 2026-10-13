@@ -25,7 +25,8 @@ fn main()
 end fn
 ~~~
 
-Declarations and assignments use `:=`. Equality uses `=`. The legacy `==` spelling is rejected. `put` always writes a
+Declarations and assignments use `:=`. Equality uses `=`. The legacy `==` spelling is rejected. `add x, n` / `sub x, n` are
+mutation commands that add/subtract `n`, lowering to `x := x ± n`; the comma is required (`add x n` is rejected). `put` always writes a
 newline; \
   \
 there is no `-n` flag.

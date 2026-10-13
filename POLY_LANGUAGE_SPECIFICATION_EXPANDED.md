@@ -91,27 +91,33 @@ count := count * 2
 
 ## 3. Arithmetic Operations
 
-### Assembly-Style Instructions
-
-| Poly Syntax | Default Step | Transpiled Rust Output |
-|-------------|--------------|------------------------|
-| `add counter` | 1 | `counter += 1;` |
-| `counter := counter + 10` | Explicit (10) | `counter += 10;` |
-| `sub score` | 1 | `score -= 1;` |
-| `score := score - 15` | Explicit (15) | `score -= 15;` |
-| `counter := counter + 1` | Alias for `add` | `counter += 1;` |
-| `counter := counter - 1` | Alias for `sub` | `counter -= 1;` |
-
 ### Mutation Commands
 
+Poly mutation uses explicit re-assignment (`x := x + n`) or the comma-form
+`add` / `sub` commands, which desugar to it. The value is always explicit —
+there is no implicit default step.
+
+| Poly Syntax | Lowers To | Transpiled Rust Output |
+|-------------|-----------|------------------------|
+| `add counter, 10` | `counter := counter + 10` | `counter += 10;` |
+| `counter := counter + 10` | (explicit form) | `counter += 10;` |
+| `sub score, 15` | `score := score - 15` | `score -= 15;` |
+| `score := score - 15` | (explicit form) | `score -= 15;` |
+| `add counter, 1` | `counter := counter + 1` | `counter += 1;` |
+| `sub score, 1` | `score := score - 1` | `score -= 1;` |
+
+`add x, n` / `sub x, n` require the comma and a plain-variable target and
+lower to `x := x ± n`. The bare forms (`add counter`, `sub score`, `inc`,
+`dec`) are retired and rejected.
+
 ~~~poly fragment
-add x          // x += 1
-x := x + 5       // x += 5
-sub x          // x -= 1
-x := x - 2       // x -= 2
-x := x + 1          // x += 1
-x := x - 1          // x -= 1
-x := y     // replace x with y; self-reference is rejected
+add x, 5         // x := x + 5
+sub x, 2         // x := x - 2
+x := x + 5       // explicit form of add
+x := x - 2       // explicit form of sub
+x := x + 1       // x += 1
+x := x - 1       // x -= 1
+x := y           // replace x with y; self-reference is rejected
 ~~~
 
 ### Bitwise Operations

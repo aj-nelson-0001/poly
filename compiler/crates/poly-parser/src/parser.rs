@@ -652,6 +652,15 @@ impl<'a> Parser<'a> {
                 Ok(Statement::ForeignBlock { language, content })
             }
             _ => {
+                // `add x, 5` / `sub x, 5` mutation commands desugar to
+                // ordinary assignments before the retired-shape check, so the
+                // comma form is live while the bare `add x n` form stays an
+                // error.
+                if let Some(op) = self.starts_mutation_command() {
+                    return self.parse_mutation_command(op).inspect(|_| {
+                        self.stmt_depth -= 1;
+                    });
+                }
                 if let Some(error) = self.detect_retired_statement() {
                     return Err(error);
                 }
@@ -749,6 +758,16 @@ impl<'a> Parser<'a> {
         ) {
             return None;
         }
+        // `add`/`sub` with a following comma are the live mutation commands
+        // (`add x, 5`), not the retired bare form, so they are not flagged.
+        if matches!(name, "add" | "sub")
+            && matches!(
+                self.tokens.get(self.pos + 2).map(|token| &token.kind),
+                Some(TokenKind::Comma)
+            )
+        {
+            return None;
+        }
         // `set` is only retired in the `set x to y` shape.
         if name == "set"
             && !matches!(
@@ -759,6 +778,56 @@ impl<'a> Parser<'a> {
             return None;
         }
         Some((name, span))
+    }
+
+    /// Detect an `add`/`sub` mutation command (`add x, 5` / `sub x, 5`). The
+    /// command form is `add <var>, <value>`: a bare `add`/`sub` name, then the
+    /// mutated variable's name, then a comma. The comma is what distinguishes
+    /// the live command from the retired bare `add x n` shape, which
+    /// `statement_starts_retired` still rejects.
+    fn starts_mutation_command(&self) -> Option<BinaryOp> {
+        let name = match &self.tokens[self.pos].kind {
+            TokenKind::Identifier(name) if name == "add" || name == "sub" => name.clone(),
+            _ => return None,
+        };
+        if !matches!(
+            self.tokens.get(self.pos + 1).map(|token| &token.kind),
+            Some(TokenKind::Identifier(_))
+        ) {
+            return None;
+        }
+        if !matches!(
+            self.tokens.get(self.pos + 2).map(|token| &token.kind),
+            Some(TokenKind::Comma)
+        ) {
+            return None;
+        }
+        Some(if name == "add" {
+            BinaryOp::Add
+        } else {
+            BinaryOp::Sub
+        })
+    }
+
+    /// Parse `add var, value` / `sub var, value`, desugaring to
+    /// `var := var <op> value`. Emitting an ordinary `Statement::Assignment`
+    /// means the type checker, IR, and every codegen backend handle the
+    /// command through the existing assignment path with no extra support.
+    /// The target is restricted to a plain variable name.
+    fn parse_mutation_command(&mut self, op: BinaryOp) -> Result<Statement, ParseError> {
+        self.advance(); // consume 'add'/'sub'
+        let name = self.expect_identifier()?;
+        self.expect(&TokenKind::Comma)?;
+        let value = self.parse_expression()?;
+        let target = Expression::Identifier(name);
+        Ok(Statement::Assignment {
+            target: target.clone(),
+            value: Expression::BinaryOp {
+                op,
+                left: Box::new(target),
+                right: Box::new(value),
+            },
+        })
     }
 
     /// Build the migration diagnostic for the retired compound assignments
@@ -5922,7 +5991,8 @@ end fn"#;
     #[test]
     fn retired_add_statement_carries_migration_suggestion() -> Result<(), Box<dyn std::error::Error>>
     {
-        let Err(error) = parse_source("add x, 5") else {
+        // The comma-less bare form stays retired; only `add x, n` is live.
+        let Err(error) = parse_source("add x 5") else {
             panic!("expected an Err result")
         };
         assert!(error.message.contains("removed"), "got: {}", error.message);
@@ -5930,6 +6000,49 @@ end fn"#;
             error.suggestion.as_deref(),
             Some("Use `x := x + n` instead of `add x n`")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn add_and_sub_commands_desugar_to_assignments() -> Result<(), Box<dyn std::error::Error>> {
+        for (source, op) in [("add x, 5", BinaryOp::Add), ("sub x, 5", BinaryOp::Sub)] {
+            let prog = match parse_source(source) {
+                Ok(prog) => prog,
+                Err(error) => panic!("`{source}` should parse, got: {error:?}"),
+            };
+            assert_eq!(
+                prog.statements.len(),
+                1,
+                "`{source}` should parse to one statement"
+            );
+            match &prog.statements[0].node {
+                Statement::Assignment { target, value } => {
+                    assert!(
+                        matches!(target, Expression::Identifier(name) if name == "x"),
+                        "`{source}` target should be `x`, got {target:?}"
+                    );
+                    match value {
+                        Expression::BinaryOp {
+                            op: got_op,
+                            left,
+                            right,
+                        } => {
+                            assert_eq!(got_op, &op, "`{source}` operator mismatch");
+                            assert!(
+                                matches!(left.as_ref(), Expression::Identifier(name) if name == "x"),
+                                "`{source}` left operand should be `x`, got {left:?}"
+                            );
+                            assert!(
+                                matches!(right.as_ref(), Expression::IntLiteral(text) if text == "5"),
+                                "`{source}` right operand should be `5`, got {right:?}"
+                            );
+                        }
+                        other => panic!("`{source}` value should be a binary op, got {other:?}"),
+                    }
+                }
+                other => panic!("`{source}` should desugar to an assignment, got {other:?}"),
+            }
+        }
         Ok(())
     }
 

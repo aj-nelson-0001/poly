@@ -113,9 +113,7 @@ Strip Poly down to only what an assembly-like syntax layer needs. Remove feature
 | Constants | `const MAX := 100` | Simple declaration |
 | I/O | `put`, `get`, `error`, `warn`, `info` | Poly's primary value add |
 | File I/O | `put to`, `get from` | Shell-like, simple |
-| Arithmetic |`+`, `-`, `*`, `/`, `%` operators | Assembly-style `add`/`sub`/`inc`/`dec`/`set x to` statements are retired (v \
-2  \
-parser rejects them with migration hints) |
+| Arithmetic |`+`, `-`, `*`, `/`, `%` operators | Bare assembly-style `add`/`sub`/`inc`/`dec`/`set x to` statements are retired (v2 parser rejects them with migration hints); the comma form `add x, n` / `sub x, n` is live |
 | Control flow | `if`, `while`, `loop` | Simple loops and conditions |
 | Functions | `fn name(params): Type ... end fn` | Basic signatures only |
 | Structs | `struct Name ... end struct` | Simple field declarations |

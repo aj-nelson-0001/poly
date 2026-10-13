@@ -253,12 +253,21 @@ name = other               # equality comparison, not assignment
 
 ~~~poly fragment
 name := name + value       # explicit re-assignment
+add name, value            # shorthand for name := name + value
+sub name, value            # shorthand for name := name - value
 vector.pop()               # remove and yield the last element
 ~~~
 
-Compound assignment operators (`+=`, `-=`) and the assembly-style `add` /
-`sub` / `inc` / `dec` statements are retired syntax: the parser rejects them
-and suggests the explicit `name := name + value` form.
+`add name, value` and `sub name, value` add or subtract `value` from
+`name`. They are shorthand for the explicit re-assignment and lower to
+`name := name + value` / `name := name - value`, so the target is a plain
+variable name and the comma is required (`add name value` without the comma
+is rejected).
+
+Compound assignment operators (`+=`, `-=`) and the bare assembly-style
+`add` / `sub` / `inc` / `dec` statements (without the comma) remain retired
+syntax: the parser rejects them and suggests the explicit
+`name := name + value` form.
 
 ---
 
@@ -548,6 +557,10 @@ pointing at the explicit form:
 | `dec x` | `x := x - 1` |
 | `x += n` | `x := x + n` |
 | `x -= n` | `x := x - n` |
+
+The retired forms above are the bare, comma-less statements. The comma
+command forms `add x, n` / `sub x, n` are live syntax and desugar to
+`x := x + n` / `x := x - n` (see §3, Mutation).
 
 ### Exponentiation
 

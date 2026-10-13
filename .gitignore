@@ -8,3 +8,5 @@ __pycache__/
 *.rs.org
 /isprime-bin
 /vscode/node_modules/
+# Local on-demand skill kept out of the repository on purpose.
+/.agents/skills/benjamin-plus/

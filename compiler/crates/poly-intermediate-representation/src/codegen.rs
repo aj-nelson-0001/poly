@@ -1710,6 +1710,21 @@ impl IntermediateRepresentationCodeGen {
                     .map(|a| self.gen_expr(a))
                     .collect::<Result<Vec<String>, String>>()?;
                 match method.as_str() {
+                    // Builtin `Timer` methods. `Timer.now()` captures the current
+                    // wall-clock time (Unix epoch milliseconds, `i64`); reading it
+                    // back via `t.epoch_ms()` is the identity on the captured value.
+                    // `now` is matched on the AST (the receiver is the `Timer` type
+                    // name, so its rendered form is ignored).
+                    "now"
+                        if matches!(object.as_ref(), Expr::Identifier(name) if name == "Timer") =>
+                    {
+                        "std::time::SystemTime::now()
+                             .duration_since(std::time::UNIX_EPOCH)
+                             .unwrap()
+                             .as_millis() as i64"
+                            .to_string()
+                    }
+                    "epoch_ms" if args.is_empty() => format!("({} as i64)", object_str),
                     "eof" => {
                         // `BufRead::fill_buf` peeks without consuming; an empty
                         // buffer (or a failed read) means end-of-file.

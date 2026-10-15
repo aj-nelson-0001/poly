@@ -94,6 +94,14 @@ struct EnumInfo {
 pub struct TypeChecker {
     // The last scope is the innermost one. Functions and modules push temporary
     // scopes instead of mutating the program-level environment.
+    //
+    // Reserved-command-word mirrors.
+    //
+    // Enum variants share the same command-word-reserved namespace as
+    // match-arm binders, so a variant named `add`/`sub` is rejected in
+    // pattern position by `check_pattern` — the pattern-level mirror of the
+    // parser's `is_reserved_command_name` / `expect_binding_identifier`
+    // guard.
     scopes: Vec<HashMap<String, PolyType>>,
     // Declarations live in separate namespaces so a function and a struct can
     // be resolved independently while checking expressions.
@@ -1723,6 +1731,14 @@ impl TypeChecker {
         method: &str,
         args: &[Expression],
     ) -> PolyType {
+        // Builtin `Timer` namespace, checked before the receiver is resolved:
+        // `Timer.now()` is a constructor call on the type name itself, so there is
+        // no variable to look up — resolving `Timer` as an expression would
+        // wrongly report "unknown variable".
+        if method == "now" && matches!(object, Expression::Identifier(name) if name == "Timer") {
+            self.expect_no_arguments(method, &[], PolyType::Named("Timer".to_string()));
+            return PolyType::Named("Timer".to_string());
+        }
         // Resolve the receiver first; method lookup depends on its concrete
         // struct, enum, or built-in container type.
         let object_type = self.check_expression(object);
@@ -2014,6 +2030,13 @@ impl TypeChecker {
                 "get_line" => self.expect_no_arguments(method, &argument_types, PolyType::String),
                 _ => self.unknown_method(method, &object_type),
             },
+            // Builtin `Timer` value: `t.epoch_ms()` reads the wall-clock
+            // milliseconds captured when `Timer.now()` ran. `i64` matches the
+            // Rust (`SystemTime`) and C (`clock_gettime`) lowering.
+            PolyType::Named(name) if name == "Timer" => match method {
+                "epoch_ms" => self.expect_no_arguments(method, &argument_types, PolyType::I64),
+                _ => self.unknown_method(method, &object_type),
+            },
             PolyType::Named(name) => {
                 let signature = self
                     .structs
@@ -2240,9 +2263,11 @@ impl TypeChecker {
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             self.require_compatible(actual, expected, format!("variant `{name}`"));
         }
-    }
-
-    fn check_pattern(&mut self, pattern: &Pattern, scrutinee_type: &PolyType, top_level: bool) {
+    }    /// `add` and `sub` are reserved command words: they cannot be used as
+    /// bindings, including match-arm bindings. This is the type-checker mirror
+    /// of the parser's `is_reserved_command_name` guard (shared by
+    /// `expect_binding_identifier`).
+    pub fn check_pattern(&mut self, pattern: &Pattern, scrutinee_type: &PolyType, top_level: bool) {
         // Pattern checking validates both the pattern's shape and any literal
         // or enum payload types against the match scrutinee.
         match pattern {
@@ -3312,9 +3337,7 @@ mod tests {
     #[test]
     fn accepts_option_some_none_values_and_patterns() -> Result<(), Box<dyn std::error::Error>> {
         let source = concat!(
-            "fn main()\n    var maybe Option<i32> := Some(42)\n    var empty Option<i32> := None\n    mat",
-            "ch maybe\n        Some(v), put v\n        None, put 0\n    end match\n    match empty\n     ",
-            "   Some(v), put v\n        None, put 0\n    end match\nend fn",
+            "fn main()\n    var maybe Option<i32> := Some(42)\n    var empty Option<i32> := None\n    match maybe\n        Some(v), put v\n        None, put 0\n    end match\n    match empty\n        Some(v), put v\n        None, put 0\n    end match\nend fn",
         );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
@@ -3528,8 +3551,7 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let Err(errors) = check(
             concat!(
-                "enum Shape\n    Circle(i32)\nend enum\nfn main()\n    var s := Shape::Circle(1)\n    match s",
-                "\n        Gren(x), put x\n    end match\nend fn",
+                "enum Shape\n    Circle(i32)\nend enum\nfn main()\n    var s := Shape::Circle(1)\n    match s\n        Gren(x), put x\n    end match\nend fn",
             ),
         )
         else { panic!("expected an Err result") };
@@ -3828,9 +3850,7 @@ mod tests {
         // `xs.get(i)` must resolve to `Option<T>` and reject non-integer
         // indexes, so the result is usable with `match`/`if` patterns.
         let source = concat!(
-            "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    match xs.get(0)\n        Some(value), put v",
-            "alue.to_string()\n        None, put \"empty\"\n    end match\n    match unicode \"abc\".get(",
-            "1)\n        Some(c), put c\n        None, put \"none\"\n    end match\nend fn",
+            "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    match xs.get(0)\n        Some(value), put value.to_string()\n        None, put \"empty\"\n    end match\n    match \"abc\".get(1)\n        Some(c), put c\n        None, put \"none\"\n    end match\nend fn",
         );
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())

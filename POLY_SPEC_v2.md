@@ -255,6 +255,8 @@ name = other               # equality comparison, not assignment
 name := name + value       # explicit re-assignment
 add name, value            # shorthand for name := name + value
 sub name, value            # shorthand for name := name - value
+inc name                   # shorthand for name := name + 1
+dec name                   # shorthand for name := name - 1
 vector.pop()               # remove and yield the last element
 ~~~
 
@@ -264,10 +266,13 @@ vector.pop()               # remove and yield the last element
 variable name and the comma is required (`add name value` without the comma
 is rejected).
 
-Compound assignment operators (`+=`, `-=`) and the bare assembly-style
-`add` / `sub` / `inc` / `dec` statements (without the comma) remain retired
-syntax: the parser rejects them and suggests the explicit
-`name := name + value` form.
+`inc name` and `dec name` are operand-free commands that lower to
+`name := name + 1` / `name := name - 1`; the target is again a plain
+variable name.
+
+Compound assignment operators (`+=`, `-=`) and the bare comma-less
+`add name value` / `sub name value` statements remain retired syntax: the
+parser rejects them and suggests the explicit `name := name + value` form.
 
 ---
 
@@ -545,21 +550,22 @@ variables, functions, or methods.
 
 ## 10. Removed Assembly-Style Operators
 
-The bare, comma-less assembly-style mutation statements and compound
+The bare, comma-less `add` / `sub` mutation statements and compound
 assignment operators from earlier versions are retired. The parser rejects
 them with a migration hint pointing at the explicit form:
 
 | Retired syntax | Replacement |
 |------|-------------|
-| `inc x` | `x := x + 1` |
-| `dec x` | `x := x - 1` |
 | `x += n` | `x := x + n` |
 | `x -= n` | `x := x - n` |
+| `add x n` | `x := x + n` |
+| `sub x n` | `x := x - n` |
 
-`add` and `sub` are live commands, not retired: only the bare,
-comma-less statement shapes (`add x n`, `sub x n`) are rejected. Their
-comma forms `add x, n` / `sub x, n` desugar to `x := x + n` /
-`x := x - n` (see §3, Mutation).
+`add`, `sub`, `inc`, and `dec` are live commands, not retired: only the
+bare, comma-less `add x n` / `sub x n` shapes are rejected. Their comma
+forms `add x, n` / `sub x, n` desugar to `x := x + n` / `x := x - n` and
+the operand-free `inc x` / `dec x` desugar to `x := x + 1` /
+`x := x - 1` (see §3, Mutation).
 
 ### Exponentiation
 

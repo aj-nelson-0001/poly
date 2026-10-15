@@ -88,9 +88,11 @@ const_declaration    ::= "const" identifier ":=" expression
 assignment           ::= assignment_target ":=" expression
 assignment_target    ::= identifier { "." identifier | "." integer | "[" expression "]" }
 mutation_command     ::= ( "add" | "sub" ) identifier "," expression
+                       | ( "inc" | "dec" ) identifier
 // `add x, n` / `sub x, n` desugar to `x := x + n` / `x := x - n`; the target
 // is a plain variable name and the comma is required. The bare, comma-less
-// `add x n` / `sub x n` shapes remain retired.
+// `add x n` / `sub x n` shapes remain retired. `inc x` / `dec x` carry no
+// operand and desugar to `x := x + 1` / `x := x - 1` (same plain target).
 
 function_declaration ::= [ "async" ] "fn" identifier [ generic_parameters ]
                          "(" [ parameters ] ")" [ ":" type ] function_body

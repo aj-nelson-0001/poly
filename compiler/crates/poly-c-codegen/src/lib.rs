@@ -31,10 +31,10 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::Write;
 
-use poly_parser::{int_literal_text, parse_int_literal_i64};
 use poly_parser::ast::{
     self, BinaryOp, Expression, FunctionDecl, Statement, TypeAnnotation, UnaryOp,
 };
+use poly_parser::{int_literal_text, parse_int_literal_i64};
 
 /// printf format specifiers for 64-bit stdint types, emitted as string
 /// literals spelling the `<inttypes.h>` macro names. The generated source
@@ -82,6 +82,7 @@ struct CGenerator {
     /// Requested when an integer `^` (power) is rendered; gates the
     /// poly_pow_ll / poly_pow_ull runtime helpers (see insert_concat_helper).
     power_helper_emitted: Cell<bool>,
+    timer_helper_emitted: Cell<bool>,
     /// Set while rendering a declared-`i64`/`i64_t` initializer so an
     /// integer `^` keeps 64-bit precision instead of the int32_t truncation
     /// cast (the operand may be an ordinary i32-range literal, so operand
@@ -125,6 +126,7 @@ impl CGenerator {
             concat_helper_emitted: Cell::new(false),
             to_string_helper_emitted: Cell::new(false),
             power_helper_emitted: Cell::new(false),
+            timer_helper_emitted: Cell::new(false),
             power_i64_context: Cell::new(false),
             fn_return_types: std::collections::HashMap::new(),
             var_widths: RefCell::new(std::collections::HashMap::new()),
@@ -225,6 +227,13 @@ impl CGenerator {
             }
         }
 
+        // POSIX feature macro: the CLI compiles generated C with -std=c11,
+        // which by default hides POSIX declarations. `Timer.now()` lowers to
+        // clock_gettime(CLOCK_REALTIME) + struct timespec, both of which need
+        // this macro visible before the first <time.h> include. It is emitted
+        // before the header comment because runtime helpers are spliced in at
+        // the include-block marker (see insert_concat_helper) and must see it.
+        self.output.push_str("#define _DEFAULT_SOURCE 1\n");
         self.output
             .push_str("/* Generated from Poly source code. */\n");
         self.output.push_str("#include <stdbool.h>\n");
@@ -238,7 +247,9 @@ impl CGenerator {
         self.output.push_str("#include <stdlib.h>\n");
         self.output.push_str("#include <string.h>\n");
         // pow() for float `^`; linked with -lm by `poly --target c`.
-        self.output.push_str("#include <math.h>\n\n");
+        self.output.push_str("#include <math.h>\n");
+        // clock_gettime/CLOCK_REALTIME/struct timespec for `Timer.now()`.
+        self.output.push_str("#include <time.h>\n\n");
         for block in &self.c_blocks {
             self.output.push_str(block.trim_matches('\n'));
             self.output.push_str("\n\n");
@@ -1253,6 +1264,20 @@ impl CGenerator {
                 // code needs; everything else stays a hard error so callers
                 // know to use a #c helper instead of silently miscompiling.
                 match method.as_str() {
+                    // Builtin `Timer` methods. `Timer.now()` captures the current
+                    // wall-clock time (Unix epoch milliseconds, `i64`); `t.epoch_ms()`
+                    // reads that captured value back (identity). `now` is matched on
+                    // the AST because its receiver is the `Timer` type name, not a
+                    // value expression.
+                    "now" if matches!(object.as_ref(), Expression::Identifier(name) if name == "Timer") =>
+                    {
+                        self.ensure_timer_helper();
+                        Ok("poly_timer_now_ms()".to_string())
+                    }
+                    "epoch_ms" if args.is_empty() => {
+                        let obj = self.expr(object)?;
+                        Ok(format!("((int64_t)({obj}))"))
+                    }
                     "len" if args.is_empty() => {
                         // String length: bytes before the NUL terminator,
                         // matching how this backend stores strings (and how
@@ -1589,6 +1614,11 @@ impl CGenerator {
         self.to_string_helper_emitted.set(true);
     }
 
+    /// Request the `poly_timer_now_ms` helper (emitted by insert_concat_helper).
+    fn ensure_timer_helper(&self) {
+        self.timer_helper_emitted.set(true);
+    }
+
     /// Insert the `poly_concat` definition into the finished output when any
     /// value-position concatenation was rendered. Called from `generate`
     /// after all expression rendering, positioned immediately after the
@@ -1601,7 +1631,8 @@ impl CGenerator {
         if !(self.concat_helper_emitted.get()
             || self.to_string_helper_emitted.get()
             || self.bool_str_emitted.get()
-            || self.power_helper_emitted.get())
+            || self.power_helper_emitted.get()
+            || self.timer_helper_emitted.get())
         {
             return;
         }
@@ -1631,6 +1662,16 @@ impl CGenerator {
                 "const char *poly_bool_str(int value) {\n    return value ? \"true\" : \"false\";\n}\n\n",
             );
         }
+        if self.timer_helper_emitted.get() {
+            // Wall-clock milliseconds since the Unix epoch (i64), matching the
+            // Rust target's SystemTime::now().duration_since(UNIX_EPOCH). Uses
+            // clock_gettime(CLOCK_REALTIME); if it fails the value is 0, which
+            // keeps the helper total (no error path on a Timer read). The
+            // <time.h> include is emitted in the top include block below.
+            helpers.push_str(
+                "static long long poly_timer_now_ms(void) {\n    struct timespec ts;\n    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) return 0;\n    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;\n}\n\n",
+            );
+        }
         if self.to_string_helper_emitted.get() {
             helpers.push_str(
                 concat!(
@@ -1654,7 +1695,9 @@ impl CGenerator {
                 ),
             );
         }
-        const MARKER: &str = "#include <math.h>\n\n";
+        // The <time.h> include for the timer helper is emitted unconditionally
+        // in the header block (see generate), so no marker rewrite is needed here.
+        const MARKER: &str = "#include <time.h>\n\n";
         if let Some(pos) = self.output.find(MARKER) {
             let insert_at = pos + MARKER.len();
             self.output.insert_str(insert_at, &helpers);
@@ -1786,6 +1829,18 @@ impl CGenerator {
             }
             Some(Expression::MethodCall { method, .. }) if method == "to_string" => {
                 "const char *".to_string()
+            }
+            // The `Timer.now()` built-in lowers to poly_timer_now_ms, which
+            // returns epoch milliseconds as a C `long long`. Its AST is a
+            // MethodCall on the `Timer` type name (see the `now` arm in
+            // `expr`), so inference must return int64_t here — the `Call`
+            // guard below never sees it, and the int32_t default would
+            // truncate the epoch value.
+            Some(Expression::MethodCall { object, method, .. })
+                if method == "now"
+                    && matches!(object.as_ref(), Expression::Identifier(name) if name == "Timer") =>
+            {
+                "int64_t".to_string()
             }
             // A call infers the callee's declared return type so struct-returning
             // functions declare struct-typed variables instead of `int32_t`.

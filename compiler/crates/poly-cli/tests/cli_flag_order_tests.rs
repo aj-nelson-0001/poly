@@ -127,8 +127,7 @@ fn retired_statements_report_migration_suggestions() -> Result<(), Box<dyn std::
     for (snippet, expected_hint) in [
         ("set x to 2", "Use `x := y` instead"),
         ("add x 5", "Use `x := x + n` instead"),
-        ("inc x", "Use `x := x + 1` instead"),
-        ("dec x", "Use `x := x - 1` instead"),
+        ("sub x 5", "Use `x := x - n` instead"),
     ] {
         let source = dir.join("retired.poly");
         fs::write(&source, snippet)?;
@@ -236,6 +235,51 @@ fn mutation_commands_add_and_sub_run_correctly() -> Result<(), Box<dyn std::erro
     assert!(
         stdout.contains("4"),
         "expected 1 + 5 - 2 = 4 on stdout, got: {stdout}"
+    );
+
+    // Rust: generated code must compile the mutation as an assignment.
+    let output = poly().arg("--emit-rust").arg(&source).output()?;
+    assert!(
+        output.status.success(),
+        "rust emit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Parser-level check must stay green.
+    let output = poly().arg(&source).arg("--check").output()?;
+    assert!(
+        output.status.success(),
+        "--check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    fs::remove_dir_all(&dir)?;
+    Ok(())
+}
+
+#[test]
+fn mutation_commands_inc_and_dec_run_correctly() -> Result<(), Box<dyn std::error::Error>> {
+    // `inc x` / `dec x` are live operand-free commands that desugar to
+    // `x := x + 1` / `x := x - 1`. They must compile and compute correctly.
+    let dir = unique_temp_dir("incdec")?;
+    fs::create_dir_all(&dir)?;
+    let source = dir.join("incdec.poly");
+    fs::write(
+        &source,
+        "fn main()\n    var x i32 := 1\n    inc x\n    inc x\n    dec x\n    put x\nend fn\n",
+    )?;
+
+    // JS: emitted and executed via Node, so the printed value is checked.
+    let output = poly().arg("--target").arg("js").arg(&source).output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "js build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("2"),
+        "expected 1 + 1 - 1 = 2 on stdout, got: {stdout}"
     );
 
     // Rust: generated code must compile the mutation as an assignment.

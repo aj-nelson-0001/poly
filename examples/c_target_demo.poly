@@ -43,7 +43,7 @@ fn c_square(x: i32) -> i32 {
 #endrust
 
 # Poly functions
-fn add(a: i32, b: i32): i32
+fn plus(a: i32, b: i32): i32
     return a + b
 end fn
 
@@ -66,7 +66,7 @@ fn main()
     put "-- Arithmetic --"
     var x i32 := 10
     var y i32 := 3
-    put add(x, y)
+    put plus(x, y)
     put x - y
     put x * y
     put x / y

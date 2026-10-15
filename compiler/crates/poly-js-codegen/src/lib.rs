@@ -7,10 +7,10 @@
 
 use std::fmt::Write;
 
-use poly_parser::{int_literal_text, parse_int_literal_i64};
 use poly_parser::ast::{
     self, BinaryOp, Expression, FunctionDecl, Statement, TypeAnnotation, UnaryOp,
 };
+use poly_parser::{int_literal_text, parse_int_literal_i64};
 
 /// Generate a complete JavaScript program from Poly source.
 pub fn transpile(program: &ast::Program) -> Result<String, String> {
@@ -690,6 +690,18 @@ impl JsGenerator {
                 method,
                 args,
             } => {
+                // Builtin `Timer` methods: `Timer.now()` captures wall-clock
+                // milliseconds since the Unix epoch (i64) via Date.now(); reading
+                // it back with `t.epoch_ms()` is the identity. `now` is matched on
+                // the AST because its receiver is the `Timer` type name.
+                if method == "now"
+                    && matches!(object.as_ref(), Expression::Identifier(name) if name == "Timer")
+                {
+                    return Ok("Date.now()".to_string());
+                }
+                if method == "epoch_ms" && args.is_empty() {
+                    return Ok(format!("({})", self.expr(object)?));
+                }
                 // Supported methods mirror the other targets' string model:
                 // `to_string` converts via JS String(), and `len` on string
                 // values uses .length (JS strings are UTF-16, so byte-length
@@ -1213,12 +1225,12 @@ mod tests {
     fn lowers_control_flow_and_functions() -> Result<(), Box<dyn std::error::Error>> {
         let output = generate(
             concat!(
-                "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nvar i i32 := 0\nwhile i < 3\n    i :=",
+                "fn plus(a: i32, b: i32): i32\n    return a + b\nend fn\nvar i i32 := 0\nwhile i < 3\n    i :=",
                 " i + 1\nend while\nloop j 0..3\n    put j\nend loop\nif 1 > 2,\n    put 1\nelse\n    put 0\n",
                 "end if\nloop k in [1, 2]\n    put k\nend loop",
             ),
         )?;
-        assert!(output.contains("function add(a, b) {"));
+        assert!(output.contains("function plus(a, b) {"));
         // Typed i32 arithmetic masks to 32 bits (defined wrap semantics);
         // comparisons stay unmasked so they produce real JS booleans.
         assert!(output.contains("return ((((a) | 0) + ((b) | 0)) | 0);"));

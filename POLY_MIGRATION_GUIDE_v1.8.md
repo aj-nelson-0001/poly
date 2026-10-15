@@ -22,7 +22,8 @@ removing SuperBASIC and assembly-style commands that were hard to read.
 
 > **Poly v2 note:** v2 restored the comma forms as **live** commands —
 > `add x, 5` and `sub x, 3` are valid again and lower to `x := x + 5` /
-> `x := x - 3`. Only `inc` / `dec` and the comma-less `add x 5` shapes
+> `x := x - 3` — and `inc` / `dec` are **live** again too (they lower to
+> `x := x + 1` / `x := x - 1`). Only the comma-less `add x 5` shapes
 > stay retired.
 
 ## Detailed Changes
@@ -59,8 +60,9 @@ These assembly-style mutation commands have been removed. Use the `:=` assignmen
 
 > **Poly v2 note:** the comma forms `add count, 1` / `sub count, 1` are
 > **live** again in v2 — they lower to `count := count + 1` /
-> `count := count - 1`. `inc` / `dec` (and the comma-less `add count 1`
-> shapes) remain retired.
+> `count := count - 1` — and `inc` / `dec` are **live** again as well
+> (they lower to `count := count + 1` / `count := count - 1`). The
+> comma-less `add count 1` shapes remain retired.
 
 **Before:**
 ~~~poly fragment
@@ -168,6 +170,8 @@ end if
    - Search for `loop:` and replace with `loop `
    - Search for `set ` followed by ` to ` and replace with `:= `
    - Search for `add `, `sub `, `inc `, `dec ` and rewrite as `:=` expressions
+     (v2 keeps `inc `/`dec ` and the comma forms `add x, n` / `sub x, n` live,
+     so rewriting them is optional)
    - Search for `> "` after `put` and replace with `to "`
    - Search for `>> "` after `put` and replace with `to "..." -append`
    - Search for `< "` after `get` and replace with `from "`

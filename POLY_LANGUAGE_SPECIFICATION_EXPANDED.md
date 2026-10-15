@@ -105,14 +105,20 @@ there is no implicit default step.
 | `score := score - 15` | (explicit form) | `score -= 15;` |
 | `add counter, 1` | `counter := counter + 1` | `counter += 1;` |
 | `sub score, 1` | `score := score - 1` | `score -= 1;` |
+| `inc counter` | `counter := counter + 1` | `counter += 1;` |
+| `dec score` | `score := score - 1` | `score -= 1;` |
 
 `add x, n` / `sub x, n` require the comma and a plain-variable target and
-lower to `x := x ± n`. The bare forms (`add counter`, `sub score`, `inc`,
-`dec`) are retired and rejected.
+lower to `x := x ± n`. `inc x` / `dec x` are operand-free and lower to
+`x := x + 1` / `x := x - 1`, with the same plain-variable target rule.
+The bare comma-less forms (`add counter 5`, `sub score 5`) are retired
+and rejected.
 
 ~~~poly fragment
 add x, 5         // x := x + 5
 sub x, 2         // x := x - 2
+inc x            // x := x + 1
+dec x            // x := x - 1
 x := x + 5       // explicit form of add
 x := x - 2       // explicit form of sub
 x := x + 1       // x += 1

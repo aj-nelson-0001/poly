@@ -15,7 +15,7 @@ function greet(name) {
 #endjs
 
 # Function defined in Poly, lowered to JS
-fn add(a: i32, b: i32): i32
+fn plus(a: i32, b: i32): i32
     return a + b
 end fn
 
@@ -46,5 +46,5 @@ fn main()
         put k
     end loop
 
-    put add(2, 3)
+    put plus(2, 3)
 end fn

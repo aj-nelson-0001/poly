@@ -796,9 +796,9 @@ mod tests {
             with_clause: None,
         };
         assert_over_deep(
-            program_with(Statement::ExpressionStatement(
-                Expression::GetExpression(Box::new(get)),
-            )),
+            program_with(Statement::ExpressionStatement(Expression::GetExpression(
+                Box::new(get),
+            ))),
             "get `as` flag type",
         );
     }

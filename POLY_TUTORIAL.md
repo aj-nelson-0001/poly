@@ -657,11 +657,16 @@ fn main()
     var count i32 := 10
     add count, 5        # count := count + 5  -> 15
     sub count, 3        # count := count - 3  -> 12
+    inc count           # count := count + 1  -> 13
+    dec count           # count := count - 1  -> 12
     put count           # 12
 end fn
 ~~~
 
-The bare, comma-less forms (`add count 5`, and the old `inc`/`dec`) are retired
+`inc count` and `dec count` need no value: each lowers to an explicit
+re-assignment by 1, exactly like `add count, 1` / `sub count, 1`.
+
+The bare, comma-less forms (`add count 5`, `sub count 5`) are retired
 and rejected — always separate the value with a comma.
 
 ---
@@ -682,7 +687,8 @@ and rejected — always separate the value with a comma.
 - **Structs**: Define data with `struct`, attach methods with `impl`
 - **Methods**: Mutating methods take and return `self`; write `c := c.bump()`
 - **Mutation Commands**: `add x, n` / `sub x, n` add/subtract `n` on a plain
-  variable (lower to `x := x ± n`); the comma is required
+  variable (lower to `x := x ± n`); the comma is required. `inc x` / `dec x`
+  lower to `x := x ± 1` and need no value
 - **Async**: Declare `async fn`, run with `.await`; `spawn` for fire-and-forget
   tasks (Rust target only)
 

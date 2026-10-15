@@ -397,4 +397,39 @@ mod tests {
         assert!(!c.contains("rust_value"));
         Ok(())
     }
+
+    /// `Timer.now()` must lower to an `int64_t` (epoch milliseconds, i64,
+    /// matching `epoch_ms`'s cast), not the `int32_t` default that would
+    /// truncate the value, and the POSIX feature macro must precede the
+    /// runtime helper that calls `clock_gettime`. Under `poly --target c`
+    /// (which passes `-std=c11`), `clock_gettime`/`struct timespec`/
+    /// `CLOCK_REALTIME` are hidden without `_DEFAULT_SOURCE` before the first
+    /// include, and helpers are spliced in ahead of the header comment, so the
+    /// macro has to be the very first line of the file or the C compiler fails
+    /// on an undeclared identifier.
+    #[test]
+    fn timer_now_lowers_to_posix_helper_with_feature_macro_first(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let source = "fn main()\n    var t := Timer.now()\n    put t.epoch_ms() >= 0\nend fn";
+        let c = Transpiler::new().transpile_target(source, "c")?;
+
+        // The feature macro must come before the include block, which sits
+        // before the spliced runtime helpers.
+        let define = c.find("#define _DEFAULT_SOURCE").unwrap_or(usize::MAX);
+        let helper = c.find("poly_timer_now_ms").unwrap_or(usize::MAX);
+        assert!(
+            define < helper,
+            "_DEFAULT_SOURCE must precede the timer helper:\n{c}"
+        );
+        assert!(define < c.find("#include").unwrap_or(usize::MAX));
+
+        // The helper is declared and its result is typed as 64-bit, so the
+        // later `t.epoch_ms()` reads the full epoch value without truncation.
+        assert!(c.contains("poly_timer_now_ms"));
+        assert!(
+            c.contains("int64_t t = poly_timer_now_ms()"),
+            "Timer receiver should be int64_t, not the int32_t default:\n{c}"
+        );
+        Ok(())
+    }
 }

@@ -159,6 +159,9 @@ struct AsmGenerator {
     /// depend on the string runtime (_strlen/_str_alloc), so requesting
     /// them also forces the string block on.
     uses_bool_helpers: bool,
+    /// Whether the program reads the wall clock via `Timer.now()` (syscall
+    /// clock_gettime). Gates emission of the `_poly_timer_now_ms` helper.
+    uses_timer: bool,
     /// Whether the put-streaming concat path can emit integer leaves
     /// (`put "v=" + 42`), which call _print_int_nobuf. Gates that helper's
     /// emission — the flag exists because put-streaming chains do not
@@ -189,6 +192,7 @@ impl AsmGenerator {
             return_strings: std::collections::HashSet::new(),
             return_bools: std::collections::HashSet::new(),
             uses_bool_helpers: false,
+            uses_timer: false,
             uses_print_nobuf: false,
             current_return_struct: None,
             power_i64_context: std::cell::Cell::new(false),
@@ -473,10 +477,46 @@ impl AsmGenerator {
             self.emit_bool_runtime();
         }
 
+        if self.uses_timer {
+            self.emit_timer_runtime();
+        }
+
         self.emit_vector_runtime();
         self.emit_string_concat_runtime();
 
         Ok(std::mem::take(&mut self.output))
+    }
+
+    /// `_poly_timer_now_ms`: wall-clock milliseconds since the Unix epoch in
+    /// %rax, via the clock_gettime syscall (228) reading CLOCK_REALTIME (0)
+    /// into a 16-byte timespec on the stack (tv_sec then tv_nsec), then
+    /// assembling `sec * 1000 + nsec / 1_000_000`. The timespec buffer is
+    /// stack-local so no .bss backing is needed; the return is a plain i64,
+    /// matching the Rust target's SystemTime::now().duration_since(UNIX_EPOCH).
+    fn emit_timer_runtime(&mut self) {
+        self.output.push_str("_poly_timer_now_ms:\n");
+        self.output.push_str("    pushq %rbp\n");
+        self.output.push_str("    movq %rsp, %rbp\n");
+        // 16-byte timespec: [rbp-16]=tv_sec, [rbp-8]=tv_nsec.
+        self.output.push_str("    subq $16, %rsp\n");
+        self.output.push_str("    movq $228, %rax\n"); // syscall: clock_gettime
+        self.output.push_str("    movq $0, %rdi\n"); // CLOCK_REALTIME
+        self.output.push_str("    leaq -16(%rbp), %rsi\n"); // &ts
+        self.output.push_str("    xorq %rdx, %rdx\n"); // NULL tz
+        self.output.push_str("    syscall\n");
+        // ms = sec * 1000 + nsec / 1000000
+        self.output.push_str("    movq -16(%rbp), %rax\n"); // tv_sec
+        self.output.push_str("    imulq $1000, %rax\n"); // sec*1000
+        self.output.push_str("    pushq %rax\n"); // stash sec*1000
+        self.output.push_str("    movq -8(%rbp), %rax\n"); // tv_nsec
+        self.output.push_str("    xorq %rdx, %rdx\n"); // clear high dividend half
+        self.output.push_str("    movq $1000000, %rcx\n");
+        self.output.push_str("    divq %rcx\n"); // nsec/1e6 in %rax
+        self.output.push_str("    popq %rcx\n"); // sec*1000
+        self.output.push_str("    addq %rcx, %rax\n"); // total ms
+        self.output.push_str("    movq %rbp, %rsp\n");
+        self.output.push_str("    popq %rbp\n");
+        self.output.push_str("    retq\n\n");
     }
 
     /// `_print_int_nobuf`: `_print_int` without the trailing newline — the
@@ -1291,9 +1331,7 @@ impl AsmGenerator {
                             op: UnaryOp::Neg,
                             expr,
                         }) => match expr.as_ref() {
-                            Expression::IntLiteral(v) => {
-                                -parse_int_literal_i64(v).unwrap_or(1)
-                            }
+                            Expression::IntLiteral(v) => -parse_int_literal_i64(v).unwrap_or(1),
                             _ => 1,
                         },
                         _ => 1,
@@ -1994,6 +2032,23 @@ impl AsmGenerator {
                     let result_loc = frame.allocate_temp();
                     self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
                     return Ok(result_loc);
+                }
+                // Builtin `Timer` methods. `Timer.now()` captures wall-clock
+                // milliseconds since the Unix epoch (i64) via the clock_gettime
+                // syscall; `t.epoch_ms()` reads that captured value back (identity).
+                // `now` is matched on the AST because its receiver is the `Timer`
+                // type name, not a value expression.
+                if method == "now"
+                    && matches!(object.as_ref(), Expression::Identifier(name) if name == "Timer")
+                {
+                    self.uses_timer = true;
+                    self.output.push_str("    callq _poly_timer_now_ms\n");
+                    let result_loc = frame.allocate_temp();
+                    self.move_to_loc(Location::Reg("%rax"), result_loc, frame)?;
+                    return Ok(result_loc);
+                }
+                if method == "epoch_ms" && args.is_empty() {
+                    return self.emit_expr(object, frame);
                 }
                 // Growable-vector methods on `Vec<T>` variables. The vector
                 // variable holds a writable descriptor; push/pop mutate the

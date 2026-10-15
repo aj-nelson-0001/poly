@@ -400,7 +400,7 @@ fn bench_throughput(c: &mut Criterion) {
         })
     });
 
-    let medium = "fn add(a: i32, b: i32): i32\n    return a + b\nend fn\nfn main()\n    var x := add(1, 2)\nend fn";
+    let medium = "fn plus(a: i32, b: i32): i32\n    return a + b\nend fn\nfn main()\n    var x := plus(1, 2)\nend fn";
     group.throughput(criterion::Throughput::Bytes(medium.len() as u64));
     group.bench_function("medium_throughput", |b| {
         b.iter(|| {

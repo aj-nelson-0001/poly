@@ -10,8 +10,16 @@ All notable changes to the Poly language compiler will be documented in this fil
   `add x, n` adds `n` to `x` and `sub x, n` subtracts it, each lowering to
   `x := x ± n`. The target is a plain variable and the comma is required
   (`add x n` with no comma is rejected). This is the comma form of the
-  `add`/`sub` keywords; the bare, comma-less shapes (`add x`, `sub x`, and
-  `inc`/`dec`) remain retired and still produce migration diagnostics.
+  `add`/`sub` keywords; the bare, comma-less shapes (`add x`, `sub x`)
+  remain retired and still produce migration diagnostics.
+
+- **The `inc x` / `dec x` mutation commands are live again.**
+  `inc x` and `dec x` are operand-free commands that desugar to
+  `x := x + 1` / `x := x - 1`, with the same plain-variable target rule
+  as `add`/`sub` (`inc obj.field` and `inc v[0]` are rejected the same
+  way `add obj.field, 1` is). They had been retired along with the bare
+  assembly-style statements; the comma-less bare shapes `add x n` /
+  `sub x n` remain retired and still produce migration diagnostics.
 
 - **The `-prepend` flag on `put ... to "file"`.**
   `put "Hello" to "Hi.txt" -prepend` writes the value in *front* of the

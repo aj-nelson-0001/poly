@@ -630,7 +630,8 @@ fn optimize_loops(statements: &mut Vec<Statement>) -> bool {
                         end,
                     } = part
                     {
-                        if matches!(step, Expr::Literal(Literal::Int(value)) if parse_int_literal_i64(value) == Some(1)) {
+                        if matches!(step, Expr::Literal(Literal::Int(value)) if parse_int_literal_i64(value) == Some(1))
+                        {
                             *part = LoopRangePart::Range {
                                 start: start.clone(),
                                 end: end.clone(),

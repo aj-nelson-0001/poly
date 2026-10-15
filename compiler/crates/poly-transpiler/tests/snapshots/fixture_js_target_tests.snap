@@ -9,7 +9,7 @@ function greet(name) {
     return "hello " + name;
 }
 
-function add(a, b) {
+function plus(a, b) {
   return ((((a) | 0) + ((b) | 0)) | 0);
 }
 
@@ -34,7 +34,7 @@ function main() {
   for (const k of [10, 20]) {
     console.log(String(k));
   }
-  console.log(String(add(2, 3)));
+  console.log(String(plus(2, 3)));
 }
 
 main();

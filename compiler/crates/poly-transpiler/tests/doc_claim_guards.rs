@@ -154,6 +154,18 @@ const CASES: &[Case] = &[
         ),
         Expect::RustOnly,
     ),
+    // Command-word symmetry: enum variant names that are reserved command words
+    // must also be rejected in pattern position (the arm binding form) so they
+    // don't shadow the command form. This is the transpiler-side mirror of the
+    // parser test `parser::reserved_add_sub_reject_match_variant_names`.
+    Case::accepted(
+        "reserved-add-sub enum variant rejected in pattern position",
+        concat!(
+            "enum E\n    add\n    sub\nend enum\n\n",
+            "fn main()\n    match 1\n        E::add, put \"ok\"\n    end match\nend fn\n",
+        ),
+        Expect::AllReject,
+    ),
     // --- named-field enum payload matching (regression: E0164) ------------
     // Variants declared with named fields compile as Rust struct variants,
     // but matches used to render tuple patterns, failing rustc with E0164
@@ -218,6 +230,32 @@ fn zero_step_rejection_names_the_limitation() -> Result<(), Box<dyn std::error::
         assert!(
             err.to_lowercase().contains("zero"),
             "target `{target}`: zero-step error should mention \"zero\", got: {err}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn reserved_add_sub_reject_value_position_variant_names() -> Result<(), Box<dyn std::error::Error>> {
+    // Enum variant names that are reserved command words must be rejected in
+    // pattern position by the parser's `reject_reserved_command_name` guard
+    // (via `expect_binding_identifier`) before they can be used as that arm's
+    // binding. See `parser::reserved_add_sub_reject_match_variant_names`.
+    for target in common::TARGETS {
+        let source = concat!(
+            "enum E\n    add\n    sub\nend enum\n\n",
+            "fn main()\n    match 1\n        E::add, put \"ok\"\n    end match\nend fn\n",
+        );
+        let res =
+            poly_transpiler::Transpiler::new().transpile_target(source, &target);
+        assert!(
+            res.is_err(),
+            "target `{target}`: reserved-command enum variant in pattern should be rejected"
+        );
+        let err = res.unwrap_err();
+        assert!(
+            err.to_string().contains("reserved command word"),
+            "target `{target}`: mismatch: {err:?}"
         );
     }
     Ok(())

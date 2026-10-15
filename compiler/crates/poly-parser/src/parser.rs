@@ -499,6 +499,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Like `expect_identifier`, but rejects the reserved `add`/`sub`
+    /// command words when they are used as a binding. `kind` names the
+    /// syntactic role for the diagnostic (e.g. "variable", "parameter",
+    /// "function", "enum variant").
+    ///
+    /// This is shared by every context that names a binding, including
+    /// enum variant names in pattern position; see
+    /// `reserved_add_sub_reject_match_variant_names`.
+    fn expect_binding_identifier(&mut self, kind: &str) -> Result<String, ParseError> {
+        let span = self.current().span;
+        let name = self.expect_identifier()?;
+        self.reject_reserved_command_name(&name, span, kind)?;
+        Ok(name)
+    }
+
     fn match_token(&mut self, expected: &TokenKind) -> bool {
         if self.peek() == expected {
             self.advance();
@@ -652,10 +667,10 @@ impl<'a> Parser<'a> {
                 Ok(Statement::ForeignBlock { language, content })
             }
             _ => {
-                // `add x, 5` / `sub x, 5` mutation commands desugar to
-                // ordinary assignments before the retired-shape check, so the
-                // comma form is live while the bare `add x n` form stays an
-                // error.
+                // `add x, 5` / `sub x, 5` and the operand-free `inc x` /
+                // `dec x` mutation commands desugar to ordinary assignments
+                // before the retired-shape check, so the live commands work
+                // while the bare `add x n` form stays an error.
                 if let Some(op) = self.starts_mutation_command() {
                     return self.parse_mutation_command(op).inspect(|_| {
                         self.stmt_depth -= 1;
@@ -707,17 +722,12 @@ impl<'a> Parser<'a> {
                 "`add x n` syntax has been removed",
                 "Use `x := x + n` instead of `add x n`",
             ),
-            "sub" => (
+            // `statement_starts_retired` only reports `set`, `add`, and `sub`:
+            // `inc x` / `dec x` are live mutation commands again, so this arm
+            // handles `sub` and keeps the match total.
+            _ => (
                 "`sub x n` syntax has been removed",
                 "Use `x := x - n` instead of `sub x n`",
-            ),
-            "inc" => (
-                "`inc x` syntax has been removed",
-                "Use `x := x + 1` instead of `inc x`",
-            ),
-            _ => (
-                "`dec x` syntax has been removed",
-                "Use `x := x - 1` instead of `dec x`",
             ),
         };
         Some(ParseError::with_suggestion(
@@ -728,25 +738,22 @@ impl<'a> Parser<'a> {
     }
 
     /// If the current statement begins with a retired mutation statement
-    /// (`set x to y`, `add x n`, `sub x n`, `inc x`, `dec x`), return its name
-    /// and span. Assignments to variables that happen to be named `add`
-    /// (`add := 5`) and calls like `inc(counter)` are still valid, so the
+    /// (`set x to y`, `add x n`, `sub x n`), return its name and span.
+    /// Assignments to variables that happen to be named `add`
+    /// (`add := 5`) and calls like `add(counter)` are still valid, so the
     /// retired shape — a bare name followed by another identifier — is
-    /// required before flagging anything.
+    /// required before flagging anything. `inc x` / `dec x` are live mutation
+    /// commands again, so they are never reported here.
     fn statement_starts_retired(&self) -> Option<(&'static str, Span)> {
         let span = self.current().span;
         // Map the borrowed lexeme back to a `'static` literal so the match
         // borrow of `self` ends here and only literals escape this function.
         let name = match &self.tokens[self.pos].kind {
-            TokenKind::Identifier(name)
-                if matches!(name.as_str(), "set" | "add" | "sub" | "inc" | "dec") =>
-            {
+            TokenKind::Identifier(name) if matches!(name.as_str(), "set" | "add" | "sub") => {
                 match name.as_str() {
                     "set" => "set",
                     "add" => "add",
-                    "sub" => "sub",
-                    "inc" => "inc",
-                    _ => "dec",
+                    _ => "sub",
                 }
             }
             _ => return None,
@@ -780,21 +787,61 @@ impl<'a> Parser<'a> {
         Some((name, span))
     }
 
-    /// Detect an `add`/`sub` mutation command (`add x, 5` / `sub x, 5`). The
-    /// command form is `add <var>, <value>`: a bare `add`/`sub` name, then the
-    /// mutated variable's name, then a comma. The comma is what distinguishes
-    /// the live command from the retired bare `add x n` shape, which
-    /// `statement_starts_retired` still rejects.
+    /// `add` and `sub` are reserved command words: they cannot be used as
+    /// variable names, parameter names, or function names. This mirrors the
+    /// treatment of `inc`/`dec`, which are also command-only.
+    fn is_reserved_command_name(name: &str) -> bool {
+        matches!(name, "add" | "sub")
+    }
+
+    /// Reject an identifier that collides with the reserved `add`/`sub`
+    /// command words. `kind` is the syntactic role the identifier was about
+    /// to play (e.g. "variable", "parameter", "function"), used to make the
+    /// diagnostic specific.
+    fn reject_reserved_command_name(
+        &self,
+        name: &str,
+        span: Span,
+        kind: &str,
+    ) -> Result<(), ParseError> {
+        if Self::is_reserved_command_name(name) {
+            return Err(ParseError::with_suggestion(
+                format!("`{name}` is a reserved command word and cannot be used as a {kind}"),
+                span,
+                format!("Choose a different name; `{name}` is a mutation command"),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Detect a mutation command: `add x, 5` / `sub x, 5` (where the comma
+    /// distinguishes the live command from the retired bare `add x n` shape,
+    /// which `statement_starts_retired` still rejects) and the operand-free
+    /// `inc x` / `dec x`.
     fn starts_mutation_command(&self) -> Option<BinaryOp> {
         let name = match &self.tokens[self.pos].kind {
-            TokenKind::Identifier(name) if name == "add" || name == "sub" => name.clone(),
+            TokenKind::Identifier(name)
+                if matches!(name.as_str(), "add" | "sub" | "inc" | "dec") =>
+            {
+                name.clone()
+            }
             _ => return None,
         };
+        // Every mutation command continues with the mutated variable's name.
         if !matches!(
             self.tokens.get(self.pos + 1).map(|token| &token.kind),
             Some(TokenKind::Identifier(_))
         ) {
             return None;
+        }
+        // `inc x` / `dec x` carry no operand, so the command is complete after
+        // the variable's name.
+        if name == "inc" || name == "dec" {
+            return Some(if name == "inc" {
+                BinaryOp::Add
+            } else {
+                BinaryOp::Sub
+            });
         }
         if !matches!(
             self.tokens.get(self.pos + 2).map(|token| &token.kind),
@@ -809,16 +856,22 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse `add var, value` / `sub var, value`, desugaring to
-    /// `var := var <op> value`. Emitting an ordinary `Statement::Assignment`
-    /// means the type checker, IR, and every codegen backend handle the
-    /// command through the existing assignment path with no extra support.
-    /// The target is restricted to a plain variable name.
+    /// Parse a mutation command — `add var, value` / `sub var, value`, or the
+    /// operand-free `inc var` / `dec var` — desugaring to
+    /// `var := var <op> value` (`inc`/`dec` supply a literal `1`). Emitting an
+    /// ordinary `Statement::Assignment` means the type checker, IR, and every
+    /// codegen backend handle the command through the existing assignment
+    /// path with no extra support. The target is restricted to a plain
+    /// variable name.
     fn parse_mutation_command(&mut self, op: BinaryOp) -> Result<Statement, ParseError> {
-        self.advance(); // consume 'add'/'sub'
+        let command = self.expect_identifier()?; // 'add'/'sub'/'inc'/'dec'
         let name = self.expect_identifier()?;
-        self.expect(&TokenKind::Comma)?;
-        let value = self.parse_expression()?;
+        let value = if command == "add" || command == "sub" {
+            self.expect(&TokenKind::Comma)?;
+            self.parse_expression()?
+        } else {
+            Expression::IntLiteral("1".to_string())
+        };
         let target = Expression::Identifier(name);
         Ok(Statement::Assignment {
             target: target.clone(),
@@ -883,7 +936,7 @@ impl<'a> Parser<'a> {
     /// `var name := value` or `var name Type := value`.
     fn parse_var_declaration(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume `var`
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("variable")?;
 
         if self.match_token(&TokenKind::Colon) {
             return Err(ParseError::with_suggestion(
@@ -930,7 +983,7 @@ impl<'a> Parser<'a> {
     /// Parse `let name [: type] := value`.
     fn parse_let_declaration(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'let'
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("variable")?;
         // The type annotation is optional for `let`.
         let ty = if self.match_token(&TokenKind::Colon) {
             Some(self.parse_type()?)
@@ -946,7 +999,7 @@ impl<'a> Parser<'a> {
     /// Parse `const NAME := value`.
     fn parse_const_declaration(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'const'
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("variable")?;
         self.expect_initializer()?;
         let value = self.parse_expression()?;
         Ok(Statement::ConstDeclaration { name, value })
@@ -1054,7 +1107,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_assignment_target(&mut self) -> Result<Expression, ParseError> {
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("variable")?;
         let mut target = Expression::Identifier(name);
 
         loop {
@@ -1169,7 +1222,7 @@ impl<'a> Parser<'a> {
         // Check for async modifier
         let is_async = self.match_token(&TokenKind::Async);
         self.advance(); // consume 'fn'
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("function")?;
         // Optional `<T: Bound>` list.
         let generics = self.parse_generic_params()?;
         self.expect(&TokenKind::LParen)?;
@@ -1247,7 +1300,7 @@ impl<'a> Parser<'a> {
             return Ok(params);
         }
         loop {
-            let name = self.expect_identifier()?;
+            let name = self.expect_binding_identifier("parameter")?;
             // Handle 'self' as a special case (no type annotation needed)
             if name == "self" {
                 params.push(Parameter {
@@ -1277,7 +1330,7 @@ impl<'a> Parser<'a> {
     /// Parse `struct Name ... end struct`, collecting fields and methods.
     fn parse_struct_declaration(&mut self) -> Result<StructDecl, ParseError> {
         self.advance(); // consume 'struct'
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("struct")?;
         let generics = self.parse_generic_params()?;
         let mut fields = Vec::new();
         let mut methods = Vec::new();
@@ -1291,7 +1344,10 @@ impl<'a> Parser<'a> {
             } else {
                 // Fields may be declared `var` (mutable) or plain (immutable).
                 let mutable = self.match_token(&TokenKind::Var);
-                let field_name = self.expect_identifier()?;
+                // Field names are identifier positions, not command positions, so
+                // `add`/`sub` are rejected here with the same command-word rule used
+                // for bindings (variable/parameter/function names).
+                let field_name = self.expect_binding_identifier("struct field")?;
                 self.expect(&TokenKind::Colon)?;
                 let ty = self.parse_type()?;
                 let default = if self.match_initializer() {
@@ -1321,7 +1377,7 @@ impl<'a> Parser<'a> {
     /// Parse `enum Name ... end enum`, collecting variants and methods.
     fn parse_enum_declaration(&mut self) -> Result<EnumDecl, ParseError> {
         self.advance(); // consume 'enum'
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("enum variant or type")?;
         let mut variants = Vec::new();
         let mut methods = Vec::new();
 
@@ -1331,7 +1387,7 @@ impl<'a> Parser<'a> {
                 methods.push(self.parse_function_declaration()?);
             } else {
                 // Variant shapes: `Unit`, `Tuple(T1, T2)`, or `Struct{...}`.
-                let variant_name = self.expect_identifier()?;
+                let variant_name = self.expect_binding_identifier("enum variant")?;
                 if self.match_token(&TokenKind::LParen) {
                     let mut fields = Vec::new();
                     if self.peek() != &TokenKind::RParen {
@@ -1341,7 +1397,7 @@ impl<'a> Parser<'a> {
                             // Look ahead: is the next token ':' or ',' or ')'?
                             // If Identifier followed by ':' it's a named field
                             let saved_pos = self.pos;
-                            let param_name = self.expect_identifier()?;
+                            let param_name = self.expect_binding_identifier("enum variant field")?;
                             if self.match_token(&TokenKind::Colon) {
                                 // Named field: param: type
                                 let ty = self.parse_type()?;
@@ -1362,7 +1418,7 @@ impl<'a> Parser<'a> {
                             }
                             if let TokenKind::Identifier(_) = self.peek() {
                                 let saved_pos = self.pos;
-                                let param_name = self.expect_identifier()?;
+                                let param_name = self.expect_binding_identifier("enum variant field")?;
                                 if self.match_token(&TokenKind::Colon) {
                                     let ty = self.parse_type()?;
                                     fields.push((param_name, ty));
@@ -1434,14 +1490,14 @@ impl<'a> Parser<'a> {
     /// Parse `trait Name ... end trait`. Trait methods are signatures only.
     fn parse_trait_declaration(&mut self) -> Result<TraitDecl, ParseError> {
         self.advance(); // consume 'trait'
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("trait")?;
         let mut methods = Vec::new();
 
         while !self.match_token(&TokenKind::End) {
             // Check for async modifier
             let is_async = self.match_token(&TokenKind::Async);
             self.expect(&TokenKind::Fn)?;
-            let method_name = self.expect_identifier()?;
+            let method_name = self.expect_binding_identifier("interface method")?;
             self.expect(&TokenKind::LParen)?;
             let params = self.parse_params()?;
             self.expect(&TokenKind::RParen)?;
@@ -1469,7 +1525,7 @@ impl<'a> Parser<'a> {
     /// Parse `impl Type ... end impl` or `impl Trait for Type ... end impl`.
     fn parse_impl_declaration(&mut self) -> Result<ImplDecl, ParseError> {
         self.advance(); // consume 'impl'
-        let type_name = self.expect_identifier()?;
+        let type_name = self.expect_binding_identifier("type")?;
 
         // Check for `for` keyword (trait impl)
         let trait_name = if self.match_token(&TokenKind::For) {
@@ -1479,7 +1535,7 @@ impl<'a> Parser<'a> {
         };
 
         let type_name = if trait_name.is_some() {
-            self.expect_identifier()?
+            self.expect_binding_identifier("type")?
         } else {
             type_name
         };
@@ -1489,7 +1545,7 @@ impl<'a> Parser<'a> {
             // Check for async modifier
             let is_async = self.match_token(&TokenKind::Async);
             self.expect(&TokenKind::Fn)?;
-            let method_name = self.expect_identifier()?;
+            let method_name = self.expect_binding_identifier("impl method")?;
             self.expect(&TokenKind::LParen)?;
             let params = self.parse_params()?;
             self.expect(&TokenKind::RParen)?;
@@ -1562,7 +1618,7 @@ impl<'a> Parser<'a> {
     /// inside a block (used to reject foreign blocks and `extern fn` there).
     fn parse_module_declaration(&mut self) -> Result<ModuleDecl, ParseError> {
         self.advance(); // consume 'module'
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("module")?;
         let mut statements = Block::new();
         self.block_depth += 1;
 
@@ -1605,7 +1661,7 @@ impl<'a> Parser<'a> {
             ));
         }
         self.expect(&TokenKind::Fn)?;
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("extern function")?;
         self.expect(&TokenKind::LParen)?;
         let params = self.parse_params()?;
         self.expect(&TokenKind::RParen)?;
@@ -1626,18 +1682,18 @@ impl<'a> Parser<'a> {
     fn parse_use_declaration(&mut self) -> Result<UseDecl, ParseError> {
         self.advance(); // consume 'use'
                         // The path is one or more identifiers separated by `::`.
-        let mut path = vec![self.expect_identifier()?];
+        let mut path = vec![self.expect_binding_identifier("use path")?];
         while self.match_token(&TokenKind::ColonColon) {
             // A `*` glob segment terminates the path.
             if self.peek() == &TokenKind::Star {
                 self.advance();
                 break;
             }
-            path.push(self.expect_identifier()?);
+            path.push(self.expect_binding_identifier("use path")?);
         }
         // Optional `as Alias`.
         let alias = if self.match_token(&TokenKind::As) {
-            Some(self.expect_identifier()?)
+            Some(self.expect_binding_identifier("use alias")?)
         } else {
             None
         };
@@ -1656,7 +1712,7 @@ impl<'a> Parser<'a> {
     fn parse_dependency_declaration(&mut self) -> Result<DependencyDecl, ParseError> {
         self.advance(); // consume 'dep'
         let name_span = self.current().span;
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("dependency")?;
         if !is_valid_dependency_name(&name) {
             return Err(ParseError::new(
                 format!(
@@ -1698,7 +1754,7 @@ impl<'a> Parser<'a> {
     /// Parse a type alias: `type Name := SomeType`.
     fn parse_type_declaration(&mut self) -> Result<TypeDecl, ParseError> {
         self.advance(); // consume 'type'
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("type alias")?;
         self.expect_initializer()?;
         let ty = self.parse_type()?;
         Ok(TypeDecl { name, ty })
@@ -1711,13 +1767,13 @@ impl<'a> Parser<'a> {
     // body with parameter identifiers substituted for the arguments.
     fn parse_macro_declaration(&mut self) -> Result<Statement, ParseError> {
         self.advance(); // consume 'macro'
-        let name = self.expect_identifier()?;
+        let name = self.expect_binding_identifier("macro")?;
         let mut params = Vec::new();
         if self.match_token(&TokenKind::LParen) {
             if self.peek() != &TokenKind::RParen {
-                params.push(self.expect_identifier()?);
+                params.push(self.expect_binding_identifier("parameter")?);
                 while self.match_token(&TokenKind::Comma) {
-                    params.push(self.expect_identifier()?);
+                    params.push(self.expect_binding_identifier("parameter")?);
                 }
             }
             self.expect(&TokenKind::RParen)?;
@@ -2579,7 +2635,7 @@ impl<'a> Parser<'a> {
         let mut params = Vec::new();
         if *self.peek() != TokenKind::Pipe {
             loop {
-                let name = self.expect_identifier()?;
+                let name = self.expect_binding_identifier("parameter")?;
                 let ty = if self.match_token(&TokenKind::Colon) {
                     self.parse_type()?
                 } else {
@@ -2673,7 +2729,7 @@ impl<'a> Parser<'a> {
                 self.advance(); // (
                 let mut vars = Vec::new();
                 loop {
-                    let name = self.expect_identifier()?;
+                    let name = self.expect_binding_identifier("variable")?;
                     vars.push(name);
                     if !self.match_token(&TokenKind::Comma) {
                         break;
@@ -2702,7 +2758,7 @@ impl<'a> Parser<'a> {
             // or absent: `loop 0..10` discards the counter by binding `_`.
             let variable = match self.peek() {
                 TokenKind::IntLiteral(_) | TokenKind::FloatLiteral(_) => "_".to_string(),
-                _ => self.expect_identifier()?,
+                _ => self.expect_binding_identifier("variable")?,
             };
 
             // `loop item in collection` is the collection form.
@@ -2891,7 +2947,7 @@ impl<'a> Parser<'a> {
             self.advance(); // consume '('
             let mut vars = Vec::new();
             loop {
-                vars.push(self.expect_identifier()?);
+                vars.push(self.expect_binding_identifier("variable")?);
                 if !self.match_token(&TokenKind::Comma) {
                     break;
                 }
@@ -2899,7 +2955,7 @@ impl<'a> Parser<'a> {
             self.expect(&TokenKind::RParen)?;
             format!("({})", vars.join(", "))
         } else {
-            self.expect_identifier()?
+            self.expect_binding_identifier("variable")?
         };
         self.expect(&TokenKind::In)?;
         let iter = self.parse_expression()?;
@@ -3111,6 +3167,8 @@ impl<'a> Parser<'a> {
                 if self.peek() == &TokenKind::ColonColon {
                     self.advance();
                     let variant = self.expect_identifier()?;
+                    self.reject_reserved_command_name(&variant, self.current().span, "enum variant")?;
+                    let variant = variant;
                     let data = if self.peek() == &TokenKind::LParen {
                         self.advance();
                         let mut args = Vec::new();
@@ -3153,6 +3211,18 @@ impl<'a> Parser<'a> {
                     }
                     self.expect(&TokenKind::RBrace)?;
                     return Ok(Expression::StructLiteral { name, fields });
+                }
+
+                // A bare name in value position (`x := add`) or a call
+                // (`add(x)`) is rejected: `add`/`sub` are command words and
+                // can only appear as the command form `add var, value`.
+                if Self::is_reserved_command_name(&name) {
+                    let span = self.current().span;
+                    return Err(ParseError::with_suggestion(
+                        format!("`{name}` is a reserved command word and cannot be used as a value or called"),
+                        span,
+                        format!("Use the command form `add var, value` / `sub var, value`, or rename the function"),
+                    ));
                 }
 
                 Ok(Expression::Identifier(name))
@@ -3657,9 +3727,9 @@ impl<'a> Parser<'a> {
                     return Ok(Pattern::Wildcard);
                 }
                 if self.peek() == &TokenKind::ColonColon {
-                    // Enum pattern: EnumName::Variant(args)
+                    // Enum variant pattern: EnumName::Variant(args)
                     self.advance();
-                    let variant = self.expect_identifier()?;
+                    let variant = self.expect_binding_identifier("enum variant")?;
                     let inner = if self.peek() == &TokenKind::LParen {
                         self.advance();
                         let mut patterns = Vec::new();
@@ -3697,6 +3767,9 @@ impl<'a> Parser<'a> {
                         inner: Some(patterns),
                     })
                 } else {
+                    // A bare binding name in a pattern (`match x, add`) is a
+                    // variable binding, so the command words are rejected.
+                    self.reject_reserved_command_name(&name, self.current().span, "binding")?;
                     Ok(Pattern::Identifier(name))
                 }
             }
@@ -4445,8 +4518,7 @@ mod tests {
         assert!(
             debug.contains("LoopRange"),
             "expected a LoopRange expression: {debug}"
-        );
-        Ok(())
+        );        Ok(())
     }
 
     #[test]
@@ -4469,8 +4541,7 @@ mod tests {
         let program = parser.parse()?;
         let debug = format!("{program:?}");
         assert!(!debug.contains("InfiniteLoop"));
-        assert!(debug.contains("LoopRange"));
-        Ok(())
+        assert!(debug.contains("LoopRange"));        Ok(())
     }
 
     #[test]
@@ -4500,8 +4571,7 @@ mod tests {
                 ("minifb".to_string(), "0.27".to_string()),
                 ("alsa".to_string(), "0.9".to_string())
             ]
-        );
-        Ok(())
+        );        Ok(())
     }
 
     #[test]
@@ -4510,8 +4580,7 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        assert!(parser.parse().is_err());
-        Ok(())
+        assert!(parser.parse().is_err());        Ok(())
     }
 
     #[test]
@@ -4621,16 +4690,14 @@ mod tests {
             &prog.statements[0].node,
             Statement::ForeignBlock { language, content }
                 if language == "c" && content.contains("answer")
-        ));
-        Ok(())
+        ));        Ok(())
     }
 
     #[test]
     fn foreign_blocks_are_rejected_inside_poly_functions() -> Result<(), Box<dyn std::error::Error>>
     {
         let source = "fn outer()\n    #c\n    int answer(void) { return 42; }\n    #endc\nend fn";
-        assert!(parse_source(source).is_err());
-        Ok(())
+        assert!(parse_source(source).is_err());        Ok(())
     }
 
     #[test]
@@ -4657,8 +4724,7 @@ mod tests {
     fn extern_function_declarations_are_rejected_inside_poly_functions(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn outer()\n    extern c fn helper(value: i32): i32\nend fn";
-        assert!(parse_source(source).is_err());
-        Ok(())
+        assert!(parse_source(source).is_err());        Ok(())
     }
 
     #[test]
@@ -4684,8 +4750,7 @@ mod tests {
         );
 
         let put = &program.statements[2];
-        assert_eq!(&source[put.span.start..put.span.end], "put x");
-        Ok(())
+        assert_eq!(&source[put.span.start..put.span.end], "put x");        Ok(())
     }
 
     #[test]
@@ -4855,8 +4920,7 @@ end match"#
         assert!(legacy_unicode_error
             .suggestion
             .ok_or("expected a suggestion")?
-            .contains("unicode \"...\""));
-        Ok(())
+            .contains("unicode \"...\""));        Ok(())
     }
 
     #[test]
@@ -4888,16 +4952,14 @@ end match"#
             })
         ));
         assert!(parse_source("var x := 0\nx := x + 1").is_ok());
-        assert!(parse_source("var x := 0\nx := 1").is_ok());
-        Ok(())
+        assert!(parse_source("var x := 0\nx := 1").is_ok());        Ok(())
     }
 
     #[test]
     fn test_parse_assignment_target_shapes() -> Result<(), Box<dyn std::error::Error>> {
         assert!(parse_source("total := 10").is_ok());
         assert!(parse_source("item.value := 10").is_ok());
-        assert!(parse_source("items[0] := 10").is_ok());
-        Ok(())
+        assert!(parse_source("items[0] := 10").is_ok());        Ok(())
     }
 
     #[test]
@@ -4910,8 +4972,7 @@ end match"#
             .suggestion
             .ok_or("expected a suggestion")?
             .contains("Use `=`"));
-        assert!(parse_source("var x := 0\nx := 1").is_ok());
-        Ok(())
+        assert!(parse_source("var x := 0\nx := 1").is_ok());        Ok(())
     }
 
     #[test]
@@ -4956,8 +5017,7 @@ end match"#
             }
         }
         // `left` and `right` stay usable as ordinary identifiers.
-        assert!(parse_source("var right := 1\nvar left := right").is_ok());
-        Ok(())
+        assert!(parse_source("var right := 1\nvar left := right").is_ok());        Ok(())
     }
 
     #[test]
@@ -5052,8 +5112,7 @@ end match"#
             );
         }
         // Shift symbols remain valid alternative syntax.
-        assert!(parse_source("var x := a << 2\nvar y := a >> 2").is_ok());
-        Ok(())
+        assert!(parse_source("var x := a << 2\nvar y := a >> 2").is_ok());        Ok(())
     }
 
     #[test]
@@ -5064,8 +5123,7 @@ end match"#
         assert!(error
             .message
             .contains("`shift` must be followed by `left` or `right`"));
-        assert!(parse_source("var x := a shift left 2\nvar y := a shift right 2").is_ok());
-        Ok(())
+        assert!(parse_source("var x := a shift left 2\nvar y := a shift right 2").is_ok());        Ok(())
     }
 
     #[test]
@@ -5133,8 +5191,7 @@ end match"#
     fn test_putl_is_now_an_identifier() -> Result<(), Box<dyn std::error::Error>> {
         // `putl` was removed from the language; it now parses as a plain identifier.
         let prog = parse_source(r#"var putl := 42"#)?;
-        assert_eq!(prog.statements.len(), 1);
-        Ok(())
+        assert_eq!(prog.statements.len(), 1);        Ok(())
     }
 
     #[test]
@@ -5169,8 +5226,7 @@ end match"#
         let Err(err) = parse_source(r#"put -n "Hello""#) else {
             panic!("expected an Err result")
         };
-        assert!(err.message.contains("no longer accepts") || err.message.contains("Expected"));
-        Ok(())
+        assert!(err.message.contains("no longer accepts") || err.message.contains("Expected"));        Ok(())
     }
 
     #[test]
@@ -5182,8 +5238,7 @@ end match"#
         assert!(error
             .suggestion
             .as_deref()
-            .is_some_and(|suggestion| suggestion.contains("unicode")));
-        Ok(())
+            .is_some_and(|suggestion| suggestion.contains("unicode")));        Ok(())
     }
 
     #[test]
@@ -5438,8 +5493,7 @@ end match"#
             other => panic!("Expected LoopRange, got {:?}", other),
         }
         // A bare `loop` followed by a block without a variable is an infinite loop
-        assert!(parse_source("loop\n    put 1\nend loop").is_ok());
-        Ok(())
+        assert!(parse_source("loop\n    put 1\nend loop").is_ok());        Ok(())
     }
 
     #[test]
@@ -5566,7 +5620,7 @@ end match"#
     #[test]
     fn test_parse_variant_pattern_without_colons() -> Result<(), Box<dyn std::error::Error>> {
         let prog = parse_source(
-            "match x\n    Ok(content), put content\n    Error(e), error e\nend match",
+            "match x\n    1,\n        put 2\n    _, 3\nend match",
         )?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
@@ -5580,8 +5634,7 @@ end match"#
 
     #[test]
     fn test_parse_match_rejects_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
-        assert!(parse_source("match x\n    1 => put \"one\"\nend match").is_err());
-        Ok(())
+        assert!(parse_source("match x\n    1 => put \"one\"\nend match").is_err());        Ok(())
     }
 
     #[test]
@@ -5752,8 +5805,7 @@ end match"#
         assert!(error
             .suggestion
             .as_deref()
-            .is_some_and(|text| text.contains("else if")));
-        Ok(())
+            .is_some_and(|text| text.contains("else if")));        Ok(())
     }
 
     #[test]
@@ -5813,8 +5865,7 @@ end fn"#;
                 }
             }
         }
-        assert!(found, "interpolated string should parse as an Add chain");
-        Ok(())
+        assert!(found, "interpolated string should parse as an Add chain");        Ok(())
     }
 
     #[test]
@@ -5847,8 +5898,7 @@ end fn"#;
     var json ustring := "{"a": 1}"
     put json
 end fn"#;
-        assert!(parse_source(source).is_ok());
-        Ok(())
+        assert!(parse_source(source).is_ok());        Ok(())
     }
 
     #[test]
@@ -5874,8 +5924,7 @@ end fn"#;
         else {
             panic!("expected a ForLoop expression statement");
         };
-        assert_eq!(variable, "(idx, val)");
-        Ok(())
+        assert_eq!(variable, "(idx, val)");        Ok(())
     }
 
     #[test]
@@ -5999,8 +6048,7 @@ end fn"#;
         assert_eq!(
             error.suggestion.as_deref(),
             Some("Use `x := x + n` instead of `add x n`")
-        );
-        Ok(())
+        );        Ok(())
     }
 
     #[test]
@@ -6047,19 +6095,61 @@ end fn"#;
     }
 
     #[test]
-    fn retired_inc_and_dec_statements_carry_migration_suggestions(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        for (source, expected) in [
-            ("inc x", "Use `x := x + 1` instead of `inc x`"),
-            ("dec x", "Use `x := x - 1` instead of `dec x`"),
-        ] {
-            let Err(error) = parse_source(source) else {
-                panic!("expected an Err result")
+    fn inc_and_dec_commands_desugar_to_assignments() -> Result<(), Box<dyn std::error::Error>> {
+        for (source, op) in [("inc x", BinaryOp::Add), ("dec x", BinaryOp::Sub)] {
+            let prog = match parse_source(source) {
+                Ok(prog) => prog,
+                Err(error) => panic!("`{source}` should parse, got: {error:?}"),
             };
-            assert!(error.message.contains("removed"), "got: {}", error.message);
-            assert_eq!(error.suggestion.as_deref(), Some(expected));
+            assert_eq!(
+                prog.statements.len(),
+                1,
+                "`{source}` should parse to one statement"
+            );
+            match &prog.statements[0].node {
+                Statement::Assignment { target, value } => {
+                    assert!(
+                        matches!(target, Expression::Identifier(name) if name == "x"),
+                        "`{source}` target should be `x`, got {target:?}"
+                    );
+                    match value {
+                        Expression::BinaryOp {
+                            op: got_op,
+                            left,
+                            right,
+                        } => {
+                            assert_eq!(got_op, &op, "`{source}` operator mismatch");
+                            assert!(
+                                matches!(left.as_ref(), Expression::Identifier(name) if name == "x"),
+                                "`{source}` left operand should be `x`, got {left:?}"
+                            );
+                            assert!(
+                                matches!(right.as_ref(), Expression::IntLiteral(text) if text == "1"),
+                                "`{source}` right operand should be `1`, got {right:?}"
+                            );
+                        }
+                        other => panic!("`{source}` value should be a binary op, got {other:?}"),
+                    }
+                }
+                other => panic!("`{source}` should desugar to an assignment, got {other:?}"),
+            }
         }
         Ok(())
+    }
+
+    #[test]
+    fn retired_sub_statement_carries_migration_suggestion() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // `inc`/`dec` are live again, but the comma-less bare `sub x n` shape
+        // remains retired (the bare `add x n` shape has its own test above).
+        let Err(error) = parse_source("sub x 5") else {
+            panic!("expected an Err result")
+        };
+        assert!(error.message.contains("removed"), "got: {}", error.message);
+        assert_eq!(
+            error.suggestion.as_deref(),
+            Some("Use `x := x - n` instead of `sub x n`")
+        );        Ok(())
     }
 
     #[test]
@@ -6084,18 +6174,238 @@ end fn"#;
         assert_eq!(
             minus.suggestion.as_deref(),
             Some("Use `x := x - value` instead")
-        );
-        Ok(())
+        );        Ok(())
     }
 
     #[test]
     fn assignments_to_variables_named_like_retired_forms_are_accepted(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // `add := 5` assigns a variable named `add`; `inc(counter)` is a call.
-        // Neither has the retired statement shape, so neither is flagged.
+        // Variable names that are now reserved command words ("add", "sub")
+        // are rejected instead of accepted. This test no longer applies.
+        // `inc(counter)` is a call (the parenthesis, not a bare second
+        // identifier, keeps it from being the `inc x` command). Neither has
+        // the retired statement shape, so neither is flagged.
+        let prog = parse_source("var acc i32 := 0\nacc := 5\nvar counter i32 := 0\ninc(counter)")?;
+        assert_eq!(prog.statements.len(), 4);        Ok(())
+    }
+
+    #[test]
+    fn reserved_add_sub_reject_variable_declarations() -> Result<(), Box<dyn std::error::Error>> {
+        for src in &[
+            "var add i32 := 0",
+            "var sub i32 := 0",
+            "let add := 10",
+            "let sub := 10",
+            "const add := 10",
+            "const sub := 10",
+            "type add := i32",
+            "type sub := i32",
+        ] {
+            let Err(e) = parse_source(src) else {
+                panic!("{src} should be rejected as a reserved command word")
+            };
+            assert!(
+                e.message.contains("reserved command word"),
+                "{src} message: {}",
+                e.message
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn reserved_add_sub_reject_function_and_macro_names() -> Result<(), Box<dyn std::error::Error>> {
+        for src in &[
+            "fn add(a: i32) i32 := a + 1",
+            "fn sub(a: i32) i32 := a - 1",
+            "macro add(x) return x * 2 end macro",
+            "macro sub(x) return x / 2 end macro",
+        ] {
+            let Err(e) = parse_source(src) else {
+                panic!("{src} should be rejected as a reserved command word")
+            };
+            assert!(
+                e.message.contains("reserved command word"),
+                "{src} message: {}",
+                e.message
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn reserved_add_sub_reject_in_value_and_call_positions() -> Result<(), Box<dyn std::error::Error>> {
+        let Err(e) = parse_source("var x i32 := add") else {
+            panic!("value-position `add` should be rejected")
+        };
+        assert!(e.message.contains("reserved command word"));
+        let Err(e) = parse_source("var x i32 := add(1)") else {
+            panic!("call `add(1)` should be rejected")
+        };
+        assert!(e.message.contains("reserved command word"));
+        // `sub` in value position
+        let Err(e) = parse_source("var x i32 := sub") else {
+            panic!("value-position `sub` should be rejected")
+        };
+        assert!(e.message.contains("reserved command word"));
+        let Err(e) = parse_source("var x i32 := sub(1)") else {
+            panic!("call `sub(1)` should be rejected")
+        };
+        assert!(e.message.contains("reserved command word"));        Ok(())
+    }
+
+    #[test]
+    fn reserved_add_sub_reject_closure_parameters() -> Result<(), Box<dyn std::error::Error>> {
+        for src in &[
+            "|add: i32| add",
+            "|sub: i32| sub",
+            "|add, sub| sub - add",
+        ] {
+            let Err(e) = parse_source(src) else {
+                panic!("{src} should be rejected in closure params")
+            };
+            assert!(
+                e.message.contains("reserved command word"),
+                "{src} message: {}",
+                e.message
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn reserved_add_sub_reject_in_pattern_binding() -> Result<(), Box<dyn std::error::Error>> {
+        for src in &[
+            "fn main()\n    match 0\n        Some(add), put add\n        None, put 0\n    end match\nend fn",
+            "fn main()\n    match None\n        Some(add), put add\n        None, put 0\n    end match\nend fn",
+        ] {
+            let Err(err) = parse_source(src) else {
+                panic!("{src} should be rejected in pattern binding")
+            };
+            assert!(
+                err.message.contains("reserved command word"),
+                "{src} message: {err}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn reserved_add_sub_reject_loop_bindings() -> Result<(), Box<dyn std::error::Error>> {
+        for src in &[
+            "fn main()\n    loop add 0..10\n        put add\n    end loop\nend fn",
+            "fn main()\n    loop sub 0..10\n        put sub\n    end loop\nend fn",
+            "fn main()\n    for add in [1, 2]\n        put add\n    end for\nend fn",
+            "fn main()\n    for sub in [1, 2]\n        put sub\n    end for\nend fn",
+            "fn main()\n    loop (add, sub) in [1, 2]\n        put add\n    end loop\nend fn",
+        ] {
+            let Err(e) = parse_source(src) else {
+                panic!("{src} should be rejected in loop binding")
+            };
+            assert!(
+                e.message.contains("reserved command word"),
+                "{src} message: {}",
+                e.message
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn reserved_add_sub_reject_parameter_names() -> Result<(), Box<dyn std::error::Error>> {
+        for src in &[
+            "fn main(add: i32) i32 := add",
+            "fn main(sub: i32) i32 := sub",
+        ] {
+            let Err(e) = parse_source(src) else {
+                panic!("{src} should be rejected in params")
+            };
+            assert!(
+                e.message.contains("reserved command word"),
+                "{src} message: {}",
+                e.message
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn reserved_add_sub_reject_type_and_trait_names() -> Result<(), Box<dyn std::error::Error>> {
+        for src in &[
+            "struct add end struct",
+            "struct sub end struct",
+            "enum add end enum",
+            "enum sub end enum",
+            "enum Inner\n    add\nend enum",
+            "enum Inner\n    add: i32\nend enum",
+            "trait add end trait",
+            "trait sub end trait",
+            "type add := i32",
+            "type sub := i32",
+            "impl add for i32 end impl",
+            "impl sub for i32 end impl",
+        ] {
+            let Err(e) = parse_source(src) else {
+                panic!("{src} should be rejected for type/struct/enum/trait/impl names")
+            };
+            assert!(
+                e.message.contains("reserved command word"),
+                "{src} message: {}",
+                e.message
+            );
+        }
+        Ok(())
+    }
+
+    #[test]    fn reserved_add_sub_reject_match_variant_names() -> Result<(), Box<dyn std::error::Error>> {
+        for src in &[
+            "enum E\n    add\nend enum",
+            "enum E\n    add: i32\nend enum",
+            // Pattern-position variant names that are reserved command words
+            // are rejected in the parser path (see
+            // `expect_binding_identifier` and the sync note there).
+            "enum E\n    add\n    sub\nend enum\n\nfn main()\n    match 1\n        E::add, put \"ok\"\n    end match\nend fn\n",
+            "enum E\n    add\n    sub\nend enum\n\nfn main()\n    match 1\n        E::sub, put \"ok\"\n    end match\nend fn\n",
+        ] {
+            let Err(e) = parse_source(src) else {
+                panic!(
+                    "{src} should be rejected as an enum variant name"
+                )
+            };
+            assert!(
+                e.message.contains("reserved command word"),
+                "{src} message: {e}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn reserved_add_sub_reject_struct_field_names() -> Result<(), Box<dyn std::error::Error>> {
+        // `add`/`sub` are rejected as struct field names because field names
+        // are identifier positions (via `expect_binding_identifier`).
+        for src in &[
+            "struct Foo\n    add: i32\nend struct",
+            "struct Foo\n    sub: i32\nend struct",
+        ] {
+            let Err(e) = parse_source(src) else {
+                panic!("{src} should be rejected as a struct field name")
+            };
+            assert!(
+                e.message.contains("reserved command word"),
+                "{src} message: {}",
+                e.message
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn non_reserved_field_names_still_parse() -> Result<(), Box<dyn std::error::Error>> {
+        // Non-reserved field names and field selection parse normally.
         let prog =
-            parse_source("var add i32 := 0\nadd := 5\nvar counter i32 := 0\nreset(counter)")?;
-        assert_eq!(prog.statements.len(), 4);
+            parse_source("struct Foo\n    total: i32\nend struct\nvar f := Foo { total: 1 }\nput f.total")?;
+        assert!(!prog.statements.is_empty());
         Ok(())
     }
 
@@ -6144,8 +6454,7 @@ end fn"#;
             error.message.contains("expects 1 arguments, got 2"),
             "got: {}",
             error.message
-        );
-        Ok(())
+        );        Ok(())
     }
 
     #[test]
@@ -6237,8 +6546,7 @@ end fn"#;
                 Statement::ExternFunctionDeclaration(_)
             ),
             "expected the extern declaration first"
-        );
-        Ok(())
+        );        Ok(())
     }
 
     #[test]

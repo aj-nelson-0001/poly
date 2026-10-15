@@ -797,9 +797,10 @@ fn main() {
 }
 ~~~
 
-> **Remember:** `add` and `sub` are live commands only in this comma form.
-> The old bare spellings — `add x n`, `sub x n`, and `inc x` / `dec x` —
-> are retired (see the retired-syntax table at the end of the book).
+> **Remember:** `add` and `sub` are live commands only in this comma form;
+> the old bare spellings `add x n` / `sub x n` are retired (see the
+> retired-syntax table at the end of the book). `inc x` and `dec x` are
+> live too — they take no value and mean `x := x + 1` / `x := x - 1`.
 
 ## The `^` power operator
 
@@ -3603,8 +3604,6 @@ Every opener needs its own closer:
 | Old (rejected) | New (correct) |
 |----------------|---------------|
 | `x += 3` | `x := x + 3` |
-| `inc x` | `x := x + 1` |
-| `dec x` | `x := x - 1` |
 | `set x to y` | `x := y` |
 | `a % b` | `a mod b` |
 | `a && b`, `a \|\| b`, `!a` | `a and b`, `a or b`, `not a` |

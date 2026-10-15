@@ -182,9 +182,13 @@ pub fn run() -> std::io::Result<()> {
         }
 
         // Handle REPL commands.
-        if let Some(action) =
-            handle_command(&trimmed, &mut buffer, &mut session, &history_path, &mut history)
-        {
+        if let Some(action) = handle_command(
+            &trimmed,
+            &mut buffer,
+            &mut session,
+            &history_path,
+            &mut history,
+        ) {
             match action {
                 CommandAction::Quit => {
                     save_history(&history_path, &history);

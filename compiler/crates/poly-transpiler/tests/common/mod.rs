@@ -2,7 +2,7 @@
 //!
 //! Both `capability_parity.rs` (method-call surface) and
 //! `doc_claim_guards.rs` (documentation claims) pin the same thing: which of
-//! the four codegen backends accept which Poly constructs. This module holds
+//! the five codegen backends accept which Poly constructs. This module holds
 //! the single definition of the per-target expectation enum, the target
 //! list, and the runner, so the two suites cannot disagree about what
 //! "supported on target X" means.
@@ -22,12 +22,12 @@
 
 use poly_transpiler::Transpiler;
 
-pub const TARGETS: &[&str] = &["rust", "c", "asm", "js"];
+pub const TARGETS: &[&str] = &["rust", "c", "asm", "js", "goose"];
 
 /// Per-target acceptance for a matrix row.
 #[derive(Clone, Copy)]
 pub enum Expect {
-    /// Accepted by all four backends.
+    /// Accepted by all five backends.
     All,
     /// Accepted by rust, c, js; asm refuses (its scalar MethodCall gate
     /// covers only integer `.to_string()`).
@@ -53,17 +53,37 @@ pub enum Expect {
 }
 
 impl Expect {
+    /// Acceptance for the non-goose targets. Goose is pinned separately by
+    /// [`Expect::goose_default`] because its subset differs from every
+    /// existing variant (it follows the JS surface plus vector literals and
+    /// mutators, but no enums, tuples, closures, floats in `power`, `get`,
+    /// or async).
     pub fn accepted(self, target: &str) -> bool {
         match self {
             Expect::All => true,
-            Expect::AllExceptAsm => target != "asm",
+            Expect::AllExceptAsm => matches!(target, "rust" | "c" | "js"),
             Expect::RustAsmJs => matches!(target, "rust" | "asm" | "js"),
             Expect::RustAsm => matches!(target, "rust" | "asm"),
             Expect::RustCJs => matches!(target, "rust" | "c" | "js"),
-            Expect::RustCAsm => target != "js",
+            Expect::RustCAsm => matches!(target, "rust" | "c" | "asm"),
             Expect::RustC => matches!(target, "rust" | "c"),
             Expect::RustOnly => target == "rust",
             Expect::AllReject => false,
+        }
+    }
+
+    /// Default goose acceptance for cases pinned to this variant. A case
+    /// whose goose behavior differs from its variant's name (the two
+    /// `RustAsm` rows split between vector pushes and named-field enums)
+    /// overrides this with `Case::without_goose`.
+    pub fn goose_default(self) -> bool {
+        match self {
+            Expect::All | Expect::AllExceptAsm | Expect::RustAsmJs | Expect::RustAsm => true,
+            Expect::RustCJs
+            | Expect::RustCAsm
+            | Expect::RustC
+            | Expect::RustOnly
+            | Expect::AllReject => false,
         }
     }
 }
@@ -80,6 +100,8 @@ pub struct Case {
     /// `target`, the generated output must contain `needle` — this proves
     /// the construct is really lowered, not just accepted-and-ignored.
     pub needle: Option<(&'static str, &'static str)>,
+    /// Optional goose override; `None` uses [`Expect::goose_default`].
+    pub goose: Option<bool>,
 }
 
 impl Case {
@@ -90,6 +112,7 @@ impl Case {
             source,
             expect,
             needle: None,
+            goose: None,
         }
     }
 
@@ -105,6 +128,19 @@ impl Case {
             source,
             expect,
             needle: Some(needle),
+            goose: None,
+        }
+    }
+
+    /// Pin this case as rejected by the goose backend even though
+    /// [`Expect::goose_default`] would accept its variant.
+    pub const fn without_goose(self) -> Self {
+        Case {
+            name: self.name,
+            source: self.source,
+            expect: self.expect,
+            needle: self.needle,
+            goose: Some(false),
         }
     }
 }
@@ -116,7 +152,12 @@ pub fn run_matrix(cases: &[Case]) {
     for case in cases {
         for target in TARGETS {
             let result = transpiler.transpile_target(case.source, target);
-            if case.expect.accepted(target) {
+            let accepted = if *target == "goose" {
+                case.goose.unwrap_or_else(|| case.expect.goose_default())
+            } else {
+                case.expect.accepted(target)
+            };
+            if accepted {
                 let output = match result {
                     Ok(output) => output,
                     Err(err) => panic!(

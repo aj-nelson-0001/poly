@@ -1,6 +1,6 @@
 # Poly Language Specification v2.0
 
-*A minimal, assembly-inspired meta-language that transpiles to Rust, C, assembly, or JavaScript.*
+*A minimal, assembly-inspired meta-language that transpiles to Rust, C, assembly, JavaScript, or Goose.*
 
 ---
 
@@ -9,15 +9,15 @@
 Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with
 an
 assembly-inspired syntax. For everything else — generics, async, closures, traits, pattern matching — users provide definitions
-in foreign language blocks (`#rust`, `#c`, `#asm`, `#js`).
+in foreign language blocks (`#rust`, `#c`, `#asm`, `#js`, `#goose`).
 
 **Core principles:**
 1. Poly provides the orchestration. Foreign blocks provide the definitions.
 2. One Poly source file produces one complete source file in the target language.
 3. No runtime. Poly adds zero overhead — it's just syntax sugar.
 4. Explicit is better than implicit.
-5. Language-agnostic: Poly currently targets Rust, C, assembly, and JavaScript; other backends (such as C++) are reserved for
-future design.
+5. Language-agnostic: Poly currently targets Rust, C, assembly, JavaScript, and Goose; other backends (such as C++) are
+reserved for future design.
 
 ---
 
@@ -53,8 +53,11 @@ end fn
 ~~~
 
 The same model covers `--target c` with `#c` blocks and `extern c fn`
-declarations, and `--target asm` with `#asm` blocks and `extern asm fn`
-declarations.
+declarations, `--target asm` with `#asm` blocks and `extern asm fn`
+declarations, `--target js` with `#js` blocks and `extern js fn`
+declarations, and `--target goose` with `#goose` blocks and `extern
+goose fn` declarations. The Goose backend is a preview subset scoped by
+[POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md).
 
 ### Foreign Blocks
 
@@ -84,13 +87,15 @@ struct Config {
 - The program declares `fn main() ... end fn`, which calls into these definitions
 - No executable statements — only declarations
 - Multiple blocks for the selected language are allowed; they are emitted in order.
-- `#rust` is selected by `--target rust`; `#c` is selected by `--target c`.
+- `#rust` is selected by `--target rust`; `#c` is selected by `--target c`; `#asm` by `--target asm`; `#js` by
+  `--target js`; `#goose` by `--target goose`. Blocks for non-selected languages are removed before checking and generation.
 - `#cpp` is reserved for a future backend; any source containing a `#cpp` block is rejected with an explicit
 unsupported-backend
 diagnostic.
-- `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, and
-  `extern js fn ...` declarations are optional top-level interface contracts
-  for foreign calls. They are checked by Poly and are not emitted.
+- `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`,
+  `extern js fn ...`, and `extern goose fn ...` declarations are optional
+  top-level interface contracts for foreign calls. They are checked by Poly
+  and are not emitted.
 - Both top-level rules are enforced in two layers at parse time: bodies
   parsed with a depth counter (functions, conditionals, loops, macros,
   modules) reject out-of-scope statements before they are built, and
@@ -171,6 +176,9 @@ project without clobbering unrelated ones.
 ~~~text
 poly --target rust program.poly
 poly --target c program.poly
+poly --target asm program.poly
+poly --target js program.poly
+poly --target goose program.poly
 ~~~
 
 ### Explicit Foreign Signatures
@@ -429,7 +437,7 @@ distinguishes a range loop from an infinite loop whose first statement begins
 with an identifier: a body statement like `acc := acc + 1` or `tick()` keeps
 the loop infinite.
 
-**Step semantics** (identical on every target — rust, c, asm, js):
+**Step semantics** (identical on every target — rust, c, asm, js, goose):
 
 - A **literal** step's sign is known at compile time: a negative step iterates
   downward from the start bound, a positive step upward. The direction is fixed
@@ -580,7 +588,7 @@ cast, like every other arithmetic operator):
 | `x ^ 2` | `x` squared (int) | `x.wrapping_pow(2 as u32)` |
 | `f ^ 2.0` | float power | `f.powf(2.0)` |
 
-Integer overflow wraps identically on all four targets. An exponent that
+Integer overflow wraps identically on every target. An exponent that
 is negative at runtime yields `0` on every target (a negative exponent
 has no integer result). Constant expressions fold at compile time when
 the exponent is in `0..=63` and the result fits `i64` (`3 ^ 4` becomes

@@ -6,6 +6,41 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Added
 
+- **The Goose target (`--target goose`).** A fifth backend
+  (`poly-goose-codegen`) lowers Poly orchestration to Goose source that
+  passes `goose check` and runs under `goose run`. `#goose ... #endgoose`
+  blocks are copied verbatim at file scope, `extern goose fn ...`
+  declarations are checked by Poly but never emitted, and only `#goose`
+  blocks are selected for this target (`#rust` blocks are ignored, and
+  `#cpp` stays explicitly rejected). The supported surface follows the
+  JS backend plus vector literals and mutators: scalar/`let`/`const`
+  declarations, plain structs, plain functions, arithmetic (integer `^`
+  lowers to an emitted `__poly_pow` helper, `mod` to
+  `__poly_mod_trunc`), `if`/`while`/numeric and value loops,
+  `match` (literal and wildcard arms, including value position),
+  strings lowered to `u8[>..]` slices with concat and `.to_string()`
+  through the generic `str(...)`, `.len`, `.push`, arrays, `Option`,
+  and `as!` casts. Everything else — enums, tuples, closures, async,
+  generics, methods, guards, `get` input, file redirects,
+  `error`/`warn`/`info`, unicode char literals, float `^`, `?`,
+  `unsafe`, raw-pointer dereferences, if/loop expressions in value
+  position — is rejected with a diagnostic naming the limitation and
+  the `#goose` escape hatch, so nothing is silently miscompiled.
+  CLI: `--target goose`, `--emit-goose`, and `POLY_GOOSE` to override
+  the toolchain binary name. `--check` runs `goose check` in a private
+  temp directory and fails with a `goose compilation error` naming the
+  missing binary when the toolchain is absent; a plain
+  `poly --target goose file.poly` still emits `main.goose` and warns
+  instead of failing. `--project` emits the standalone layout (the
+  `.goose` artifact, the original source, and a README) because there
+  is no build system to generate. The scope and rules are documented
+  in POLY_GOOSE_BLOCKS.md; the support matrix gained a Goose summary
+  row, and the target lists in README, POLY_SPEC_v2, and
+  POLY_DOCUMENTATION_INDEX now include the fifth target. Coverage:
+  `tests/goose_target_tests.poly`, `fixture_goose_target_tests.snap`,
+  the shared capability/doc-claim matrix, and new doc-claim guards
+  pinning the rejection wording and helper lowering.
+
 - **The `add x, n` / `sub x, n` mutation commands.**
   `add x, n` adds `n` to `x` and `sub x, n` subtracts it, each lowering to
   `x := x ± n`. The target is a plain variable and the comma is required

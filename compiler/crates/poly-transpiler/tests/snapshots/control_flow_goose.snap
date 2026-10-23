@@ -1,0 +1,18 @@
+// Generated from Poly source code.
+// Target language: Goose (https://github.com/aardappel/goose).
+
+fn main() {
+    var x: i32 = 10;
+    if (((x) > (5))) {
+        print(1);
+    } else {
+        print(0);
+    }
+    var i: i32 = 0;
+    while (((i) < (3))) {
+        i = ((i) + (1));
+    }
+    for j: i32 in 0..((3) + 1) {
+        print(j);
+    }
+}

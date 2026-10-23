@@ -26,8 +26,8 @@ and `if`.
 
 Poly is also a **transpiler**. That is a fancy word for "code translator."
 Poly reads your `.poly` file, translates it into another language (Rust, C,
-assembly, or JavaScript), and then the real compiler for that language builds
-your program.
+assembly, JavaScript, or Goose), and then the real compiler for that language
+builds your program.
 
 ~~~text
   my_program.poly  --(Poly)-->  my_program.rs  --(rustc)-->  executable
@@ -35,7 +35,7 @@ your program.
 
 Why is that cool? Because you write the simple, easy part, and Poly handles
 the boring plumbing for you. When you need something powerful, you can slip
-real Rust (or C, or JavaScript) straight into your file.
+real Rust (or C, or JavaScript, or Goose) straight into your file.
 
 ## Your very first program
 
@@ -543,7 +543,8 @@ fn main() {
 }
 ~~~
 
-Interpolation works on every target (Rust, C, assembly, and JavaScript).
+Interpolation works on every target (Rust, C, assembly, JavaScript, and
+Goose).
 
 ---
 
@@ -3373,8 +3374,9 @@ libc = "0.2"
 
 # Chapter 19: Async and `spawn` — waiting without waiting
 
-> This chapter is a **Rust-target only** feature. The C, assembly, and JS
-> targets reject async functions and will point you back at foreign blocks.
+> This chapter is a **Rust-target only** feature. The C, assembly, JS, and
+> Goose targets reject async functions and will point you back at foreign
+> blocks.
 
 **What it does:** An `async fn` is a function that can pause ("await")
 while slow work happens, instead of freezing your whole program.
@@ -3867,7 +3869,7 @@ delay(100).await                           # sleep 100 ms
 - **Enumerator (enum)** — a type with a fixed list of choices.
 - **Expression** — anything that produces a value, like `2 + 3`.
 - **Foreign block** — a section of your file written directly in Rust, C,
-  assembly, or JavaScript.
+  assembly, JavaScript, or Goose.
 - **Function (`fn`)** — a named recipe you can run whenever you like.
 - **Immutable** — unable to change (Poly's `let` boxes).
 - **Inference** — Poly guessing a type from the value you gave it.
@@ -3885,7 +3887,7 @@ delay(100).await                           # sleep 100 ms
 - **Statement** — one instruction, like `put "hi"`.
 - **Struct** — a bundle of named fields you designed yourself.
 - **Syntax** — the rules for how commands are spelled.
-- **Target** — which language Poly translates to: rust, c, asm, or js.
+- **Target** — which language Poly translates to: rust, c, asm, js, or goose.
 - **Transpiler** — a translator between two programming languages (Poly
   is one).
 - **Type** — the kind of value a variable holds, like `i32` or `ustring`.

@@ -107,7 +107,20 @@ impl Transpiler {
         poly_js_codegen::transpile(&program)
     }
 
-    /// Transpile Poly source to the selected target (`rust`, `c`, `asm`, or `js`).
+    /// Transpile a parsed program to Goose after checking Poly semantics.
+    pub fn transpile_goose_checked(&self, source: &str) -> Result<String, String> {
+        let program = Self::parse_target(source, "goose")?;
+        check_program(&program).map_err(|errors| {
+            errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })?;
+        poly_goose_codegen::transpile(&program)
+    }
+
+    /// Transpile Poly source to the selected target (`rust`, `c`, `asm`, `js`, or `goose`).
     ///
     /// Each alias (for example `rs` for `rust`) maps onto the same checked
     /// entry point; unknown targets get a helpful error rather than a panic.
@@ -117,8 +130,9 @@ impl Transpiler {
             "c" => self.transpile_c_checked(source),
             "asm" | "s" | "S" => self.transpile_asm_checked(source),
             "js" | "mjs" => self.transpile_js_checked(source),
+            "goose" => self.transpile_goose_checked(source),
             other => Err(format!(
-                "Unknown target '{}'. Supported targets: rust, c, asm, js",
+                "Unknown target '{}'. Supported targets: rust, c, asm, js, goose",
                 other
             )),
         }
@@ -148,7 +162,7 @@ impl Transpiler {
             )
         }) {
             return Err(
-                "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js"
+                "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js, goose"
                     .to_string(),
             );
         }

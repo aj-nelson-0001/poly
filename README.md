@@ -8,15 +8,15 @@
 (https://github.com/aj-nelson-0001/poly/actions/workflows/release.yml)
 ![Version](https://img.shields.io/badge/version-2.0--preview-green)
 ![Status](https://img.shields.io/badge/status-Active%20Development-blue)
-![Backend](https://img.shields.io/badge/backends-Rust%20%7C%20C%20%7C%20Asm%20%7C%20JS-black)
+![Backend](https://img.shields.io/badge/backends-Rust%20%7C%20C%20%7C%20Asm%20%7C%20JS%20%7C%20Goose-black)
 
 ## Overview
 
 Poly is a **thin syntax layer over any systems language.** It handles the simple, boilerplate-heavy parts of programming with
 an
 assembly-inspired syntax. For target-specific or advanced work, users provide definitions in foreign language blocks (`#rust`,
-`#c`, `#asm`, or `#js`). The parser models additional Rust-oriented constructs, but the supported backend and target determine
-what is runnable.
+`#c`, `#asm`, `#js`, or `#goose`). The parser models additional Rust-oriented constructs, but the supported backend and target
+determine what is runnable.
 
 **Key principle:** Foreign blocks provide target-language definitions. Poly provides the orchestration. Foreign blocks must be
 top-level; the native compiler validates their contents.
@@ -59,11 +59,11 @@ Foreign blocks provide target-language definitions at file scope. Poly does not 
 compiler validates them. Poly owns the generated entry point (`fn main()` for Rust or `int main(void)` for C).
 
 This model currently supports `#rust` for Rust, `#c` for C, `#asm` for
-Linux x86-64 assembly, and `#js` for JavaScript. Optional
-`extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, and
-`extern js fn ...` declarations add Poly-side interface checks for foreign
-calls. `#cpp` syntax is reserved and rejected until a C++ backend is
-designed.
+Linux x86-64 assembly, `#js` for JavaScript, and `#goose` for Goose. Optional
+`extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`,
+`extern js fn ...`, and `extern goose fn ...` declarations add Poly-side
+interface checks for foreign calls. `#cpp` syntax is reserved and rejected
+until a C++ backend is designed.
 
 See [POLY_SPEC_v2.md](POLY_SPEC_v2.md) for the full specification, [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md)
 for  \
@@ -71,7 +71,7 @@ the frozen target contract, and [POLY_ROADMAP_v2.md](POLY_ROADMAP_v2.md) for the
 
 > ⚠️ **`poly` compiles and runs code.** `poly file.poly`, `poly --project`,
 > and `poly --check` all hand the generated code to `rustc`, `cargo`, `cc`,
-> `as`, or `node`, and `--check` still executes the build scripts of any `dep`
+> `as`, `node`, or `goose`, and `--check` still executes the build scripts of any `dep`
 > crate. Combined with the verbatim foreign blocks above, running `poly` on a
 > file you did not write is arbitrary code execution. **Never run `poly` on an
 > untrusted `.poly` file**, and in CI treat every `.poly` file in a pull
@@ -82,8 +82,8 @@ the frozen target contract, and [POLY_ROADMAP_v2.md](POLY_ROADMAP_v2.md) for the
 ## What's New in v2.0 Preview
 
 Poly 2.0 adds target selection with `--target rust`, `--target c`,
-`--target asm`, and `--target js`. Rust and C
-foreign blocks are selected by the target, emitted at file scope, and kept
+`--target asm`, `--target js`, and `--target goose`. Foreign
+blocks are selected by the target, emitted at file scope, and kept
 opaque to Poly's type checker; the native target compiler validates them.
 
 ~~~poly fragment
@@ -570,6 +570,7 @@ Poly/
         ├── poly-c-codegen/            # C11 backend (--target c)
         ├── poly-asm-codegen/          # x86-64 assembly backend (--target asm)
         ├── poly-js-codegen/           # JavaScript backend (--target js)
+        ├── poly-goose-codegen/        # Goose backend (--target goose)
         ├── poly-wasm/                 # WebAssembly bindings for the playground
         ├── poly-lsp/                  # Dependency-free JSON-RPC language server
         └── poly-cli/                  # Command-line interface
@@ -594,14 +595,16 @@ Poly/
 | [Documentation Style Guide](POLY_DOCUMENTATION_STYLE_GUIDE.md) | Documentation and example conventions |
 | [Grammar](POLY_GRAMMAR.md) | Compact v2 grammar accepted by the parser |
 | [Support Matrix](POLY_V2_SUPPORT_MATRIX.md) | Frozen per-target feature contract |
+| [Goose Backend](POLY_GOOSE_BLOCKS.md) | Goose target scope and `#goose` block behavior |
 | [Documentation Index](POLY_DOCUMENTATION_INDEX.md) | Maintained vs. historical documents |
 
 ---
 
 ## Transpilation
 
-Poly currently targets Rust by default and supports documented C11, assembly, and JavaScript orchestration subsets with  \
-`--target c`, `--target asm`, and `--target js`. Every supported Poly construct has a direct equivalent in the selected target:
+Poly currently targets Rust by default and supports documented C11, assembly, JavaScript, and Goose orchestration subsets with  \
+`--target c`, `--target asm`, `--target js`, and `--target goose`. Every supported Poly construct has a direct equivalent in the
+selected target:
 
 | Poly | Rust |
 |------|------|
@@ -758,6 +761,9 @@ is an alias |
 | `poly --target asm file.poly` | Generate and build an assembly program (Linux x86-64) |
 | `poly --target js --emit-js file.poly` | Emit JavaScript to stdout (run with Node) |
 | `poly --target js file.poly` | Emit JavaScript and run it with Node |
+| `poly --target goose --emit-goose file.poly` | Emit Goose source to stdout |
+| `poly --target goose file.poly` | Emit Goose source and run it with `goose run` |
+| `poly --target goose --check file.poly` | Validate the Goose backend (requires the `goose` toolchain on `PATH`)
 
 ---
 
@@ -778,9 +784,10 @@ is an alias |
 - **Testing:** Every new language construct or backend change should include tests. Parser tests go in
 `poly-parser/src/parser.rs` (unit tests at bottom of file). Cross-target correctness is verified by differential tests in
 `tests/diff_*.poly` — if a change affects code generation, add or update a differential test that runs through all four targets
-(rust/c/asm/js).
+(rust/c/asm/js; the Goose target is not in the differential suite because its toolchain is not assumed present).
 - **Backends:** The Rust target (`--target rust`) is the reference implementation. When adding a feature, implement it for Rust
-first, then C/asm/JS. Each backend lives in its own crate (`poly-c-codegen`, `poly-asm-codegen`, `poly-js-codegen`).
+first, then C/asm/JS. Each backend lives in its own crate (`poly-c-codegen`, `poly-asm-codegen`, `poly-js-codegen`,
+`poly-goose-codegen`).
 - **Checker:** The semantic checker in `poly-transpiler/src/checker/` (module split across `mod.rs`, `type_checker.rs`, and
 `helpers.rs`) validates types, scoping, and foreign-call contracts. New builtins or method calls need checker support before
 codegen.

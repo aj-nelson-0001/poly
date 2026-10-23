@@ -1,4 +1,4 @@
-//! Snapshot tests for the rust, c, asm, and js codegen targets.
+//! Snapshot tests for the rust, c, asm, js, and goose codegen targets.
 //!
 //! Each test transpiles a fixed Poly source file and compares the generated
 //! output byte-for-byte against a snapshot in `snapshots/`. To regenerate all
@@ -27,9 +27,9 @@ fn snapshot_path(name: &str) -> PathBuf {
     snapshot_dir().join(format!("{name}.snap"))
 }
 
-/// Shared sample programs covering the core language surface that all three
-/// targets must support: variables, arithmetic, strings, conditionals, loops,
-/// functions, and foreign blocks for the relevant target.
+/// Shared sample programs covering the core language surface that every
+/// target must support (or reject uniformly): variables, arithmetic,
+/// strings, conditionals, loops, functions, and bools.
 const SAMPLES: &[(&str, &str)] = &[
     (
         "hello",
@@ -74,6 +74,11 @@ const TARGET_FIXTURES: &[(&str, &str, &str)] = &[
         "js",
         "../../../tests/js_target_tests.poly",
     ),
+    (
+        "goose_target_tests",
+        "goose",
+        "../../../tests/goose_target_tests.poly",
+    ),
 ];
 
 fn transpile_source(source: &str, target: &str) -> Result<String, String> {
@@ -111,7 +116,7 @@ fn check_snapshot(name: &str, output: &str) {
 #[test]
 fn snapshots_all_targets() -> Result<(), Box<dyn std::error::Error>> {
     for (name, source) in SAMPLES {
-        for target in ["rust", "c", "asm", "js"] {
+        for target in ["rust", "c", "asm", "js", "goose"] {
             let snapshot_name = format!("{name}_{target}");
             match transpile_source(source, target) {
                 Ok(output) => check_snapshot(&snapshot_name, &output),

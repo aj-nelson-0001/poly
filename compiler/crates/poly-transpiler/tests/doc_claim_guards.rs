@@ -1,7 +1,7 @@
 //! Documentation-claim guards: pin the per-backend behavior claims that the
 //! maintained docs (README, POLY_SPEC_v2, POLY_GRAMMAR, POLY_QUICK_REFERENCE,
 //! POLY_API_REFERENCE, POLY_CHEATSHEET, POLY_JS_BLOCKS,
-//! POLY_V2_SUPPORT_MATRIX, POLY_MIGRATION_GUIDE_v2) make about the four
+//! POLY_V2_SUPPORT_MATRIX, POLY_MIGRATION_GUIDE_v2) make about the five
 //! targets.
 //!
 //! Every case was verified end-to-end during the 2.0.0-preview.12
@@ -180,7 +180,10 @@ const CASES: &[Case] = &[
         ),
         Expect::RustAsm,
         ("rust", "Badge::Level { n: n }"),
-    ),
+    )
+    // Goose rejects the `enum` declaration itself, so the vector-capable
+    // `RustAsm` default is overridden for these two rows.
+    .without_goose(),
     Case::with_output(
         "named-field payload match, qualified arm",
         concat!(
@@ -190,7 +193,8 @@ const CASES: &[Case] = &[
         ),
         Expect::RustAsm,
         ("rust", "Badge::Level { n: n }"),
-    ),
+    )
+    .without_goose(),
     // File I/O: redirects and file input are Rust-target features; C, asm,
     // and JS reject them with guidance.
     Case::accepted(
@@ -264,8 +268,9 @@ fn reserved_add_sub_reject_value_position_variant_names() -> Result<(), Box<dyn 
 #[test]
 fn async_rejection_names_the_foreign_block_escape_hatch() -> Result<(), Box<dyn std::error::Error>>
 {
-    // C, asm, and JS must refuse async functions with guidance pointing at
-    // a foreign block (POLY_TUTORIAL.md Part 7); rust must accept them.
+    // C, asm, JS, and goose must refuse async functions with guidance
+    // pointing at a foreign block (POLY_TUTORIAL.md Part 7); rust must
+    // accept them.
     let transpiler = poly_transpiler::Transpiler::new();
     let source = concat!(
         "async fn compute(x: i32): i32\n    delay(10).await\n    return x * x\nend fn\n\nfn main()\n ",
@@ -275,7 +280,12 @@ fn async_rejection_names_the_foreign_block_escape_hatch() -> Result<(), Box<dyn 
         transpiler.transpile_target(source, "rust").is_ok(),
         "async fn should compile on the rust target"
     );
-    for (target, block) in [("c", "#c"), ("asm", "#asm"), ("js", "#js")] {
+    for (target, block) in [
+        ("c", "#c"),
+        ("asm", "#asm"),
+        ("js", "#js"),
+        ("goose", "#goose"),
+    ] {
         let err = match transpiler.transpile_target(source, target) {
             Err(err) => err,
             Ok(_) => panic!("async fn unexpectedly compiled on `{target}`"),
@@ -286,5 +296,87 @@ fn async_rejection_names_the_foreign_block_escape_hatch() -> Result<(), Box<dyn 
             "target `{target}`: async rejection should mention async and {block}, got: {err}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn mod_is_the_truncated_remainder_on_every_target() -> Result<(), Box<dyn std::error::Error>> {
+    // POLY_V2_SUPPORT_MATRIX.md and AUDIT_ROUND2_REPORT.md pin `mod` to the
+    // truncated (sign-of-dividend) remainder on every backend, so
+    // `-17 mod 5` must be `-2` everywhere. Goose's native `%` is *Euclidean*
+    // (reference §Arithmetic: the result lies in `[0, |b|)` and is never
+    // negative), which would yield 3, so the helper delegates to `std.rem`
+    // — the documented truncated partner of `/`, verified against the real
+    // compiler. The helper must never grow a sign-adjustment clause or
+    // fall back to `%`: both produce a floored, non-negative remainder
+    // that diverges from rust/c/asm/js for negative operands (3 vs -2).
+    let source = "fn main()\n    var a i32 := -17\n    var r i32 := a mod 5\n    put r\nend fn\n";
+    let transpiler = poly_transpiler::Transpiler::new();
+
+    // The other four targets lower `mod` to their native remainder
+    // operator, which truncates in Rust, C, x86 `idiv`, and JS alike.
+    for target in ["rust", "c", "js"] {
+        let out = transpiler.transpile_target(source, target)?;
+        assert!(
+            !out.contains("__poly_mod"),
+            "target `{target}`: mod should lower to the native operator, not a helper:\n{out}"
+        );
+    }
+    let asm = transpiler.transpile_target(source, "asm")?;
+    assert!(
+        asm.contains("idivl") && !asm.contains("__poly_mod"),
+        "asm: mod should lower to idiv (truncated remainder in edx):\n{asm}"
+    );
+
+    // Goose emits the helper; it must delegate to `std.rem` through the
+    // file-level `import std;`, with untyped parameters so the real goose
+    // compiler specializes it per operand width and signedness (a typed
+    // `a: i32` helper rejected every non-i32 operand with "narrowing and
+    // sign changes require an explicit `as`").
+    let goose = transpiler.transpile_target(source, "goose")?;
+    assert!(
+        goose.contains("fn __poly_mod_trunc(a, b) {")
+            && goose.contains("return rem(a, b);")
+            && goose.contains("import std;"),
+        "goose: mod helper should delegate to std.rem (native % is Euclidean, not truncated), got:\n{goose}"
+    );
+    assert!(
+        !goose.contains("r + b") && !goose.contains("a % b"),
+        "goose: mod helper must neither adjust the remainder's sign nor use native % (both diverge from the other four targets):\n{goose}"
+    );
+    Ok(())
+}
+
+#[test]
+fn runtime_step_sign_dispatch_matches_the_other_targets() -> Result<(), Box<dyn std::error::Error>> {
+    // POLY_SPEC_v2 "Step semantics (identical on every target — rust, c,
+    // asm, js, goose)": a non-literal step keeps its sign at runtime, so the
+    // loop must dispatch on that sign — ascending compares against the upper
+    // bound, descending against the lower bound (c and js emit the same
+    // dispatch and pin it with `runtime_step_uses_sign_dispatch`). The Goose
+    // backend used to reuse the statically-chosen ascending comparison in
+    // both branches, so `step s` with `s = -1` ran zero iterations, and a
+    // runtime-negative step over ascending bounds never terminated.
+    let source = "fn main()\n    var s i32 := -1\n    var acc i32 := 0\n    loop i 10..1 step s\n        acc := acc + i\n    end loop\n    put acc\nend fn\n";
+    let transpiler = poly_transpiler::Transpiler::new();
+    let goose = transpiler.transpile_target(source, "goose")?;
+    assert!(
+        goose.contains(
+            "while (__poly_step > 0 && (i <= __poly_end)) || (__poly_step < 0 && (i >= __poly_end))"
+        ),
+        "goose: a runtime step must dispatch on its sign like c/js (descending compares `>=`), got:\n{goose}"
+    );
+    // The expansion must also declare typed variables: Goose infers an
+    // untyped `var i = 10` as `i64`, so `acc = acc + i` with `acc: i32`
+    // fails the real `goose check` ("narrowing and sign changes require an
+    // explicit `as`"). Typed against the real goose v2026.3 compiler:
+    // `poly --check --target goose` runs `goose check` on this output.
+    assert!(
+        goose.contains("var i: i32 = 10;")
+            && goose.contains("var __poly_end: i32 = 1;")
+            && goose.contains("var __poly_step: i64 = s;")
+            && goose.contains("i += __poly_step as i32;"),
+        "goose: step-loop variables must be typed i32 and the step widened to i64 (the real goose compiler rejects the untyped form), got:\n{goose}"
+    );
     Ok(())
 }

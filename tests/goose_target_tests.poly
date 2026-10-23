@@ -1,0 +1,78 @@
+#!/usr/bin/env poly
+# Goose target smoke test (runs under the Goose interpreter)
+# The Goose backend lowers Poly constructs to plain Goose code and passes
+# `#goose` blocks through verbatim.
+extern goose fn double_value(n: i32): i32
+extern goose fn greet(name: ustring): ustring
+
+#goose
+fn double_value(n: i32) -> i32 {
+    return n * 2;
+}
+
+fn greet(name: u8[>..]) -> u8[>..] {
+    return str("hello ", name);
+}
+#endgoose
+
+struct Point
+    var x: i32
+    var y: i32
+end struct
+
+# Function defined in Poly, lowered to Goose
+fn plus(a: i32, b: i32): i32
+    return a + b
+end fn
+
+fn main()
+    # Scalars and output
+    var x i32 := 21
+    put double_value(x)
+    put greet(unicode "world")
+
+    # Arithmetic and control flow
+    var total i32 := 0
+    loop i 1..5
+        total := total + i
+    end loop
+    put total
+
+    if total = 15
+        put 1
+    else
+        put 0
+    end if
+
+    # Range loop and for-in loop
+    loop j 0..2
+        put j
+    end loop
+    loop k in [10, 20]
+        put k
+    end loop
+
+    # int to_string lowers to str(); ^ on integers lowers to __poly_pow
+    var n i32 := 5
+    put n.to_string()
+    var square i32 := n ^ 2
+    put square
+
+    # Struct declaration and literal
+    var p Point := Point { x: 3, y: 4 }
+    put p.x + p.y
+
+    # Match statement on literals
+    match 2
+        1, put "one"
+        2, put "two"
+        _, put "other"
+    end match
+
+    # Vector literal and mutator methods
+    var v Vec<i32> := [1, 2]
+    v.push(3)
+    put v.len()
+
+    put plus(2, 3)
+end fn

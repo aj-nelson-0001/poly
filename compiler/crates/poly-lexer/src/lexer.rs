@@ -446,7 +446,7 @@ impl Lexer {
         // The text between `#` and end-of-line is the candidate marker.
         let marker: String = self.chars[marker_start..line_end].iter().collect();
         // Only a handful of languages are supported for passthrough blocks.
-        let language = ["rust", "cpp", "c", "asm", "js"]
+        let language = ["rust", "cpp", "c", "asm", "js", "goose"]
             .iter()
             .find(|language| marker.starts_with(**language))?;
         // It counts as a block opener only if nothing but whitespace follows

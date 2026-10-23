@@ -1,7 +1,7 @@
 //! Capability-parity tests: per-backend method-call support, pinned per
 //! target.
 //!
-//! The four codegen backends support overlapping but different subsets of
+//! The five codegen backends support overlapping but different subsets of
 //! method calls. These tests pin each backend's *accepted* surface so that
 //! any change — a backend quietly gaining or losing a capability — fails a
 //! test instead of drifting silently. The per-target expected results below
@@ -148,6 +148,20 @@ fn rejection_errors_name_the_backend_or_limitation() -> Result<(), Box<dyn std::
             "fn main()\n    var v Vec<i32> := [1, 2]\n    v.push(3)\nend fn\n",
             "js",
             &["JS backend does not support method calls"],
+        ),
+        (
+            // Goose has `__poly_pow` for integers only; float `^` points at
+            // the escape hatch just like the other non-rust backends.
+            "float power on goose",
+            "fn main()\n    var base f64 := 2.0\n    put base ^ 10.0\nend fn\n",
+            "goose",
+            &["float exponentiation", "#goose"],
+        ),
+        (
+            "get input on goose",
+            "fn main()\n    var x := get\n    put x\nend fn\n",
+            "goose",
+            &["`get` input", "#goose"],
         ),
     ];
     for (name, source, target, needles) in cases {

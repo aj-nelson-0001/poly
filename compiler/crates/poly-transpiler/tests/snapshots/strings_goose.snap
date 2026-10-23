@@ -1,0 +1,8 @@
+// Generated from Poly source code.
+// Target language: Goose (https://github.com/aardappel/goose).
+
+fn main() {
+    var name: u8[>..] = "Poly";
+    print(name);
+    print(str("hello ", name));
+}

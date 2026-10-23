@@ -3,7 +3,9 @@
 **Status:** Frozen preview contract, current through `2.0.0-preview.17`
 
 This matrix is the implementation contract for the current Rust, C, assembly, and JavaScript targets. A construct marked
-`Parsed` may exist in the parser and AST without being runnable on every backend.
+`Parsed` may exist in the parser and AST without being runnable on every backend. The Goose target is a preview subset with
+its own backend document, [POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md); its summary and rules are appended below rather
+than given a column in every row.
 
 ## Target Summary
 
@@ -90,6 +92,16 @@ foreign bodies. |
 
 The asm column reflects the narrow Linux x86-64 subset documented in the release notes: only constructs the backend can emit
 without a cross-language runtime representation are marked, and everything else is rejected with guidance.
+
+## Goose Target Summary
+
+The Goose backend (`--target goose`) is the fifth target: it lowers Poly orchestration to Goose source that passes `goose
+check` and runs under `goose run`, with `#goose ... #endgoose` blocks copied verbatim at file scope and `extern goose fn ...`
+declarations checked by Poly but never emitted. Its surface follows the JS column plus vector literals and mutators; a compact
+row-by-row scope, the type mapping, the rejection list, and the toolchain fallback behavior are maintained in
+[POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md) against the implementation in `compiler/crates/poly-goose-codegen/src/lib.rs`.
+Like the columns above, every rejection names the limitation and the matching `#goose` escape hatch, so nothing lowers to a
+placeholder silently.
 
 ## Foreign Interface Rules
 

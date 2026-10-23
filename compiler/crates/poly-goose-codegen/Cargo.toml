@@ -1,0 +1,15 @@
+[package]
+name = "poly-goose-codegen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Goose code generator for the Poly language"
+
+[dependencies]
+poly-parser.workspace = true
+
+[dev-dependencies]
+poly-lexer.workspace = true
+
+[lints]
+workspace = true

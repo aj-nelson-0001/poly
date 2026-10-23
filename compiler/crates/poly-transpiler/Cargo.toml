@@ -14,6 +14,7 @@ poly-c-codegen.workspace = true
 poly-asm-codegen.workspace = true
 thiserror.workspace = true
 poly-js-codegen.workspace = true
+poly-goose-codegen.workspace = true
 
 [lints]
 workspace = true

@@ -12,6 +12,7 @@ members = [
     "crates/poly-c-codegen",
     "crates/poly-asm-codegen",
     "crates/poly-js-codegen",
+    "crates/poly-goose-codegen",
 ]
 
 [workspace.package]
@@ -19,7 +20,7 @@ version = "2.0.0-preview.17"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/aj-nelson-0001/poly"
-description = "A minimal systems-language syntax layer with Rust, C, assembly, and JavaScript backends"
+description = "A minimal systems-language syntax layer with Rust, C, assembly, JavaScript, and Goose backends"
 
 [workspace.dependencies]
 poly-lexer = { path = "crates/poly-lexer" }
@@ -33,6 +34,7 @@ poly-wasm = { path = "crates/poly-wasm" }
 poly-c-codegen = { path = "crates/poly-c-codegen" }
 poly-asm-codegen = { path = "crates/poly-asm-codegen" }
 poly-js-codegen = { path = "crates/poly-js-codegen" }
+poly-goose-codegen = { path = "crates/poly-goose-codegen" }
 thiserror = "2"
 anyhow = "1"
 

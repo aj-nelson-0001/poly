@@ -22,6 +22,7 @@ enum Target {
     C,
     Asm,
     Js,
+    Goose,
 }
 
 impl Target {
@@ -33,8 +34,9 @@ impl Target {
             "c" => Ok(Target::C),
             "asm" | "s" | "S" => Ok(Target::Asm),
             "js" | "mjs" => Ok(Target::Js),
+            "goose" => Ok(Target::Goose),
             other => bail!(
-                "Unknown target '{}'. Supported targets: rust, c, asm, js",
+                "Unknown target '{}'. Supported targets: rust, c, asm, js, goose",
                 other
             ),
         }
@@ -47,6 +49,9 @@ impl Target {
             Target::C => "c",
             Target::Asm => "S",
             Target::Js => "js",
+            // Goose emits Goose source, which uses the `.goose` extension
+            // (see github.com/aardappel/goose).
+            Target::Goose => "goose",
         }
     }
 
@@ -57,6 +62,7 @@ impl Target {
             Target::C => "c",
             Target::Asm => "asm",
             Target::Js => "js",
+            Target::Goose => "goose",
         }
     }
 }
@@ -129,6 +135,7 @@ fn parse_args(raw_args: &[String]) -> Result<ParsedArgs> {
             "--emit-c" => emit_target = Some(Target::C),
             "--emit-asm" => emit_target = Some(Target::Asm),
             "--emit-js" => emit_target = Some(Target::Js),
+            "--emit-goose" => emit_target = Some(Target::Goose),
             "--intermediate-representation" | "--ir" => {
                 command = Some(Command::IntermediateRepresentation)
             }
@@ -219,7 +226,9 @@ fn main() -> Result<()> {
         eprintln!("Mode flags and the file argument may appear in any order.");
         eprintln!();
         eprintln!("Options:");
-        eprintln!("  --target <lang>   Target language (default: rust; options: rust, c, asm, js)");
+        eprintln!(
+            "  --target <lang>   Target language (default: rust; options: rust, c, asm, js, goose)"
+        );
         eprintln!("  --strict          Reject foreign calls without an explicit `extern <target> fn` declaration");
         eprintln!("  --tokens          Print tokens and exit");
         eprintln!("  --ast             Print AST and exit");
@@ -228,6 +237,7 @@ fn main() -> Result<()> {
         eprintln!("  --emit-c          Print transpiled C instead of compiling");
         eprintln!("  --emit-asm        Print transpiled x86-64 assembly instead of compiling");
         eprintln!("  --emit-js         Print transpiled JavaScript instead of compiling");
+        eprintln!("  --emit-goose      Print transpiled Goose instead of compiling");
         eprintln!(
             "  --intermediate-representation  Print the IR pipeline output (rust target only)"
         );
@@ -261,7 +271,7 @@ fn main() -> Result<()> {
             println!();
             println!("Options:");
             println!(
-                "  --target <lang>   Target language (default: rust; options: rust, c, asm, js)"
+                "  --target <lang>   Target language (default: rust; options: rust, c, asm, js, goose)"
             );
             println!("  --strict          Reject foreign calls without an explicit `extern <target> fn` declaration");
             println!("  --tokens          Print tokens and exit");
@@ -271,6 +281,7 @@ fn main() -> Result<()> {
             println!("  --emit-c          Print transpiled C instead of compiling");
             println!("  --emit-asm        Print transpiled x86-64 assembly instead of compiling");
             println!("  --emit-js         Print transpiled JavaScript instead of compiling");
+            println!("  --emit-goose      Print transpiled Goose instead of compiling");
             println!(
                 "  --intermediate-representation  Print the IR pipeline output (rust target only)"
             );
@@ -293,6 +304,7 @@ fn main() -> Result<()> {
             println!("  c                 Transpile to C (C11 subset)");
             println!("  asm               Transpile to x86-64 assembly (Linux syscalls)");
             println!("  js                Transpile to JavaScript (Node / browser)");
+            println!("  goose             Transpile to Goose (github.com/aardappel/goose)");
             Ok(())
         }
         Command::Version => {
@@ -470,6 +482,9 @@ fn main() -> Result<()> {
                                 Target::C => verify_c_compiles(&code),
                                 Target::Asm => verify_asm_compiles(&code),
                                 Target::Js => verify_js_compiles(&code),
+                                // Goose emits Goose source, validated by the
+                                // `goose` compiler's typechecker.
+                                Target::Goose => verify_goose_compiles(&code),
                             };
                             match compile_result {
                                 Ok(_) => println!(
@@ -595,6 +610,16 @@ fn main() -> Result<()> {
                     generate_js_project(&source_path, &output_dir)?;
                     println!(
                         "Generated JavaScript project at {} (source: {})",
+                        output_dir.display(),
+                        source_path.display()
+                    );
+                }
+                Target::Goose => {
+                    // Like JS, a Goose "project" is the emitted artifact next
+                    // to a copy of the source; `goose run main.goose` runs it.
+                    generate_goose_project(&source_path, &output_dir)?;
+                    println!(
+                        "Generated Goose project at {} (source: {})",
                         output_dir.display(),
                         source_path.display()
                     );
@@ -744,6 +769,46 @@ fn main() -> Result<()> {
                         Ok(status) => process::exit(status.code().unwrap_or(1)),
                         Err(error) => eprintln!(
                             "Warning: could not run {node} (set POLY_NODE to override): {error}"
+                        ),
+                    }
+                }
+                Target::Goose => {
+                    // The Goose backend emits Goose source (`.goose`); the
+                    // `goose` compiler typechecks it with `goose check` and
+                    // runs it with `goose run` (github.com/aardappel/goose).
+                    let output_path = custom_output
+                        .clone()
+                        .unwrap_or_else(|| path.with_extension("goose"));
+                    let source = std::fs::read_to_string(&path)
+                        .with_context(|| format!("Failed to read file: {}", path.display()))?;
+                    warn_dependencies_ignored(&source, &target);
+                    let code = poly_transpiler::Transpiler::new()
+                        .transpile_goose_checked(&source)
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                    std::fs::write(&output_path, &code)
+                        .with_context(|| format!("Failed to write {}", output_path.display()))?;
+                    match verify_goose_compiles(&code) {
+                        Ok(()) => {}
+                        Err(error) => {
+                            eprintln!("Warning: Goose typecheck unavailable: {error}")
+                        }
+                    }
+                    println!("Generated {} -> {}", path.display(), output_path.display());
+                    // Execute the generated artifact with `goose run`,
+                    // streaming the program's output. A missing goose
+                    // compiler degrades to a warning (mirroring the other
+                    // targets' missing-compiler fallbacks); a failing
+                    // program propagates its exit status.
+                    let goose = std::env::var("POLY_GOOSE").unwrap_or_else(|_| "goose".to_string());
+                    match std::process::Command::new(&goose)
+                        .arg("run")
+                        .arg(&output_path)
+                        .status()
+                    {
+                        Ok(status) if status.success() => {}
+                        Ok(status) => process::exit(status.code().unwrap_or(1)),
+                        Err(error) => eprintln!(
+                            "Warning: could not run {goose} (set POLY_GOOSE to override): {error}"
                         ),
                     }
                 }
@@ -1579,6 +1644,63 @@ node main.js\n\
     Ok(())
 }
 
+/// Generate a standalone Goose project from a Poly source file: the emitted
+/// Goose source artifact, the original Poly source, and a README. There is no
+/// build system to generate; `goose run main.goose` runs the project
+/// (github.com/aardappel/goose), mirroring the JS project layout.
+fn generate_goose_project(source_path: &Path, output_dir: &Path) -> Result<()> {
+    if source_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        != Some("poly")
+    {
+        bail!(
+            "Source file must have a .poly extension: {}",
+            source_path.display()
+        );
+    }
+    let source = std::fs::read_to_string(source_path)
+        .with_context(|| format!("Failed to read source file: {}", source_path.display()))?;
+    let code = poly_transpiler::Transpiler::new()
+        .transpile_goose_checked(&source)
+        .map_err(|error| anyhow::anyhow!(error))?;
+    warn_dependencies_ignored(&source, &Target::Goose);
+    if output_dir.exists() && output_dir.read_dir()?.next().is_some() {
+        bail!(
+            "Refusing to overwrite existing files in {}",
+            output_dir.display()
+        );
+    }
+    std::fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "Failed to create project directory: {}",
+            output_dir.display()
+        )
+    })?;
+    std::fs::write(output_dir.join("main.goose"), &code)
+        .with_context(|| format!("Failed to write main.goose in {}", output_dir.display()))?;
+    std::fs::copy(source_path, output_dir.join("main.poly"))
+        .with_context(|| format!("Failed to copy source into {}", output_dir.display()))?;
+    let readme = format!(
+        "# Poly Goose project\n\
+\n\
+Generated from `{}`.\n\
+\n\
+## Run\n\
+\n\
+```\n\
+goose run main.goose\n\
+```\n",
+        source_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+    );
+    std::fs::write(output_dir.join("README.md"), &readme)
+        .with_context(|| format!("Failed to write README.md in {}", output_dir.display()))?;
+    Ok(())
+}
+
 /// Verify generated x86-64 assembly syntax using `as`.
 fn verify_asm_compiles(code: &str) -> Result<()> {
     use std::process::Command;
@@ -1625,6 +1747,30 @@ fn verify_js_compiles(code: &str) -> Result<()> {
     let _ = std::fs::remove_dir_all(&temp_dir);
     let output = output.map_err(|error| {
         anyhow::anyhow!("failed to run `{node}` (set POLY_NODE to override): {error}")
+    })?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            String::from_utf8_lossy(&output.stderr).to_string()
+        ))
+    }
+}
+
+/// Typecheck generated Goose source with the `goose` compiler's
+/// `goose check` command (github.com/aardappel/goose).
+fn verify_goose_compiles(code: &str) -> Result<()> {
+    let temp_dir = create_private_temp_dir("poly_goose")?;
+    let source_path = temp_dir.join("check.goose");
+    std::fs::write(&source_path, code).context("Failed to write temporary Goose source")?;
+    let goose = std::env::var("POLY_GOOSE").unwrap_or_else(|_| "goose".to_string());
+    let output = std::process::Command::new(&goose)
+        .arg("check")
+        .arg(&source_path)
+        .output();
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    let output = output.map_err(|error| {
+        anyhow::anyhow!("failed to run `{goose}` (set POLY_GOOSE to override): {error}")
     })?;
     if output.status.success() {
         Ok(())

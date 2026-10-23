@@ -1,0 +1,78 @@
+// Generated from Poly source code.
+// Target language: Goose (https://github.com/aardappel/goose).
+
+fn double_value(n: i32) -> i32 {
+    return n * 2;
+}
+
+fn greet(name: u8[>..]) -> u8[>..] {
+    return str("hello ", name);
+}
+
+struct Point { x: i32, y: i32 }
+
+
+fn plus(a: i32, b: i32) -> i32 {
+    return ((a) + (b));
+}
+
+
+fn main() {
+    var x: i32 = 21;
+    print(double_value(x));
+    print(greet("world"));
+    var total: i32 = 0;
+    for i: i32 in 1..((5) + 1) {
+        total = ((total) + (i));
+    }
+    print(total);
+    if (((total) == (15))) {
+        print(1);
+    } else {
+        print(0);
+    }
+    for j: i32 in 0..((2) + 1) {
+        print(j);
+    }
+    for k in [10, 20] {
+        print(k);
+    }
+    var n: i32 = 5;
+    print(str(n));
+    var square: i32 = __poly_pow(n, 2);
+    print(square);
+    var p: Point = Point { x: 3, y: 4 };
+    print((((p).x) + ((p).y)));
+    match 2 {
+        1 => {
+            print("one");
+        },
+        2 => {
+            print("two");
+        },
+        _ => {
+            print("other");
+        },
+    }
+    var v: i32[>..] = [1, 2];
+    (v).push(3);
+    print((v).len);
+    print(plus(2, 3));
+}
+
+fn __poly_pow(base, exp) {
+    if exp < 0 {
+        return 0;
+    }
+    var result = 1;
+    var b = base;
+    var e = exp;
+    while e > 0 {
+        if e % 2 == 1 {
+            result = result * b;
+        }
+        b = b * b;
+        e = e / 2;
+    }
+    return result;
+}

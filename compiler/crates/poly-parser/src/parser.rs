@@ -1654,9 +1654,17 @@ impl<'a> Parser<'a> {
         }
         self.advance(); // consume `extern`
         let target = self.expect_identifier()?;
-        if target != "rust" && target != "c" && target != "asm" && target != "js" {
+        if target != "rust"
+            && target != "c"
+            && target != "asm"
+            && target != "js"
+            && target != "goose"
+        {
             return Err(ParseError::new(
-                format!("Unsupported extern target `{target}`; use `rust`, `c`, `asm`, or `js`"),
+                format!(
+                    "Unsupported extern target `{target}`; use `rust`, `c`, `asm`, `js`, or \
+                     `goose`"
+                ),
                 self.current().span,
             ));
         }

@@ -13,6 +13,7 @@ targets, tooling, and migration.
 | [POLY_MIGRATION_GUIDE_v2.md](POLY_MIGRATION_GUIDE_v2.md) | Migration from v1.8 to the v2 preview and target selection |
 | [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md) | C11 backend scope and `#c` block behavior |
 | [POLY_JS_BLOCKS.md](POLY_JS_BLOCKS.md) | JavaScript backend scope and `#js` block behavior |
+| [POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md) | Goose backend scope and `#goose` block behavior |
 | [POLY_API_REFERENCE.md](POLY_API_REFERENCE.md) | Current I/O, builtin, and runtime API reference |
 | [POLY_TUTORIAL.md](POLY_TUTORIAL.md) | Beginner tutorial covering I/O, error handling, and loop ranges |
 | [POLY_QUICK_REFERENCE.md](POLY_QUICK_REFERENCE.md) | Current syntax and I/O quick reference |
@@ -20,7 +21,7 @@ targets, tooling, and migration.
 | [POLY_TROUBLESHOOTING_GUIDE.md](POLY_TROUBLESHOOTING_GUIDE.md) | Current error, input/output, and target troubleshooting |
 | [POLY_DOCUMENTATION_STYLE_GUIDE.md](POLY_DOCUMENTATION_STYLE_GUIDE.md) | Example, fence, terminology, and line-length rules |
 | [POLY_V2_AUDIT.md](POLY_V2_AUDIT.md) | Verified v2 status and remaining risks |
-| [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) | Frozen Rust/C feature and foreign-interface contract |
+| [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) | Frozen Rust/C/asm/JS feature contract, plus a Goose summary |
 | [POLY_PREVIEW_RELEASE_CHECKLIST.md](POLY_PREVIEW_RELEASE_CHECKLIST.md) | Preview release readiness and hygiene checklist |
 | [POLY_VERSION_FILES_MAP.md](POLY_VERSION_FILES_MAP.md) | Maintainer map of version-bearing files to their regeneration
 mechanism |
@@ -38,9 +39,11 @@ Complete runnable Poly programs live in [`examples/`](examples/); executable beh
 - `--target c` emits and checks a C11 orchestration subset through `poly-c-codegen`.
 - `--target asm` emits freestanding Linux x86-64 assembly through `poly-asm-codegen`.
 - `--target js` emits an ES2020 JavaScript module through `poly-js-codegen`.
-- `#rust`, `#c`, `#asm`, and `#js` blocks are top-level, opaque to Poly, and selected by target.
-- `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, and `extern js fn ...` provide opt-in Poly-side checks for
-opaque foreign calls.
+- `--target goose` emits and checks a Goose orchestration subset through `poly-goose-codegen` (the `goose` toolchain must be
+on `PATH` for `--check`; emission works without it).
+- `#rust`, `#c`, `#asm`, `#js`, and `#goose` blocks are top-level, opaque to Poly, and selected by target.
+- `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`, `extern js fn ...`, and `extern goose fn ...` provide opt-in
+Poly-side checks for opaque foreign calls.
 - `#cpp` syntax is reserved and rejected explicitly because no C++ backend exists.
 - `=` is equality; `:=` is assignment. `==` is rejected legacy syntax.
 - Append output uses `put value to "file" -append` (Rust target; the C, asm, and JS backends reject file redirects).

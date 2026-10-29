@@ -4,6 +4,8 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.17] - 2026-09-22
+
 ### Added
 
 - **The Goose target (`--target goose`).** A fifth backend
@@ -73,8 +75,21 @@ All notable changes to the Poly language compiler will be documented in this fil
   exponent is in `0..=63` and the result fits `i64`. This repurposes `^`,
   which was the retired symbol spelling of `xor` and previously rejected
   with a migration diagnostic; `xor` remains the bitwise-exclusive-or
-  keyword and is unaffected. The C target now links `-lm` (for `pow`), and
-  the emitted C includes `<math.h>`.
+  keyword and is unaffected.  The C target now links `-lm` (for `pow`), and the emitted C includes
+  `<math.h>`.
+
+- Parser: expression and type nesting is capped at 32 levels with a
+  `Maximum nested expression depth` diagnostic, checked where every
+  sub-expression re-enters (`parse_unary`, the precedence chain's bottom)
+  and where tuple/reference/array types recurse (`parse_type`). Sized from
+  measurement: ~45 KiB per debug precedence-chain level, so the worst case
+  peaks near 1.6 MiB — inside the 2 MiB default test-thread stack. A chain
+  of `if`s exhausts this budget and `MAX_IF_DEPTH` at the same level, so
+  both guards name the more specific if-depth limit when both are spent.
+- Differential coverage for the depth caps: a `tests/diff_deep_nesting`
+  fixture (deep parens, nested ifs/whiles just under every cap) runs
+  through all four backends, and the fuzz generator wraps leaves in extra
+  grouping parens so seeds parse in the cap's neighbourhood.
 
 ### Security
 
@@ -207,6 +222,10 @@ All notable changes to the Poly language compiler will be documented in this fil
   runtime length, so any literal containing an escape — or any non-ASCII
   text — over-read the label by the escape characters' width. Now
   `interned_string_len`, the original byte length.
+- The Linux stack-floor guard recentred from 1972 KiB to 1952 KiB: the
+  expression cap's parser changes moved the healthy floor to 1936 KiB
+  (frame-per-level regression floor ~1968 KiB), keeping 16 KiB of margin
+  on each side of the window.
 
 ### Documentation
 
@@ -228,30 +247,6 @@ All notable changes to the Poly language compiler will be documented in this fil
   security audit of the compiler, LSP, WASM/playground, CI and scripts —
   including the areas checked and found clean, and the two residual
   limitations left open with the reasoning.
-
-## [2.0.0-preview.17] - 2026-09-22
-
-### Added
-
-- Parser: expression and type nesting is capped at 32 levels with a
-  `Maximum nested expression depth` diagnostic, checked where every
-  sub-expression re-enters (`parse_unary`, the precedence chain's bottom)
-  and where tuple/reference/array types recurse (`parse_type`). Sized from
-  measurement: ~45 KiB per debug precedence-chain level, so the worst case
-  peaks near 1.6 MiB — inside the 2 MiB default test-thread stack. A chain
-  of `if`s exhausts this budget and `MAX_IF_DEPTH` at the same level, so
-  both guards name the more specific if-depth limit when both are spent.
-- Differential coverage for the depth caps: a `tests/diff_deep_nesting`
-  fixture (deep parens, nested ifs/whiles just under every cap) runs
-  through all four backends, and the fuzz generator wraps leaves in extra
-  grouping parens so seeds parse in the cap's neighbourhood.
-
-### Fixed
-
-- The Linux stack-floor guard recentred from 1972 KiB to 1952 KiB: the
-  expression cap's parser changes moved the healthy floor to 1936 KiB
-  (frame-per-level regression floor ~1968 KiB), keeping 16 KiB of margin
-  on each side of the window.
 
 ## [2.0.0-preview.16] - 2026-09-22
 

@@ -2,16 +2,17 @@
 
 **Status:** Frozen preview contract, current through `2.0.0-preview.17`
 
-This matrix is the implementation contract for the current Rust, C, assembly, and JavaScript targets. A construct marked
-`Parsed` may exist in the parser and AST without being runnable on every backend. The Goose target is a preview subset with
-its own backend document, [POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md); its summary and rules are appended below rather
+This matrix is the implementation contract for the current Rust, C, assembly, JavaScript, and Goose targets. A construct
+marked `Parsed` may exist in the parser and AST without being runnable on every backend. The Goose target is a preview subset
+with its own backend document, [POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md); its summary and rules are appended below rather
 than given a column in every row.
 
 ## Target Summary
 
 | Area | Rust target | C target | Asm target | JS target | Notes |
 |---|---|---|---|---|---|
-| Default target | Yes | No | No | No | Rust is selected unless `--target c`, `--target asm`, or `--target js` is supplied. |
+| Default target | Yes | No | No | No | Rust is selected unless `--target c`, `--target asm`, `--target js`, or `--target
+goose` is supplied. |
 | Native validation | `rustc` or temporary Cargo project | C11 compiler | GNU assembler + linker | `node --check` + execution |
 `POLY_CC` selects the C compiler for CLI checks/builds. The asm target emits and assembles x86-64 `.S` sources on Linux. The JS
 target emits ES2020 with no runtime dependencies. |
@@ -20,7 +21,7 @@ target emits ES2020 with no runtime dependencies. |
 is checked by Poly and never emitted. |
 | External dependencies |`dep name = "version"` | Rejected with a warning | Rejected with a warning | Rejected with a warning |
 `dep` declarations are Rust-target only: `--project` emits them into `Cargo.toml` and `--check` resolves them via a temporary
-Cargo project. The C, asm, and JS backends warn that `dep` statements are ignored. |
+Cargo project. The C, asm, JS, and Goose backends warn that `dep` statements are ignored. |
 | C++ | Rejected | Rejected | Rejected | Rejected | `#cpp` remains reserved; no C++ backend exists. |
 
 ## Language Surface
@@ -40,7 +41,8 @@ by `-1` is guarded in both widths (`INT_MIN / -1` is `INT_MIN`, mod is `0` — n
 | Strings and string concatenation | Yes | Yes | Yes | Yes | All targets support `+` concat in value and `put` position plus
 `.len()`. C materializes concat with an emitted `poly_concat` helper and `to_string()` on scalars with
 `poly_int_to_string`/`poly_float_to_string`; asm carves results from a static bump arena (`_str_arena`). String interpolation
-lowers to concatenation on every target. Asm string method calls beyond `.len()` are rejected with guidance. |
+lowers to concatenation on every target. Asm accepts only `.len()` and integer `.to_string()` method calls; others
+(including float `.to_string()`) are rejected with guidance. |
 | `put`, `error`, `warn`, `info` |Yes | Yes | Limited | Yes | C supports scalar output and diagnostics; JS maps the diagnostics
 to `console` streams. |
 | File output redirects | Yes | No | No | No | C must call a `#c` helper. |
@@ -54,7 +56,7 @@ behavior. |
 | Inclusive numeric loops | Yes | Yes | Limited | Yes | C currently supports one numeric range per loop. `step` is supported
 everywhere: literal steps fix the direction at compile time, and variable steps dispatch on the step's runtime sign (a zero
 step
-terminates) — identical iteration semantics on all four targets. |
+terminates) — identical iteration semantics on every target. |
 | Multi-range loops | Yes | No | No | No | C and JS reject multiple range parts. |
 | Collection loops | Yes | Limited | Limited | Yes | C only supports a shallow C-array form. Asm supports `for x in <vector>`
 and `for x in <string>`. JS lowers both `for x in` and `loop x in` to `for...of`. |
@@ -75,7 +77,7 @@ pointer); capturing closures are rejected with guidance. |
 them are supported. JS tuples lower to arrays with `.N` index access. |
 | `match` statements |Yes | Limited | No | Yes | C lowers literal, wildcard, range, and identifier arms to an if/else-if chain;
 structured patterns and guards are rejected. JS lowers literal, wildcard, and unit-enum arms to `switch`. |
-| `match` expressions (value position) | Yes | Limited | Limited | Limited | All four targets support literal and wildcard arms
+| `match` expressions (value position) | Yes | Limited | Limited | Limited | Every target supports literal and wildcard arms
 in initializers and other value positions. C lowers to a ternary chain (also range and unit-enum patterns; qualified
 `Enum::Variant` patterns only — the C subset cannot resolve bare variant names) and aborts on an unmatched scrutinee, mirroring
 the Rust target's panic. JS lowers to an IIFE `switch` (unit-enum patterns subject to the JS enum row) and throws on an
@@ -129,7 +131,7 @@ var result i32 := double_value(21)
 
 Rules:
 
-- `extern rust fn`, `extern c fn`, `extern asm fn`, and `extern js fn` declarations must be top-level.
+- `extern rust fn`, `extern c fn`, `extern asm fn`, `extern js fn`, and `extern goose fn` declarations must be top-level.
 - The target name must match the selected backend; declarations for other targets are removed before checking and generation.
 - Explicit declarations validate arity and Poly-visible types.
 - The native compiler remains authoritative for the foreign definition, ABI, pointer layout, ownership, lifetimes, calling

@@ -25,15 +25,15 @@ that does more than print output:
 |---|---|
 | `poly untrusted.poly` | Generates a Cargo project, runs `cargo build`, **runs the binary** |
 | `poly --project out untrusted.poly` | Writes a Cargo project that `cargo build`/`cargo run` will execute |
-| `poly --check --strict untrusted.poly` | Hands the generated code to `rustc`/`cargo check`/`cc`/`as`/`node` |
+| `poly --check --strict untrusted.poly` | Hands the generated code to `rustc`/`cargo check`/`cc`/`as`/`node`/`goose` |
 | `poly --repl` | Executes each line as you type it |
 
 Three concrete paths to arbitrary code execution, all of them by design:
 
-1. **Foreign blocks.** `#rust`, `#c`, `#asm` and `#js` blocks are copied
-   **verbatim** into the generated target source and handed to the native
-   toolchain. A `#rust` block can call `std::process::Command` directly; an
-   `#asm` block can emit a `syscall`.
+1. **Foreign blocks.** `#rust`, `#c`, `#asm`, `#js` and `#goose` blocks are
+   copied **verbatim** into the generated target source and handed to the
+   native toolchain. A `#rust` block can call `std::process::Command`
+   directly; an `#asm` block can emit a `syscall`.
 2. **`extern` declarations and foreign calls.** With `--strict`, a call to a
    foreign function requires an explicit `extern <target> fn` declaration —
    without `--strict` the default is permissive, so an undeclared name is
@@ -51,7 +51,7 @@ Three concrete paths to arbitrary code execution, all of them by design:
   repository, a code-generation service).
 - Prefer a mode that prints without building when you only need to inspect a
   file: `--tokens`, `--ast`, `--emit-rust`, `--emit-c`, `--emit-asm`,
-  `--emit-js`. These still run the front end (so the language's own resource
+  `--emit-js`, `--emit-goose`. These still run the front end (so the language's own resource
   caps apply) but hand nothing to an external toolchain.
   **`--emit-*` is not a security boundary against a hostile file** — treat its
   output as untrusted input, and do not pipe it into a compiler yourself.
@@ -70,7 +70,7 @@ These are compiler-side guarantees, not promises about your file's contents:
   before they reach the generated `Cargo.toml`, so a source file cannot inject
   extra manifest tables (`[build-dependencies]`, `[patch]`, …) that would change
   what the build does.
-- Identifier emission into the C, asm and JS backends is constrained by the
+- Identifier emission into the C, asm, JS and Goose backends is constrained by the
   lexer's identifier rules, so a variable name cannot break out into generated
   target syntax.
 - Expression nesting (32), statement nesting (128), `if` nesting (32), and
@@ -80,9 +80,9 @@ These are compiler-side guarantees, not promises about your file's contents:
   counter to see, yet still folds into a tree one level deep per operand. The
   parser refuses to build that tree at all, because a deep tree still has to be
   dropped — rejecting it after the fact does not avoid the overflow.
-- Strings emitted into generated C, asm and JS sources have NUL and all other
-  control characters escaped, so a hostile string cannot smuggle raw bytes into
-  the target source.
+- Strings emitted into generated C, asm, JS and Goose sources have NUL and all
+  other control characters escaped, so a hostile string cannot smuggle raw bytes
+  into the target source.
 - Scratch files and temporary Cargo projects are created in private (`0700`)
   directories with names derived from per-process OS randomness, so another
   user on the same machine cannot pre-create or read them.

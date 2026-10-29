@@ -36,7 +36,7 @@ end fn
 ~~~
 
 Note that `#` only starts a comment when it does not name a foreign code block:
-a line beginning `#rust` or `#c` opens a foreign block instead.
+a line beginning `#rust`, `#c`, `#asm`, `#js`, or `#goose` opens a foreign block instead.
 
 The rest of this tutorial uses `#` comments to explain what each example does.
 
@@ -595,7 +595,7 @@ Two rules worth remembering:
 - `spawn` and `step` are reserved words and cannot name fields or methods.
 
 For generics, traits, or default field values, put the definition in a
-`#rust` (or `#c`) foreign block and call it from Poly.
+`#rust` foreign block and call it from Poly.
 
 ---
 
@@ -634,8 +634,8 @@ result, so spawn is for side-effecting work, not for values you need later.
 
 ### Notes and Limits
 
-- Async is a Rust-target feature. The C, assembly, and JS backends reject
-  async functions with a diagnostic that points at foreign blocks.
+- Async is a Rust-target feature. The C, assembly, JS, and Goose backends
+  reject async functions with a diagnostic that points at foreign blocks.
 - `delay(ms)` is the builtin sleep; `.await` it inside an async function.
 - Awaiting in a loop runs the futures one at a time; to run work in
   parallel, `spawn` it and `.await` nothing.

@@ -159,8 +159,11 @@ fn main()
 end fn
 ~~~
 
+`#goose` blocks are accepted only for `--target goose` and are emitted into the
+generated Goose program (see [POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md)).
 `#cpp` is explicitly rejected. Foreign calls without declarations remain opaque to
-Poly semantic checking; Rust or C validates the actual call after generation.
+Poly semantic checking; the selected target's compiler validates the actual call
+after generation.
 Add an optional target-aware declaration when you want Poly to check the
 interface first:
 
@@ -168,7 +171,8 @@ interface first:
 extern c fn native_value(value: i32): i32
 ~~~
 
-The declaration is checker-only, must match the selected target, and does not replace native compiler validation.
+The declaration is checker-only, must match the selected target, and does not replace native compiler validation. See
+[POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the per-target rules.
 
 ## Targets and CLI
 
@@ -179,6 +183,7 @@ poly --emit-rust program.poly
 poly --target c --emit-c program.poly
 poly --target asm --emit-asm program.poly
 poly --target js --emit-js program.poly
+poly --target goose --emit-goose program.poly
 poly --tokens program.poly
 poly --ast program.poly
 poly --intermediate-representation program.poly

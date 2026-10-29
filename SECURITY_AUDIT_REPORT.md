@@ -119,10 +119,11 @@ is worse than a clear diagnostic.
 
 `poly file.poly` transpiles **and compiles and runs** the result. `--check` does not
 run the program but does hand the generated code to `rustc` / `cargo check` / `cc` /
-`as` / `node`. Three independent paths reach arbitrary code execution, all by
+`as` / `node` / `goose`. Three independent paths reach arbitrary code execution, all by
 design:
 
-1. **Foreign blocks.** `#rust`, `#c`, `#asm` and `#js` bodies are copied **verbatim**
+1. **Foreign blocks.** `#rust`, `#c`, `#asm`, `#js` and `#goose` bodies are copied
+   **verbatim**
    into the generated target source. Confirmed: a `#rust` block calling
    `std::process::Command::new("sh")` appeared unmodified in the generated
    `src/main.rs` and executed when the binary was run.
@@ -153,7 +154,7 @@ compiler is hardened" and "the compiler still executes your file" is explicit.
 
 `ci.yml` runs `--check --strict` over `examples/`, `tests/` and the differential
 fixtures, and `tetris` additionally builds and runs a generated project. Since
-`--check` executes build scripts and `--target c`/asm/JS fixtures are compiled and
+`--check` executes build scripts and `--target c`/asm/JS/Goose fixtures are compiled and
 run, **a malicious pull request that adds a `.poly` fixture executes code on the
 runner** — while reporting a green build. Compounding it, every action was pinned to
 a mutable tag (`actions/checkout@v4`, `dtolnay/rust-toolchain@1.98.0`,

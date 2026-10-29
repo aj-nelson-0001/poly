@@ -28,10 +28,12 @@ foreign_block ::= "#rust" foreign_text "#endrust"
                 | "#c" foreign_text "#endc"
                 | "#asm" foreign_text "#endasm"
                 | "#cpp" foreign_text "#endcpp"
+                | "#js" foreign_text "#endjs"
+                | "#goose" foreign_text "#endgoose"
 
 extern_function_declaration ::= "extern" foreign_target "fn" identifier
                                 "(" [ parameters ] ")" [ ":" type ]
-foreign_target ::= "rust" | "c" | "asm" | "js"
+foreign_target ::= "rust" | "c" | "asm" | "js" | "goose"
 
 // Foreign markers are line-oriented. Leading whitespace is allowed, but the
 // marker must occupy the line; foreign_text is opaque to the Poly lexer.
@@ -114,9 +116,8 @@ continue_statement   ::= "continue"
 ~~~
 
 Foreign blocks and explicit foreign function declarations are only valid as `top_level_item`s. The parser rejects them inside
-functions, loops, modules, or other nested Poly blocks. `extern rust fn ...` and `extern c fn ...` declarations are
-checker-only
-metadata and are not emitted.
+functions, loops, modules, or other nested Poly blocks. `extern rust fn ...`, `extern c fn ...`, `extern asm fn ...`,
+`extern js fn ...`, and `extern goose fn ...` declarations are checker-only metadata and are not emitted.
 
 ## Types
 
@@ -256,8 +257,11 @@ poly --target c --check program.poly
 poly --target c --emit-c program.poly
 poly --target asm --emit-asm program.poly
 poly --target asm program.poly
+poly --target js --emit-js program.poly
+poly --target goose --check program.poly
 ~~~
 
-`#rust` blocks are selected for Rust, `#c` blocks for C, and `#asm` blocks for
-the Linux x86-64 assembly target. A source containing `#cpp` is rejected
-explicitly because no C++ backend exists yet.
+`#rust` blocks are selected for Rust, `#c` blocks for C, `#asm` blocks for
+the Linux x86-64 assembly target, `#js` blocks for the JavaScript (Node)
+target, and `#goose` blocks for the Goose target. A source containing `#cpp`
+is rejected explicitly because no C++ backend exists yet.

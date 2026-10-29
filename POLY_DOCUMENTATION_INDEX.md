@@ -21,7 +21,7 @@ targets, tooling, and migration.
 | [POLY_TROUBLESHOOTING_GUIDE.md](POLY_TROUBLESHOOTING_GUIDE.md) | Current error, input/output, and target troubleshooting |
 | [POLY_DOCUMENTATION_STYLE_GUIDE.md](POLY_DOCUMENTATION_STYLE_GUIDE.md) | Example, fence, terminology, and line-length rules |
 | [POLY_V2_AUDIT.md](POLY_V2_AUDIT.md) | Verified v2 status and remaining risks |
-| [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) | Frozen Rust/C/asm/JS feature contract, plus a Goose summary |
+| [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) | Frozen Rust/C/asm/JS/Goose feature contract and per-target summary |
 | [POLY_PREVIEW_RELEASE_CHECKLIST.md](POLY_PREVIEW_RELEASE_CHECKLIST.md) | Preview release readiness and hygiene checklist |
 | [POLY_VERSION_FILES_MAP.md](POLY_VERSION_FILES_MAP.md) | Maintainer map of version-bearing files to their regeneration
 mechanism |

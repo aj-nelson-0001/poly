@@ -100,9 +100,9 @@ fn main()
 end fn
 ~~~
 
-The Rust backend implements redirects. The C, asm, and JS backends reject them
-because their contracts are stdout/stderr orchestration only; move file behavior
-into a `#c`, `#asm`, or `#js` helper.
+The Rust backend implements redirects. The C, asm, JS, and Goose backends
+reject them because their contracts are stdout/stderr orchestration only; move
+file behavior into a `#c`, `#asm`, `#js`, or `#goose` helper.
 
 ## Input Problems
 
@@ -120,8 +120,8 @@ end fn
 
 The C backend supports plain `get` — with an optional prompt — reading one line
 of stdin through an emitted runtime helper; file sources, input flags, and `with`
-clauses require a `#c` helper. The asm and JS backends reject input entirely;
-move input into a foreign helper when targeting them.
+clauses require a `#c` helper. The asm, JS, and Goose backends reject input
+entirely; move input into a foreign helper when targeting them.
 
 If a Rust input program appears to hang, it is waiting for stdin. Provide input
 through the terminal or redirect a file at the process level. Do not rely on
@@ -179,10 +179,12 @@ fn main()
 end fn
 ~~~
 
-Select C with `--target c` and use `#c` instead. A foreign block for another
-language is rejected. In particular, `#cpp` is not silently ignored and C++ is
-not currently supported. See [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md)
-for the complete target boundary.
+Select the block matching your `--target`: `#c` for `--target c`, `#asm` for
+`--target asm`, `#js` for `--target js`, and `#goose` for `--target goose`. A
+foreign block for another language is rejected. In particular, `#cpp` is not
+silently ignored and C++ is not currently supported. See
+[POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) for the complete target
+boundary.
 
 When a target feature is unsupported, the compiler should name the feature and
 suggest a foreign helper. Treat that diagnostic as a contract boundary rather
@@ -239,6 +241,8 @@ poly --target rust --check program.poly
 poly --target c --check program.poly
 poly --emit-rust program.poly
 poly --target c --emit-c program.poly
+poly --target goose --check program.poly
+poly --target goose --emit-goose program.poly
 poly --tokens program.poly
 poly --ast program.poly
 

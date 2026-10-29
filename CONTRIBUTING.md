@@ -76,6 +76,7 @@ poly/
 │   │   ├── poly-c-codegen/  # C11 backend
 │   │   ├── poly-asm-codegen/# x86-64 assembly backend (Linux)
 │   │   ├── poly-js-codegen/ # JavaScript backend (ES2020)
+│   │   ├── poly-goose-codegen/ # Goose backend
 │   │   ├── poly-wasm/       # Playground WASM bindings
 │   │   ├── poly-lsp/        # Language server
 │   │   └── poly-cli/        # Command-line interface

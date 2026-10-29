@@ -1572,7 +1572,7 @@ fn name_without_result() {
 **How to use it:**
 
 ~~~poly
-fn add(a: i32, b: i32): i32
+fn sum(a: i32, b: i32): i32
     return a + b
 end fn
 
@@ -1581,10 +1581,10 @@ fn say_hello(name: ustring)
 end fn
 
 fn main()
-    var total i32 := add(2, 3)      # call the recipe, catch the answer
+    var total i32 := sum(2, 3)      # call the recipe, catch the answer
     put total                       # 5
     say_hello("Mia")                # a recipe with no answer to catch
-    put add(10, 20)                 # use the answer right away
+    put sum(10, 20)                 # use the answer right away
 end fn
 ~~~
 
@@ -1599,7 +1599,7 @@ Hello, Mia!
 **The same thing in Rust:**
 
 ~~~rust
-fn add(a: i32, b: i32) -> i32 {
+fn sum(a: i32, b: i32) -> i32 {
     a + b   // Rust lets you drop the `return` for the last line
 }
 
@@ -1608,20 +1608,20 @@ fn say_hello(name: &str) {
 }
 
 fn main() {
-    let total: i32 = add(2, 3);
+    let total: i32 = sum(2, 3);
     println!("{}", total);
     say_hello("Mia");
-    println!("{}", add(10, 20));
+    println!("{}", sum(10, 20));
 }
 ~~~
 
 **Rules of the road:**
 
-- The return type goes after a **colon**: `fn add(...): i32`.
-  Rust uses an arrow instead: `fn add(...) -> i32`.
+- The return type goes after a **colon**: `fn sum(...): i32`.
+  Rust uses an arrow instead: `fn sum(...) -> i32`.
 - Close every function with `end fn`.
 - No return type means "gives back nothing" — just like `fn greet()`.
-- Calling a function is its name and parentheses: `add(2, 3)`.
+- Calling a function is its name and parentheses: `sum(2, 3)`.
 - Functions may be declared inside other functions — `main` can use its own
   helpers.
 
@@ -1816,8 +1816,10 @@ fn main() {
 }
 ~~~
 
-> **Note:** `.to_string()` on numbers works on the Rust and C targets.
-> String `+` and interpolation work on **all** targets (Rust, C, asm, JS).
+> **Note:** `.to_string()` on integers works on every target; on floats it
+> works on every target except asm.
+> String `+` and interpolation work on **all** targets (Rust, C, asm, JS,
+> Goose).
 
 ## Characters
 
@@ -3211,7 +3213,7 @@ Poly it changes nothing: everything in the file can see everything else.
 
 ---
 
-# Chapter 18: Foreign blocks — slipping in real Rust (or C, asm, JS)
+# Chapter 18: Foreign blocks — slipping in real Rust (or C, asm, JS, Goose)
 
 **What it does:** When you need something Poly cannot do — a clever
 algorithm, a game library, a hardware trick — you open a **foreign block**
@@ -3236,14 +3238,18 @@ file exactly as typed.
 #js
 // real JavaScript here
 #endjs
+
+#goose
+// real Goose here
+#endgoose
 ~~~
 
 **The same shape in Rust:**
 
 ~~~rust
 // #rust ... #endrust: those lines are pasted into the generated Rust
-// file exactly as you wrote them. C, asm, and js blocks are handed to
-// those languages' compilers instead — Rust never sees them.
+// file exactly as you wrote them. C, asm, js, and goose blocks are
+// handed to those languages' compilers instead — Rust never sees them.
 ~~~
 
 **How to use it:**
@@ -3291,8 +3297,8 @@ fn double_value(value: i32) -> i32 {
 - No running commands in a foreign block — only definitions. Poly's
   `fn main()` is where the action starts.
 - `#c` blocks pair with `--target c`, `#asm` with `--target asm`, `#js`
-  with `--target js`. A source containing `#cpp` is rejected: there is no
-  C++ backend yet.
+  with `--target js`, and `#goose` with `--target goose`. A source
+  containing `#cpp` is rejected: there is no C++ backend yet.
 
 ## Telling Poly about a foreign function (optional `extern`)
 
@@ -3315,8 +3321,8 @@ fn double_value(value: i32) -> i32 { value * 2 }
 fn double_value(value: i32) -> i32 { value * 2 }
 ~~~
 
-**Rules:** top level only, and the target (`rust`, `c`, `asm`, `js`) must
-match `--target`. Declarations are checked by Poly and never copied into
+**Rules:** top level only, and the target (`rust`, `c`, `asm`, `js`,
+`goose`) must match `--target`. Declarations are checked by Poly and never copied into
 the output. With `--strict`, every foreign call must have one.
 
 ## Bringing in outside crates with `dep`
@@ -3355,8 +3361,8 @@ libc = "0.2"
 
 **Good to know:**
 
-- Only the Rust target has dependencies; C, asm, and JS warn and ignore
-  `dep`.
+- Only the Rust target has dependencies; C, asm, JS, and Goose warn and
+  ignore `dep`.
 - The version must be a plain Cargo version string (`"1"`, `"0.9"`,
   `"^1.2"`).
 
@@ -3368,6 +3374,7 @@ libc = "0.2"
 | `#c` ... `#endc` | `--target c` | C11 |
 | `#asm` ... `#endasm` | `--target asm` | x86-64 assembly (Linux) |
 | `#js` ... `#endjs` | `--target js` | JavaScript (ES2020) |
+| `#goose` ... `#endgoose` | `--target goose` | Goose |
 | `#cpp` ... `#endcpp` | *(reserved)* | rejected until C++ exists |
 
 ---
@@ -3469,6 +3476,7 @@ poly program.poly                 # translate + build (Rust target by default)
 poly --check program.poly         # check everything WITHOUT keeping output
 poly --target js program.poly     # translate to JavaScript and run it with Node
 poly --target c program.poly      # translate to C and build a C executable
+poly --target goose program.poly  # translate to Goose and run it with goose
 poly --help                       # show the option list
 poly --version                    # show the version
 ~~~
@@ -3489,6 +3497,7 @@ poly --target rust program.poly    # default: Rust
 poly --target c program.poly       # C11
 poly --target asm program.poly     # x86-64 assembly (Linux)
 poly --target js program.poly      # JavaScript (ES2020, run with Node)
+poly --target goose program.poly   # Goose (run with goose)
 ~~~
 
 Rust is the default, so `--target rust` can be left out.
@@ -3500,6 +3509,7 @@ poly --emit-rust program.poly              # print the generated Rust
 poly --target c --emit-c program.poly      # print the generated C
 poly --target asm --emit-asm program.poly  # print the generated assembly
 poly --target js --emit-js program.poly    # print the generated JavaScript
+poly --target goose --emit-goose program.poly  # print the generated Goose
 poly --intermediate-representation program.poly   # print the IR (Rust target)
 poly --ir program.poly                     # shorter spelling of the same
 poly --source-map program.poly             # print the source map
@@ -3595,6 +3605,7 @@ Every opener needs its own closer:
 | `unsafe` | `end unsafe` |
 | `#rust` | `#endrust` |
 | `#c` | `#endc` |
+| `#goose` | `#endgoose` |
 
 ## `var x: i32 := 5` is wrong
 
@@ -3794,6 +3805,7 @@ type Nickname := Type                      # a type's second name
 #c ... #endc                               # paste real C
 #asm ... #endasm                           # paste assembly
 #js ... #endjs                             # paste JavaScript
+#goose ... #endgoose                       # paste Goose
 extern rust fn name(a: Type): Type          # describe a foreign function
 dep crate_name = "1.2"                     # an outside crate (Rust target)
 
@@ -3829,7 +3841,7 @@ delay(100).await                           # sleep 100 ms
 | `loop x in xs` | `for x in &xs {` |
 | `loop ... end loop` (infinite) | `loop {` |
 | `break` / `continue` | `break;` / `continue;` |
-| `fn add(a: i32, b: i32): i32` | `fn add(a: i32, b: i32) -> i32` |
+| `fn sum(a: i32, b: i32): i32` | `fn sum(a: i32, b: i32) -> i32` |
 | `return a + b` | `return a + b;` |
 | `struct Point ... end struct` | `struct Point { ... }` |
 | `impl Counter ... end impl` | `impl Counter { ... }` |

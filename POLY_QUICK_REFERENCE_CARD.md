@@ -39,8 +39,10 @@ end fn
 ~~~
 
 `put` always adds a newline. Diagnostic commands write `[ERROR]`, `[WARN]`, or
-`[INFO]` to stderr. File redirects and the input flags above are implemented by
-the Rust target; the C target currently rejects redirects and stdin.
+`[INFO]` to stderr. File output redirects and the typed input flags above are
+Rust-only; the C target supports plain `get` (with an optional prompt) via an
+emitted runtime helper, and needs a `#c` helper for file input, the typed
+flags, and file output redirects.
 
 ## Control Flow
 
@@ -74,7 +76,7 @@ Loop ranges include both endpoints. Collection loops borrow their source collect
 ## Functions and Data
 
 ~~~poly
-fn add(a: i32, b: i32): i32
+fn sum(a: i32, b: i32): i32
     return a + b
 end fn
 
@@ -84,7 +86,7 @@ struct Point
 end struct
 
 fn main()
-    var result := add(2, 3)
+    var result := sum(2, 3)
     put result
 end fn
 ~~~
@@ -92,7 +94,9 @@ end fn
 The Rust target supports the broader parser/checker feature set, including enums,
 traits, modules, closures, generic types, async functions, matches, and
 collections. The C target supports scalar orchestration, simple functions, plain
-structs, arithmetic, conditions, loops, and stdout/stderr.
+structs, arithmetic, conditions, loops, and stdout/stderr. The Goose target is a
+preview subset that follows the JS surface plus vector literals and mutators —
+see [POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md).
 
 ## Foreign Blocks and Targets
 
@@ -131,9 +135,16 @@ poly --target rust program.poly
 poly --target c --check program.poly
 poly --target c --emit-c program.poly
 poly --target c program.poly
+poly --target goose --check program.poly
+poly --target goose --emit-goose program.poly
+poly --target goose program.poly
 ~~~
 
-`#cpp` is reserved and rejected until a C++ backend exists. Set `POLY_CC` when the C compiler is not named `cc`.
+The same helper on the Goose target uses `#goose` / `#endgoose` and an
+`extern goose fn ...` declaration.
+
+`#cpp` is reserved and rejected until a C++ backend exists. Set `POLY_CC` when the C compiler is not named `cc`, and
+`POLY_GOOSE` when the Goose compiler is not named `goose`.
 
 ## CLI
 
@@ -147,6 +158,8 @@ poly --target c program.poly
 | `poly --target c --emit-c file.poly` | Print C output |
 | `poly --project DIR file.poly` | Generate a Rust project |
 | `poly --target c --project DIR file.poly` | Generate and build a C project |
+| `poly --target goose --emit-goose file.poly` | Print Goose output |
+| `poly --target goose --check file.poly` | Check generated Goose with `goose check` |
 | `poly --tokens file.poly` | Print lexer tokens |
 | `poly --ast file.poly` | Print the parsed AST |
 | `poly --ir file.poly` | Print optimized Rust IR output |

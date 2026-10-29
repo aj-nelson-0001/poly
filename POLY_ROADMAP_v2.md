@@ -8,7 +8,7 @@
 
 Poly becomes a **thin, assembly-inspired syntax layer over any systems language.** It handles the simple, boilerplate-heavy
 parts of programming. For everything else — generics, async, closures, traits, pattern matching — users provide definitions in
-foreign language blocks (`#rust`, `#c`, `#asm`, `#js`, etc.).
+foreign language blocks (`#rust`, `#c`, `#asm`, `#js`, `#goose`, etc.).
 
 **Key principle:** Foreign blocks provide target-language definitions at file scope. Poly provides the orchestration and
 generated entry point. The selected native compiler validates foreign code.
@@ -37,7 +37,7 @@ source.poly
 
 ### What's Implemented
 
-- **Lexer**: `#rust`, `#c`, `#asm`, `#js`, and `#cpp` blocks lexed as `ForeignBlock { language, content }` tokens
+- **Lexer**: `#rust`, `#c`, `#asm`, `#js`, `#goose`, and `#cpp` blocks lexed as `ForeignBlock { language, content }` tokens
 - **Parser**: foreign blocks are represented explicitly in the AST and rejected inside Poly blocks
 - **IR**: Rust foreign blocks are lowered into the Rust IR; other targets are handled by target-specific backends
 - **Codegen**: Verbatim emission of selected Rust blocks at module scope
@@ -239,6 +239,7 @@ about direct C++ emission, compiler selection, and runtime/type mappings before 
 | Phase 2.5: C backend | ✅ Hardened Preview | ~1 day |
 | Phase 2.6: Asm backend | ✅ Linux x86-64 subset shipped | `2.0.0-preview.2` |
 | Phase 2.7: JS backend | ✅ ES2020 subset shipped (`2.0.0-preview.2`) | Strict-mode CI + playground selector |
+| Phase 2.8: Goose backend | ✅ Preview subset shipped | `#goose` blocks, `extern goose fn`, `--target goose`, `--emit-goose` |
 | Phase 3: Polish & Tooling |🟡 In progress | Cross-platform CI and interface diagnostics are now implemented; packaging and U \
 X  \
 remain |

@@ -145,6 +145,7 @@ poly --emit-rust program.poly              # print the generated Rust source
 poly --target c --emit-c program.poly      # print the generated C source
 poly --target asm --emit-asm program.poly  # print the generated x86-64 assembly
 poly --target js --emit-js program.poly    # print the generated JavaScript
+poly --target goose --emit-goose program.poly  # print the generated Goose source
 poly --tokens program.poly                 # show lexer tokens
 poly --ast program.poly                    # show the parsed AST
 ~~~
@@ -175,5 +176,5 @@ end fn
 ~~~
 
 `#` starts a comment unless it names a foreign block: a line beginning `#rust`,
-`#c`, `#asm`, or `#js` opens a foreign block instead. Comments inside a foreign
-block belong to the target language and are copied verbatim.
+`#c`, `#asm`, `#js`, or `#goose` opens a foreign block instead. Comments inside a
+foreign block belong to the target language and are copied verbatim.

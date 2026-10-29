@@ -157,7 +157,8 @@ fn main()
 end fn
 ~~~
 
-Foreign blocks are emitted to the selected target at file scope. The target compiler validates their contents. `#cpp` is
+Foreign blocks are emitted to the selected target at file scope. The target compiler validates their contents. The block
+kinds are `#rust`, `#c`, `#asm`, `#js`, and `#goose`. `#cpp` is
 rejected explicitly; there is no C++ backend yet.
 
 ## External Crates
@@ -170,7 +171,7 @@ dep alsa = "0.9"
 Program-scope `dep name = "version"` declarations name the Cargo crates the
 foreign blocks use. `--project` emits them into `Cargo.toml`; `--check`
 resolves them through Cargo so the program validates standalone. They are
-ignored by the C, asm, and JS backends.
+ignored by the C, asm, JS, and Goose backends.
 
 `--project` also writes a `.poly-generated` marker recording the owning
 source path relative to the generated project (e.g. `source=../../tetris.poly`);
@@ -203,7 +204,9 @@ end fn
 Rust lowers `s := s + x` in loops to in-place `push_str` (amortized O(1)).
 C materializes concat with an emitted `poly_concat` helper and `.len()` via
 `strlen`; asm uses a static bump arena (`_str_arena`) for concat results.
-The JS target maps everything to native string operations. Interpolation
+The JS target maps everything to native string operations. The Goose target
+lowers concat to `str(...)` and supports integer `.to_string()`, `.len`, and
+`.push`; other method calls are rejected with a `#goose` hint. Interpolation
 lowers to concatenation on every target (C formats through `printf`).
 
 ## Targets
@@ -215,6 +218,7 @@ poly --emit-rust program.poly              # print the generated Rust source
 poly --target c --emit-c program.poly      # print the generated C source
 poly --target asm --emit-asm program.poly  # print the generated x86-64 assembly
 poly --target js --emit-js program.poly    # print the generated JavaScript
+poly --target goose --emit-goose program.poly  # print the generated Goose source
 ~~~
 
 Rust is the default target. The C target is a C11 orchestration subset and supports scalar declarations, calls to foreign C  \
@@ -233,4 +237,5 @@ re-chaining \
   \
 `else if` arms.
 - Use `put value to "file" -append` for Rust file append output.
-- Use a target-language helper in `#rust` or `#c` when the Poly subset does not express the operation.
+- Use a target-language helper in `#rust`, `#c`, `#asm`, `#js`, or `#goose` when the Poly subset does not express the
+operation.

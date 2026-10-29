@@ -4,7 +4,8 @@
 
 Poly 2.0.0-preview.17 continues the target-aware compiler model established by the earlier previews. Rust remains the default
 and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available
-through `--target asm`, a JavaScript target through `--target js`, and C++ syntax is reserved and explicitly rejected.
+through `--target asm`, a JavaScript target through `--target js`, a Goose target through `--target goose`, and C++ syntax
+is reserved and explicitly rejected.
 
 ## What's New in 2.0.0-preview.17
 
@@ -189,6 +190,7 @@ For the 2.0.0-preview.1 highlights, see [CHANGELOG.md](CHANGELOG.md).
 | C | C11 orchestration subset | `POLY_CC` C compiler |
 | Asm | Linux x86-64 assembly subset | GNU assembler and linker (Linux CI) |
 | JS | ES2020 orchestration subset, no runtime dependencies | `node --check` plus execution (Linux CI) |
+| Goose | Goose orchestration subset | `goose check` plus execution (when the `goose` toolchain is available) |
 | C++ | Reserved only | Explicitly rejected; no backend exists |
 
 For the complete feature boundary, see [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md). For foreign block syntax and C

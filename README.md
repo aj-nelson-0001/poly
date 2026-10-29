@@ -397,11 +397,12 @@ end fn
 | C block | `#c ... #endc` | C declarations emitted at file scope |
 | Asm block | `#asm ... #endasm` | Assembly definitions emitted at file scope (Linux x86-64) |
 | JS block | `#js ... #endjs` | JavaScript definitions emitted at module scope |
+| Goose block | `#goose ... #endgoose` | Goose definitions emitted at file scope |
 | C++ block | `#cpp ... #endcpp` | Reserved; rejected until a backend exists |
 
 **Rule:** Foreign blocks are top-level target-language definitions and are opaque to Poly. Poly programs declare their own `fn
-main() ... end fn`, which the backends emit as `fn main()` (Rust), `int main(void)` (C), `main:` (asm), or `function main()`
-(JS). The native compiler validates foreign contents.
+main() ... end fn`, which the backends emit as `fn main()` (Rust), `int main(void)` (C), `main:` (asm), `function main()`
+(JS), or `fn main()` (Goose). The native compiler validates foreign contents.
 
 ### I/O System
 
@@ -430,7 +431,7 @@ A program can declare the Cargo crates its `#rust` foreign blocks use with a
 top-level `dep` statement. Only the Rust target has a dependency mechanism:
 `--project` emits the declarations into the generated `Cargo.toml`, and
 `--check` resolves them through Cargo so the program validates standalone. The
-C, asm, and JS targets reject `dep` declarations with an explanatory warning.
+C, asm, JS, and Goose targets reject `dep` declarations with an explanatory warning.
 
 The version must be a plain Cargo version requirement (`"1"`, `"0.9"`,
 `"1.0.0"`, `"^1.2"`, `">=1, <2"`). Quotes, braces, brackets, backslashes and
@@ -469,10 +470,10 @@ end fn
 
 String operations across targets: `+` concat (value and `put` position) and
 `.len()` are supported on Rust, C (emitted `poly_concat`/`strlen` helpers),
-asm (`_str_arena` bump allocator), and JS. `.to_string()` on scalars is
-supported on Rust and C, and string interpolation lowers to concatenation on
-every target. See `POLY_V2_SUPPORT_MATRIX.md` for the full per-target
-contract.
+asm (`_str_arena` bump allocator), and JS. `.to_string()` on integers is
+supported on every target and on floats on every target except asm (which
+has no float support); string interpolation lowers to concatenation on every
+target. See `POLY_V2_SUPPORT_MATRIX.md` for the full per-target contract.
 
 ### Language Constructs
 
@@ -505,9 +506,9 @@ loop`
 - **Unsafe**: `unsafe ... end unsafe`
 - **Mutation**: `count := count + 1`, `total := total - amount`
 - **Strings**: concatenation with `+` in value and `put` position on every
-  target; `n.to_string()` for scalars (Rust and C targets); `s.len()` for byte
-  length; string interpolation `"n is {n}"` lowers to concatenation on every
-  target
+  target; `n.to_string()` for integers on every target and floats on every
+  target except asm; `s.len()` for byte length; string interpolation
+  `"n is {n}"` lowers to concatenation on every target
 
 ---
 

@@ -1,7 +1,8 @@
 # Poly 2.0 Preview Migration Guide
 
 Poly 2.0 preview keeps the compact orchestration syntax and adds explicit target selection. Rust remains the default target; C
-is available as a documented C11 subset.
+is available as a documented C11 subset. Assembly, JavaScript, and Goose targets are also selectable with `--target asm`,
+`--target js`, and `--target goose`.
 
 ## Target Selection
 
@@ -27,11 +28,16 @@ poly --target rust program.poly
 poly --target c program.poly
 poly --target c --check program.poly
 poly --target c --emit-c program.poly
+poly --target asm --emit-asm program.poly
+poly --target js --emit-js program.poly
+poly --target goose --check program.poly
+poly --target goose --emit-goose program.poly
 ~~~
 
 Only the selected foreign block is emitted. A `#cpp` block is reserved and causes an explicit unsupported-backend error until a
 C++ backend is designed. Optional `extern rust fn ...` and `extern c fn ...` declarations let migrated programs opt into
-Poly-side foreign-call checks.
+Poly-side foreign-call checks. Goose is selected with `--target goose` and uses a `#goose` block; see
+[POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md) for the block contract.
 
 ## Foreign Blocks
 

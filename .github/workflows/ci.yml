@@ -322,6 +322,20 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      # The build script treats wasm-opt as optional, but the shipped artifact
+      # is always built with it (749838 -> 636157 bytes, -15%). ubuntu-latest
+      # has no binaryen, so without this step CI would optimize a different
+      # artifact than the one committed and the size budget below would be
+      # measuring the wrong thing. Pinned + checksummed to match release builds.
+      - name: Install wasm-opt (binaryen 130)
+        run: |
+          curl -fsSL -o /tmp/binaryen.tar.gz \
+            https://github.com/WebAssembly/binaryen/releases/download/version_130/binaryen-version_130-x86_64-linux.tar.gz
+          echo "0a18362361ad05465118cd8eeb72edaeec89de6894bc283576ef4e07aa3babcc  /tmp/binaryen.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/binaryen.tar.gz -C /tmp
+          sudo install -m755 /tmp/binaryen-version_130/bin/wasm-opt /usr/local/bin/wasm-opt
+          wasm-opt --version
+
       - name: Rebuild playground wasm
         working-directory: compiler
         run: bash scripts/build_playground_wasm.sh

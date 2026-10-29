@@ -20,6 +20,7 @@ def markdown_files():
             and "target" not in path.parts
             and "node_modules" not in path.parts
             and ".agents" not in path.parts  # vendored third-party skills keep their own conventions
+            and ".tools" not in path.parts  # vendored third-party toolchains (e.g. .tools/goose-* docs)
         ):
             yield path
 

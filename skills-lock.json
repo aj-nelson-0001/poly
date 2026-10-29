@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "academic-writing-skills/latex-paper-en/SKILL.md",
       "computedHash": "c1ca54bd7c9896b273cdf44b2b6fb30b242369c12d63d9d678b420512348e2c9"
+    },
+    "reverse-engineer-anything": {
+      "source": "morluto/rea",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/reverse-engineer-anything/SKILL.md",
+      "computedHash": "fe691bfa8f3f249106d26de7efc2cf115095c1a30dc78d8531d9a711b31873fd"
     }
   }
 }

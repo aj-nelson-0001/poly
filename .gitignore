@@ -6,7 +6,22 @@
 __pycache__/
 *.pyc
 *.rs.org
+# Editor/assistant save files.
+*.save
 /isprime-bin
 /vscode/node_modules/
 # Local on-demand skill kept out of the repository on purpose.
 /.agents/skills/benjamin-plus/
+/.claude/skills/benjamin-plus
+# Vendored third-party toolchains unpacked locally (38 MB of goose source and
+# its own Markdown, which trips scripts/check_markdown.py's fence rules).
+/.tools/
+# Local session scratch: agent preferences, exported chat logs, throwaway
+# Poly/JS experiments and an unreferenced draft. Nothing here is linked from
+# the documentation index; delete these entries to start tracking any of them.
+/compiler/.freebuff-prefs.md
+/freebuff-chat-*.md
+/compiler/t3.js
+/compiler/nh.poly
+/interop_test.poly
+/whyPolly.md

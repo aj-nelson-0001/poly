@@ -340,6 +340,21 @@ jobs:
       - name: Run playground wasm smoke test
         run: node scripts/playground_wasm_smoke.mjs
 
+      # The module ships whole to every browser, so size regressions deserve a
+      # gate rather than a code-review eyeball: 636157 bytes is the post-`5b588f0`
+      # baseline (goose backend compiled out), and ~4% of headroom absorbs
+      # ordinary feature growth. When a legitimate change needs more room, raise
+      # the budget in the same commit that grows the artifact.
+      - name: Enforce wasm size budget
+        run: |
+          budget=660000
+          size=$(wc -c < playground/poly.wasm)
+          echo "poly.wasm: $size bytes (budget: $budget)"
+          if [ "$size" -gt "$budget" ]; then
+            echo "::error::poly.wasm is $size bytes, over the $budget-byte budget. Trim it or raise the budget in this commit."
+            exit 1
+          fi
+
 # Release publishing is owned by .github/workflows/release.yml (build job +
 # create-release job, triggered on v* tags). CI no longer duplicates it: two
 # jobs uploading assets to the same release raced and made results order-

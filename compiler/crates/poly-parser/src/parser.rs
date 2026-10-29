@@ -1397,7 +1397,8 @@ impl<'a> Parser<'a> {
                             // Look ahead: is the next token ':' or ',' or ')'?
                             // If Identifier followed by ':' it's a named field
                             let saved_pos = self.pos;
-                            let param_name = self.expect_binding_identifier("enum variant field")?;
+                            let param_name =
+                                self.expect_binding_identifier("enum variant field")?;
                             if self.match_token(&TokenKind::Colon) {
                                 // Named field: param: type
                                 let ty = self.parse_type()?;
@@ -1418,7 +1419,8 @@ impl<'a> Parser<'a> {
                             }
                             if let TokenKind::Identifier(_) = self.peek() {
                                 let saved_pos = self.pos;
-                                let param_name = self.expect_binding_identifier("enum variant field")?;
+                                let param_name =
+                                    self.expect_binding_identifier("enum variant field")?;
                                 if self.match_token(&TokenKind::Colon) {
                                     let ty = self.parse_type()?;
                                     fields.push((param_name, ty));
@@ -3175,8 +3177,11 @@ impl<'a> Parser<'a> {
                 if self.peek() == &TokenKind::ColonColon {
                     self.advance();
                     let variant = self.expect_identifier()?;
-                    self.reject_reserved_command_name(&variant, self.current().span, "enum variant")?;
-                    let variant = variant;
+                    self.reject_reserved_command_name(
+                        &variant,
+                        self.current().span,
+                        "enum variant",
+                    )?;
                     let data = if self.peek() == &TokenKind::LParen {
                         self.advance();
                         let mut args = Vec::new();
@@ -3229,7 +3234,7 @@ impl<'a> Parser<'a> {
                     return Err(ParseError::with_suggestion(
                         format!("`{name}` is a reserved command word and cannot be used as a value or called"),
                         span,
-                        format!("Use the command form `add var, value` / `sub var, value`, or rename the function"),
+                        "Use the command form `add var, value` / `sub var, value`, or rename the function".to_string(),
                     ));
                 }
 
@@ -4526,7 +4531,8 @@ mod tests {
         assert!(
             debug.contains("LoopRange"),
             "expected a LoopRange expression: {debug}"
-        );        Ok(())
+        );
+        Ok(())
     }
 
     #[test]
@@ -4549,7 +4555,8 @@ mod tests {
         let program = parser.parse()?;
         let debug = format!("{program:?}");
         assert!(!debug.contains("InfiniteLoop"));
-        assert!(debug.contains("LoopRange"));        Ok(())
+        assert!(debug.contains("LoopRange"));
+        Ok(())
     }
 
     #[test]
@@ -4579,7 +4586,8 @@ mod tests {
                 ("minifb".to_string(), "0.27".to_string()),
                 ("alsa".to_string(), "0.9".to_string())
             ]
-        );        Ok(())
+        );
+        Ok(())
     }
 
     #[test]
@@ -4588,7 +4596,8 @@ mod tests {
         let (tokens, errors) = Lexer::lex(source);
         assert!(errors.is_empty(), "{errors:?}");
         let mut parser = Parser::new(&tokens);
-        assert!(parser.parse().is_err());        Ok(())
+        assert!(parser.parse().is_err());
+        Ok(())
     }
 
     #[test]
@@ -4698,14 +4707,16 @@ mod tests {
             &prog.statements[0].node,
             Statement::ForeignBlock { language, content }
                 if language == "c" && content.contains("answer")
-        ));        Ok(())
+        ));
+        Ok(())
     }
 
     #[test]
     fn foreign_blocks_are_rejected_inside_poly_functions() -> Result<(), Box<dyn std::error::Error>>
     {
         let source = "fn outer()\n    #c\n    int answer(void) { return 42; }\n    #endc\nend fn";
-        assert!(parse_source(source).is_err());        Ok(())
+        assert!(parse_source(source).is_err());
+        Ok(())
     }
 
     #[test]
@@ -4732,7 +4743,8 @@ mod tests {
     fn extern_function_declarations_are_rejected_inside_poly_functions(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let source = "fn outer()\n    extern c fn helper(value: i32): i32\nend fn";
-        assert!(parse_source(source).is_err());        Ok(())
+        assert!(parse_source(source).is_err());
+        Ok(())
     }
 
     #[test]
@@ -4758,7 +4770,8 @@ mod tests {
         );
 
         let put = &program.statements[2];
-        assert_eq!(&source[put.span.start..put.span.end], "put x");        Ok(())
+        assert_eq!(&source[put.span.start..put.span.end], "put x");
+        Ok(())
     }
 
     #[test]
@@ -4928,7 +4941,8 @@ end match"#
         assert!(legacy_unicode_error
             .suggestion
             .ok_or("expected a suggestion")?
-            .contains("unicode \"...\""));        Ok(())
+            .contains("unicode \"...\""));
+        Ok(())
     }
 
     #[test]
@@ -4960,14 +4974,16 @@ end match"#
             })
         ));
         assert!(parse_source("var x := 0\nx := x + 1").is_ok());
-        assert!(parse_source("var x := 0\nx := 1").is_ok());        Ok(())
+        assert!(parse_source("var x := 0\nx := 1").is_ok());
+        Ok(())
     }
 
     #[test]
     fn test_parse_assignment_target_shapes() -> Result<(), Box<dyn std::error::Error>> {
         assert!(parse_source("total := 10").is_ok());
         assert!(parse_source("item.value := 10").is_ok());
-        assert!(parse_source("items[0] := 10").is_ok());        Ok(())
+        assert!(parse_source("items[0] := 10").is_ok());
+        Ok(())
     }
 
     #[test]
@@ -4980,7 +4996,8 @@ end match"#
             .suggestion
             .ok_or("expected a suggestion")?
             .contains("Use `=`"));
-        assert!(parse_source("var x := 0\nx := 1").is_ok());        Ok(())
+        assert!(parse_source("var x := 0\nx := 1").is_ok());
+        Ok(())
     }
 
     #[test]
@@ -5025,7 +5042,8 @@ end match"#
             }
         }
         // `left` and `right` stay usable as ordinary identifiers.
-        assert!(parse_source("var right := 1\nvar left := right").is_ok());        Ok(())
+        assert!(parse_source("var right := 1\nvar left := right").is_ok());
+        Ok(())
     }
 
     #[test]
@@ -5120,7 +5138,8 @@ end match"#
             );
         }
         // Shift symbols remain valid alternative syntax.
-        assert!(parse_source("var x := a << 2\nvar y := a >> 2").is_ok());        Ok(())
+        assert!(parse_source("var x := a << 2\nvar y := a >> 2").is_ok());
+        Ok(())
     }
 
     #[test]
@@ -5131,7 +5150,8 @@ end match"#
         assert!(error
             .message
             .contains("`shift` must be followed by `left` or `right`"));
-        assert!(parse_source("var x := a shift left 2\nvar y := a shift right 2").is_ok());        Ok(())
+        assert!(parse_source("var x := a shift left 2\nvar y := a shift right 2").is_ok());
+        Ok(())
     }
 
     #[test]
@@ -5199,7 +5219,8 @@ end match"#
     fn test_putl_is_now_an_identifier() -> Result<(), Box<dyn std::error::Error>> {
         // `putl` was removed from the language; it now parses as a plain identifier.
         let prog = parse_source(r#"var putl := 42"#)?;
-        assert_eq!(prog.statements.len(), 1);        Ok(())
+        assert_eq!(prog.statements.len(), 1);
+        Ok(())
     }
 
     #[test]
@@ -5234,7 +5255,8 @@ end match"#
         let Err(err) = parse_source(r#"put -n "Hello""#) else {
             panic!("expected an Err result")
         };
-        assert!(err.message.contains("no longer accepts") || err.message.contains("Expected"));        Ok(())
+        assert!(err.message.contains("no longer accepts") || err.message.contains("Expected"));
+        Ok(())
     }
 
     #[test]
@@ -5246,7 +5268,8 @@ end match"#
         assert!(error
             .suggestion
             .as_deref()
-            .is_some_and(|suggestion| suggestion.contains("unicode")));        Ok(())
+            .is_some_and(|suggestion| suggestion.contains("unicode")));
+        Ok(())
     }
 
     #[test]
@@ -5501,7 +5524,8 @@ end match"#
             other => panic!("Expected LoopRange, got {:?}", other),
         }
         // A bare `loop` followed by a block without a variable is an infinite loop
-        assert!(parse_source("loop\n    put 1\nend loop").is_ok());        Ok(())
+        assert!(parse_source("loop\n    put 1\nend loop").is_ok());
+        Ok(())
     }
 
     #[test]
@@ -5627,9 +5651,7 @@ end match"#
 
     #[test]
     fn test_parse_variant_pattern_without_colons() -> Result<(), Box<dyn std::error::Error>> {
-        let prog = parse_source(
-            "match x\n    1,\n        put 2\n    _, 3\nend match",
-        )?;
+        let prog = parse_source("match x\n    1,\n        put 2\n    _, 3\nend match")?;
         assert_eq!(prog.statements.len(), 1);
         match &prog.statements[0].node {
             Statement::ExpressionStatement(Expression::MatchExpression { arms, .. }) => {
@@ -5642,7 +5664,8 @@ end match"#
 
     #[test]
     fn test_parse_match_rejects_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
-        assert!(parse_source("match x\n    1 => put \"one\"\nend match").is_err());        Ok(())
+        assert!(parse_source("match x\n    1 => put \"one\"\nend match").is_err());
+        Ok(())
     }
 
     #[test]
@@ -5813,7 +5836,8 @@ end match"#
         assert!(error
             .suggestion
             .as_deref()
-            .is_some_and(|text| text.contains("else if")));        Ok(())
+            .is_some_and(|text| text.contains("else if")));
+        Ok(())
     }
 
     #[test]
@@ -5873,7 +5897,8 @@ end fn"#;
                 }
             }
         }
-        assert!(found, "interpolated string should parse as an Add chain");        Ok(())
+        assert!(found, "interpolated string should parse as an Add chain");
+        Ok(())
     }
 
     #[test]
@@ -5906,7 +5931,8 @@ end fn"#;
     var json ustring := "{"a": 1}"
     put json
 end fn"#;
-        assert!(parse_source(source).is_ok());        Ok(())
+        assert!(parse_source(source).is_ok());
+        Ok(())
     }
 
     #[test]
@@ -5932,7 +5958,8 @@ end fn"#;
         else {
             panic!("expected a ForLoop expression statement");
         };
-        assert_eq!(variable, "(idx, val)");        Ok(())
+        assert_eq!(variable, "(idx, val)");
+        Ok(())
     }
 
     #[test]
@@ -6056,7 +6083,8 @@ end fn"#;
         assert_eq!(
             error.suggestion.as_deref(),
             Some("Use `x := x + n` instead of `add x n`")
-        );        Ok(())
+        );
+        Ok(())
     }
 
     #[test]
@@ -6157,7 +6185,8 @@ end fn"#;
         assert_eq!(
             error.suggestion.as_deref(),
             Some("Use `x := x - n` instead of `sub x n`")
-        );        Ok(())
+        );
+        Ok(())
     }
 
     #[test]
@@ -6182,7 +6211,8 @@ end fn"#;
         assert_eq!(
             minus.suggestion.as_deref(),
             Some("Use `x := x - value` instead")
-        );        Ok(())
+        );
+        Ok(())
     }
 
     #[test]
@@ -6194,7 +6224,8 @@ end fn"#;
         // identifier, keeps it from being the `inc x` command). Neither has
         // the retired statement shape, so neither is flagged.
         let prog = parse_source("var acc i32 := 0\nacc := 5\nvar counter i32 := 0\ninc(counter)")?;
-        assert_eq!(prog.statements.len(), 4);        Ok(())
+        assert_eq!(prog.statements.len(), 4);
+        Ok(())
     }
 
     #[test]
@@ -6222,7 +6253,8 @@ end fn"#;
     }
 
     #[test]
-    fn reserved_add_sub_reject_function_and_macro_names() -> Result<(), Box<dyn std::error::Error>> {
+    fn reserved_add_sub_reject_function_and_macro_names() -> Result<(), Box<dyn std::error::Error>>
+    {
         for src in &[
             "fn add(a: i32) i32 := a + 1",
             "fn sub(a: i32) i32 := a - 1",
@@ -6242,7 +6274,8 @@ end fn"#;
     }
 
     #[test]
-    fn reserved_add_sub_reject_in_value_and_call_positions() -> Result<(), Box<dyn std::error::Error>> {
+    fn reserved_add_sub_reject_in_value_and_call_positions(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let Err(e) = parse_source("var x i32 := add") else {
             panic!("value-position `add` should be rejected")
         };
@@ -6259,16 +6292,13 @@ end fn"#;
         let Err(e) = parse_source("var x i32 := sub(1)") else {
             panic!("call `sub(1)` should be rejected")
         };
-        assert!(e.message.contains("reserved command word"));        Ok(())
+        assert!(e.message.contains("reserved command word"));
+        Ok(())
     }
 
     #[test]
     fn reserved_add_sub_reject_closure_parameters() -> Result<(), Box<dyn std::error::Error>> {
-        for src in &[
-            "|add: i32| add",
-            "|sub: i32| sub",
-            "|add, sub| sub - add",
-        ] {
+        for src in &["|add: i32| add", "|sub: i32| sub", "|add, sub| sub - add"] {
             let Err(e) = parse_source(src) else {
                 panic!("{src} should be rejected in closure params")
             };
@@ -6365,7 +6395,8 @@ end fn"#;
         Ok(())
     }
 
-    #[test]    fn reserved_add_sub_reject_match_variant_names() -> Result<(), Box<dyn std::error::Error>> {
+    #[test]
+    fn reserved_add_sub_reject_match_variant_names() -> Result<(), Box<dyn std::error::Error>> {
         for src in &[
             "enum E\n    add\nend enum",
             "enum E\n    add: i32\nend enum",
@@ -6411,8 +6442,9 @@ end fn"#;
     #[test]
     fn non_reserved_field_names_still_parse() -> Result<(), Box<dyn std::error::Error>> {
         // Non-reserved field names and field selection parse normally.
-        let prog =
-            parse_source("struct Foo\n    total: i32\nend struct\nvar f := Foo { total: 1 }\nput f.total")?;
+        let prog = parse_source(
+            "struct Foo\n    total: i32\nend struct\nvar f := Foo { total: 1 }\nput f.total",
+        )?;
         assert!(!prog.statements.is_empty());
         Ok(())
     }
@@ -6462,7 +6494,8 @@ end fn"#;
             error.message.contains("expects 1 arguments, got 2"),
             "got: {}",
             error.message
-        );        Ok(())
+        );
+        Ok(())
     }
 
     #[test]
@@ -6554,7 +6587,8 @@ end fn"#;
                 Statement::ExternFunctionDeclaration(_)
             ),
             "expected the extern declaration first"
-        );        Ok(())
+        );
+        Ok(())
     }
 
     #[test]

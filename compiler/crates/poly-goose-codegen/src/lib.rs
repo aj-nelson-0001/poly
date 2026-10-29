@@ -119,7 +119,8 @@ impl GooseGenerator {
 
         self.output
             .push_str("// Generated from Poly source code.\n");
-        self.output.push_str("// Target language: Goose (https://github.com/aardappel/goose).\n\n");
+        self.output
+            .push_str("// Target language: Goose (https://github.com/aardappel/goose).\n\n");
         for block in &self.goose_blocks {
             self.output.push_str(block.trim_matches('\n'));
             self.output.push_str("\n\n");
@@ -145,12 +146,12 @@ impl GooseGenerator {
         // Helpers are emitted after every statement (including `main`'s body)
         // has been rendered, so the `used_*_helper` flags are final by now.
         if *self.used_power_helper.borrow() {
-            self.output.push_str("\n");
+            self.output.push('\n');
             self.output.push_str(&power_helper());
             self.output.push('\n');
         }
         if *self.used_mod_helper.borrow() {
-            self.output.push_str("\n");
+            self.output.push('\n');
             // `std.rem` (the truncated partner of `/`) lives in the standard
             // library, so the file must import it. Imports are top-level and
             // order-free, and a duplicate `import std;` is tolerated, so it
@@ -191,7 +192,8 @@ impl GooseGenerator {
             })
             .collect::<Result<Vec<_>, String>>()?
             .join(", ");
-        writeln!(result, "struct {} {{ {} }}", structure.name, fields).map_err(|e| e.to_string())?;
+        writeln!(result, "struct {} {{ {} }}", structure.name, fields)
+            .map_err(|e| e.to_string())?;
         Ok(result)
     }
 
@@ -523,8 +525,12 @@ impl GooseGenerator {
                     self.expr(end)?
                 };
                 line_prefix_for(output, indent);
-                writeln!(output, "for {variable}: i32 in {}..{upper} {{", self.expr(start)?)
-                    .map_err(|e| e.to_string())?;
+                writeln!(
+                    output,
+                    "for {variable}: i32 in {}..{upper} {{",
+                    self.expr(start)?
+                )
+                .map_err(|e| e.to_string())?;
                 self.block_into(output, indent + 1, body)?;
                 line_prefix_for(output, indent);
                 output.push_str("}\n");
@@ -1054,7 +1060,9 @@ impl GooseGenerator {
             Expression::StructLiteral { fields, .. } => fields
                 .iter()
                 .any(|(_, value)| self.expression_references_identifier(value, name)),
-            Expression::EnumVariant { data: Some(items), .. } => items
+            Expression::EnumVariant {
+                data: Some(items), ..
+            } => items
                 .iter()
                 .any(|item| self.expression_references_identifier(item, name)),
             Expression::EnumVariant { data: None, .. }
@@ -1071,42 +1079,43 @@ impl GooseGenerator {
             Expression::MatchExpression { scrutinee, arms } => {
                 self.expression_references_identifier(scrutinee, name)
                     || arms.iter().any(|arm| {
-                        arm.guard.as_ref().is_some_and(|guard| {
-                            self.expression_references_identifier(guard, name)
-                        }) || match &arm.body {
-                            ast::MatchArmBody::Expression(expression) => {
-                                self.expression_references_identifier(expression, name)
+                        arm.guard
+                            .as_ref()
+                            .is_some_and(|guard| self.expression_references_identifier(guard, name))
+                            || match &arm.body {
+                                ast::MatchArmBody::Expression(expression) => {
+                                    self.expression_references_identifier(expression, name)
+                                }
+                                ast::MatchArmBody::Block(block) => block.iter().any(|statement| {
+                                    self.statement_references_identifier(&statement.node, name)
+                                }),
                             }
-                            ast::MatchArmBody::Block(block) => block.iter().any(|statement| {
-                                self.statement_references_identifier(&statement.node, name)
-                            }),
-                        }
                     })
             }
-            Expression::Closure { body, .. } => {
-                self.expression_references_identifier(body, name)
-            }
+            Expression::Closure { body, .. } => self.expression_references_identifier(body, name),
             Expression::UnsafeBlock(block) => block
                 .iter()
                 .any(|statement| self.statement_references_identifier(&statement.node, name)),
             Expression::WhileLoop { condition, body } => {
                 self.expression_references_identifier(condition, name)
-                    || body
-                        .iter()
-                        .any(|statement| self.statement_references_identifier(&statement.node, name))
+                    || body.iter().any(|statement| {
+                        self.statement_references_identifier(&statement.node, name)
+                    })
             }
             Expression::ForLoop { iterable, body, .. } => {
                 self.expression_references_identifier(iterable, name)
-                    || body
-                        .iter()
-                        .any(|statement| self.statement_references_identifier(&statement.node, name))
+                    || body.iter().any(|statement| {
+                        self.statement_references_identifier(&statement.node, name)
+                    })
             }
             Expression::LoopRange { ranges, body, .. } => {
                 ranges.iter().any(|part| match part {
                     ast::LoopRangePart::Value(expression) => {
                         self.expression_references_identifier(expression, name)
                     }
-                    ast::LoopRangePart::Range { start, end, step, .. } => {
+                    ast::LoopRangePart::Range {
+                        start, end, step, ..
+                    } => {
                         self.expression_references_identifier(start, name)
                             || self.expression_references_identifier(end, name)
                             || step.as_ref().is_some_and(|step| {
@@ -1126,15 +1135,13 @@ impl GooseGenerator {
                 else_block,
             } => {
                 self.expression_references_identifier(condition, name)
-                    || then_block
-                        .iter()
-                        .any(|statement| self.statement_references_identifier(&statement.node, name))
+                    || then_block.iter().any(|statement| {
+                        self.statement_references_identifier(&statement.node, name)
+                    })
                     || else_block.as_ref().is_some_and(|block| {
-                        block
-                            .iter()
-                            .any(|statement| {
-                                self.statement_references_identifier(&statement.node, name)
-                            })
+                        block.iter().any(|statement| {
+                            self.statement_references_identifier(&statement.node, name)
+                        })
                     })
             }
             _ => false,
@@ -1204,9 +1211,7 @@ impl GooseGenerator {
                 };
                 Ok(format!("{}[{len_text}]", self.type_to_goose(inner)?))
             }
-            TypeAnnotation::Option(inner) => {
-                Ok(format!("{}?", self.type_to_goose(inner)?))
-            }
+            TypeAnnotation::Option(inner) => Ok(format!("{}?", self.type_to_goose(inner)?)),
             other => {
                 let _ = other;
                 Err(

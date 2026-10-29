@@ -2263,7 +2263,8 @@ impl TypeChecker {
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             self.require_compatible(actual, expected, format!("variant `{name}`"));
         }
-    }    /// `add` and `sub` are reserved command words: they cannot be used as
+    }
+    /// `add` and `sub` are reserved command words: they cannot be used as
     /// bindings, including match-arm bindings. This is the type-checker mirror
     /// of the parser's `is_reserved_command_name` guard (shared by
     /// `expect_binding_identifier`).
@@ -3336,9 +3337,7 @@ mod tests {
 
     #[test]
     fn accepts_option_some_none_values_and_patterns() -> Result<(), Box<dyn std::error::Error>> {
-        let source = concat!(
-            "fn main()\n    var maybe Option<i32> := Some(42)\n    var empty Option<i32> := None\n    match maybe\n        Some(v), put v\n        None, put 0\n    end match\n    match empty\n        Some(v), put v\n        None, put 0\n    end match\nend fn",
-        );
+        let source = "fn main()\n    var maybe Option<i32> := Some(42)\n    var empty Option<i32> := None\n    match maybe\n        Some(v), put v\n        None, put 0\n    end match\n    match empty\n        Some(v), put v\n        None, put 0\n    end match\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }
@@ -3550,9 +3549,7 @@ mod tests {
     fn rejects_misspelled_enum_variant_with_payload_in_match(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let Err(errors) = check(
-            concat!(
-                "enum Shape\n    Circle(i32)\nend enum\nfn main()\n    var s := Shape::Circle(1)\n    match s\n        Gren(x), put x\n    end match\nend fn",
-            ),
+            "enum Shape\n    Circle(i32)\nend enum\nfn main()\n    var s := Shape::Circle(1)\n    match s\n        Gren(x), put x\n    end match\nend fn",
         )
         else { panic!("expected an Err result") };
         assert!(errors
@@ -3849,9 +3846,7 @@ mod tests {
     fn checked_index_get_returns_option() -> Result<(), Box<dyn std::error::Error>> {
         // `xs.get(i)` must resolve to `Option<T>` and reject non-integer
         // indexes, so the result is usable with `match`/`if` patterns.
-        let source = concat!(
-            "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    match xs.get(0)\n        Some(value), put value.to_string()\n        None, put \"empty\"\n    end match\n    match \"abc\".get(1)\n        Some(c), put c\n        None, put \"none\"\n    end match\nend fn",
-        );
+        let source = "fn main()\n    var xs Vec<i32> := [1, 2, 3]\n    match xs.get(0)\n        Some(value), put value.to_string()\n        None, put \"empty\"\n    end match\n    match \"abc\".get(1)\n        Some(c), put c\n        None, put \"none\"\n    end match\nend fn";
         assert!(check(source).is_ok(), "{:?}", check(source).err());
         Ok(())
     }

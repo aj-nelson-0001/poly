@@ -2350,6 +2350,11 @@ mod tests {
         Ok(())
     }
 
+    // POSIX permission bits have no Windows equivalent, so the 0o700
+    // assertion below can only be made where `mode()` exists. Ungated, this
+    // test failed `cargo check --all-targets` on windows-latest (E0433/E0599)
+    // and took the whole Test job down with it.
+    #[cfg(unix)]
     #[test]
     fn private_temp_dirs_are_private_unique_and_unguessable(
     ) -> Result<(), Box<dyn std::error::Error>> {

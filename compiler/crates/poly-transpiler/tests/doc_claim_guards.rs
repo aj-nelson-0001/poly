@@ -240,7 +240,8 @@ fn zero_step_rejection_names_the_limitation() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn reserved_add_sub_reject_value_position_variant_names() -> Result<(), Box<dyn std::error::Error>> {
+fn reserved_add_sub_reject_value_position_variant_names() -> Result<(), Box<dyn std::error::Error>>
+{
     // Enum variant names that are reserved command words must be rejected in
     // pattern position by the parser's `reject_reserved_command_name` guard
     // (via `expect_binding_identifier`) before they can be used as that arm's
@@ -250,13 +251,12 @@ fn reserved_add_sub_reject_value_position_variant_names() -> Result<(), Box<dyn 
             "enum E\n    add\n    sub\nend enum\n\n",
             "fn main()\n    match 1\n        E::add, put \"ok\"\n    end match\nend fn\n",
         );
-        let res =
-            poly_transpiler::Transpiler::new().transpile_target(source, &target);
-        assert!(
-            res.is_err(),
-            "target `{target}`: reserved-command enum variant in pattern should be rejected"
-        );
-        let err = res.unwrap_err();
+        let res = poly_transpiler::Transpiler::new().transpile_target(source, target);
+        let Err(err) = res else {
+            panic!(
+                "target `{target}`: reserved-command enum variant in pattern should be rejected"
+            );
+        };
         assert!(
             err.to_string().contains("reserved command word"),
             "target `{target}`: mismatch: {err:?}"
@@ -348,7 +348,8 @@ fn mod_is_the_truncated_remainder_on_every_target() -> Result<(), Box<dyn std::e
 }
 
 #[test]
-fn runtime_step_sign_dispatch_matches_the_other_targets() -> Result<(), Box<dyn std::error::Error>> {
+fn runtime_step_sign_dispatch_matches_the_other_targets() -> Result<(), Box<dyn std::error::Error>>
+{
     // POLY_SPEC_v2 "Step semantics (identical on every target — rust, c,
     // asm, js, goose)": a non-literal step keeps its sign at runtime, so the
     // loop must dispatch on that sign — ascending compares against the upper

@@ -11,6 +11,21 @@ use poly_parser::{Parser, Program};
 use crate::checker::check_program;
 use crate::source_map::SourceMap;
 
+/// Target list advertised in error messages. The Goose backend is a default
+/// feature that size-sensitive consumers (the playground wasm) disable, so the
+/// advertised set follows the compiled feature set rather than being fixed.
+#[cfg(feature = "goose")]
+const SUPPORTED_TARGETS: &str = "rust, c, asm, js, goose";
+#[cfg(not(feature = "goose"))]
+const SUPPORTED_TARGETS: &str = "rust, c, asm, js";
+
+#[cfg(feature = "goose")]
+const CPP_RESERVED: &str =
+    "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js, goose";
+#[cfg(not(feature = "goose"))]
+const CPP_RESERVED: &str =
+    "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js";
+
 /// The Poly-to-Rust transpiler.
 pub struct Transpiler {
     /// Source map for debugging
@@ -108,6 +123,7 @@ impl Transpiler {
     }
 
     /// Transpile a parsed program to Goose after checking Poly semantics.
+    #[cfg(feature = "goose")]
     pub fn transpile_goose_checked(&self, source: &str) -> Result<String, String> {
         let program = Self::parse_target(source, "goose")?;
         check_program(&program).map_err(|errors| {
@@ -130,10 +146,11 @@ impl Transpiler {
             "c" => self.transpile_c_checked(source),
             "asm" | "s" | "S" => self.transpile_asm_checked(source),
             "js" | "mjs" => self.transpile_js_checked(source),
+            #[cfg(feature = "goose")]
             "goose" => self.transpile_goose_checked(source),
             other => Err(format!(
-                "Unknown target '{}'. Supported targets: rust, c, asm, js, goose",
-                other
+                "Unknown target '{}'. Supported targets: {}",
+                other, SUPPORTED_TARGETS
             )),
         }
     }
@@ -161,10 +178,7 @@ impl Transpiler {
                     if block_language == "cpp"
             )
         }) {
-            return Err(
-                "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js, goose"
-                    .to_string(),
-            );
+            return Err(CPP_RESERVED.to_string());
         }
         // Non-selected foreign blocks and extern declarations are removed
         // before semantic checking; ordinary Poly statements are retained for

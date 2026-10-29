@@ -55,6 +55,9 @@ function transpileTarget(src, target) {
 
 const good = [
   ['fn main()\n    put 5 mod 3\n    put 6 xor 3\nend fn\n', ['wrapping_rem', '^']],
+  // `^` is the exponentiation operator (commit 9e3a752), not legacy xor:
+  // integer power lowers to wrapping_pow, so it must be accepted.
+  ['fn main()\n    put 6 ^ 3\nend fn\n', ['wrapping_pow']],
   ['fn main()\n    put true and false\n    put not false\nend fn\n', ['&&', '!']],
   ['fn main()\n    put 12 bitand 10\n    put 12 bitor 10\nend fn\n', ['&', '|']],
   // Shifts lower to wrapping_shl/shr (defined 32-bit wrap semantics), so
@@ -66,7 +69,6 @@ const good = [
 const bad = [
   'fn main()\n    put 5 % 3\nend fn\n',   // -> mod
   'fn main()\n    put a && b\nend fn\n',  // -> and
-  'fn main()\n    put 6 ^ 3\nend fn\n',   // -> xor
   'fn main()\n    put !true\nend fn\n',   // -> not
   'fn main()\n    put a | b\nend fn\n',   // -> bitor
   'fn main()\n    put 5 == 3\nend fn\n',  // -> =

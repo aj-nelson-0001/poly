@@ -25,3 +25,7 @@ __pycache__/
 /compiler/nh.poly
 /interop_test.poly
 /whyPolly.md
+# Local environment files (may contain secrets) — never commit
+.env
+.env.*
+!.env.example

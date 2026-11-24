@@ -16,9 +16,6 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_BUILD_JOBS: 2
   RUST_TEST_THREADS: 1
-  # Shared with release.yml, which gates the published module against the same
-  # number; a release-wide change must raise both or the publication fails.
-  WASM_SIZE_BUDGET: '660000'
 
 jobs:
   test:
@@ -321,62 +318,11 @@ jobs:
 
   wasm:
     name: WebAssembly Artifact
-    runs-on: ubuntu-latest
     needs: test
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@4dfd137a5aecc12897f37a01818006f58cf58347 # 1.98.0
-        with:
-          targets: wasm32-unknown-unknown
-
-      # The build script treats wasm-opt as optional, but the shipped artifact
-      # is always built with it (749838 -> 636157 bytes, -15%). ubuntu-latest
-      # has no binaryen, so without this step CI would optimize a different
-      # artifact than the one committed and the size budget below would be
-      # measuring the wrong thing. Pinned + checksummed to match release builds.
-      - name: Install wasm-opt (binaryen 130)
-        run: |
-          curl -fsSL -o /tmp/binaryen.tar.gz \
-            https://github.com/WebAssembly/binaryen/releases/download/version_130/binaryen-version_130-x86_64-linux.tar.gz
-          echo "0a18362361ad05465118cd8eeb72edaeec89de6894bc283576ef4e07aa3babcc  /tmp/binaryen.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/binaryen.tar.gz -C /tmp
-          sudo install -m755 /tmp/binaryen-version_130/bin/wasm-opt /usr/local/bin/wasm-opt
-          wasm-opt --version
-
-      - name: Rebuild playground wasm
-        working-directory: compiler
-        run: bash scripts/build_playground_wasm.sh
-
-      - name: Verify rebuilt wasm
-        working-directory: compiler
-        run: |
-          wasm_file="../playground/poly.wasm"
-          if [ ! -s "$wasm_file" ]; then
-            echo "WASM artifact is missing or empty: $wasm_file"
-            exit 1
-          fi
-          sha256sum "$wasm_file"
-          wc -c < "$wasm_file"
-
-      - name: Run playground wasm smoke test
-        run: node scripts/playground_wasm_smoke.mjs
-
-      # The module ships whole to every browser, so size regressions deserve a
-      # gate rather than a code-review eyeball: 636157 bytes is the post-`5b588f0`
-      # baseline (goose backend compiled out), and ~4% of headroom absorbs
-      # ordinary feature growth. When a legitimate change needs more room, raise
-      # the budget in the same commit that grows the artifact.
-      - name: Enforce wasm size budget
-        run: |
-          size=$(wc -c < playground/poly.wasm)
-          echo "poly.wasm: $size bytes (budget: $WASM_SIZE_BUDGET)"
-          if [ "$size" -gt "$WASM_SIZE_BUDGET" ]; then
-            echo "::error::poly.wasm is $size bytes, over the $WASM_SIZE_BUDGET-byte budget. Trim it or raise the budget in this commit."
-            exit 1
-          fi
+    # The build, the pinned wasm-opt, the smoke test and the size budget live
+    # in one reusable workflow that release.yml also calls, so the module CI
+    # gates is the same definition the release uploads.
+    uses: ./.github/workflows/wasm-build.yml
 
 # Release publishing is owned by .github/workflows/release.yml (build, wasm,
 # create-release, then a verify-release job that re-downloads and checks the

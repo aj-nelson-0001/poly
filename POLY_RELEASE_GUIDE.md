@@ -54,12 +54,14 @@ enforces most of it mechanically.
 - `release.yml` refuses to publish when `poly --version` does not equal the
   tag name minus the `v` prefix, and when `CHANGELOG.md` has no section for
   the tag.
-- `release.yml`'s wasm job installs the same pinned `wasm-opt` (binaryen 130,
-  checksummed) as CI and enforces the same 660,000-byte budget before upload.
-  Both workflows read the budget as `WASM_SIZE_BUDGET`; without the pinned
-  binaryen, releases shipped the unoptimized module (748,320 B for
-  `2.0.0-preview.18` against 636,157 B committed), so the gate measured a
-  build nobody downloaded.
+- `.github/workflows/wasm-build.yml` is the only playground-wasm build: both
+  `ci.yml` (build and gate) and `release.yml` (build, gate, upload) call it.
+  It installs the checksummed `wasm-opt` (binaryen 130), runs the smoke test,
+  and owns the 660,000-byte `WASM_SIZE_BUDGET`, so CI and release cannot
+  diverge on toolchain or number. Before the shared definition each workflow
+  built its own module and only CI installed binaryen, so releases shipped the
+  unoptimized build (748,320 B for `2.0.0-preview.18` against 636,157 B
+  committed) and the gate measured bytes nobody downloaded.
 - A post-publish `verify-release` job re-downloads every asset from the
   published release and checks: `sha256sums.txt` matches the bytes and covers
   exactly the release's files, asset names carry the tag version, the Linux

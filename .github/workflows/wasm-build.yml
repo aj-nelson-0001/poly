@@ -1,0 +1,98 @@
+name: Playground wasm
+
+# One build for the module both workflows care about. ci.yml calls this to
+# prove the committed playground/poly.wasm still builds and fits the budget;
+# release.yml calls the same job and uploads it as a release asset. Keeping a
+# single definition means the release cannot drift from CI again: the
+# preview.16-18 releases shipped the unoptimized module (748,320 B for
+# preview.18) because only ci.yml installed wasm-opt, and nothing caught it
+# until the published bytes were compared with the gated build.
+#
+# No token is needed: the build runs cargo and node, and artifact upload uses
+# the Actions runtime token rather than GITHUB_TOKEN.
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: >-
+          Upload the module under this artifact name. Empty means
+          build-and-gate only, which is what CI wants.
+        required: false
+        default: ''
+        type: string
+      run_smoke_test:
+        description: Run scripts/playground_wasm_smoke.mjs against the build.
+        required: false
+        default: true
+        type: boolean
+
+permissions: {}
+
+env:
+  # Single source of truth for the published module's size. The module ships
+  # whole to every browser, so 636,157 bytes (the post-`5b588f0` baseline with
+  # the goose backend compiled out) plus ~4% headroom is a gate rather than a
+  # code-review eyeball. A legitimate feature that needs more room raises this
+  # number in the same commit that grows the artifact.
+  WASM_SIZE_BUDGET: '660000'
+
+jobs:
+  build:
+    name: Build and gate playground wasm
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4dfd137a5aecc12897f37a01818006f58cf58347 # 1.98.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      # The build script treats wasm-opt as optional, but the shipped artifact
+      # is always the optimized build (-15%, 749,838 -> 636,157 bytes), and
+      # ubuntu-latest has no binaryen. Pinned and checksummed so CI, the
+      # release, and any local rebuild optimize with the same tool.
+      - name: Install wasm-opt (binaryen 130)
+        run: |
+          curl -fsSL -o /tmp/binaryen.tar.gz \
+            https://github.com/WebAssembly/binaryen/releases/download/version_130/binaryen-version_130-x86_64-linux.tar.gz
+          echo "0a18362361ad05465118cd8eeb72edaeec89de6894bc283576ef4e07aa3babcc  /tmp/binaryen.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/binaryen.tar.gz -C /tmp
+          sudo install -m755 /tmp/binaryen-version_130/bin/wasm-opt /usr/local/bin/wasm-opt
+          wasm-opt --version
+
+      - name: Build playground wasm
+        run: bash compiler/scripts/build_playground_wasm.sh
+
+      - name: Verify the build produced a module
+        run: |
+          wasm_file="playground/poly.wasm"
+          if [ ! -s "$wasm_file" ]; then
+            echo "::error::WASM artifact is missing or empty: $wasm_file"
+            exit 1
+          fi
+          sha256sum "$wasm_file"
+          wc -c < "$wasm_file"
+
+      - name: Smoke test the wasm artifact
+        if: inputs.run_smoke_test
+        run: node scripts/playground_wasm_smoke.mjs
+
+      - name: Enforce wasm size budget
+        run: |
+          size=$(wc -c < playground/poly.wasm)
+          echo "poly.wasm: ${size} bytes (budget: ${WASM_SIZE_BUDGET})"
+          if [ "$size" -gt "$WASM_SIZE_BUDGET" ]; then
+            echo "::error::poly.wasm is ${size} bytes, over the ${WASM_SIZE_BUDGET}-byte budget. Trim it or raise the budget in the commit that grows it."
+            exit 1
+          fi
+
+      - name: Upload wasm artifact
+        if: inputs.artifact_name != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: playground/poly.wasm

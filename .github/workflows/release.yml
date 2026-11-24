@@ -16,11 +16,9 @@ on:
 # uses the Actions runtime token, not GITHUB_TOKEN, so it is unaffected.
 permissions: {}
 
-# Budget for the published playground module. The same number gates the CI
-# rebuild (ci.yml, "Enforce wasm size budget"); keeping it here as well means
-# the artifact users download is measured, not only the local build.
-env:
-  WASM_SIZE_BUDGET: '660000'
+# The published module's size budget and the pinned wasm-opt live in
+# .github/workflows/wasm-build.yml, which both this workflow and ci.yml call:
+# the artifact users download is the definition CI gates, not a second copy.
 
 jobs:
   build:
@@ -86,57 +84,12 @@ jobs:
 
   wasm:
     name: Playground wasm artifact
-    runs-on: ubuntu-latest
     permissions: {}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@4dfd137a5aecc12897f37a01818006f58cf58347 # 1.98.0
-        with:
-          targets: wasm32-unknown-unknown
-
-      # The build script applies wasm-opt only when it is installed, and the
-      # committed playground/poly.wasm is the optimized build. Without this
-      # step every release shipped the unoptimized module (748,320 B for
-      # preview.18 against 636,157 B committed), and the size gate measured a
-      # build nobody downloads. Same pins and checksum as the ci.yml gate so
-      # both workflows measure the same artifact.
-      - name: Install wasm-opt (binaryen 130)
-        run: |
-          curl -fsSL -o /tmp/binaryen.tar.gz \
-            https://github.com/WebAssembly/binaryen/releases/download/version_130/binaryen-version_130-x86_64-linux.tar.gz
-          echo "0a18362361ad05465118cd8eeb72edaeec89de6894bc283576ef4e07aa3babcc  /tmp/binaryen.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/binaryen.tar.gz -C /tmp
-          sudo install -m755 /tmp/binaryen-version_130/bin/wasm-opt /usr/local/bin/wasm-opt
-          wasm-opt --version
-
-      - name: Build playground wasm
-        run: bash compiler/scripts/build_playground_wasm.sh
-
-      - name: Enforce wasm size budget
-        run: |
-          wasm_file="playground/poly.wasm"
-          if [ ! -s "$wasm_file" ]; then
-            echo "::error::WASM artifact is missing or empty: $wasm_file"
-            exit 1
-          fi
-          size=$(wc -c < "$wasm_file")
-          echo "poly.wasm: ${size} bytes (budget: ${WASM_SIZE_BUDGET})"
-          if [ "$size" -gt "$WASM_SIZE_BUDGET" ]; then
-            echo "::error::poly.wasm is ${size} bytes, over the ${WASM_SIZE_BUDGET}-byte budget. Trim it or raise the budget in the commit that grows it."
-            exit 1
-          fi
-
-      - name: Smoke test the wasm artifact
-        run: node scripts/playground_wasm_smoke.mjs
-
-      - name: Upload wasm artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: poly-playground-wasm
-          path: playground/poly.wasm
+    # Build, gate and upload the module through the same reusable workflow CI
+    # runs, so release and CI cannot diverge on toolchain or budget again.
+    uses: ./.github/workflows/wasm-build.yml
+    with:
+      artifact_name: poly-playground-wasm
 
   create-release:
     name: Create Release

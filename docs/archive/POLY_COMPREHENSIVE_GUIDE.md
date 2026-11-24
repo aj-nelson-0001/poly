@@ -1,7 +1,7 @@
 # Poly Language Comprehensive Guide
 
 > **Historical guide:** Examples and feature claims reflect the v1 documentation set. For the current v2 preview, use
-[POLY_SPEC_v2.md](POLY_SPEC_v2.md).
+[POLY_SPEC_v2.md](../../POLY_SPEC_v2.md).
 
 ## Table of Contents
 
@@ -1082,9 +1082,9 @@ guidelines and examples, you can write efficient, maintainable Poly code that tr
 ### Resources
 
 - [Poly Language Specification](POLY_LANGUAGE_SPECIFICATION_EXPANDED.md)
-- [API Reference](POLY_API_REFERENCE.md)
-- [Tutorial](POLY_TUTORIAL.md)
-- [Examples](examples/)
+- [API Reference](../../POLY_API_REFERENCE.md)
+- [Tutorial](../../POLY_TUTORIAL.md)
+- [Examples](../../examples/)
 
 ### Getting Help
 

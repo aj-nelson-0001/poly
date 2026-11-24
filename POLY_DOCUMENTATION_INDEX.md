@@ -1,6 +1,7 @@
 # Poly Documentation Index
 
-Poly 2.0.0-preview.17 is the current implementation baseline. The files below are the maintained sources of truth for syntax,
+Poly 2.0.0-preview.18 is the latest released implementation baseline; work landed after that tag is listed under
+`[Unreleased]` in [CHANGELOG.md](CHANGELOG.md). The files below are the maintained sources of truth for syntax,
 targets, tooling, and migration.
 
 ## Current Documentation
@@ -16,20 +17,18 @@ targets, tooling, and migration.
 | [POLY_GOOSE_BLOCKS.md](POLY_GOOSE_BLOCKS.md) | Goose backend scope and `#goose` block behavior |
 | [POLY_API_REFERENCE.md](POLY_API_REFERENCE.md) | Current I/O, builtin, and runtime API reference |
 | [POLY_TUTORIAL.md](POLY_TUTORIAL.md) | Beginner tutorial covering I/O, error handling, and loop ranges |
-| [POLY_QUICK_REFERENCE.md](POLY_QUICK_REFERENCE.md) | Current syntax and I/O quick reference |
-| [POLY_CHEATSHEET.md](POLY_CHEATSHEET.md) | Compact v2 syntax and target cheat sheet |
+| [POLY_QUICK_REFERENCE.md](POLY_QUICK_REFERENCE.md) | Current syntax, I/O, strings, foreign blocks, and CLI quick reference |
 | [POLY_TROUBLESHOOTING_GUIDE.md](POLY_TROUBLESHOOTING_GUIDE.md) | Current error, input/output, and target troubleshooting |
 | [POLY_DOCUMENTATION_STYLE_GUIDE.md](POLY_DOCUMENTATION_STYLE_GUIDE.md) | Example, fence, terminology, and line-length rules |
-| [POLY_V2_AUDIT.md](POLY_V2_AUDIT.md) | Verified v2 status and remaining risks |
 | [POLY_V2_SUPPORT_MATRIX.md](POLY_V2_SUPPORT_MATRIX.md) | Frozen Rust/C/asm/JS/Goose feature contract and per-target summary |
-| [POLY_PREVIEW_RELEASE_CHECKLIST.md](POLY_PREVIEW_RELEASE_CHECKLIST.md) | Preview release readiness and hygiene checklist |
-| [POLY_VERSION_FILES_MAP.md](POLY_VERSION_FILES_MAP.md) | Maintainer map of version-bearing files to their regeneration
-mechanism |
-| [POLY_V2_PREVIEW_RELEASE_NOTES.md](POLY_V2_PREVIEW_RELEASE_NOTES.md) | Preview highlights, compatibility notes, and
-verification evidence |
+| [POLY_RELEASE_GUIDE.md](POLY_RELEASE_GUIDE.md) | Preview release readiness, version-bearing file map, and release procedure |
+| [POLY_V2_PREVIEW_RELEASE_NOTES.md](POLY_V2_PREVIEW_RELEASE_NOTES.md) | Preview highlights, compatibility notes, and verification evidence |
 | [POLY_ROADMAP_v2.md](POLY_ROADMAP_v2.md) | Planned v2 work and design decisions |
 | [CHANGELOG.md](CHANGELOG.md) | Versioned implementation history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development and verification workflow |
+| [PROGRESS.md](PROGRESS.md) | Dated implementation log |
+| [TODO.md](TODO.md) | Outstanding work items |
+| [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) | Required branch protection settings |
 
 Complete runnable Poly programs live in [`examples/`](examples/); executable behavior fixtures live in [`tests/`](tests/).
 
@@ -51,30 +50,15 @@ Poly-side checks for opaque foreign calls.
 
 ## Historical References
 
-The v1 guides, blog posts, release notes, and expanded drafts remain in the repository as historical material. They may
-describe
-syntax or features from older releases and are not normative for v2. Use
-[POLY_MIGRATION_GUIDE_v1.8.md](POLY_MIGRATION_GUIDE_v1.8.md) only when migrating old source, and then consult the v2 documents
-for the resulting syntax.
+Everything point-in-time — v1 guides, audit reports, blog drafts, old release notes, social copy, and superseded design
+records — lives under [`docs/archive/`](docs/archive/README.md). Those files are not normative for v2 and may describe
+older syntax. Use [POLY_MIGRATION_GUIDE_v1.8.md](docs/archive/POLY_MIGRATION_GUIDE_v1.8.md) only when migrating old
+source, and then consult the v2 documents for the resulting syntax.
 
-Historical documents include:
+Also historical: `compiler/grammar/poly.bnf` (stale v1.5 draft; `POLY_GRAMMAR.md` is the maintained grammar).
 
-- `compiler/grammar/poly.bnf` (stale v1.5 draft; `POLY_GRAMMAR.md` is the maintained grammar)
-- `POLY_LANGUAGE_SPECIFICATION_EXPANDED.md`
-- `THE_POLY_PROGRAMMING_LANGUAGE.md`
-- `POLY_COMPREHENSIVE_GUIDE.md`
-- `POLY_BEST_PRACTICES.md`
-- `POLY_PERFORMANCE_GUIDE.md`
-- `POLY_SECURITY_GUIDE.md`
-- `POLY_DEPLOYMENT_GUIDE.md`
-- `POLY_INTEGRATION_GUIDE.md`
-- `POLY_COMPATIBILITY_GUIDE.md`
-- `POLY_VERSIONING_GUIDE.md`
-- `POLY_FUTURE_MIGRATION_GUIDE.md`
-- `BLOG_POST_*.md` and `RELEASE_NOTES_*.md`
-
-These files should be updated when a statement would mislead a current reader. Examples marked `poly fragment` are allowed to
-retain version-specific or context-dependent syntax for historical explanation.
+Archived files should be updated only when a statement would actively mislead a current reader, or when a current document
+needs to point at them. Examples marked `poly fragment` may retain version-specific syntax for historical explanation.
 
 ## Verification
 

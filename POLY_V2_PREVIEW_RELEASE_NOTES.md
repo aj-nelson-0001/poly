@@ -2,10 +2,40 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.17 continues the target-aware compiler model established by the earlier previews. Rust remains the default
+Poly 2.0.0-preview.18 continues the target-aware compiler model established by the earlier previews. Rust remains the default
 and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available
-through `--target asm`, a JavaScript target through `--target js`, a Goose target through `--target goose`, and C++ syntax
-is reserved and explicitly rejected.
+through `--target asm`, a JavaScript target through `--target js`, a Goose target through `--target goose`, and C++ syntax is
+reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.18
+
+- **The Goose target ships.** `--target goose` emits Goose orchestration
+  source through `poly-goose-codegen`: `#goose ... #endgoose` blocks are
+  copied verbatim at file scope, `extern goose fn ...` declarations are
+  checked by Poly but never emitted, and `--check` runs `goose check` (with
+  `POLY_GOOSE` overriding the toolchain binary). The supported surface
+  follows the JS backend plus vector literals and mutators; anything else —
+  enums, tuples, closures, async, generics, methods, guards, `get` input,
+  file redirects, `error`/`warn`/`info`, and more — is rejected with a
+  diagnostic naming the limitation and the `#goose` escape hatch.
+- **Simpler mutation and new operators.** `add x, n` / `sub x, n` and
+  `inc x` / `dec x` lower to `x := x ± n` and `x := x ± 1` over plain
+  variables, `put ... to "file" -prepend` writes in front of the existing
+  contents, and `^` is exponentiation on every target
+  (right-associative, tighter than `*`, with compile-time folding for
+  constant exponents in `0..=63`).
+- **Security hardening.** `dep` version strings are validated against an
+  allowlist, closing a TOML-injection path that could execute a build
+  script during `--check`; generated C, asm, and JS escape NUL and every
+  other control character; scratch files and temporary Cargo projects use
+  private, unpredictable directories with `0700` permissions on Unix.
+- **Documentation consolidated.** Point-in-time guides, audit reports, blog
+  drafts, and old release material moved to `docs/archive/` (indexed by
+  `docs/archive/README.md`). `POLY_QUICK_REFERENCE.md` now merges the
+  former cheatsheet and quick-reference card, and `POLY_RELEASE_GUIDE.md`
+  merges the preview checklist and version-bearing file map. The Tetris CI
+  guard now diffs the regenerated `src/main.rs` against the committed file,
+  so a stale checked-in project fails CI instead of passing silently.
 
 ## What's New in 2.0.0-preview.17
 
@@ -256,5 +286,5 @@ also be completed before tagging.
 - [Poly v2 specification](POLY_SPEC_v2.md)
 - [Poly v2 support matrix](POLY_V2_SUPPORT_MATRIX.md)
 - [C11 backend guide](POLY_C_BLOCKS.md)
-- [Preview release checklist](POLY_PREVIEW_RELEASE_CHECKLIST.md)
-- [v2 audit](POLY_V2_AUDIT.md)
+- [Preview release checklist](POLY_RELEASE_GUIDE.md)
+- [v2 audit](docs/archive/POLY_V2_AUDIT.md)

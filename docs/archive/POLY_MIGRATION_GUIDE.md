@@ -1,6 +1,6 @@
 # Poly Language Migration Guide: Old to New Syntax
 
-> **Historical migration reference:** Use [POLY_MIGRATION_GUIDE_v2.md](POLY_MIGRATION_GUIDE_v2.md) for the current preview. The
+> **Historical migration reference:** Use [POLY_MIGRATION_GUIDE_v2.md](../../POLY_MIGRATION_GUIDE_v2.md) for the current preview. The
 examples below describe earlier syntax transitions.
 
 ## Overview

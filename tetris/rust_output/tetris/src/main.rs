@@ -26,16 +26,16 @@ const BH: i32 = 600;
 const PW: i32 = 100;
 const PX0: i32 = 62;
 const PX1: i32 = 498;
-const BG: i32 = 0x05010A;
-const GRIDBG: i32 = 0x000814;
-const GRIDLN: i32 = 0x26204A;
-const PANELB: i32 = 0x2A1C63;
-const FLASH: i32 = 0x888888;
-const WHITE: i32 = 0xFFFFFF;
-const DIM: i32 = 0x8A8A8A;
-const RED: i32 = 0xFF3A4A;
-const CYNE: i32 = 0x2BF2FF;
-const YELLOW: i32 = 0xFFE74A;
+const BG: i32 = 327946;
+const GRIDBG: i32 = 2068;
+const GRIDLN: i32 = 2498634;
+const PANELB: i32 = 2759779;
+const FLASH: i32 = 8947848;
+const WHITE: i32 = 16777215;
+const DIM: i32 = 9079434;
+const RED: i32 = 16726602;
+const CYNE: i32 = 2880255;
+const YELLOW: i32 = 16770890;
 
 struct Piece {
     t: i32,
@@ -585,25 +585,25 @@ fn piece_h(bits: i32) -> i32 {
 fn color_of(t: i32) -> i32 {
     match t {
         0 => {
-            return 0x2BF2FF;
+            return 2880255;
         }
         1 => {
-            return 0xFFE74A;
+            return 16770890;
         }
         2 => {
-            return 0xC54BFF;
+            return 12930047;
         }
         3 => {
-            return 0x66FF6A;
+            return 6750058;
         }
         4 => {
-            return 0xFF3A4A;
+            return 16726602;
         }
         5 => {
-            return 0x4A7BFF;
+            return 4881407;
         }
         _ => {
-            return 0xFF9A3A;
+            return 16751162;
         }
     }
 }
@@ -1460,7 +1460,7 @@ fn run_selftest(s0: GameState) {
         println!("{}", String::from("FAIL font"));
     }
 
-    if (((color_of(0)) as i64) != (0x2BF2FF as i64)) {
+    if (color_of(0) != 2880255) {
         fails = (fails).wrapping_add(1_i32);
         println!("{}", String::from("FAIL color"));
     }

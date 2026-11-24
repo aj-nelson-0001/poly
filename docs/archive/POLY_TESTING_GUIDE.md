@@ -1,7 +1,7 @@
 # Poly Language Testing Guide
 
 > **Historical guide:** This document describes the earlier test surface. Current verification commands are maintained in
-[POLY_DOCUMENTATION_STYLE_GUIDE.md](POLY_DOCUMENTATION_STYLE_GUIDE.md) and CI.
+[POLY_DOCUMENTATION_STYLE_GUIDE.md](../../POLY_DOCUMENTATION_STYLE_GUIDE.md) and CI.
 
 ## Overview
 

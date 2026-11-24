@@ -1,7 +1,7 @@
 # Poly Language Future Migration Guide
 
 > **Planning document:** This is non-normative future-work material. The current migration path is
-[POLY_MIGRATION_GUIDE_v2.md](POLY_MIGRATION_GUIDE_v2.md).
+[POLY_MIGRATION_GUIDE_v2.md](../../POLY_MIGRATION_GUIDE_v2.md).
 
 ## Overview
 

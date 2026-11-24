@@ -62,7 +62,7 @@ CI toolchain images change.
 
 ## Recommended Next Milestone
 
-The next milestone is preview release hardening under the frozen [support matrix](POLY_V2_SUPPORT_MATRIX.md): cross-platform
+The next milestone is preview release hardening under the frozen [support matrix](../../POLY_V2_SUPPORT_MATRIX.md): cross-platform
 CI,
 strict foreign-call enforcement, and the documentation audits have landed (risks 1 and 7), so what remains is using explicit
 foreign signatures where stronger diagnostics are needed and keeping C++ out of scope until its emission and build model is

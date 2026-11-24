@@ -10,7 +10,7 @@
 > Poly. The Rust target with Tokio provides async networking; other backends
 > require foreign helpers.
 >
-> See [POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md) for current
+> See [POLY_DOCUMENTATION_INDEX.md](../../POLY_DOCUMENTATION_INDEX.md) for current
 > v2 references.
 
 ## Overview

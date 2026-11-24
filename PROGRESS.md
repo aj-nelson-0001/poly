@@ -1,7 +1,87 @@
 # Poly — Session Progress
 
 Working log of improvements made to the Poly compiler, playground, and tooling.
-Last updated: 2026-10-10.
+Last updated: 2026-11-24.
+
+## Preview 18 preparation, CI guard hardening, and documentation consolidation (2026-11-24)
+
+- **Tetris CI guard**: the job now stashes the committed
+  `tetris/rust_output/tetris/src/main.rs` before `rm -rf` and diffs it
+  against the regenerated file, so a stale checked-in project fails CI;
+  previously it only validated the freshly generated file against
+  `--emit-rust`, which let both sides drift together. Verified locally: the
+  pre-regeneration committed file fails the diff, and the current tree
+  passes.
+- **Documentation consolidated**: 34 point-in-time documents (v1 manuals,
+  audit reports, blog/social drafts, old release material, superseded design
+  records) moved to `docs/archive/`, described by a new
+  `docs/archive/README.md`. `POLY_QUICK_REFERENCE.md` absorbed the cheatsheet
+  and quick-reference card (gaining strings, `dep`, movement rules,
+  `enumerate`, and the CLI table); `POLY_RELEASE_GUIDE.md` absorbed the
+  preview checklist and version-bearing file map. Relative links were
+  rewritten mechanically — 45 link targets — and a link scan over every
+  Markdown file reports no broken relative links.
+- **`2.0.0-preview.18` prepared**: CHANGELOG dated, README and release-notes
+  highlights added, documentation index baseline updated, then
+  `prepare_release.py 2.0.0-preview.18` bumped the workspace and playground
+  footer, regenerated the tetris project, and re-ran tests, fmt, clippy,
+  Markdown conventions (61 files) and the documentation audit (668 blocks,
+  142 passed, 526 fragments, 0 failures). `poly --version` and the
+  generated-path check agree with the new version. No tag or push.
+
+## Documentation reconciliation and a full local CI pass (2026-11-24)
+
+- **CHANGELOG.md**: work landed after the `2.0.0-preview.17` tag (2026-09-22)
+  moved under `[Unreleased]`, and the preview.17 section restored to exactly
+  the tagged content (three bullets). Goose, `^`, `add`/`sub`, `inc`/`dec`,
+  `-prepend` and the post-tag fixes are recorded as unreleased.
+- **Preview documentation**: POLY_V2_PREVIEW_RELEASE_NOTES.md no longer claims
+  Goose shipped in preview.17; POLY_GOOSE_BLOCKS.md and
+  POLY_DOCUMENTATION_INDEX.md now state that preview.17 is the latest
+  *released* baseline and the Goose docs describe the unreleased development
+  tree.
+- **Tetris generated source**: regenerated
+  `tetris/rust_output/tetris/src/main.rs`; the committed copy still spelled
+  its colour constants in hex, which the post-tag radix normalisation rewrites
+  as decimal, so it no longer matched its generator.
+- **Full CI run locally (Linux)**: release build, `cargo check --workspace
+  --all-targets`, workspace tests (281), the 1952 KiB stack guard, all 28 Rust
+  examples, the C/asm/JS fixtures with exact output, mixed target selection,
+  `cargo fmt --check`, clippy with `-D warnings`, Markdown conventions (63
+  files), 681 documentation blocks, generated-path check, tetris regeneration
+  and self-test, the differential backend suite, `cargo audit` (83
+  dependencies, no advisories), and the wasm rebuild/smoke test/size budget
+  (636,157 B). The macOS and Windows matrix jobs were not run; there is no
+  host for them here.
+
+## Goose backend, arithmetic mutators, exponentiation and a wasm size gate (2026-10-29)
+
+All of this landed after the `2.0.0-preview.17` tag (2026-09-22), so
+CHANGELOG.md now records it under `[Unreleased]`.
+
+- **Goose target (`--target goose`)**: the new `poly-goose-codegen` lowers
+  Poly orchestration to Goose source. `#goose ... #endgoose` blocks are
+  copied verbatim, `extern goose fn` declarations are checked but not
+  emitted, and unsupported constructs fail with a diagnostic naming the
+  `#goose` escape hatch. `--check` runs `goose check` from a private temp
+  directory and reports a `goose compilation error` when the toolchain is
+  absent; plain emission warns instead. `POLY_GOOSE` overrides the binary
+  name, and `--project` emits a standalone layout. Documented in
+  POLY_GOOSE_BLOCKS.md, pinned by doc-claim guards and
+  `tests/goose_target_tests.poly`.
+- **`add x, n` / `sub x, n`** lower to `x := x ± n`; the comma is required
+  and the target must be a plain variable. **`inc x` / `dec x`** are live
+  again as operand-free `x := x ± 1` commands with the same target rule.
+- **`^` exponentiation**: right-associative and tighter than `*`/`/`, on all
+  four backends. Integer powers wrap and a negative runtime exponent yields
+  `0`; floats use `powf`/`pow`/`**`; constant powers fold when the exponent
+  is `0..=63`; the C target now links `-lm`.
+- **`put ... -prepend`** writes in front of existing file contents; C, asm
+  and JS reject it exactly as they reject `-append`.
+- **Playground wasm** rebuilt from a clean tree with `wasm-opt -Oz` when
+  available; compiling the Goose backend out of the module brings the shipped
+  artifact to 636,157 B. CI enforces a 660,000-byte budget and the
+  bulk-memory validation flags.
 
 ## Integer literals unified across every stage, plus REPL history, rustfmt race and LSP ranges (2026-10-10)
 

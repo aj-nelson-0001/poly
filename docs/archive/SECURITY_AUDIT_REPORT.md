@@ -8,7 +8,7 @@
 > **STATUS:** Findings 1–4 are **fixed in this branch** and pinned by new regression
 > tests. Findings 5 and 6 are documented design properties, now stated explicitly in
 > [POLY_SECURITY_GUIDE.md](POLY_SECURITY_GUIDE.md#0-running-the-compiler-on-untrusted-files)
-> and [README.md](README.md). Finding 7 is a residual fidelity limitation, tracked
+> and [README.md](../../README.md). Finding 7 is a residual fidelity limitation, tracked
 > rather than half-fixed. See "Residual risk" at the end.
 
 Findings are ranked by severity. Every finding marked **confirmed** was reproduced
@@ -176,7 +176,7 @@ or re-pointed upstream tag would land in a workflow that also runs untrusted cod
   exactly while removing the tag's mutability.
 
 Each pinning carries a version comment, and
-[BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) is the place to record the bump policy.
+[BRANCH_PROTECTION.md](../../BRANCH_PROTECTION.md) is the place to record the bump policy.
 
 ---
 
@@ -420,4 +420,4 @@ the guard and reproducing the original crash.
 
 Full detail, including the negative tests, is in
 [SECURITY_FIX_HANDOFF.md](SECURITY_FIX_HANDOFF.md); the limits themselves are
-specified in [POLY_SPEC_v2.md](POLY_SPEC_v2.md#depth-limits).
+specified in [POLY_SPEC_v2.md](../../POLY_SPEC_v2.md#depth-limits).

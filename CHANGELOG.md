@@ -4,7 +4,7 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
-## [2.0.0-preview.17] - 2026-09-22
+## [2.0.0-preview.18] - 2026-11-24
 
 ### Added
 
@@ -78,19 +78,6 @@ All notable changes to the Poly language compiler will be documented in this fil
   keyword and is unaffected.  The C target now links `-lm` (for `pow`), and the emitted C includes
   `<math.h>`.
 
-- Parser: expression and type nesting is capped at 32 levels with a
-  `Maximum nested expression depth` diagnostic, checked where every
-  sub-expression re-enters (`parse_unary`, the precedence chain's bottom)
-  and where tuple/reference/array types recurse (`parse_type`). Sized from
-  measurement: ~45 KiB per debug precedence-chain level, so the worst case
-  peaks near 1.6 MiB — inside the 2 MiB default test-thread stack. A chain
-  of `if`s exhausts this budget and `MAX_IF_DEPTH` at the same level, so
-  both guards name the more specific if-depth limit when both are spent.
-- Differential coverage for the depth caps: a `tests/diff_deep_nesting`
-  fixture (deep parens, nested ifs/whiles just under every cap) runs
-  through all four backends, and the fuzz generator wraps leaves in extra
-  grouping parens so seeds parse in the cap's neighbourhood.
-
 ### Security
 
 - **`dep` version strings can no longer inject TOML into the generated
@@ -104,14 +91,14 @@ All notable changes to the Poly language compiler will be documented in this fil
   Previously a one-line `.poly` file could close its TOML string and
   inject a `[build-dependencies]` table, whose build script then ran
   during a plain `poly --check --strict`. See
-  [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) finding 1.
+  [SECURITY_AUDIT_REPORT.md](docs/archive/SECURITY_AUDIT_REPORT.md) finding 1.
 - **Generated C, asm and JS sources now escape NUL and every other
   control character.** `c_escape`, `asm_escape` and `js_escape` emitted
   raw bytes for anything outside `\\ " \n \r \t`, so `put "a\0b"` wrote a
   literal NUL into the generated source: `cc` only warned and the binary
   silently printed `a`. All three are now a single character-wise pass
   emitting fixed-width octal (C, asm) or `\xNN` (JS) escapes. See
-  [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) finding 4.
+  [SECURITY_AUDIT_REPORT.md](docs/archive/SECURITY_AUDIT_REPORT.md) finding 4.
 - **Scratch files and temporary Cargo projects moved to private,
   unpredictable directories.** Every path handed to `rustc`/`cargo`/`cc`/
   `as`/`node` was `<pid>-<nanos>` written straight into the shared temp
@@ -122,7 +109,7 @@ All notable changes to the Poly language compiler will be documented in this fil
   name from per-process OS randomness, uses `create_dir`, creates the
   directory `0700` on Unix, and all eight call sites clean up with
   `remove_dir_all`. No new dependency. See
-  [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) finding 5.
+  [SECURITY_AUDIT_REPORT.md](docs/archive/SECURITY_AUDIT_REPORT.md) finding 5.
 - **CI runs untrusted input with no token, and every action is pinned
   to a commit SHA.** `poly` compiles and runs `.poly` files, so a pull
   request adding a fixture executes code on the runner. `ci.yml` and
@@ -130,7 +117,7 @@ All notable changes to the Poly language compiler will be documented in this fil
   `create-release` gets `contents: write`. All 28 action references
   across the three workflows are full SHAs with the version in a
   trailing comment. See
-  [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) finding 3.
+  [SECURITY_AUDIT_REPORT.md](docs/archive/SECURITY_AUDIT_REPORT.md) finding 3.
 
 ### Fixed
 
@@ -209,23 +196,21 @@ All notable changes to the Poly language compiler will be documented in this fil
   Formatting was already best-effort, so the child is now bounded by a 10 s
   deadline and falls back to unformatted output. The same call also leaked the
   child when writing stdin failed and never drained its pipes; both are fixed.
-- **`playground/poly.wasm` rebuilt and shrunk below its previous committed
-  size.** The checked-in artifact was roughly twenty compiler commits stale, so
-  the growth it appeared to show was never really these guards' doing: rebuilt
-  from a clean tree the depth fixes cost +9,713 B (+1.4%). `wasm-opt -Oz` is
-  now applied when the tool is present and skipped cleanly when it is not,
-  giving 609,080 B — 29,799 B smaller than the artifact it replaces. The
-  `--enable-bulk-memory` family of flags is required, not cosmetic: the Rust
-  backend emits those post-MVP opcodes, and validation fails without them.
+- **`playground/poly.wasm` rebuilt and kept under a size gate.** The
+  checked-in artifact was roughly twenty compiler commits stale, so the growth
+  it appeared to show was never really these guards' doing: rebuilt from a
+  clean tree the depth fixes cost +9,713 B (+1.4%), and `wasm-opt -Oz` is now
+  applied when the tool is present and skipped cleanly when it is not. Later
+  changes (the `^` operator, then compiling the Goose backend out of the
+  module) set the current artifact at 636,157 B, under the 660,000-byte CI
+  budget. The `--enable-bulk-memory` family of flags is required, not
+  cosmetic: the Rust backend emits those post-MVP opcodes, and validation
+  fails without them.
 - asm: the `write` syscall byte count for an interned string literal used
   the *escaped* length (`asm_escape(value).len()`) rather than the
   runtime length, so any literal containing an escape — or any non-ASCII
   text — over-read the label by the escape characters' width. Now
   `interned_string_len`, the original byte length.
-- The Linux stack-floor guard recentred from 1972 KiB to 1952 KiB: the
-  expression cap's parser changes moved the healthy floor to 1936 KiB
-  (frame-per-level regression floor ~1968 KiB), keeping 16 KiB of margin
-  on each side of the window.
 
 ### Documentation
 
@@ -235,7 +220,7 @@ All notable changes to the Poly language compiler will be documented in this fil
   captured from an actual run of the current compiler — which caught two
   stale float outputs (`rectangle area 12`, `Answer: 5`) that predated the
   `.to_string()` fix above.
-- [POLY_SECURITY_GUIDE.md](POLY_SECURITY_GUIDE.md) gains section 0,
+- [POLY_SECURITY_GUIDE.md](docs/archive/POLY_SECURITY_GUIDE.md) gains section 0,
   "Running the compiler on untrusted files": what each CLI mode actually
   does, the three paths from a `.poly` file to arbitrary code execution
   (verbatim foreign blocks, undeclared foreign calls, `dep` build
@@ -243,10 +228,34 @@ All notable changes to the Poly language compiler will be documented in this fil
   compiler-side guarantees the project does provide. The guide previously
   covered only how to write secure Poly programs, not how to run the
   compiler safely.
-- New [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md): the full
+- New [SECURITY_AUDIT_REPORT.md](docs/archive/SECURITY_AUDIT_REPORT.md): the full
   security audit of the compiler, LSP, WASM/playground, CI and scripts —
   including the areas checked and found clean, and the two residual
   limitations left open with the reasoning.
+
+## [2.0.0-preview.17] - 2026-09-22
+
+### Added
+
+- Parser: expression and type nesting is capped at 32 levels with a
+  `Maximum nested expression depth` diagnostic, checked where every
+  sub-expression re-enters (`parse_unary`, the precedence chain's bottom)
+  and where tuple/reference/array types recurse (`parse_type`). Sized from
+  measurement: ~45 KiB per debug precedence-chain level, so the worst case
+  peaks near 1.6 MiB — inside the 2 MiB default test-thread stack. A chain
+  of `if`s exhausts this budget and `MAX_IF_DEPTH` at the same level, so
+  both guards name the more specific if-depth limit when both are spent.
+- Differential coverage for the depth caps: a `tests/diff_deep_nesting`
+  fixture (deep parens, nested ifs/whiles just under every cap) runs
+  through all four backends, and the fuzz generator wraps leaves in extra
+  grouping parens so seeds parse in the cap's neighbourhood.
+
+### Fixed
+
+- The Linux stack-floor guard recentred from 1972 KiB to 1952 KiB: the
+  expression cap's parser changes moved the healthy floor to 1936 KiB
+  (frame-per-level regression floor ~1968 KiB), keeping 16 KiB of margin
+  on each side of the window.
 
 ## [2.0.0-preview.16] - 2026-09-22
 
@@ -1007,7 +1016,7 @@ a substantially widened C backend, and cross-target fixes.
 - Pinned development and CI builds to Rust 1.98.0 and refreshed the checked-in
   playground WASM artifact for reproducible releases.
 - Added the frozen [Rust/C v2 support matrix](POLY_V2_SUPPORT_MATRIX.md),
-  [preview release checklist](POLY_PREVIEW_RELEASE_CHECKLIST.md), and
+  [preview release checklist](POLY_RELEASE_GUIDE.md), and
   [preview release notes](POLY_V2_PREVIEW_RELEASE_NOTES.md).
 - Added target-aware `extern rust fn ...` and `extern c fn ...` declarations.
   They are optional checker-only interface contracts: opaque legacy foreign

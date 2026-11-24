@@ -73,7 +73,7 @@ The v1.8 syntax migration remains applicable:
 - Use `put value to "file" -append` for append output.
 - Use `get from "file"` for file input.
 
-See [POLY_MIGRATION_GUIDE_v1.8.md](POLY_MIGRATION_GUIDE_v1.8.md) for the complete v1.7 to v1.8 syntax table.
+See [POLY_MIGRATION_GUIDE_v1.8.md](docs/archive/POLY_MIGRATION_GUIDE_v1.8.md) for the complete v1.7 to v1.8 syntax table.
 
 ## C Preview Scope
 

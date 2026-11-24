@@ -75,7 +75,7 @@ the frozen target contract, and [POLY_ROADMAP_v2.md](POLY_ROADMAP_v2.md) for the
 > crate. Combined with the verbatim foreign blocks above, running `poly` on a
 > file you did not write is arbitrary code execution. **Never run `poly` on an
 > untrusted `.poly` file**, and in CI treat every `.poly` file in a pull
-> request as executable code. See [POLY_SECURITY_GUIDE.md](POLY_SECURITY_GUIDE.md#0-running-the-compiler-on-untrusted-files).
+> request as executable code. See [POLY_SECURITY_GUIDE.md](docs/archive/POLY_SECURITY_GUIDE.md#0-running-the-compiler-on-untrusted-files).
 
 ---
 
@@ -102,6 +102,24 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 `extern <target> fn ...` declaration — opaque calls are allowed by default
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
+
+### What's New in 2.0.0-preview.18
+
+**A fifth target, simpler mutation, and a harder security floor.**
+`--target goose` lowers orchestration to Goose source that passes
+`goose check`; `#goose` blocks, `extern goose fn ...` declarations, and
+`POLY_GOOSE` follow the same rules as the other targets, and anything
+outside the documented subset is rejected with a diagnostic rather than
+miscompiled. `add x, n` / `sub x, n` and `inc x` / `dec x` return as
+mutation commands over plain variables, `put ... to "file" -prepend`
+writes in front of a file's contents, and `^` is now exponentiation on
+every target. On the security side, `dep` version strings are validated
+against an allowlist (closing a TOML-injection path to arbitrary code
+execution), generated C/asm/JS escape NUL and all control characters, and
+scratch files plus temporary Cargo projects live in private, unpredictable
+directories. Documentation is consolidated: historical guides and reports
+moved to `docs/archive/`, with `POLY_QUICK_REFERENCE.md` and the new
+`POLY_RELEASE_GUIDE.md` as the canonical references.
 
 ### What's New in 2.0.0-preview.17
 
@@ -517,29 +535,22 @@ loop`
 ~~~
 Poly/
 ├── README.md                          # This file
-├── POLY_SPEC_v2.md                         # Current v2 language specification
-├── POLY_CHEATSHEET.md                 # Quick syntax reference
-├── POLY_QUICK_REFERENCE.md            # Concise reference card
+├── POLY_SPEC_v2.md                    # Current v2 language contract
+├── POLY_GRAMMAR.md                    # Compact v2 grammar accepted by the parser
+├── POLY_QUICK_REFERENCE.md            # Syntax, I/O, strings, foreign blocks, CLI
 ├── POLY_TUTORIAL.md                   # Beginner tutorial
 ├── POLY_API_REFERENCE.md              # API documentation
-├── POLY_BEST_PRACTICES.md             # Idiomatic patterns
-├── POLY_TESTING_GUIDE.md              # Testing strategies
-├── POLY_PERFORMANCE_GUIDE.md          # Optimization tips
-├── POLY_SECURITY_GUIDE.md             # Running poly on untrusted files; security considerations
-├── SECURITY_AUDIT_REPORT.md           # Compiler security audit findings and fixes
-├── POLY_COMPATIBILITY_GUIDE.md        # Cross-platform notes
-├── POLY_DEPLOYMENT_GUIDE.md           # Build & deploy
-├── POLY_VERSIONING_GUIDE.md           # Version management
-├── POLY_PROFILING_GUIDE.md            # Profiling techniques
-├── POLY_INTEGRATION_GUIDE.md          # External integrations
 ├── POLY_TROUBLESHOOTING_GUIDE.md      # Common issues
-├── POLY_MIGRATION_GUIDE.md            # Migration paths
-├── POLY_FUTURE_MIGRATION_GUIDE.md     # Future migration plans
 ├── POLY_DOCUMENTATION_STYLE_GUIDE.md  # Documentation and example conventions
-├── POLY_GRAMMAR.md                    # Compact v2 grammar accepted by the parser
-├── POLY_SPEC_v2.md                    # Current v2 language contract
 ├── POLY_V2_SUPPORT_MATRIX.md          # Frozen per-target feature contract
+├── POLY_RELEASE_GUIDE.md              # Release readiness, version map, procedure
 ├── POLY_V2_PREVIEW_RELEASE_NOTES.md   # Release notes for preview series
+├── POLY_MIGRATION_GUIDE_v2.md         # Migration from v1.8 to v2
+├── POLY_ROADMAP_v2.md                 # Planned v2 work
+├── POLY_DOCUMENTATION_INDEX.md        # Canonical documentation map
+├── CHANGELOG.md                       # Versioned history
+├── PROGRESS.md                        # Dated implementation log
+├── docs/archive/                      # Non-normative historical documents
 ├── examples/
 │   ├── prime_numbers.poly             # Loop ranges, basic functions
 │   ├── interactive_menu.poly          # Menus, match, get flags
@@ -586,13 +597,13 @@ Poly/
 | [Language Specification](POLY_SPEC_v2.md) | Complete v2 language reference |
 | [Tutorial](POLY_TUTORIAL.md) | Getting started guide |
 | [Quick Reference](POLY_QUICK_REFERENCE.md) | Syntax at a glance |
-| [Cheat Sheet](POLY_CHEATSHEET.md) | Compact syntax reference |
+| [Cheat Sheet](POLY_QUICK_REFERENCE.md) | Compact syntax reference |
 | [API Reference](POLY_API_REFERENCE.md) | Standard library APIs |
-| [Best Practices](POLY_BEST_PRACTICES.md) | Idiomatic Poly patterns |
-| [Testing Guide](POLY_TESTING_GUIDE.md) | How to test Poly programs |
-| [Performance Guide](POLY_PERFORMANCE_GUIDE.md) | Optimization techniques |
-| [Security Guide](POLY_SECURITY_GUIDE.md) | **Running `poly` on untrusted files**, and security considerations |
-| [Security Audit Report](SECURITY_AUDIT_REPORT.md) | Compiler security audit: findings, fixes, and residual risk |
+| [Best Practices](docs/archive/POLY_BEST_PRACTICES.md) | Idiomatic Poly patterns |
+| [Testing Guide](docs/archive/POLY_TESTING_GUIDE.md) | How to test Poly programs |
+| [Performance Guide](docs/archive/POLY_PERFORMANCE_GUIDE.md) | Optimization techniques |
+| [Security Guide](docs/archive/POLY_SECURITY_GUIDE.md) | **Running `poly` on untrusted files**, and security considerations |
+| [Security Audit Report](docs/archive/SECURITY_AUDIT_REPORT.md) | Compiler security audit: findings, fixes, and residual risk |
 | [Documentation Style Guide](POLY_DOCUMENTATION_STYLE_GUIDE.md) | Documentation and example conventions |
 | [Grammar](POLY_GRAMMAR.md) | Compact v2 grammar accepted by the parser |
 | [Support Matrix](POLY_V2_SUPPORT_MATRIX.md) | Frozen per-target feature contract |

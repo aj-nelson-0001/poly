@@ -1,7 +1,7 @@
 # Poly Language Compatibility Guide
 
 > **Historical guide:** Compatibility notes cover earlier releases. For the maintained v2 target contract, use
-[POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md).
+[POLY_DOCUMENTATION_INDEX.md](../../POLY_DOCUMENTATION_INDEX.md).
 
 ## Overview
 

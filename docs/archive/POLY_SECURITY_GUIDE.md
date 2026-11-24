@@ -1,7 +1,7 @@
 # Poly Language Security Guide
 
 > **Historical guide:** This document predates the v2 target contract. Treat its examples as advisory and consult
-[POLY_C_BLOCKS.md](POLY_C_BLOCKS.md) for current C limitations.
+[POLY_C_BLOCKS.md](../../POLY_C_BLOCKS.md) for current C limitations.
 
 ## Overview
 

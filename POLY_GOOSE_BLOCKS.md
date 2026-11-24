@@ -1,6 +1,6 @@
 # Poly Goose Backend
 
-**Status:** Current for Poly 2.0.0-preview.17
+**Status:** Current for the development tree (post-2.0.0-preview.17, unreleased)
 
 This document describes the implemented Goose target. It is not a proposal for a future general-purpose Goose translator.
 

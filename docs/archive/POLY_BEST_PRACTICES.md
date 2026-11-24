@@ -1,7 +1,7 @@
 # Poly Language Best Practices Guide
 
 > **Historical guide:** These practices were written for the v1 language surface. Consult
-[POLY_DOCUMENTATION_INDEX.md](POLY_DOCUMENTATION_INDEX.md) for current v2 references.
+[POLY_DOCUMENTATION_INDEX.md](../../POLY_DOCUMENTATION_INDEX.md) for current v2 references.
 
 ## Overview
 

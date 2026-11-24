@@ -52,7 +52,21 @@ enforces most of it mechanically.
 - The tetris CI job diffs the regenerated `src/main.rs` against the committed
   file and checks `--emit-rust` agreement.
 - `release.yml` refuses to publish when `poly --version` does not equal the
-  tag name minus the `v` prefix.
+  tag name minus the `v` prefix, and when `CHANGELOG.md` has no section for
+  the tag.
+- `release.yml`'s wasm job installs the same pinned `wasm-opt` (binaryen 130,
+  checksummed) as CI and enforces the same 660,000-byte budget before upload.
+  Both workflows read the budget as `WASM_SIZE_BUDGET`; without the pinned
+  binaryen, releases shipped the unoptimized module (748,320 B for
+  `2.0.0-preview.18` against 636,157 B committed), so the gate measured a
+  build nobody downloaded.
+- A post-publish `verify-release` job re-downloads every asset from the
+  published release and checks: `sha256sums.txt` matches the bytes and covers
+  exactly the release's files, asset names carry the tag version, the Linux
+  binary reports it, the WASM header is version 1 and under budget, the macOS
+  asset is 64-bit little-endian Mach-O, the Windows asset is PE, and the
+  release is published (not a draft). It also records the tag's base branch as
+  `target_commitish` instead of defaulting to `master`.
 
 ## Tag naming convention
 
@@ -176,15 +190,21 @@ git push origin 2.0.0-preview.N
 #    - .github/workflows/release.yml builds and publishes the binary; tags
 #      containing "preview" are marked as prereleases automatically
 #      (verified end to end with a throwaway tag on 2026-09-17).
+#    - The verify-release job is green: it re-downloads the published assets
+#      and checksum-verifies them, matches the Linux version to the tag, and
+#      checks the wasm header/size and platform format magic.
 #    - CI on the branch is green for the release commit.
-#    - The published release shows the expected asset and prerelease flag.
 ~~~
 
 When the tag is pushed, `release.yml` builds, verifies the binary version
 against the tag, renames the asset to `poly-linux-amd64-<version>`, generates
 `sha256sums.txt` over the uploaded assets, and publishes a prerelease whose
-body is the committed `POLY_V2_PREVIEW_RELEASE_NOTES.md` — no manual
-post-release steps. (Verified end-to-end by re-publishing 2.0.0-preview.13
-through the workflow.) Because the tagged commit's notes become the release
+body is the committed `POLY_V2_PREVIEW_RELEASE_NOTES.md`; a follow-up
+`verify-release` job then re-downloads and checks what was published, so there
+are no manual post-release steps. If that job fails, the release is live but
+unverified: delete it with `gh release delete <tag>` and re-cut the tag after
+fixing the cause — do not quietly leave a red verification run behind.
+(Verified end-to-end by re-publishing 2.0.0-preview.13 through the workflow.)
+Because the tagged commit's notes become the release
 body, its What's New section must already describe the release being cut, and
 the verification-evidence numbers in it should be re-checked at tag time.

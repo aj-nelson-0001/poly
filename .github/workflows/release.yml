@@ -16,6 +16,12 @@ on:
 # uses the Actions runtime token, not GITHUB_TOKEN, so it is unaffected.
 permissions: {}
 
+# Budget for the published playground module. The same number gates the CI
+# rebuild (ci.yml, "Enforce wasm size budget"); keeping it here as well means
+# the artifact users download is measured, not only the local build.
+env:
+  WASM_SIZE_BUDGET: '660000'
+
 jobs:
   build:
     name: Build (${{ matrix.os }})
@@ -91,8 +97,37 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      # The build script applies wasm-opt only when it is installed, and the
+      # committed playground/poly.wasm is the optimized build. Without this
+      # step every release shipped the unoptimized module (748,320 B for
+      # preview.18 against 636,157 B committed), and the size gate measured a
+      # build nobody downloads. Same pins and checksum as the ci.yml gate so
+      # both workflows measure the same artifact.
+      - name: Install wasm-opt (binaryen 130)
+        run: |
+          curl -fsSL -o /tmp/binaryen.tar.gz \
+            https://github.com/WebAssembly/binaryen/releases/download/version_130/binaryen-version_130-x86_64-linux.tar.gz
+          echo "0a18362361ad05465118cd8eeb72edaeec89de6894bc283576ef4e07aa3babcc  /tmp/binaryen.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/binaryen.tar.gz -C /tmp
+          sudo install -m755 /tmp/binaryen-version_130/bin/wasm-opt /usr/local/bin/wasm-opt
+          wasm-opt --version
+
       - name: Build playground wasm
         run: bash compiler/scripts/build_playground_wasm.sh
+
+      - name: Enforce wasm size budget
+        run: |
+          wasm_file="playground/poly.wasm"
+          if [ ! -s "$wasm_file" ]; then
+            echo "::error::WASM artifact is missing or empty: $wasm_file"
+            exit 1
+          fi
+          size=$(wc -c < "$wasm_file")
+          echo "poly.wasm: ${size} bytes (budget: ${WASM_SIZE_BUDGET})"
+          if [ "$size" -gt "$WASM_SIZE_BUDGET" ]; then
+            echo "::error::poly.wasm is ${size} bytes, over the ${WASM_SIZE_BUDGET}-byte budget. Trim it or raise the budget in the commit that grows it."
+            exit 1
+          fi
 
       - name: Smoke test the wasm artifact
         run: node scripts/playground_wasm_smoke.mjs
@@ -112,6 +147,37 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Full history so the tag's base branch can be resolved below.
+          fetch-depth: 0
+
+      - name: Determine the branch the tag was cut from
+        id: branch
+        run: |
+          # softprops/action-gh-release otherwise records the repository
+          # default branch (master), which does not carry the v2 preview line,
+          # so the release page named a base the build never came from. Prefer
+          # the remote branch whose tip is the tagged commit; fall back to the
+          # sole branch containing it.
+          tip=""
+          fallback=""
+          for ref in $(git for-each-ref --contains "$GITHUB_SHA" \
+              --format='%(refname:short)' refs/remotes/origin); do
+            name="${ref#origin/}"
+            [ "$name" = "HEAD" ] && continue
+            if [ "$(git rev-parse "origin/${name}")" = "$GITHUB_SHA" ]; then
+              tip="$name"
+              break
+            fi
+            [ -z "$fallback" ] && fallback="$name"
+          done
+          branch="${tip:-$fallback}"
+          if [ -z "$branch" ]; then
+            echo "::error::no origin branch contains ${GITHUB_SHA}; cannot name the release base"
+            exit 1
+          fi
+          echo "release base branch: ${branch}"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
 
       - name: Download binaries
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -173,6 +239,103 @@ jobs:
           # Preview tags publish as prereleases; stable tags (no "preview"
           # segment in the tag name) publish as full releases.
           prerelease: ${{ contains(github.ref_name, 'preview') }}
+          # The branch the tag was cut from, not the repository default.
+          target_commitish: ${{ steps.branch.outputs.branch }}
           files: |
             ./bin/poly-*
             ./bin/sha256sums.txt
+
+  verify-release:
+    name: Verify published release
+    runs-on: ubuntu-latest
+    needs: [create-release]
+    permissions:
+      contents: read
+    steps:
+      # Re-download what the world gets, not the workflow's own artifacts:
+      # upload, renaming and checksum generation all sit between the tested
+      # builds and the published bytes.
+      - name: Download every published asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist && cd dist
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+          ls -l
+
+      - name: Verify checksums cover exactly the published assets
+        working-directory: dist
+        run: |
+          sha256sum -c sha256sums.txt
+          listed=$(awk '{print $2}' sha256sums.txt | sed 's/^\*//' | sort)
+          present=$(ls -1 | grep -v '^sha256sums.txt$' | sort)
+          if [ "$listed" != "$present" ]; then
+            echo "::error::sha256sums.txt does not list exactly the published assets"
+            diff <(echo "$listed") <(echo "$present") || true
+            exit 1
+          fi
+          echo "sha256sums.txt covers every asset"
+
+      - name: Verify asset names carry the release version
+        working-directory: dist
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for asset in poly-*; do
+            case "$asset" in
+              *"$version"*) ;;
+              *) echo "::error::asset '$asset' does not name version ${version}"; exit 1 ;;
+            esac
+          done
+          echo "asset names name ${version}"
+
+      - name: Verify the linux binary reports the tag version
+        working-directory: dist
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          chmod +x "poly-linux-amd64-${version}"
+          reported="$(./"poly-linux-amd64-${version}" --version)"
+          if [ "$reported" != "poly ${version}" ]; then
+            echo "::error::published binary reports '$reported', tag says '${version}'"
+            exit 1
+          fi
+          echo "published binary reports ${reported}"
+
+      - name: Verify the published wasm header and size
+        working-directory: dist
+        run: |
+          wasm="poly-playground-${GITHUB_REF_NAME#v}.wasm"
+          header=$(od -An -tx1 -N8 "$wasm" | tr -s ' ' | sed 's/^ //;s/ $//')
+          if [ "$header" != "00 61 73 6d 01 00 00 00" ]; then
+            echo "::error::${wasm} is not a version-1 wasm module (header: ${header})"
+            exit 1
+          fi
+          size=$(wc -c < "$wasm")
+          echo "${wasm}: ${size} bytes (budget: ${WASM_SIZE_BUDGET})"
+          if [ "$size" -gt "$WASM_SIZE_BUDGET" ]; then
+            echo "::error::published wasm is ${size} bytes, over the ${WASM_SIZE_BUDGET}-byte budget"
+            exit 1
+          fi
+
+      - name: Verify documented platform formats
+        working-directory: dist
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mac=$(od -An -tx1 -N4 "poly-macos-arm64-${version}" | tr -s ' ' | sed 's/^ //;s/ $//')
+          if [ "$mac" != "cf fa ed fe" ]; then
+            echo "::error::macOS asset is not a 64-bit little-endian Mach-O (magic: ${mac})"
+            exit 1
+          fi
+          win=$(od -An -tx1 -N2 "poly-windows-amd64-${version}.exe" | tr -s ' ' | sed 's/^ //;s/ $//')
+          if [ "$win" != "4d 5a" ]; then
+            echo "::error::Windows asset is not a PE image (magic: ${win})"
+            exit 1
+          fi
+          echo "macOS is Mach-O arm64, Windows is PE"
+
+      - name: Confirm the release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease,tagName,url \
+            --jq 'if .isDraft then error("release is still a draft") else "release \(.tagName) published at \(.url) (prerelease=\(.isPrerelease))" end'

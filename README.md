@@ -121,6 +121,9 @@ directories. Documentation is consolidated: historical guides and reports
 moved to `docs/archive/`, with `POLY_QUICK_REFERENCE.md` and the new
 `POLY_RELEASE_GUIDE.md` as the canonical references.
 
+Download the Linux, macOS, Windows, and playground WASM builds from the
+[2.0.0-preview.18 release](https://github.com/aj-nelson-0001/poly/releases/tag/2.0.0-preview.18).
+
 ### What's New in 2.0.0-preview.17
 
 **Hostile input can't exhaust the parser.** Two new caps bound parser

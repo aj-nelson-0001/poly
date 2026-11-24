@@ -259,14 +259,21 @@ jobs:
           mkdir -p /tmp/tetris-tracked
           cp rust_output/tetris/Cargo.toml rust_output/tetris/Cargo.lock \
             rust_output/tetris/.poly-generated /tmp/tetris-tracked/
+          # Stash the committed sources too: the guard must compare against the
+          # tracked baseline, not the file this step just wrote. Diffing the
+          # freshly generated src/main.rs only proves --project is
+          # self-consistent, so a committed file that no longer reproduces from
+          # the source (e.g. stale hex literals after a parser change) passed.
+          cp rust_output/tetris/src/main.rs /tmp/tetris-tracked/src-main.rs
           rm -rf rust_output/tetris
           ../compiler/target/release/poly --project rust_output/tetris tetris.poly
           # The regenerated project must match the committed files byte-for-byte.
           for f in Cargo.toml .poly-generated; do
             diff "/tmp/tetris-tracked/$f" "rust_output/tetris/$f"
           done
-          # src/main.rs must reproduce byte-for-byte too (modulo one trailing
-          # newline that only --emit-rust adds).
+          diff /tmp/tetris-tracked/src-main.rs rust_output/tetris/src/main.rs
+          # --emit-rust must agree with the project source too (modulo the one
+          # trailing newline that only --emit-rust adds).
           diff <(../compiler/target/release/poly tetris.poly --emit-rust | sed -e '$d') rust_output/tetris/src/main.rs
           # --project emits no lockfile, so restore the committed one and check
           # that it still resolves for the regenerated manifest. Deliberately

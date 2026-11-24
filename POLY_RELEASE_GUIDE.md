@@ -65,7 +65,9 @@ enforces most of it mechanically.
 - A post-publish `verify-release` job re-downloads every asset from the
   published release and checks: `sha256sums.txt` matches the bytes and covers
   exactly the release's files, asset names carry the tag version, the Linux
-  binary reports it, the WASM header is version 1 and under budget, the macOS
+  binary reports it, the WASM header is version 1 and under the budget
+  `wasm-build.yml` exports (an unset budget fails the step rather than
+  skipping the comparison), the macOS
   asset is 64-bit little-endian Mach-O, the Windows asset is PE, and the
   release is published (not a draft). It also records the tag's base branch as
   `target_commitish` instead of defaulting to `master`.

@@ -36,10 +36,30 @@ OUT="../playground/poly.wasm"
 # nontrapping-float-to-int are on because the Rust/LLVM backend already emits
 # those post-MVP opcodes, so leaving them off would fail validation here.
 if command -v wasm-opt >/dev/null 2>&1; then
-  wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int \
-    --enable-sign-ext --enable-mutable-globals \
-    "$SRC" -o "$OUT"
-  echo "wasm-opt: applied (-Oz)"
+  optimize() {
+    wasm-opt -Oz --converge --enable-bulk-memory --enable-nontrapping-float-to-int \
+      --enable-sign-ext --enable-mutable-globals \
+      "$1" -o "$2"
+  }
+
+  # --converge runs the -Oz pipeline until it reaches a fixed point inside one
+  # invocation, which is worth ~450 B over a single -Oz pass. A second
+  # invocation still finds a handful of bytes, so repeat while the module keeps
+  # shrinking (bounded, so an oscillation cannot hang the build).
+  optimize "$SRC" "$OUT"
+  passes=1
+  while [ "$passes" -lt 4 ]; do
+    before=$(wc -c < "$OUT")
+    optimize "$OUT" "$OUT.next"
+    if [ "$(wc -c < "$OUT.next")" -lt "$before" ]; then
+      mv "$OUT.next" "$OUT"
+      passes=$((passes + 1))
+    else
+      rm -f "$OUT.next"
+      break
+    fi
+  done
+  echo "wasm-opt: applied (-Oz --converge, $passes pass(es))"
 else
   cp "$SRC" "$OUT"
   echo "wasm-opt: not found, using cargo output as-is"

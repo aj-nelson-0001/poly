@@ -11,20 +11,31 @@ use poly_parser::{Parser, Program};
 use crate::checker::check_program;
 use crate::source_map::SourceMap;
 
-/// Target list advertised in error messages. The Goose backend is a default
-/// feature that size-sensitive consumers (the playground wasm) disable, so the
-/// advertised set follows the compiled feature set rather than being fixed.
-#[cfg(feature = "goose")]
-const SUPPORTED_TARGETS: &str = "rust, c, asm, js, goose";
-#[cfg(not(feature = "goose"))]
-const SUPPORTED_TARGETS: &str = "rust, c, asm, js";
+/// Target list advertised in error messages. The Goose and asm backends are
+/// default features that size-sensitive consumers (the playground wasm) disable,
+/// so the advertised set follows the compiled feature set rather than being
+/// fixed -- a build without them must not advertise targets it cannot reach.
+const SUPPORTED_TARGETS: &str = match (cfg!(feature = "asm"), cfg!(feature = "goose")) {
+    (true, true) => "rust, c, asm, js, goose",
+    (true, false) => "rust, c, asm, js",
+    (false, true) => "rust, c, js, goose",
+    (false, false) => "rust, c, js",
+};
 
-#[cfg(feature = "goose")]
-const CPP_RESERVED: &str =
-    "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js, goose";
-#[cfg(not(feature = "goose"))]
-const CPP_RESERVED: &str =
-    "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js";
+const CPP_RESERVED: &str = match (cfg!(feature = "asm"), cfg!(feature = "goose")) {
+    (true, true) => {
+        "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js, goose"
+    }
+    (true, false) => {
+        "#cpp blocks are reserved for a future backend; supported targets are rust, c, asm, js"
+    }
+    (false, true) => {
+        "#cpp blocks are reserved for a future backend; supported targets are rust, c, js, goose"
+    }
+    (false, false) => {
+        "#cpp blocks are reserved for a future backend; supported targets are rust, c, js"
+    }
+};
 
 /// The Poly-to-Rust transpiler.
 pub struct Transpiler {
@@ -97,6 +108,7 @@ impl Transpiler {
     }
 
     /// Transpile a parsed program to x86-64 assembly after checking Poly semantics.
+    #[cfg(feature = "asm")]
     pub fn transpile_asm_checked(&self, source: &str) -> Result<String, String> {
         let program = Self::parse_target(source, "asm")?;
         check_program(&program).map_err(|errors| {
@@ -107,6 +119,15 @@ impl Transpiler {
                 .join("\n")
         })?;
         poly_asm_codegen::transpile(&program)
+    }
+
+    /// Builds without the `asm` feature (the browser playground) reject the
+    /// target explicitly instead of producing code they cannot emit.
+    #[cfg(not(feature = "asm"))]
+    pub fn transpile_asm_checked(&self, _source: &str) -> Result<String, String> {
+        Err(format!(
+            "The asm target is not part of this build. Supported targets: {SUPPORTED_TARGETS}"
+        ))
     }
 
     /// Transpile a parsed program to JavaScript after checking Poly semantics.
@@ -137,6 +158,10 @@ impl Transpiler {
     }
 
     /// Transpile Poly source to the selected target (`rust`, `c`, `asm`, `js`, or `goose`).
+    ///
+    /// `asm` and `goose` are cargo features: builds that turn them off (the
+    /// playground wasm) report them as unavailable rather than silently
+    /// accepting a target they cannot compile.
     ///
     /// Each alias (for example `rs` for `rust`) maps onto the same checked
     /// entry point; unknown targets get a helpful error rather than a panic.

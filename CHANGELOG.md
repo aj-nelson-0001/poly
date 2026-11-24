@@ -4,6 +4,35 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- **The playground module no longer carries the asm backend (635,084 ->
+  547,160 bytes).** `poly-asm-codegen` is now an `asm` cargo feature of
+  `poly-transpiler`, default-on so the CLI, LSP, and tests keep the target,
+  and off for `poly-wasm`, which serves the browser playground where the
+  target was never offered and x86-64 assembly cannot run. Asking the module
+  for `asm` now returns `The asm target is not part of this build` and lists
+  the targets it does support instead of quietly compiling a backend nobody
+  could execute. This buys 112,840 bytes of headroom under the unchanged
+  660,000-byte gate. The build also runs `wasm-opt --converge` to a fixed
+  point (worth ~450 bytes over a single `-Oz` pass).
+
+### Fixed
+
+- **`playground/poly.wasm` can no longer go stale.** `wasm-build.yml` saves
+  the committed module before building and fails when the rebuild differs, so
+  the bytes CI gates and releases publish are the bytes in the repository.
+  The committed module is rebuilt here to match.
+
+### Added
+
+- **Release verification runs on demand.** The post-publish job is now
+  `.github/workflows/verify-release.yml`, callable from `release.yml` and
+  dispatchable for an already-published tag
+  (`gh workflow run verify-release.yml -f tag=<tag>`), so a repaired gate can
+  be proven without cutting a disposable tag. The empty-budget guard that
+  made the size check vacuous is kept.
+
 ## [2.0.0-preview.19] - 2026-11-24
 
 ### Fixed

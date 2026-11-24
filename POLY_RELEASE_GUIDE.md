@@ -61,8 +61,17 @@ enforces most of it mechanically.
   diverge on toolchain or number. Before the shared definition each workflow
   built its own module and only CI installed binaryen, so releases shipped the
   unoptimized build (748,320 B for `2.0.0-preview.18` against 636,157 B
-  committed) and the gate measured bytes nobody downloaded.
-- A post-publish `verify-release` job re-downloads every asset from the
+  committed) and the gate measured bytes nobody downloaded. It also fails the
+  run when the rebuild differs from the committed `playground/poly.wasm`, so
+  the module in the repository is always the one CI measured and releases
+  publish.
+- `.github/workflows/verify-release.yml` is the only post-publish check:
+  `release.yml` calls it, and it can also be dispatched against a tag that is
+  already published (`gh workflow run verify-release.yml --ref <branch>
+  -f tag=<tag>`), so a changed or repaired gate is proven on real assets
+  without cutting a disposable tag. Run it by hand after editing any of its
+  checks.
+- That workflow re-downloads every asset from the
   published release and checks: `sha256sums.txt` matches the bytes and covers
   exactly the release's files, asset names carry the tag version, the Linux
   binary reports it, the WASM header is version 1 and under the budget

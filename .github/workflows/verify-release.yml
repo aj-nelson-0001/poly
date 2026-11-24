@@ -1,0 +1,147 @@
+name: Verify published release
+
+# Post-publish verification of an existing GitHub Release. `release.yml` calls
+# this after create-release so a tag run proves what it published, and
+# workflow_dispatch runs the same checks on demand -- that is how a repaired
+# gate is proven without cutting a throwaway tag. One definition means the
+# on-demand run cannot diverge from what a release actually checks.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Published tag to verify (for example 2.0.0-preview.19).
+        required: true
+        type: string
+      size_budget:
+        description: Byte budget the wasm artifact must stay under.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published tag to verify (for example 2.0.0-preview.19).
+        required: true
+        type: string
+      size_budget:
+        description: Byte budget the wasm artifact must stay under.
+        required: false
+        default: '660000'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify published release
+    runs-on: ubuntu-latest
+    env:
+      # Injected through the environment rather than interpolated into each
+      # script, so a tag name can never become shell syntax.
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Reject an empty tag
+        run: |
+          if [ -z "${TAG}" ]; then
+            echo "::error::No tag to verify was provided"
+            exit 1
+          fi
+
+      # Re-download what the world gets, not the workflow's own artifacts:
+      # upload, renaming and checksum generation all sit between the tested
+      # builds and the published bytes.
+      - name: Download every published asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist && cd dist
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}"
+          ls -l
+
+      - name: Verify checksums cover exactly the published assets
+        working-directory: dist
+        run: |
+          sha256sum -c sha256sums.txt
+          listed=$(awk '{print $2}' sha256sums.txt | sed 's/^\*//' | sort)
+          present=$(ls -1 | grep -v '^sha256sums.txt$' | sort)
+          if [ "$listed" != "$present" ]; then
+            echo "::error::sha256sums.txt does not list exactly the published assets"
+            diff <(echo "$listed") <(echo "$present") || true
+            exit 1
+          fi
+          echo "sha256sums.txt covers every asset"
+
+      - name: Verify asset names carry the release version
+        working-directory: dist
+        run: |
+          version="${TAG#v}"
+          for asset in poly-*; do
+            case "$asset" in
+              *"$version"*) ;;
+              *) echo "::error::asset '$asset' does not name version ${version}"; exit 1 ;;
+            esac
+          done
+          echo "asset names name ${version}"
+
+      - name: Verify the linux binary reports the tag version
+        working-directory: dist
+        run: |
+          version="${TAG#v}"
+          chmod +x "poly-linux-amd64-${version}"
+          reported="$(./"poly-linux-amd64-${version}" --version)"
+          if [ "$reported" != "poly ${version}" ]; then
+            echo "::error::published binary reports '$reported', tag says '${version}'"
+            exit 1
+          fi
+          echo "published binary reports ${reported}"
+
+      - name: Verify the published wasm header and size
+        working-directory: dist
+        env:
+          # A caller passes the budget the gated build reported. Failures here
+          # used to swallow an empty value: `[ "" -gt "" ]` is a bash error
+          # inside an `if`, not a step failure, so the size gate silently
+          # passed.
+          WASM_SIZE_BUDGET: ${{ inputs.size_budget }}
+        run: |
+          if ! [ "$WASM_SIZE_BUDGET" -gt 0 ] 2>/dev/null; then
+            echo "::error::WASM_SIZE_BUDGET is '${WASM_SIZE_BUDGET}', not a byte count; the size gate cannot run"
+            exit 1
+          fi
+          wasm="poly-playground-${TAG#v}.wasm"
+          header=$(od -An -tx1 -N8 "$wasm" | tr -s ' ' | sed 's/^ //;s/ $//')
+          if [ "$header" != "00 61 73 6d 01 00 00 00" ]; then
+            echo "::error::${wasm} is not a version-1 wasm module (header: ${header})"
+            exit 1
+          fi
+          size=$(wc -c < "$wasm")
+          echo "${wasm}: ${size} bytes (budget: ${WASM_SIZE_BUDGET})"
+          if [ "$size" -gt "$WASM_SIZE_BUDGET" ]; then
+            echo "::error::published wasm is ${size} bytes, over the ${WASM_SIZE_BUDGET}-byte budget"
+            exit 1
+          fi
+
+      - name: Verify documented platform formats
+        working-directory: dist
+        run: |
+          version="${TAG#v}"
+          mac=$(od -An -tx1 -N4 "poly-macos-arm64-${version}" | tr -s ' ' | sed 's/^ //;s/ $//')
+          if [ "$mac" != "cf fa ed fe" ]; then
+            echo "::error::macOS asset is not a 64-bit little-endian Mach-O (magic: ${mac})"
+            exit 1
+          fi
+          win=$(od -An -tx1 -N2 "poly-windows-amd64-${version}.exe" | tr -s ' ' | sed 's/^ //;s/ $//')
+          if [ "$win" != "4d 5a" ]; then
+            echo "::error::Windows asset is not a PE image (magic: ${win})"
+            exit 1
+          fi
+          echo "macOS is Mach-O arm64, Windows is PE"
+
+      - name: Confirm the release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --json isDraft,isPrerelease,tagName,url \
+            --jq 'if .isDraft then error("release is still a draft") else "release \(.tagName) published at \(.url) (prerelease=\(.isPrerelease))" end'

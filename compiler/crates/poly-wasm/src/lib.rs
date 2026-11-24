@@ -10,7 +10,9 @@
 //! - `poly_alloc(len) -> ptr`            allocate a writable buffer
 //! - `transpile(ptr, len) -> result_ptr` run the full pipeline (Rust target)
 //! - `transpile_target(ptr, len, tptr, tlen) -> result_ptr` run the pipeline
-//!   for the selected target (`rust`, `c`, `asm`, or `js`)
+//!   for the selected target (`rust`, `c`, or `js`); the `asm` target is
+//!   compiled out of this module because a browser cannot run x86-64 assembly
+//!   and the backend costs ~85 KB of the download
 //! - `result_ptr(result) -> usize`        output buffer pointer
 //! - `result_len(result) -> usize`        output byte length
 //! - `result_is_error(result) -> i32`     1 when the result is an error
@@ -161,7 +163,8 @@ pub extern "C" fn result_ptr(result: *const u8) -> usize {
 }
 
 /// Transpile Poly source held at `ptr`/`len` to the backend named in the
-/// UTF-8 string at `target_ptr`/`target_len` (`rust`, `c`, `asm`, or `js`).
+/// UTF-8 string at `target_ptr`/`target_len` (`rust`, `c`, or `js`; `asm` is
+/// compiled out -- see the module docs).
 /// Returns a pointer to the same result-block layout as `transpile`.
 ///
 /// # Safety

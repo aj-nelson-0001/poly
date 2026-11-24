@@ -79,6 +79,13 @@ jobs:
           sudo install -m755 /tmp/binaryen-version_130/bin/wasm-opt /usr/local/bin/wasm-opt
           wasm-opt --version
 
+      # The build overwrites the committed module; keep the committed copy so
+      # the next step can prove the two match. preview.19 shipped a stale
+      # playground/poly.wasm for exactly this reason: the committed file was
+      # 636,157 B while the gated build produced 635,084 B.
+      - name: Save the committed wasm for a drift check
+        run: cp playground/poly.wasm "$RUNNER_TEMP/committed-poly.wasm"
+
       - name: Build playground wasm
         run: bash compiler/scripts/build_playground_wasm.sh
 
@@ -91,6 +98,19 @@ jobs:
           fi
           sha256sum "$wasm_file"
           wc -c < "$wasm_file"
+
+      - name: Check the committed wasm matches the build
+        run: |
+          committed="$RUNNER_TEMP/committed-poly.wasm"
+          if [ ! -s "$committed" ]; then
+            echo "::error::No committed playground/poly.wasm to compare against."
+            exit 1
+          fi
+          if ! cmp -s "$committed" playground/poly.wasm; then
+            echo "::error::playground/poly.wasm is stale: committed $(wc -c < "$committed") B, rebuilt $(wc -c < playground/poly.wasm) B. Rebuild and commit the module with the sources that produced it."
+            exit 1
+          fi
+          echo "playground/poly.wasm matches the build ($(wc -c < playground/poly.wasm) B)"
 
       - name: Smoke test the wasm artifact
         if: inputs.run_smoke_test

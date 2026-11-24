@@ -326,7 +326,9 @@ jobs:
 
 # Release publishing is owned by .github/workflows/release.yml (build, wasm,
 # create-release, then a verify-release job that re-downloads and checks the
-# published assets; triggered on v* and 2.* tags). CI no longer duplicates it:
+# published assets; triggered on v* and 2.* tags). The verification checks live
+# in .github/workflows/verify-release.yml, which is also dispatchable against an
+# already-published tag, so CI no longer duplicates them:
 # two jobs uploading assets to the same release raced and made results
 # order-dependent. The CI workflow still runs on tag pushes via its branch and PR
 # gates so the tag commit's test/lint/audit/tetris/wasm results are visible

@@ -11,9 +11,10 @@ crate-type = ["cdylib"]
 [dependencies]
 poly-lexer.workspace = true
 poly-parser.workspace = true
-# default-features = false drops the Goose backend: the playground only offers
-# the rust/c/js targets, and shipping an unused backend costs ~34 KB of the
-# browser download. Everything native keeps the workspace default (goose on).
+# default-features = false drops the Goose and asm backends: the playground only
+# offers the rust/c/js targets, the module cannot run x86-64 assembly, and
+# shipping the two unused backends cost ~34 KB (goose) and ~85 KB (asm) of the
+# browser download.
 poly-transpiler = { path = "../poly-transpiler", default-features = false }
 
 [lints]

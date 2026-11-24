@@ -6,11 +6,14 @@ license.workspace = true
 description = "Rust code generator for the Poly programming language"
 
 [features]
-# The Goose backend is optional so size-sensitive consumers (the browser
-# playground via poly-wasm) can compile it out; every native consumer -- CLI,
-# LSP, tests -- keeps it by default.
-default = ["goose"]
+# The Goose and asm backends are optional so size-sensitive consumers (the
+# browser playground via poly-wasm) can compile them out; every native
+# consumer -- CLI, LSP, tests -- keeps both by default. The playground never
+# offers `asm`, and the module cannot run x86-64 assembly, so shipping the
+# backend there only costs download size.
+default = ["goose", "asm"]
 goose = ["dep:poly-goose-codegen"]
+asm = ["dep:poly-asm-codegen"]
 
 [dependencies]
 poly-lexer.workspace = true
@@ -18,7 +21,7 @@ poly-parser.workspace = true
 poly-types.workspace = true
 poly-intermediate-representation.workspace = true
 poly-c-codegen.workspace = true
-poly-asm-codegen.workspace = true
+poly-asm-codegen = { workspace = true, optional = true }
 thiserror.workspace = true
 poly-js-codegen.workspace = true
 poly-goose-codegen = { workspace = true, optional = true }

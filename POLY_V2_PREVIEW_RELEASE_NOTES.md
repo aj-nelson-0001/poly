@@ -2,10 +2,29 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.18 continues the target-aware compiler model established by the earlier previews. Rust remains the default
-and most complete backend. C is an intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available
-through `--target asm`, a JavaScript target through `--target js`, a Goose target through `--target goose`, and C++ syntax is
-reserved and explicitly rejected.
+Poly 2.0.0-preview.19 narrows to the release pipeline itself: the language surface is unchanged from preview.18, which added the
+Goose target, mutation commands, and the security hardening described below. Rust remains the default and most complete backend. C is an
+intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target
+through `--target js`, a Goose target through `--target goose`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.19
+
+- **The playground module is optimized again.** preview.16, preview.17, and
+  preview.18 published the unoptimized wasm build — 705,154, 707,584, and
+  748,320 bytes — because only the CI workflow installed `wasm-opt`; the
+  release workflow built its own copy without binaryen, so the 660,000-byte
+  size gate measured a build nobody downloaded. Both workflows now call one
+  reusable `.github/workflows/wasm-build.yml` that installs pinned binaryen
+  130 (checksummed), runs the playground smoke test, and owns the budget. This
+  release ships 635,076 bytes, about 15% smaller than preview.18.
+- **Releases record the right base branch.** `create-release` derives the
+  tag's branch (`fetch-depth: 0`) and passes it as `target_commitish`; before,
+  every release pointed at the stale `master` branch.
+- **Published assets are verified.** A new `verify-release` job re-downloads
+  every asset and checks the checksum manifest against the bytes, asset
+  naming, the Linux binary's reported version, the WASM header and size
+  budget, and the macOS/Windows binary formats, so a broken release fails the
+  workflow instead of staying published.
 
 ## What's New in 2.0.0-preview.18
 

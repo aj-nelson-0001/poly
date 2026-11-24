@@ -4,6 +4,28 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.19] - 2026-11-24
+
+### Fixed
+
+- **The playground module ships optimized again (748 KB -> 635 KB).** The
+  preview.16, preview.17, and preview.18 releases published the unoptimized
+  wasm build (705,154, 707,584, and 748,320 bytes) even though the committed
+  module was 636,157 bytes. Only the CI workflow installed `wasm-opt`;
+  `release.yml` built its own copy without binaryen, so the 660,000-byte gate
+  measured a build nobody downloaded. Both workflows now call one reusable
+  `.github/workflows/wasm-build.yml` that installs pinned binaryen 130
+  (checksummed), runs the playground smoke test, and owns the size budget, so
+  the artifact CI gates is the artifact releases publish.
+- **Releases target `v2.0-dev`.** `create-release` now derives the tag's base
+  branch (`fetch-depth: 0`) and passes it as `target_commitish`; before, every
+  release pointed at `master`, which is a stale branch.
+- **Published assets are verified after upload.** A new `verify-release` job
+  re-downloads every asset and checks the checksum manifest against the bytes,
+  asset naming, the Linux binary's reported version, the WASM header and size
+  budget, and the macOS/Windows binary formats, so a broken or mismatched
+  release fails the workflow instead of staying published.
+
 ## [2.0.0-preview.18] - 2026-11-24
 
 ### Added

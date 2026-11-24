@@ -103,6 +103,21 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.19
+
+**A smaller playground and releases that check themselves.** `poly.wasm` is
+back to the optimized build — 635 KB, down from the 748 KB that
+preview.18 published — because CI and the release workflow now share one
+wasm build that pins `wasm-opt` and gates its size, so the module users
+download is the one CI measured. Releases now target `v2.0-dev` instead of
+the stale `master`, and a post-publish `verify-release` job re-downloads
+every asset to check the checksum manifest, asset naming, the reported
+compiler version, the WASM header and budget, and the macOS/Windows binary
+formats before the run can go green.
+
+Download the Linux, macOS, Windows, and playground WASM builds from the
+[2.0.0-preview.19 release](https://github.com/aj-nelson-0001/poly/releases/tag/2.0.0-preview.19).
+
 ### What's New in 2.0.0-preview.18
 
 **A fifth target, simpler mutation, and a harder security floor.**

@@ -103,6 +103,20 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.20
+
+**A smaller browser module, and a guard that keeps it that way.** The
+playground `poly.wasm` no longer compiles the x86-64 assembly backend —
+547 KB, down from 635 KB — because a browser cannot execute that target and
+the page never offered it. The CLI still ships `--target asm`, and asking
+the playground for it reports that the target is not part of that build. The
+660,000-byte budget is unchanged, leaving 112 KB of headroom, and the wasm
+job now compares its rebuild with the committed module byte for byte, so the
+published bytes are the bytes CI measured.
+
+Download the Linux, macOS, Windows, and playground WASM builds from the
+[2.0.0-preview.20 release](https://github.com/aj-nelson-0001/poly/releases/tag/2.0.0-preview.20).
+
 ### What's New in 2.0.0-preview.19
 
 **A smaller playground and releases that check themselves.** `poly.wasm` is

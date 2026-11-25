@@ -4,6 +4,8 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+## [2.0.0-preview.20] - 2026-11-25
+
 ### Changed
 
 - **The playground module no longer carries the asm backend (635,084 ->

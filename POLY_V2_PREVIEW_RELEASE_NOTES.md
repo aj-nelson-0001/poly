@@ -2,10 +2,39 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.19 narrows to the release pipeline itself: the language surface is unchanged from preview.18, which added the
+Poly 2.0.0-preview.20 is a size release: the language surface is unchanged from preview.18, which added the
 Goose target, mutation commands, and the security hardening described below. Rust remains the default and most complete backend. C is an
-intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm`, a JavaScript target
-through `--target js`, a Goose target through `--target goose`, and C++ syntax is reserved and explicitly rejected.
+intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm` from the CLI, a JavaScript
+target through `--target js`, a Goose target through `--target goose`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.20
+
+- **The browser module drops the assembly backend.** `poly.wasm` ships at
+  547,160 bytes, down from 635,084 in preview.19 (-87,924 bytes, about 14%),
+  with the 660,000-byte budget left unchanged and 112,840 bytes of headroom.
+  The asm backend now sits behind a default-on `asm` cargo feature, the same
+  shape the `goose` target already used: the CLI, the LSP, and the test suite
+  still compile it, while `poly-wasm` builds `poly-transpiler` with
+  `default-features = false`. Asking the playground for `--target asm` now
+  reports that the target is not part of that build rather than carrying a
+  backend the page cannot use.
+- **The published module is the module CI measured.** The wasm workflow
+  rebuilds the playground module, compares it byte for byte against the
+  committed `playground/poly.wasm`, and then gates its size, so a hand-edited
+  or stale artifact fails CI instead of shipping quietly.
+- **The size pass runs to a fixed point.** The build applies `wasm-opt -Oz`
+  repeatedly (`--converge`) until a pass changes nothing, which is where the
+  last few hundred bytes of the smaller module come from.
+- **Release verification runs on demand.** `verify-release.yml` is now
+  dispatchable as well as reusable, so any published tag can be re-checked
+  without cutting a new release. The first dispatched run re-verified
+  `2.0.0-preview.19` (run
+  [45515305170](https://github.com/aj-nelson-0001/poly/actions/runs/45515305170)):
+  all eight checks passed, and the published module measured 635,084 bytes
+  against the 660,000 budget.
+- **The default branch is `v2.0-dev`.** The repository default moved off
+  `master`, which had been a strict ancestor of `v2.0-dev` since October, so
+  clones, links, and dispatches all land on the code that ships.
 
 ## What's New in 2.0.0-preview.19
 
@@ -237,7 +266,7 @@ For the 2.0.0-preview.1 highlights, see [CHANGELOG.md](CHANGELOG.md).
 |---|---|---|
 | Rust | Default target and complete v2 baseline | `rustc` or generated Cargo project |
 | C | C11 orchestration subset | `POLY_CC` C compiler |
-| Asm | Linux x86-64 assembly subset | GNU assembler and linker (Linux CI) |
+| Asm | Linux x86-64 assembly subset (CLI only; absent from the browser module) | GNU assembler and linker (Linux CI) |
 | JS | ES2020 orchestration subset, no runtime dependencies | `node --check` plus execution (Linux CI) |
 | Goose | Goose orchestration subset | `goose check` plus execution (when the `goose` toolchain is available) |
 | C++ | Reserved only | Explicitly rejected; no backend exists |
@@ -251,6 +280,7 @@ type mappings, see [POLY_C_BLOCKS.md](POLY_C_BLOCKS.md); for the JS backend, see
 - Append output uses `put value to "file" -append`.
 - `put` always writes a newline.
 - Foreign blocks and `extern` declarations must be top-level.
+- `--target asm` is a CLI target. The playground module is built without the asm backend and reports that the target is not part of that build.
 - Opaque foreign calls remain permissive for compatibility. Add an explicit `extern` declaration when Poly-side interface
 diagnostics are useful, or run `poly --strict` / the CI checks, which enforce declarations.
 - C does not provide the full Rust runtime surface. File redirects, file input, typed input flags, vectors, maps/sets, async
@@ -259,20 +289,24 @@ simple `match` patterns, struct literals, enum variants, and non-capturing closu
 
 ## Verification Evidence
 
-The committed local verification completed successfully:
+The checks for this release ran in hosted CI and were reproduced locally:
 
 ~~~bash
-cargo test --workspace -- --test-threads=1
-cargo check --workspace --all-targets
+cargo test -p poly-transpiler -p poly-wasm
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+node scripts/playground_wasm_smoke.mjs
 python3 scripts/check_markdown.py
-python3 scripts/check_poly_examples.py --poly-bin compiler/target/release/poly
 ~~~
 
-The full-repository documentation audit covers 587 example blocks with 0
-unmarked failures; the Tetris example regenerates, builds, and passes its
-headless self-test with the release compiler.
+Run [45514077539](https://github.com/aj-nelson-0001/poly/actions/runs/45514077539)
+on the shipping commit is green across all seven jobs: the workspace test suite
+on Linux, macOS, and Windows, the dependency audit, the lint and documentation
+checks covering 587 example blocks with 0 unmarked failures, the Tetris
+example's regeneration and headless self-test, and the wasm build with its
+drift and size gates. The wasm job logged `poly.wasm: 547160 bytes (budget:
+660000)`, and the same bytes were built twice locally to confirm the artifact
+is stable.
 
 Additional target checks passed for the Rust examples, the mixed-target fixture, the C fixture, native C execution, explicit
 C \
@@ -281,9 +315,8 @@ foreign signatures, and unsupported C diagnostics. The asm and JS fixtures were 
 outputs  \
 verified on Linux.
 
-The committed CI workflow runs the same Rust/C test path on `ubuntu-latest`, `macos-latest`, and `windows-latest`.  \
-Hosted-runner results are release evidence that must be recorded after the workflow executes; they are not claimed by this  \
-local verification.
+Hosted-runner results for the shipping commit and for a re-verified published
+tag are recorded above; they are the release evidence for this preview.
 
 ## Known Preview Limitations
 
@@ -291,9 +324,9 @@ local verification.
 - Foreign function ABI, pointer, ownership, lifetime, and target-specific type correctness remain the responsibility of the  \
 native compiler.
 - `#cpp` has no implementation.
-- The playground WASM artifact is reproducible locally under the repository-pinned Rust toolchain. Hosted CI builds and  \
-validates a non-empty artifact in its canonical Linux environment; byte identity is not expected across different build  \
-environments.
+- The playground WASM artifact is byte-identical between the repository-pinned local toolchain and hosted CI: the workflow  \
+rebuilds it, compares it with the committed file, and gates the size of the same bytes users download. A build outside the  \
+pinned toolchain is not covered by that comparison.
 - Hosted cross-platform CI evidence is required before tagging or publishing the preview. A final clean-checkout review
 should \
   \

@@ -67,10 +67,13 @@ enforces most of it mechanically.
   publish.
 - `.github/workflows/verify-release.yml` is the only post-publish check:
   `release.yml` calls it, and it can also be dispatched against a tag that is
-  already published (`gh workflow run verify-release.yml --ref <branch>
+  already published (`gh workflow run verify-release.yml --ref v2.0-dev
   -f tag=<tag>`), so a changed or repaired gate is proven on real assets
   without cutting a disposable tag. Run it by hand after editing any of its
-  checks.
+  checks. `v2.0-dev` is the repository's default branch (it became the default
+  once `master` was confirmed to be a strict ancestor of it), which is what
+  lets `workflow_dispatch` fire; a workflow file that exists only on a
+  non-default branch answers dispatch requests with a 404.
 - That workflow re-downloads every asset from the
   published release and checks: `sha256sums.txt` matches the bytes and covers
   exactly the release's files, asset names carry the tag version, the Linux

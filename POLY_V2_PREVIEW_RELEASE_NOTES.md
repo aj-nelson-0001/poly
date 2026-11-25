@@ -20,6 +20,11 @@ target through `--target js`, a Goose target through `--target goose`, and C++ s
   the slower measurement of each stage (CI 5m 44s-6m 09s, release 1m 48s-2m 06s
   across preview.21 and preview.22). A stuck CI wait no longer eats the release
   wait's budget, and the old `--timeout` flag is gone.
+- **`master` cannot advance on a red or pending check.** The `protect-master`
+  ruleset now requires the eight `ci.yml` check contexts by name — the three
+  OS test jobs, lint and documentation, the Tetris example, the dependency
+  audit, the wasm build and gate, and the asm guard — so a sync pull request
+  merges only after CI says the tree is green.
 - **The release scripts have unit tests.** They cover the generated wasm-size
   rewrite (plain and comma-grouped numbers, an already-correct no-op, the
   not-a-number placeholder in this file's prose, duplicate lines, and a missing

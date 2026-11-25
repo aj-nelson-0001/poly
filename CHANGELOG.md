@@ -6,6 +6,12 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Added
 
+- **Pull requests into `master` wait for CI.** The `protect-master` ruleset now
+  requires the eight `ci.yml` check contexts by name (the three OS test jobs,
+  lint and documentation, the Tetris example, the dependency audit, the wasm
+  build and gate, and the asm guard), so the branch cannot advance while a
+  check is red, running, or queued. A skipped or missing check is unsatisfied,
+  not a pass.
 - **The release scripts have unit tests.**
   `scripts/tests/test_release_scripts.py` covers the generated wasm-size
   rewrite (plain and comma-grouped numbers, the already-correct no-op, the

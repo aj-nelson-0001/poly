@@ -103,6 +103,20 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.23
+
+**The release notes' wasm size is generated, and each wait has its own limit.**
+`scripts/prepare_release.py` now rewrites the `poly.wasm: <n> bytes` evidence
+line from the module it just rebuilt, keeping the file's separator style, and
+the driver still re-checks that number before tagging. The single wait cap is
+split into `--ci-timeout` (15 minutes) and `--release-timeout` (5 minutes),
+about 2.5x the slower measurement of each stage, so a stuck CI wait no longer
+consumes the release wait's budget. The release scripts also gained unit tests
+that the lint job runs on every pull request.
+
+Download the Linux, macOS, Windows, and playground WASM builds from the
+[2.0.0-preview.23 release](https://github.com/aj-nelson-0001/poly/releases/tag/2.0.0-preview.23).
+
 ### What's New in 2.0.0-preview.22
 
 **The release driver checks the numbers it publishes, and any run can be

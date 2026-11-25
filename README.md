@@ -103,6 +103,22 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.21
+
+**A release can no longer tag a commit CI has not passed.** `scripts/release.py`
+prepares the release, commits only release metadata, pushes the branch, waits
+for CI on that exact commit, and only then creates and pushes the tag — the
+ordering preview.20's first tag got wrong, which is why it had to be deleted
+and re-cut. A red CI run now stops the driver before any tag exists. Its
+summary also states the published playground module against the wasm budget
+(preview.20: 548,899 bytes of 660,000, leaving 111,101 bytes of headroom), and
+the new `protect-v2.0-dev` / `protect-master` rulesets block force pushes and
+deletions, with `master` now taking a pull request instead of a raw
+fast-forward.
+
+Download the Linux, macOS, Windows, and playground WASM builds from the
+[2.0.0-preview.21 release](https://github.com/aj-nelson-0001/poly/releases/tag/2.0.0-preview.21).
+
 ### What's New in 2.0.0-preview.20
 
 **A smaller browser module, and a guard that keeps it that way.** The

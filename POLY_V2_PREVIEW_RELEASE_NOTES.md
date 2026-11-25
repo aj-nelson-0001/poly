@@ -2,10 +2,35 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.20 is a size release: the language surface is unchanged from preview.18, which added the
-Goose target, mutation commands, and the security hardening described below. Rust remains the default and most complete backend. C is an
+Poly 2.0.0-preview.21 is a release-tooling release: the language surface is unchanged from preview.20, the size release
+that dropped the assembly backend from the browser module. Rust remains the default and most complete backend. C is an
 intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm` from the CLI, a JavaScript
 target through `--target js`, a Goose target through `--target goose`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.21
+
+- **A release cannot tag a commit before CI passes.** `scripts/release.py`
+  runs `prepare_release.py`, commits only release metadata (it aborts and
+  lists the paths if anything outside the release surface changed), pushes the
+  branch, waits for the `ci.yml` push run on that exact commit, and only then
+  creates and pushes the tag. A red run stops it with instructions and leaves
+  no tag behind — the failure mode that forced preview.20's first tag to be
+  deleted and re-cut. `--resume` continues after a red run, `--skip-tests`
+  forwards to the prep, and `--dry-run` prints the plan without writing.
+- **The summary reports wasm headroom.** The driver prints the published
+  playground module against the budget it reads from `wasm-build.yml`, so a
+  release that spends the headroom says so when it ships rather than at the
+  next failed size gate.
+- **The asm guard is proven where it runs.** A `wasm-asm-guard` CI job builds
+  the module with `poly-transpiler/asm` and fails unless the smoke test
+  rejects it for both reasons — the target-list parity message and the notes
+  message — so a smoke test broken for an unrelated cause cannot satisfy it.
+  The job runs in `$RUNNER_TEMP` and never touches the committed module.
+- **The long-lived branches are locked against rewrites.** Rulesets
+  `protect-v2.0-dev` and `protect-master` block deletion and non-fast-forward
+  pushes, with no bypass actors; `master` additionally requires a pull request
+  with no approvals, so it can no longer be fast-forwarded by a raw push. The
+  guide records both rulesets and the read-back command.
 
 ## What's New in 2.0.0-preview.20
 
@@ -297,18 +322,18 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 node scripts/playground_wasm_smoke.mjs
 python3 scripts/check_markdown.py
-~~~
-
-The tag is cut only from a `v2.0-dev` commit whose push-triggered run is green:
-the workspace test suite on Linux, macOS, and Windows, the dependency audit,
-the lint and documentation checks, the Tetris example's regeneration and
-headless self-test, and the wasm build with its drift and size gates. The
+~~~The tag is cut only from a `v2.0-dev` commit whose push-triggered run is green:
+the workspace test suite on Linux, macOS, and Windows, the dependency audit, the
+lint and documentation checks, the Tetris example's regeneration and
+headless self-test, the asm-parity guard, and the wasm build with its drift and
+size gates. That ordering is now enforced by `scripts/release.py`, which waits
+for the CI run on the exact release commit before it creates the tag. The
 release workflow then rebuilds the module through that same reusable job,
 publishes those bytes, and runs `verify-release` to re-download every asset and
 check the checksum manifest, asset naming, the reported compiler version, the
 WASM header and budget, and the macOS/Windows binaries. The wasm job logs
-`poly.wasm: 548899 bytes (budget: 660000)`, and building the tagged sources
-repeatedly locally produced the same 548,899-byte module and SHA-256, so the
+`poly.wasm: 548185 bytes (budget: 660000)`, and building the tagged sources
+repeatedly locally produced the same 548,185-byte module and SHA-256, so the
 published artifact is reproducible from the repository.
 
 Additional target checks passed for the Rust examples, the mixed-target fixture, the C fixture, native C execution, explicit

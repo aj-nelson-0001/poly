@@ -2,7 +2,7 @@
 
 All notable changes to the Poly language compiler will be documented in this file.
 
-## [Unreleased]
+## [2.0.0-preview.21] - 2026-11-25
 
 ### Added
 

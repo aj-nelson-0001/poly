@@ -2,8 +2,8 @@
 
 **Applies to:** any `2.0.0-preview.N` release. This guide covers release
 readiness, the version-bearing file map, and the mechanical release path. It
-does not create or tag a release automatically; the agent workflow never tags
-or pushes.
+tags nothing by itself: `scripts/release.py` is the one path that tags and
+pushes, and only when someone runs it.
 
 ## Consistency bar
 
@@ -178,8 +178,13 @@ clean checkout.
 
 ## Release procedure
 
-The mechanical steps are automated by `scripts/prepare_release.py`; it never
-commits, tags, or pushes.
+The mechanical steps are automated by `scripts/prepare_release.py`, which never
+commits, tags, or pushes. `scripts/release.py` wraps it into one command: it
+prepares, commits only release metadata, pushes the branch, **waits for CI on
+that exact commit**, and only then creates and pushes the tag and waits for the
+release run. That ordering is not cosmetic: preview.20's first tag failed the
+wasm drift gate because it was cut before the branch CI for the release commit
+had finished, and the tag had to be deleted and re-cut.
 
 ~~~sh
 # 1. Update the docs that must describe the new version by hand:
@@ -195,10 +200,38 @@ python3 scripts/prepare_release.py 2.0.0-preview.N
 #     directories, runner paths) that would break byte-reproducibility:
 python3 scripts/check_generated_paths.py
 
-# 3. Review the diff, then commit and tag:
+# 3. Commit, wait for CI, tag, and watch the release in one step:
+python3 scripts/release.py 2.0.0-preview.N
+
+# Re-running after a red CI run (the release commit is already pushed):
+python3 scripts/release.py 2.0.0-preview.N --resume
+
+# Plan only: preflight checks and the steps it would take, no writes:
+python3 scripts/release.py 2.0.0-preview.N --dry-run
+~~~
+
+The driver refuses to run if the tag already exists, if the branch is `master`,
+or if the commit would contain anything outside the release surface
+(`CHANGELOG.md`, `README.md`, the documentation index, the preview notes, this
+guide, `compiler/Cargo.{toml,lock}`, `playground/{index.html,poly.wasm}`, and
+the tracked tetris output). A red CI run stops it before a tag exists, which is
+the whole point; a red release run leaves the tag alone and prints how to
+inspect it.
+
+It also compares the `poly.wasm: <n> bytes` line in
+`POLY_V2_PREVIEW_RELEASE_NOTES.md` with the module it just built and stops on a
+mismatch, because that number is written by hand and shipped stale once. Fix
+the number, commit it, and re-run with `--resume`. The final summary ends with
+stage timings (`prepare`, `CI wait`, `release wait`, `total`).
+
+Manual equivalent, when the driver cannot run (for example no `gh`):
+
+~~~sh
 git add -A
 git commit -m "chore(release): prepare 2.0.0-preview.N"
 git push origin v2.0-dev
+# wait for CI to go green on that commit before tagging
+gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)"
 git tag -a 2.0.0-preview.N -m "Poly 2.0.0-preview.N"
 git push origin 2.0.0-preview.N
 
@@ -224,3 +257,36 @@ fixing the cause — do not quietly leave a red verification run behind.
 Because the tagged commit's notes become the release
 body, its What's New section must already describe the release being cut, and
 the verification-evidence numbers in it should be re-checked at tag time.
+
+## Branch protection
+
+Two repository rulesets guard the long-lived branches. Both are active, apply
+to the whole branch, and have **no bypass actors** — not even the repository
+owner can push past them by accident.
+
+| Ruleset | Branch | Rules |
+|---|---|---|
+| `protect-v2.0-dev` | `v2.0-dev` | block deletion, block non-fast-forward |
+| `protect-master` | `master` | block deletion, block non-fast-forward, require a pull request (0 approvals) |
+
+`v2.0-dev` stays directly pushable on purpose: it is where work lands, and the
+driver's `chore(release): prepare <version>` commit is an ordinary push to it.
+The rules only stop a force push or a deletion from rewriting published
+history, which is exactly what a bad `--force` or a stray `push --delete`
+would do to tags and to every commit the releases were cut from.
+
+`master` is the stable mirror of `v2.0-dev`, and the pull-request rule means it
+**can no longer be fast-forwarded by a raw push**: syncing it is now a PR from
+`v2.0-dev` with nothing to approve, or a deliberate edit to the ruleset. That
+is the intended cost of refusing direct pushes. Tags are not covered by
+either ruleset, so moving a release tag is still possible by hand — the driver
+never does it, and neither should a routine release.
+
+Read the effective rules for a branch (the API returns what is actually
+enforced, not what the ruleset was meant to say):
+
+~~~sh
+gh api repos/aj-nelson-0001/poly/rules/branches/v2.0-dev --jq '.[].type'
+gh api repos/aj-nelson-0001/poly/rules/branches/master --jq '.[].type'
+gh api repos/aj-nelson-0001/poly/rulesets --jq '.[] | "\(.id) \(.name) \(.target) \(.enforcement)"'
+~~~

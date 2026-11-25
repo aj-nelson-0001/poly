@@ -4,6 +4,20 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Changed
+
+- **The release driver rejects a stale wasm size in the release notes.**
+  `scripts/release.py` now reads the `poly.wasm: <n> bytes` line from
+  `POLY_V2_PREVIEW_RELEASE_NOTES.md` and compares it with the module
+  `prepare_release.py` just built. A mismatch stops the run with both numbers;
+  the preview.21 notes carried 548,899 bytes for a 548,185-byte module until it
+  was caught by hand, which is exactly the claim this check removes.
+- **The release driver reports how long each stage took.** The summary ends
+  with `prepare`, `CI wait`, `release wait`, and `total`, so the wait timeouts
+  can be set from measurements instead of guesses.
+
+## [2.0.0-preview.21] - 2026-11-25
+
 ### Added
 
 - **CI fails if the browser module offers `asm` again without saying so.**
@@ -14,6 +28,27 @@ All notable changes to the Poly language compiler will be documented in this fil
   leaving the notes claiming the module lacks the target fails the job with
   a message naming the file to update, so the download cannot grow and the
   documentation cannot drift back.
+- **The asm guard itself is now proven on a runner.** A `wasm-asm-guard` CI job
+  builds the module with `poly-transpiler/asm` and fails unless the smoke test
+  rejects it in `$RUNNER_TEMP`, and rejects it for *both* reasons (the parity
+  message and the notes message), so a smoke test that breaks for an unrelated
+  cause cannot satisfy the guard. The committed module is never touched.
+- **`scripts/release.py` cuts a release in one command.** It runs
+  `prepare_release.py`, commits only release metadata, pushes the branch,
+  waits for CI on that exact commit, and only then tags and watches
+  `release.yml`. A red CI run stops it before a tag exists, which is exactly
+  the mistake that forced preview.20's tag to be deleted and re-cut.
+- **The release summary reports wasm headroom.** After printing the assets,
+  `scripts/release.py` states the published playground module against the
+  budget it reads from `wasm-build.yml` (the number that gate enforces, not a
+  copy): `548,899 bytes against a 660,000-byte budget (83.2% used, 111,101
+  bytes of headroom)`. A release that eats the headroom now says so at tag
+  time instead of at the next failed gate.
+- **The branch rulesets are documented where the release path is.**
+  `POLY_RELEASE_GUIDE.md` gains a Branch protection section: both rulesets
+  (`protect-v2.0-dev`, `protect-master`), what each blocks, the
+  `rules/branches/<branch>` read-back command, and the consequence that
+  `master` now needs a pull request rather than a raw fast-forward.
 
 ## [2.0.0-preview.20] - 2026-11-25
 

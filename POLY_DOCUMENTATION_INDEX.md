@@ -1,6 +1,6 @@
 # Poly Documentation Index
 
-Poly 2.0.0-preview.20 is the latest released implementation baseline; work landed after that tag is listed under
+Poly 2.0.0-preview.21 is the latest released implementation baseline; work landed after that tag is listed under
 `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md). The files below are the maintained sources of truth for syntax,
 targets, tooling, and migration.
 

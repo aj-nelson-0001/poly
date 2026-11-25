@@ -218,6 +218,12 @@ the tracked tetris output). A red CI run stops it before a tag exists, which is
 the whole point; a red release run leaves the tag alone and prints how to
 inspect it.
 
+It also compares the `poly.wasm: <n> bytes` line in
+`POLY_V2_PREVIEW_RELEASE_NOTES.md` with the module it just built and stops on a
+mismatch, because that number is written by hand and shipped stale once. Fix
+the number, commit it, and re-run with `--resume`. The final summary ends with
+stage timings (`prepare`, `CI wait`, `release wait`, `total`).
+
 Manual equivalent, when the driver cannot run (for example no `gh`):
 
 ~~~sh

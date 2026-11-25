@@ -14,11 +14,15 @@ commit is green.
        when the release commit is already pushed).
     3. Commit ``chore(release): prepare <version>`` and push the branch. Only
        release metadata may be in that commit; anything else aborts first.
-    4. Wait for the ``CI`` run on that commit. A red run stops here, before any
+    4. Check the wasm size quoted in ``POLY_V2_PREVIEW_RELEASE_NOTES.md``
+       against the module ``prepare_release.py`` just built. A stale number is
+       a docs bug, but it ships as a false claim, so it stops the run.
+    5. Wait for the ``CI`` run on that commit. A red run stops here, before any
        tag exists.
-    5. Tag ``<version>`` (annotated) and push the tag, which starts
+    6. Tag ``<version>`` (annotated) and push the tag, which starts
        ``release.yml``.
-    6. Wait for the release run and print the published assets.
+    7. Wait for the release run, print the published assets, and report how
+       long the prepare, CI, and release stages took.
 
 It never force-pushes and never deletes a tag: a red run leaves the commit (or
 the tag) in place with instructions, because moving a tag is a human call.
@@ -49,6 +53,12 @@ RELEASE_WORKFLOW = "release.yml"
 # from the number that actually fails a build.
 WASM_WORKFLOW = ROOT / ".github" / "workflows" / "wasm-build.yml"
 WASM_BUDGET_RE = re.compile(r"WASM_SIZE_BUDGET:\s*'(\d+)'")
+WASM_MODULE = ROOT / "playground" / "poly.wasm"
+RELEASE_NOTES = ROOT / "POLY_V2_PREVIEW_RELEASE_NOTES.md"
+# The evidence section quotes the published module, e.g.
+# "`poly.wasm: 548185 bytes (budget: 660000)`". The number is written by hand,
+# so it has already gone stale once (548,899 for a 548,185-byte module).
+NOTES_WASM_RE = re.compile(r"poly\.wasm:\s*(\d[\d,]*)\s*bytes")
 POLL_SECONDS = 10
 # 45 minutes covers a cold wasm build plus the three platform builds; the
 # timeout exists so a stuck queue cannot hang a terminal forever, not to fit
@@ -166,6 +176,43 @@ def wait_run(run_info: dict[str, object], label: str, timeout_minutes: int) -> d
     )
 
 
+def duration(seconds: float) -> str:
+    """A compact "42.3s" / "3m 07.1s" for the stage timings."""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, rest = divmod(seconds, 60)
+    return f"{int(minutes)}m {rest:04.1f}s"
+
+
+def check_notes_wasm_size() -> None:
+    """Stop when the release notes quote a wasm size the built module lacks.
+
+    Only the ``poly.wasm: <n> bytes`` evidence line is checked; the notes are
+    otherwise prose and are not second-guessed here. A notes file with no such
+    line passes, because there is no claim to contradict.
+    """
+    if not RELEASE_NOTES.exists():
+        print(f"  notes: {RELEASE_NOTES.name} is missing; nothing to check")
+        return
+    quoted = {
+        int(match.group(1).replace(",", ""))
+        for match in NOTES_WASM_RE.finditer(RELEASE_NOTES.read_text(encoding="utf-8"))
+    }
+    if not quoted:
+        print(f"  notes: no `poly.wasm: <n> bytes` line in {RELEASE_NOTES.name}")
+        return
+    actual = WASM_MODULE.stat().st_size
+    stale = sorted(size for size in quoted if size != actual)
+    if stale:
+        raise SystemExit(
+            f"{RELEASE_NOTES.name} quotes a wasm size the built module does not have: "
+            f"notes say {', '.join(f'{size:,}' for size in stale)} bytes, "
+            f"{WASM_MODULE.relative_to(ROOT)} is {actual:,} bytes. "
+            "Fix the number in the notes, commit it, and re-run with --resume."
+        )
+    print(f"  notes: wasm size matches the built module ({actual:,} bytes)")
+
+
 def wasm_size_budget() -> int | None:
     """The byte budget wasm-build.yml gates against, or None if unreadable."""
     match = WASM_BUDGET_RE.search(WASM_WORKFLOW.read_text(encoding="utf-8"))
@@ -217,7 +264,10 @@ def main() -> int:
     arguments = parser.parse_args()
     version = arguments.version
 
-    print("1/6 Preflight")
+    run_started = time.time()
+    timings: dict[str, float] = {}
+
+    print("1/7 Preflight")
     if version.startswith("v"):
         raise SystemExit("tags are unprefixed: pass the version without the leading `v`")
     if not VERSION_RE.match(version):
@@ -240,6 +290,7 @@ def main() -> int:
         if not arguments.resume:
             print(f"  - run scripts/prepare_release.py {version}")
         print(f"  - commit `chore(release): prepare {version}` and push {branch}")
+        print(f"  - check the wasm size in {RELEASE_NOTES.name} against the built module")
         print(f"  - wait for the {CI_WORKFLOW} push run at that commit; stop if it is not green")
         print(f"  - `git tag -a {version} -m \"Poly {version}\"` and push the tag")
         print(f"  - wait for the {RELEASE_WORKFLOW} run and print the release")
@@ -257,15 +308,17 @@ def main() -> int:
             raise SystemExit(
                 f"HEAD is {local_ahead} commit(s) ahead of origin/{branch}; push it first"
             )
-        print("2/6 Prepare: skipped (--resume, HEAD is pushed)")
+        print("2/7 Prepare: skipped (--resume, HEAD is pushed)")
     else:
-        print("2/6 Prepare")
+        print("2/7 Prepare")
+        prepare_started = time.time()
         prepare = [sys.executable, str(PREPARE_SCRIPT), version]
         if arguments.skip_tests:
             prepare.append("--skip-tests")
         run(prepare, allow_failure=False)
+        timings["prepare"] = time.time() - prepare_started
 
-        print("3/6 Commit and push")
+        print("3/7 Commit and push")
         changed = changed_paths()
         if not changed:
             print("  no changes: the version was already prepared in this commit")
@@ -283,25 +336,32 @@ def main() -> int:
         head = git("rev-parse", "HEAD").strip()
 
     if arguments.resume:
-        print("3/6 Commit and push: skipped")
+        print("3/7 Commit and push: skipped")
 
-    print("4/6 Wait for CI on the release commit")
+    print("4/7 Check the release notes")
+    check_notes_wasm_size()
+
+    print("5/7 Wait for CI on the release commit")
+    ci_started = time.time()
     ci_run = find_run(CI_WORKFLOW, commit=head, branch=branch)
     ci_view = wait_run(ci_run, "CI", arguments.timeout)
+    timings["CI wait"] = time.time() - ci_started
     if not print_jobs(ci_view):
         raise SystemExit(
             f"CI is red for {head[:9]}, so no tag was created. Fix the cause, commit and push, then "
             f"re-run with --resume:\n  python3 scripts/release.py {version} --resume"
         )
-    print("  CI is green; the commit is safe to tag")
+    print(f"  CI is green after {duration(timings['CI wait'])}; the commit is safe to tag")
 
-    print("5/6 Tag and push")
+    print("6/7 Tag and push")
     git("tag", "-a", version, "-m", f"Poly {version}")
     git("push", "origin", version)
 
-    print("6/6 Wait for the release")
+    print("7/7 Wait for the release")
+    release_started = time.time()
     release_run = find_run(RELEASE_WORKFLOW, commit=head, branch=version)
     release_view = wait_run(release_run, "release", arguments.timeout)
+    timings["release wait"] = time.time() - release_started
     if not print_jobs(release_view):
         raise SystemExit(
             f"the release run failed for {version}. The release may be published but unverified; "
@@ -317,6 +377,11 @@ def main() -> int:
         print(f"  {asset['name']}  {asset['size']} bytes")
     print_wasm_headroom(release["assets"])  # type: ignore[arg-type]
     print(f"  {release['url']}")
+
+    print("\nTimings")
+    for label, seconds in timings.items():
+        print(f"  {label:<14} {duration(seconds)}")
+    print(f"  {'total':<14} {duration(time.time() - run_started)}")
     return 0
 
 

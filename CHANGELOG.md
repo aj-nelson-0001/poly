@@ -2,6 +2,20 @@
 
 All notable changes to the Poly language compiler will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **The release driver rejects a stale wasm size in the release notes.**
+  `scripts/release.py` now reads the `poly.wasm: <n> bytes` line from
+  `POLY_V2_PREVIEW_RELEASE_NOTES.md` and compares it with the module
+  `prepare_release.py` just built. A mismatch stops the run with both numbers;
+  the preview.21 notes carried 548,899 bytes for a 548,185-byte module until it
+  was caught by hand, which is exactly the claim this check removes.
+- **The release driver reports how long each stage took.** The summary ends
+  with `prepare`, `CI wait`, `release wait`, and `total`, so the wait timeouts
+  can be set from measurements instead of guesses.
+
 ## [2.0.0-preview.21] - 2026-11-25
 
 ### Added

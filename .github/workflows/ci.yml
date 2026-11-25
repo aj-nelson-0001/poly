@@ -324,6 +324,58 @@ jobs:
     # gates is the same definition the release uploads.
     uses: ./.github/workflows/wasm-build.yml
 
+  # The `wasm` job proves the committed module passes the smoke test. This job
+  # proves the other half: a module that compiles the asm backend back in must
+  # fail that same smoke test, so the parity guard is a fact checked on every
+  # run instead of something a hand edit showed once. It does not need wasm-opt
+  # (only the advertised target set matters here) and it runs the smoke test
+  # against a copy in $RUNNER_TEMP, so the committed module is never touched.
+  wasm-asm-guard:
+    name: Wasm asm guard fires
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4dfd137a5aecc12897f37a01818006f58cf58347 # 1.98.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build poly-wasm with asm compiled in
+        working-directory: compiler
+        run: |
+          cargo build --locked -p poly-wasm --release --target wasm32-unknown-unknown \
+            --features poly-transpiler/asm \
+            --config 'profile.release.opt-level="z"' \
+            --config 'profile.release.lto=true' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.strip=true' \
+            --config 'profile.release.panic="abort"'
+          cp target/wasm32-unknown-unknown/release/poly_wasm.wasm "$RUNNER_TEMP/asm-poly.wasm"
+
+      # A red smoke test for some unrelated reason would not prove the guard,
+      # so the failure has to name both parity checks.
+      - name: Require the smoke test to reject it
+        run: |
+          set +e
+          output=$(node scripts/playground_wasm_smoke.mjs "$RUNNER_TEMP/asm-poly.wasm" 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -eq 0 ]; then
+            echo "::error::the smoke test accepted a wasm module that compiles asm; the parity guard is not firing"
+            exit 1
+          fi
+          for check in 'TARGET parity' 'NOTES: the wasm module now compiles asm'; do
+            if ! printf '%s\n' "$output" | grep -Fq "$check"; then
+              echo "::error::the smoke test failed, but not on '$check'; the guard proved nothing"
+              exit 1
+            fi
+          done
+          echo "asm guard: the smoke test rejected the asm build for both parity checks"
+
 # Release publishing is owned by .github/workflows/release.yml (build, wasm,
 # create-release, then a verify-release job that re-downloads and checks the
 # published assets; triggered on v* and 2.* tags). The verification checks live

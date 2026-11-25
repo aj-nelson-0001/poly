@@ -14,6 +14,11 @@ All notable changes to the Poly language compiler will be documented in this fil
   leaving the notes claiming the module lacks the target fails the job with
   a message naming the file to update, so the download cannot grow and the
   documentation cannot drift back.
+- **The asm guard itself is now proven on a runner.** A `wasm-asm-guard` CI job
+  builds the module with `poly-transpiler/asm` and fails unless the smoke test
+  rejects it in `$RUNNER_TEMP`, and rejects it for *both* reasons (the parity
+  message and the notes message), so a smoke test that breaks for an unrelated
+  cause cannot satisfy the guard. The committed module is never touched.
 - **`scripts/release.py` cuts a release in one command.** It runs
   `prepare_release.py`, commits only release metadata, pushes the branch,
   waits for CI on that exact commit, and only then tags and watches

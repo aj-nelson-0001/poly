@@ -10,13 +10,20 @@
 //     the asm target (compiled out here, documented as absent)
 //
 // Runs in CI (see the `wasm` job in .github/workflows/ci.yml) and locally:
-//   node scripts/playground_wasm_smoke.mjs
+//   node scripts/playground_wasm_smoke.mjs [path-to-poly.wasm]
+//
+// The optional path defaults to playground/poly.wasm. ci.yml's
+// `wasm-asm-guard` job points it at a deliberately asm-enabled build and
+// requires this script to fail, which proves the parity check below fires on a
+// real runner rather than only under a hand edit.
 import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const wasmPath = join(root, 'playground', 'poly.wasm');
+const wasmPath = process.argv[2]
+  ? resolve(process.argv[2])
+  : join(root, 'playground', 'poly.wasm');
 
 const { instance } = await WebAssembly.instantiate(readFileSync(wasmPath), {});
 const exp = instance.exports;

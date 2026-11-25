@@ -20,13 +20,13 @@ All notable changes to the Poly language compiler will be documented in this fil
 ### Changed
 
 - **The playground module no longer carries the asm backend (635,084 ->
-  547,160 bytes).** `poly-asm-codegen` is now an `asm` cargo feature of
+  548,899 bytes).** `poly-asm-codegen` is now an `asm` cargo feature of
   `poly-transpiler`, default-on so the CLI, LSP, and tests keep the target,
   and off for `poly-wasm`, which serves the browser playground where the
   target was never offered and x86-64 assembly cannot run. Asking the module
   for `asm` now returns `The asm target is not part of this build` and lists
   the targets it does support instead of quietly compiling a backend nobody
-  could execute. This buys 112,840 bytes of headroom under the unchanged
+  could execute. This buys 111,101 bytes of headroom under the unchanged
   660,000-byte gate. The build also runs `wasm-opt --converge` to a fixed
   point (worth ~450 bytes over a single `-Oz` pass).
 
@@ -35,7 +35,11 @@ All notable changes to the Poly language compiler will be documented in this fil
 - **`playground/poly.wasm` can no longer go stale.** `wasm-build.yml` saves
   the committed module before building and fails when the rebuild differs, so
   the bytes CI gates and releases publish are the bytes in the repository.
-  The committed module is rebuilt here to match.
+  The committed module is rebuilt here to match: the module embeds the
+  compiler version, so stamping preview.20 changed its optimized size
+  (547,160 -> 548,899 bytes). `prepare_release.py` now rebuilds the module as
+  part of the version bump and fails without `wasm-opt`, so a future release
+  cannot tag a module the drift gate rejects.
 
 ### Added
 

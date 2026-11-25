@@ -5,11 +5,16 @@ Automates the manual steps performed for 2.0.0-preview.4/.5:
 
 1. Bump the workspace version in ``compiler/Cargo.toml`` and refresh
    ``compiler/Cargo.lock`` (workspace members only; dependencies untouched).
-2. Regenerate the tetris generated project and restore its Cargo
+2. Rebuild ``playground/poly.wasm``. The module embeds the version string,
+   so a bump changes its bytes and size; skipping this leaves a module that
+   the wasm-build workflow's drift gate rejects when the release tag runs.
+   ``wasm-opt`` is mandatory here (the build script otherwise falls back to
+   the unoptimized cargo output, which CI would not reproduce).
+3. Regenerate the tetris generated project and restore its Cargo
    dependencies, then refresh its ``Cargo.lock`` **online** (an offline
    resolution downgrades transitive dependencies relative to the original
    lockfile) and verify ``src/main.rs`` matches ``--emit-rust`` output.
-3. Run the full verification battery: workspace tests, ``cargo fmt --check``,
+4. Run the full verification battery: workspace tests, ``cargo fmt --check``,
    ``cargo clippy -D warnings``, the markdown convention check, and the
    full-repository Poly documentation audit.
 
@@ -30,12 +35,15 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_TOML = ROOT / "compiler" / "Cargo.toml"
+PLAYGROUND_WASM = ROOT / "playground" / "poly.wasm"
+WASM_BUILD_SCRIPT = ROOT / "compiler" / "scripts" / "build_playground_wasm.sh"
 WORKSPACE_LOCK = ROOT / "compiler" / "Cargo.lock"
 TETRIS_DIR = ROOT / "tetris"
 TETRIS_PROJECT = TETRIS_DIR / "rust_output" / "tetris"
@@ -163,6 +171,27 @@ def check_version_consistency(version: str) -> None:
     print(f"  doc baselines state {version}")
 
 
+def rebuild_playground_wasm() -> None:
+    """Rebuild the playground module at the version just stamped.
+
+    The transpiler embeds its version string, so the bump changes the
+    module's bytes and its optimized size (547,160 -> 548,899 B between
+    preview.19 and preview.20). The wasm-build workflow compares the
+    committed module against a fresh build and fails the release tag when
+    they differ, so this has to run before the release is committed.
+    """
+    if shutil.which("wasm-opt") is None:
+        raise SystemExit(
+            "wasm-opt is required to rebuild playground/poly.wasm: without it\n"
+            "build_playground_wasm.sh emits the unoptimized cargo output, which\n"
+            "the wasm drift gate will reject. Install binaryen (wasm-opt), then\n"
+            "re-run this script."
+        )
+    run(["bash", str(WASM_BUILD_SCRIPT)])
+    size = PLAYGROUND_WASM.stat().st_size
+    print(f"  playground/poly.wasm rebuilt ({size:,} bytes)")
+
+
 def regenerate_tetris_project() -> None:
     run(["cargo", "build", "--release", "-p", "poly-cli"], cwd=ROOT / "compiler")
     # --project refuses to touch an existing directory; regenerate from scratch.
@@ -250,14 +279,17 @@ def main() -> int:
     if old == arguments.version:
         print("Version unchanged; regenerating and re-verifying only.")
 
-    print("1/3 Workspace version bump")
+    print("1/4 Workspace version bump")
     bump_workspace_version(arguments.version)
     sync_playground_version(arguments.version)
 
-    print("2/3 Tetris generated project")
+    print("2/4 Playground wasm module")
+    rebuild_playground_wasm()
+
+    print("3/4 Tetris generated project")
     regenerate_tetris_project()
 
-    print("3/3 Verification")
+    print("4/4 Verification")
     check_version_consistency(arguments.version)
     verify(skip_tests=arguments.skip_tests)
 

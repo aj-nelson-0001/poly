@@ -107,10 +107,10 @@ them, which is useful in CI.
 
 **A smaller browser module, and a guard that keeps it that way.** The
 playground `poly.wasm` no longer compiles the x86-64 assembly backend —
-547 KB, down from 635 KB — because a browser cannot execute that target and
+548 KB, down from 635 KB — because a browser cannot execute that target and
 the page never offered it. The CLI still ships `--target asm`, and asking
 the playground for it reports that the target is not part of that build. The
-660,000-byte budget is unchanged, leaving 112 KB of headroom, and the wasm
+660,000-byte budget is unchanged, leaving 111 KB of headroom, and the wasm
 job now compares its rebuild with the committed module byte for byte, so the
 published bytes are the bytes CI measured.
 

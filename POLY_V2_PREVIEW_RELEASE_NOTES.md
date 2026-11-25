@@ -10,8 +10,8 @@ target through `--target js`, a Goose target through `--target goose`, and C++ s
 ## What's New in 2.0.0-preview.20
 
 - **The browser module drops the assembly backend.** `poly.wasm` ships at
-  547,160 bytes, down from 635,084 in preview.19 (-87,924 bytes, about 14%),
-  with the 660,000-byte budget left unchanged and 112,840 bytes of headroom.
+  548,899 bytes, down from 635,084 in preview.19 (-86,185 bytes, about 14%),
+  with the 660,000-byte budget left unchanged and 111,101 bytes of headroom.
   The asm backend now sits behind a default-on `asm` cargo feature, the same
   shape the `goose` target already used: the CLI, the LSP, and the test suite
   still compile it, while `poly-wasm` builds `poly-transpiler` with
@@ -299,14 +299,17 @@ node scripts/playground_wasm_smoke.mjs
 python3 scripts/check_markdown.py
 ~~~
 
-Run [45514077539](https://github.com/aj-nelson-0001/poly/actions/runs/45514077539)
-on the shipping commit is green across all seven jobs: the workspace test suite
-on Linux, macOS, and Windows, the dependency audit, the lint and documentation
-checks covering 587 example blocks with 0 unmarked failures, the Tetris
-example's regeneration and headless self-test, and the wasm build with its
-drift and size gates. The wasm job logged `poly.wasm: 547160 bytes (budget:
-660000)`, and the same bytes were built twice locally to confirm the artifact
-is stable.
+The tag is cut only from a `v2.0-dev` commit whose push-triggered run is green:
+the workspace test suite on Linux, macOS, and Windows, the dependency audit,
+the lint and documentation checks, the Tetris example's regeneration and
+headless self-test, and the wasm build with its drift and size gates. The
+release workflow then rebuilds the module through that same reusable job,
+publishes those bytes, and runs `verify-release` to re-download every asset and
+check the checksum manifest, asset naming, the reported compiler version, the
+WASM header and budget, and the macOS/Windows binaries. The wasm job logs
+`poly.wasm: 548899 bytes (budget: 660000)`, and building the tagged sources
+repeatedly locally produced the same 548,899-byte module and SHA-256, so the
+published artifact is reproducible from the repository.
 
 Additional target checks passed for the Rust examples, the mixed-target fixture, the C fixture, native C execution, explicit
 C \

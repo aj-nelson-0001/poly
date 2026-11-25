@@ -46,6 +46,9 @@ enforces most of it mechanically.
 
 ## Related guards
 
+- `scripts/tests/test_release_scripts.py` — unit tests for the notes
+  wasm-size rewrite and the driver's split wait flags; the lint job runs them
+  with `python3 -m unittest discover -s scripts/tests`.
 - `scripts/check_generated_paths.py` — no machine-specific paths in tracked
   generated files (also wired as a pre-commit hook via `.githooks/`;
   activate with `git config core.hooksPath .githooks`).
@@ -282,7 +285,7 @@ owner can push past them by accident.
 | Ruleset | Branch | Rules |
 |---|---|---|
 | `protect-v2.0-dev` | `v2.0-dev` | block deletion, block non-fast-forward |
-| `protect-master` | `master` | block deletion, block non-fast-forward, require a pull request (0 approvals) |
+| `protect-master` | `master` | block deletion, block non-fast-forward, require a pull request (0 approvals), require the eight CI checks |
 
 `v2.0-dev` stays directly pushable on purpose: it is where work lands, and the
 driver's `chore(release): prepare <version>` commit is an ordinary push to it.
@@ -293,9 +296,14 @@ would do to tags and to every commit the releases were cut from.
 `master` is the stable mirror of `v2.0-dev`, and the pull-request rule means it
 **can no longer be fast-forwarded by a raw push**: syncing it is now a PR from
 `v2.0-dev` with nothing to approve, or a deliberate edit to the ruleset. That
-is the intended cost of refusing direct pushes. Tags are not covered by
-either ruleset, so moving a release tag is still possible by hand — the driver
-never does it, and neither should a routine release.
+is the intended cost of refusing direct pushes. The same ruleset requires the
+CI jobs by name — `Test (ubuntu-latest)`, `Test (macos-latest)`,
+`Test (windows-latest)`, `Lint and documentation`, `Tetris example (Linux)`,
+`Dependency Audit`, `WebAssembly Artifact / Build and gate playground wasm`,
+and `Wasm asm guard fires` — so a sync PR cannot merge while a check is red or
+still running. A job still queued counts as unsatisfied, not as a pass. Tags
+are not covered by either ruleset, so moving a release tag is still possible
+by hand — the driver never does it, and neither should a routine release.
 
 Read the effective rules for a branch (the API returns what is actually
 enforced, not what the ruleset was meant to say):

@@ -2,7 +2,24 @@
 
 All notable changes to the Poly language compiler will be documented in this file.
 
-## [Unreleased]
+## [2.0.0-preview.23] - 2026-11-25
+
+### Added
+
+- **Pull requests into `master` wait for CI.** The `protect-master` ruleset now
+  requires the eight `ci.yml` check contexts by name (the three OS test jobs,
+  lint and documentation, the Tetris example, the dependency audit, the wasm
+  build and gate, and the asm guard), so the branch cannot advance while a
+  check is red, running, or queued. A skipped or missing check is unsatisfied,
+  not a pass.
+- **The release scripts have unit tests.**
+  `scripts/tests/test_release_scripts.py` covers the generated wasm-size
+  rewrite (plain and comma-grouped numbers, the already-correct no-op, the
+  not-a-number placeholder in the notes' prose, duplicate lines, and a missing
+  file), the version patterns, and the split wait flags. The lint job runs it
+  with `python3 -m unittest discover -s scripts/tests`, so a change to these
+  one-off release paths is caught on every pull request instead of
+  mid-release.
 
 ### Changed
 

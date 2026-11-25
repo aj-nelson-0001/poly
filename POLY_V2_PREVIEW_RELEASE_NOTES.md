@@ -2,10 +2,35 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.22 is a release-tooling release: the language surface is unchanged from preview.21, the release
-that first shipped through the driver. Rust remains the default and most complete backend. C is an
+Poly 2.0.0-preview.23 is a release-tooling release: the language surface is unchanged from preview.22, the release
+that first published through the driver. Rust remains the default and most complete backend. C is an
 intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm` from the CLI, a JavaScript
 target through `--target js`, a Goose target through `--target goose`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.23
+
+- **The notes' wasm size is generated from the module that ships.**
+  `scripts/prepare_release.py` rewrites the `poly.wasm: <n> bytes` evidence
+  line from the module it just rebuilt, keeping the file's separator style, and
+  `scripts/release.py` still re-checks it before tagging. The number below is
+  therefore written by the release, not by hand; preview.21's hand-written
+  note was 714 bytes off.
+- **Each wait has its own limit.** A single shared cap is replaced by
+  `--ci-timeout` (15 minutes) and `--release-timeout` (5 minutes), about 2.5x
+  the slower measurement of each stage (CI 5m 44s-6m 09s, release 1m 48s-2m 06s
+  across preview.21 and preview.22). A stuck CI wait no longer eats the release
+  wait's budget, and the old `--timeout` flag is gone.
+- **`master` cannot advance on a red or pending check.** The `protect-master`
+  ruleset now requires the eight `ci.yml` check contexts by name — the three
+  OS test jobs, lint and documentation, the Tetris example, the dependency
+  audit, the wasm build and gate, and the asm guard — so a sync pull request
+  merges only after CI says the tree is green.
+- **The release scripts have unit tests.** They cover the generated wasm-size
+  rewrite (plain and comma-grouped numbers, an already-correct no-op, the
+  not-a-number placeholder in this file's prose, duplicate lines, and a missing
+  file), the version patterns, and the split wait flags. The lint job runs them
+  on every pull request, because these paths otherwise execute only during a
+  release.
 
 ## What's New in 2.0.0-preview.22
 
@@ -353,7 +378,7 @@ release workflow then rebuilds the module through that same reusable job,
 publishes those bytes, and runs `verify-release` to re-download every asset and
 check the checksum manifest, asset naming, the reported compiler version, the
 WASM header and budget, and the macOS/Windows binaries. The wasm job logs
-`poly.wasm: 547733 bytes (budget: 660000)`, and that is the size quoted in this
+`poly.wasm: 547152 bytes (budget: 660000)`, and that is the size quoted in this
 file, which `scripts/release.py` re-checks against the module before it tags.
 The release workflow rebuilds the module from the tagged commit and fails on
 drift, so the published bytes are the ones built from the repository.

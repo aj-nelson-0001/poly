@@ -103,6 +103,21 @@ Add `--strict` to reject calls to foreign functions that lack an explicit
 (the native compiler validates them), but strict mode makes Poly surface
 them, which is useful in CI.
 
+### What's New in 2.0.0-preview.22
+
+**The release driver checks the numbers it publishes, and any run can be
+resumed.** Before tagging, `scripts/release.py` compares the wasm size quoted
+in the preview notes with the module it just built and stops on a mismatch
+(preview.21's notes were off by 714 bytes until corrected by hand). The run now
+ends with stage timings, so the wait limit is set from measurement rather than
+guesswork — 20 minutes per stage instead of the old 45 — and `--resume` also
+works after the tag exists, which is where an interrupted release wait leaves
+you. `master` was synced to preview.21 by pull request, so the mirror no longer
+lags.
+
+Download the Linux, macOS, Windows, and playground WASM builds from the
+[2.0.0-preview.22 release](https://github.com/aj-nelson-0001/poly/releases/tag/2.0.0-preview.22).
+
 ### What's New in 2.0.0-preview.21
 
 **A release can no longer tag a commit CI has not passed.** `scripts/release.py`

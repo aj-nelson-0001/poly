@@ -2,10 +2,31 @@
 
 **Status:** Preview release candidate documentation
 
-Poly 2.0.0-preview.21 is a release-tooling release: the language surface is unchanged from preview.20, the size release
-that dropped the assembly backend from the browser module. Rust remains the default and most complete backend. C is an
+Poly 2.0.0-preview.22 is a release-tooling release: the language surface is unchanged from preview.21, the release
+that first shipped through the driver. Rust remains the default and most complete backend. C is an
 intentionally narrow C11 orchestration backend, a Linux x86-64 assembly target is available through `--target asm` from the CLI, a JavaScript
 target through `--target js`, a Goose target through `--target goose`, and C++ syntax is reserved and explicitly rejected.
+
+## What's New in 2.0.0-preview.22
+
+- **The driver refuses to publish a number it did not measure.** Before the tag
+  exists, `scripts/release.py` reads the `poly.wasm: <n> bytes` line from these
+  notes and compares it with the module it just built; a mismatch stops the run
+  and names both numbers. preview.21's notes quoted 548,899 bytes for a
+  548,185-byte module until it was corrected by hand.
+- **Every stage is timed.** The run ends with `prepare`, `CI wait`,
+  `release wait`, and `total`, and the CI stage prints when the commit became
+  safe to tag.
+- **A run interrupted after the tag can be resumed.** `--resume` now accepts a
+  tag that already names `HEAD`: it re-checks the notes, re-confirms CI on that
+  commit, skips the tag, and waits on the existing release run instead of
+  refusing because the tag exists. A tag naming another commit still stops it.
+- **The wait limit comes from measurement.** The default per-run timeout is 20
+  minutes instead of 45, three times the slowest stage measured on preview.21
+  (CI 6m 09s, release 2m 06s); `--timeout` still raises it on slow runners.
+- **`master` is current.** The mirror was synced to preview.21 by pull request
+  ([#2](https://github.com/aj-nelson-0001/poly/pull/2), a merge commit, no
+  source changes), so both long-lived branches point at the same tree.
 
 ## What's New in 2.0.0-preview.21
 
@@ -332,9 +353,10 @@ release workflow then rebuilds the module through that same reusable job,
 publishes those bytes, and runs `verify-release` to re-download every asset and
 check the checksum manifest, asset naming, the reported compiler version, the
 WASM header and budget, and the macOS/Windows binaries. The wasm job logs
-`poly.wasm: 548185 bytes (budget: 660000)`, and building the tagged sources
-repeatedly locally produced the same 548,185-byte module and SHA-256, so the
-published artifact is reproducible from the repository.
+`poly.wasm: 547733 bytes (budget: 660000)`, and that is the size quoted in this
+file, which `scripts/release.py` re-checks against the module before it tags.
+The release workflow rebuilds the module from the tagged commit and fails on
+drift, so the published bytes are the ones built from the repository.
 
 Additional target checks passed for the Rust examples, the mixed-target fixture, the C fixture, native C execution, explicit
 C \

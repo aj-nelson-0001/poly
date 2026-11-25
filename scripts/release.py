@@ -17,8 +17,9 @@ commit is green.
     3. Commit ``chore(release): prepare <version>`` and push the branch. Only
        release metadata may be in that commit; anything else aborts first.
     4. Check the wasm size quoted in ``POLY_V2_PREVIEW_RELEASE_NOTES.md``
-       against the module ``prepare_release.py`` just built. A stale number is
-       a docs bug, but it ships as a false claim, so it stops the run.
+       against the module ``prepare_release.py`` just built. That script writes
+       the number; this is the independent check that it is true. A stale
+       number is a docs bug, but it ships as a false claim, so it stops the run.
     5. Wait for the ``CI`` run on that commit. A red run stops here, before any
        tag exists.
     6. Tag ``<version>`` (annotated) and push the tag, which starts
@@ -59,15 +60,19 @@ WASM_BUDGET_RE = re.compile(r"WASM_SIZE_BUDGET:\s*'(\d+)'")
 WASM_MODULE = ROOT / "playground" / "poly.wasm"
 RELEASE_NOTES = ROOT / "POLY_V2_PREVIEW_RELEASE_NOTES.md"
 # The evidence section quotes the published module, e.g.
-# "`poly.wasm: 548185 bytes (budget: 660000)`". The number is written by hand,
-# so it has already gone stale once (548,899 for a 548,185-byte module).
+# "`poly.wasm: 548185 bytes (budget: 660000)`". `prepare_release.py` writes it
+# from the built module, and this check confirms the shipped claim; it went
+# stale by hand once (548,899 for a 548,185-byte module).
 NOTES_WASM_RE = re.compile(r"poly\.wasm:\s*(\d[\d,]*)\s*bytes")
 POLL_SECONDS = 10
-# Measured on 2.0.0-preview.21 (2026-11-25): CI 6m 09s, release 2m 06s. 20
-# minutes is about 3x the slower stage, which leaves room for a cold runner
-# queue while still failing long before the old 45-minute guess could hang a
-# terminal. Override with --timeout when the runners are slow.
-DEFAULT_TIMEOUT_MINUTES = 20
+# Each wait gets its own limit. Measured on preview.21 (2026-11-25): CI 6m 09s,
+# release 2m 06s; on preview.22 (2026-11-25): CI 5m 44s, release 1m 48s. Each
+# default is about 2.5x its slower measurement, which leaves room for a cold
+# runner queue but fails long before the old 45-minute guess could hang a
+# terminal. Separate limits mean a stuck CI wait no longer eats the release
+# wait's budget. Override with --ci-timeout / --release-timeout.
+DEFAULT_CI_TIMEOUT_MINUTES = 15
+DEFAULT_RELEASE_TIMEOUT_MINUTES = 5
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$")
 # The release commit is metadata only. Docs are edited by hand before the
 # driver runs, so they are allowed; application sources are not, and an
@@ -282,8 +287,12 @@ def main() -> int:
                         help="pass --skip-tests to prepare_release.py")
     parser.add_argument("--dry-run", action="store_true",
                         help="run the read-only checks and print the plan, without changing anything")
-    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_MINUTES, metavar="MINUTES",
-                        help=f"per-run wait limit (default {DEFAULT_TIMEOUT_MINUTES})")
+    parser.add_argument("--ci-timeout", type=int, default=DEFAULT_CI_TIMEOUT_MINUTES,
+                        metavar="MINUTES",
+                        help=f"CI wait limit (default {DEFAULT_CI_TIMEOUT_MINUTES})")
+    parser.add_argument("--release-timeout", type=int, default=DEFAULT_RELEASE_TIMEOUT_MINUTES,
+                        metavar="MINUTES",
+                        help=f"release wait limit (default {DEFAULT_RELEASE_TIMEOUT_MINUTES})")
     arguments = parser.parse_args()
     version = arguments.version
 
@@ -387,7 +396,7 @@ def main() -> int:
     print("5/7 Wait for CI on the release commit")
     ci_started = time.time()
     ci_run = find_run(CI_WORKFLOW, commit=head, branch=branch)
-    ci_view = wait_run(ci_run, "CI", arguments.timeout)
+    ci_view = wait_run(ci_run, "CI", arguments.ci_timeout)
     timings["CI wait"] = time.time() - ci_started
     if not print_jobs(ci_view):
         if tagged:
@@ -411,7 +420,7 @@ def main() -> int:
     print("7/7 Wait for the release")
     release_started = time.time()
     release_run = find_run(RELEASE_WORKFLOW, commit=head, branch=version)
-    release_view = wait_run(release_run, "release", arguments.timeout)
+    release_view = wait_run(release_run, "release", arguments.release_timeout)
     timings["release wait"] = time.time() - release_started
     if not print_jobs(release_view):
         raise SystemExit(

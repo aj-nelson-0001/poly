@@ -2,6 +2,22 @@
 
 All notable changes to the Poly language compiler will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **The release notes' wasm size is generated, not hand-written.**
+  `scripts/prepare_release.py` now rewrites the `poly.wasm: <n> bytes` evidence
+  line from the module it just rebuilt, keeping the file's separator style. The
+  release driver still re-checks that line before tagging, so the claim is
+  verified and cannot start out stale; preview.21's hand-written number was
+  548,899 bytes for a 548,185-byte module.
+- **Each wait has its own limit.** The single 20-minute cap is split into
+  `--ci-timeout` (15 minutes, default) and `--release-timeout` (5 minutes,
+  default), about 2.5x the slower measurement of each stage (CI 5m 44s-6m 09s,
+  release 1m 48s-2m 06s across preview.21 and preview.22). A stuck CI wait no
+  longer consumes the release wait's budget, and `--timeout` is gone.
+
 ## [2.0.0-preview.22] - 2026-11-25
 
 ### Changed

@@ -14,6 +14,11 @@ All notable changes to the Poly language compiler will be documented in this fil
   leaving the notes claiming the module lacks the target fails the job with
   a message naming the file to update, so the download cannot grow and the
   documentation cannot drift back.
+- **`scripts/release.py` cuts a release in one command.** It runs
+  `prepare_release.py`, commits only release metadata, pushes the branch,
+  waits for CI on that exact commit, and only then tags and watches
+  `release.yml`. A red CI run stops it before a tag exists, which is exactly
+  the mistake that forced preview.20's tag to be deleted and re-cut.
 
 ## [2.0.0-preview.20] - 2026-11-25
 

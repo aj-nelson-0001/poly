@@ -178,8 +178,13 @@ clean checkout.
 
 ## Release procedure
 
-The mechanical steps are automated by `scripts/prepare_release.py`; it never
-commits, tags, or pushes.
+The mechanical steps are automated by `scripts/prepare_release.py`, which never
+commits, tags, or pushes. `scripts/release.py` wraps it into one command: it
+prepares, commits only release metadata, pushes the branch, **waits for CI on
+that exact commit**, and only then creates and pushes the tag and waits for the
+release run. That ordering is not cosmetic: preview.20's first tag failed the
+wasm drift gate because it was cut before the branch CI for the release commit
+had finished, and the tag had to be deleted and re-cut.
 
 ~~~sh
 # 1. Update the docs that must describe the new version by hand:
@@ -195,10 +200,32 @@ python3 scripts/prepare_release.py 2.0.0-preview.N
 #     directories, runner paths) that would break byte-reproducibility:
 python3 scripts/check_generated_paths.py
 
-# 3. Review the diff, then commit and tag:
+# 3. Commit, wait for CI, tag, and watch the release in one step:
+python3 scripts/release.py 2.0.0-preview.N
+
+# Re-running after a red CI run (the release commit is already pushed):
+python3 scripts/release.py 2.0.0-preview.N --resume
+
+# Plan only: preflight checks and the steps it would take, no writes:
+python3 scripts/release.py 2.0.0-preview.N --dry-run
+~~~
+
+The driver refuses to run if the tag already exists, if the branch is `master`,
+or if the commit would contain anything outside the release surface
+(`CHANGELOG.md`, `README.md`, the documentation index, the preview notes, this
+guide, `compiler/Cargo.{toml,lock}`, `playground/{index.html,poly.wasm}`, and
+the tracked tetris output). A red CI run stops it before a tag exists, which is
+the whole point; a red release run leaves the tag alone and prints how to
+inspect it.
+
+Manual equivalent, when the driver cannot run (for example no `gh`):
+
+~~~sh
 git add -A
 git commit -m "chore(release): prepare 2.0.0-preview.N"
 git push origin v2.0-dev
+# wait for CI to go green on that commit before tagging
+gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)"
 git tag -a 2.0.0-preview.N -m "Poly 2.0.0-preview.N"
 git push origin 2.0.0-preview.N
 

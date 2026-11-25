@@ -4,6 +4,17 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- **The release scripts have unit tests.**
+  `scripts/tests/test_release_scripts.py` covers the generated wasm-size
+  rewrite (plain and comma-grouped numbers, the already-correct no-op, the
+  not-a-number placeholder in the notes' prose, duplicate lines, and a missing
+  file), the version patterns, and the split wait flags. The lint job runs it
+  with `python3 -m unittest discover -s scripts/tests`, so a change to these
+  one-off release paths is caught on every pull request instead of
+  mid-release.
+
 ### Changed
 
 - **The release notes' wasm size is generated, not hand-written.**

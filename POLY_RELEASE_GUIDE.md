@@ -46,6 +46,9 @@ enforces most of it mechanically.
 
 ## Related guards
 
+- `scripts/tests/test_release_scripts.py` — unit tests for the notes
+  wasm-size rewrite and the driver's split wait flags; the lint job runs them
+  with `python3 -m unittest discover -s scripts/tests`.
 - `scripts/check_generated_paths.py` — no machine-specific paths in tracked
   generated files (also wired as a pre-commit hook via `.githooks/`;
   activate with `git config core.hooksPath .githooks`).

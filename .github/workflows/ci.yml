@@ -222,6 +222,11 @@ jobs:
       - name: Check generated files for machine-specific paths
         run: python3 scripts/check_generated_paths.py
 
+      # The release scripts only run during a release, so their file edits
+      # need a test that runs on every change instead.
+      - name: Run release script tests
+        run: python3 -m unittest discover -s scripts/tests
+
   tetris:
     name: Tetris example (Linux)
     runs-on: ubuntu-latest

@@ -2,8 +2,8 @@
 
 **Applies to:** any `2.0.0-preview.N` release. This guide covers release
 readiness, the version-bearing file map, and the mechanical release path. It
-does not create or tag a release automatically; the agent workflow never tags
-or pushes.
+tags nothing by itself: `scripts/release.py` is the one path that tags and
+pushes, and only when someone runs it.
 
 ## Consistency bar
 
@@ -251,3 +251,36 @@ fixing the cause — do not quietly leave a red verification run behind.
 Because the tagged commit's notes become the release
 body, its What's New section must already describe the release being cut, and
 the verification-evidence numbers in it should be re-checked at tag time.
+
+## Branch protection
+
+Two repository rulesets guard the long-lived branches. Both are active, apply
+to the whole branch, and have **no bypass actors** — not even the repository
+owner can push past them by accident.
+
+| Ruleset | Branch | Rules |
+|---|---|---|
+| `protect-v2.0-dev` | `v2.0-dev` | block deletion, block non-fast-forward |
+| `protect-master` | `master` | block deletion, block non-fast-forward, require a pull request (0 approvals) |
+
+`v2.0-dev` stays directly pushable on purpose: it is where work lands, and the
+driver's `chore(release): prepare <version>` commit is an ordinary push to it.
+The rules only stop a force push or a deletion from rewriting published
+history, which is exactly what a bad `--force` or a stray `push --delete`
+would do to tags and to every commit the releases were cut from.
+
+`master` is the stable mirror of `v2.0-dev`, and the pull-request rule means it
+**can no longer be fast-forwarded by a raw push**: syncing it is now a PR from
+`v2.0-dev` with nothing to approve, or a deliberate edit to the ruleset. That
+is the intended cost of refusing direct pushes. Tags are not covered by
+either ruleset, so moving a release tag is still possible by hand — the driver
+never does it, and neither should a routine release.
+
+Read the effective rules for a branch (the API returns what is actually
+enforced, not what the ruleset was meant to say):
+
+~~~sh
+gh api repos/aj-nelson-0001/poly/rules/branches/v2.0-dev --jq '.[].type'
+gh api repos/aj-nelson-0001/poly/rules/branches/master --jq '.[].type'
+gh api repos/aj-nelson-0001/poly/rulesets --jq '.[] | "\(.id) \(.name) \(.target) \(.enforcement)"'
+~~~

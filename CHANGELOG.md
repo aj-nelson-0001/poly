@@ -6,6 +6,22 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ### Changed
 
+- **The release notes' wasm size is generated, not hand-written.**
+  `scripts/prepare_release.py` now rewrites the `poly.wasm: <n> bytes` evidence
+  line from the module it just rebuilt, keeping the file's separator style. The
+  release driver still re-checks that line before tagging, so the claim is
+  verified and cannot start out stale; preview.21's hand-written number was
+  548,899 bytes for a 548,185-byte module.
+- **Each wait has its own limit.** The single 20-minute cap is split into
+  `--ci-timeout` (15 minutes, default) and `--release-timeout` (5 minutes,
+  default), about 2.5x the slower measurement of each stage (CI 5m 44s-6m 09s,
+  release 1m 48s-2m 06s across preview.21 and preview.22). A stuck CI wait no
+  longer consumes the release wait's budget, and `--timeout` is gone.
+
+## [2.0.0-preview.22] - 2026-11-25
+
+### Changed
+
 - **The release driver rejects a stale wasm size in the release notes.**
   `scripts/release.py` now reads the `poly.wasm: <n> bytes` line from
   `POLY_V2_PREVIEW_RELEASE_NOTES.md` and compares it with the module
@@ -15,6 +31,12 @@ All notable changes to the Poly language compiler will be documented in this fil
 - **The release driver reports how long each stage took.** The summary ends
   with `prepare`, `CI wait`, `release wait`, and `total`, so the wait timeouts
   can be set from measurements instead of guesses.
+- **A release interrupted after tagging can be resumed.** `--resume` now also
+  accepts a tag that already names `HEAD`: it re-checks the notes, re-confirms
+  CI was green on that commit, skips the tag, and waits on the existing release
+  run. A tag naming another commit still stops the run.
+- **The per-run wait limit is 20 minutes, not 45.** Measured on preview.21:
+  CI 6m 09s, release 2m 06s. `--timeout` still raises it for slow runners.
 
 ## [2.0.0-preview.21] - 2026-11-25
 

@@ -190,7 +190,8 @@ had finished, and the tag had to be deleted and re-cut.
 # 1. Update the docs that must describe the new version by hand:
 #    CHANGELOG.md (date the [Unreleased] section), README.md
 #    ("What's New"), POLY_DOCUMENTATION_INDEX.md (baseline),
-#    POLY_V2_PREVIEW_RELEASE_NOTES.md (highlights).
+#    POLY_V2_PREVIEW_RELEASE_NOTES.md (highlights; step 2 rewrites its
+#    `poly.wasm: <n> bytes` line, so do not hand-maintain that number).
 
 # 2. Bump, regenerate, and verify (workspace version, tetris project,
 #    lockfiles, tests, fmt, clippy, markdown, doc audit):
@@ -206,6 +207,9 @@ python3 scripts/release.py 2.0.0-preview.N
 # Re-running after a red CI run (the release commit is already pushed):
 python3 scripts/release.py 2.0.0-preview.N --resume
 
+# Re-running after the tag exists (an interrupted release wait):
+python3 scripts/release.py 2.0.0-preview.N --resume
+
 # Plan only: preflight checks and the steps it would take, no writes:
 python3 scripts/release.py 2.0.0-preview.N --dry-run
 ~~~
@@ -218,11 +222,22 @@ the tracked tetris output). A red CI run stops it before a tag exists, which is
 the whole point; a red release run leaves the tag alone and prints how to
 inspect it.
 
-It also compares the `poly.wasm: <n> bytes` line in
-`POLY_V2_PREVIEW_RELEASE_NOTES.md` with the module it just built and stops on a
-mismatch, because that number is written by hand and shipped stale once. Fix
-the number, commit it, and re-run with `--resume`. The final summary ends with
-stage timings (`prepare`, `CI wait`, `release wait`, `total`).
+The `poly.wasm: <n> bytes` line in `POLY_V2_PREVIEW_RELEASE_NOTES.md` is now
+generated: `prepare_release.py` rewrites it from the module it just rebuilt,
+and the driver re-checks it before tagging, so a stale number cannot ship. If
+the driver still reports a mismatch (the notes were edited after the build),
+fix the number, commit it, and re-run with `--resume`. The final summary ends
+with stage timings (`prepare`, `CI wait`, `release wait`, `total`).
+
+`--resume` also covers a run that was interrupted *after* tagging, which is
+what happens when the terminal is cut off inside the release wait: if the tag
+already names `HEAD`, the driver re-checks the notes, re-confirms CI was green
+on that commit, skips the tag, and waits on the existing release run. A tag
+that names some other commit still stops the run, because moving it is a human
+decision. Each wait has its own limit: 15 minutes for CI and 5 for the release,
+about 2.5x the slower measurement of each stage (preview.21 and preview.22: CI
+5m 44s-6m 09s, release 1m 48s-2m 06s). Raise them with `--ci-timeout` and
+`--release-timeout` on slow runners.
 
 Manual equivalent, when the driver cannot run (for example no `gh`):
 

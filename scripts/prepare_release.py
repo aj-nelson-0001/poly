@@ -9,7 +9,9 @@ Automates the manual steps performed for 2.0.0-preview.4/.5:
    so a bump changes its bytes and size; skipping this leaves a module that
    the wasm-build workflow's drift gate rejects when the release tag runs.
    ``wasm-opt`` is mandatory here (the build script otherwise falls back to
-   the unoptimized cargo output, which CI would not reproduce).
+   the unoptimized cargo output, which CI would not reproduce). Then rewrite
+   the ``poly.wasm: <n> bytes`` line in the preview notes to the size just
+   built, because that number is evidence and was hand-maintained stale once.
 3. Regenerate the tetris generated project and restore its Cargo
    dependencies, then refresh its ``Cargo.lock`` **online** (an offline
    resolution downgrades transitive dependencies relative to the original
@@ -62,6 +64,11 @@ DOC_BASELINE_FILES = {
     "POLY_V2_PREVIEW_RELEASE_NOTES.md": "intro line",
 }
 DOC_BASELINE_RE = re.compile(r"(2\.0\.0-preview\.\d+)")
+RELEASE_NOTES = ROOT / "POLY_V2_PREVIEW_RELEASE_NOTES.md"
+# The evidence paragraph quotes the published module, e.g.
+# "`poly.wasm: 547733 bytes (budget: 660000)`". `scripts/release.py` checks
+# this line before tagging; the number is written here so it starts out right.
+NOTES_WASM_RE = re.compile(r"(poly\.wasm:\s*)(\d[\d,]*)(\s*bytes)")
 
 
 def run(cmd: list[str], cwd: Path | None = None, allow_failure: bool = False) -> str:
@@ -192,6 +199,43 @@ def rebuild_playground_wasm() -> None:
     print(f"  playground/poly.wasm rebuilt ({size:,} bytes)")
 
 
+def sync_notes_wasm_size() -> None:
+    """Rewrite the wasm size quoted in the preview notes to the built module.
+
+    The line is evidence a reader can compare with the budget, so it must
+    describe the module the release actually ships. preview.21's notes quoted
+    548,899 bytes for a 548,185-byte module because the number was written by
+    hand; deriving it here removes that class of error. The release driver
+    still re-checks the result before tagging, which is what makes the number
+    verified rather than merely generated.
+    """
+    if not RELEASE_NOTES.exists():
+        raise SystemExit(
+            f"{RELEASE_NOTES.name} is missing; it is part of the release surface, "
+            "so restore it (including its `poly.wasm: <n> bytes` evidence line) "
+            "and re-run"
+        )
+    text = RELEASE_NOTES.read_text(encoding="utf-8")
+    matches = NOTES_WASM_RE.findall(text)
+    if len(matches) != 1:
+        raise SystemExit(
+            f"{RELEASE_NOTES.name}: expected exactly one `poly.wasm: <n> bytes` "
+            f"line, found {len(matches)}; update the file by hand"
+        )
+    size = PLAYGROUND_WASM.stat().st_size
+    # Keep the author's separator style: 547,733 stays comma-grouped, 547733
+    # stays plain, so the rewrite changes the number and nothing else.
+    formatted = f"{size:,}" if "," in matches[0][1] else str(size)
+    updated = NOTES_WASM_RE.sub(
+        lambda match: match.group(1) + formatted + match.group(3), text, count=1
+    )
+    if updated == text:
+        print(f"  {RELEASE_NOTES.name}: wasm size already {formatted} bytes")
+        return
+    RELEASE_NOTES.write_text(updated, encoding="utf-8")
+    print(f"  {RELEASE_NOTES.name}: wasm size {matches[0][1]} -> {formatted} bytes")
+
+
 def regenerate_tetris_project() -> None:
     run(["cargo", "build", "--release", "-p", "poly-cli"], cwd=ROOT / "compiler")
     # --project refuses to touch an existing directory; regenerate from scratch.
@@ -285,6 +329,7 @@ def main() -> int:
 
     print("2/4 Playground wasm module")
     rebuild_playground_wasm()
+    sync_notes_wasm_size()
 
     print("3/4 Tetris generated project")
     regenerate_tetris_project()

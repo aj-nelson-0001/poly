@@ -15,6 +15,12 @@ All notable changes to the Poly language compiler will be documented in this fil
 - **The release driver reports how long each stage took.** The summary ends
   with `prepare`, `CI wait`, `release wait`, and `total`, so the wait timeouts
   can be set from measurements instead of guesses.
+- **A release interrupted after tagging can be resumed.** `--resume` now also
+  accepts a tag that already names `HEAD`: it re-checks the notes, re-confirms
+  CI was green on that commit, skips the tag, and waits on the existing release
+  run. A tag naming another commit still stops the run.
+- **The per-run wait limit is 20 minutes, not 45.** Measured on preview.21:
+  CI 6m 09s, release 2m 06s. `--timeout` still raises it for slow runners.
 
 ## [2.0.0-preview.21] - 2026-11-25
 

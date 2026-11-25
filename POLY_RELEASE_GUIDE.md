@@ -206,6 +206,9 @@ python3 scripts/release.py 2.0.0-preview.N
 # Re-running after a red CI run (the release commit is already pushed):
 python3 scripts/release.py 2.0.0-preview.N --resume
 
+# Re-running after the tag exists (an interrupted release wait):
+python3 scripts/release.py 2.0.0-preview.N --resume
+
 # Plan only: preflight checks and the steps it would take, no writes:
 python3 scripts/release.py 2.0.0-preview.N --dry-run
 ~~~
@@ -223,6 +226,15 @@ It also compares the `poly.wasm: <n> bytes` line in
 mismatch, because that number is written by hand and shipped stale once. Fix
 the number, commit it, and re-run with `--resume`. The final summary ends with
 stage timings (`prepare`, `CI wait`, `release wait`, `total`).
+
+`--resume` also covers a run that was interrupted *after* tagging, which is
+what happens when the terminal is cut off inside the release wait: if the tag
+already names `HEAD`, the driver re-checks the notes, re-confirms CI was green
+on that commit, skips the tag, and waits on the existing release run. A tag
+that names some other commit still stops the run, because moving it is a human
+decision. The per-run wait limit defaults to 20 minutes, about three times the
+slowest stage measured on preview.21 (CI 6m 09s, release 2m 06s); raise it with
+`--timeout` on slow runners.
 
 Manual equivalent, when the driver cannot run (for example no `gh`):
 

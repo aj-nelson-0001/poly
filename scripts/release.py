@@ -9,7 +9,9 @@ re-cut. Here the tag is created only after the CI run for the exact release
 commit is green.
 
     1. Check the preconditions: ``gh`` is signed in, the branch is not
-       ``master``, the version is sane, and the tag does not exist.
+       ``master``, the version is sane, and the tag is free — or, with
+       ``--resume``, already names HEAD, which means a run was interrupted
+       after tagging and only the release wait is left.
     2. Prepare with ``prepare_release.py <version>`` (skipped by ``--resume``
        when the release commit is already pushed).
     3. Commit ``chore(release): prepare <version>`` and push the branch. Only
@@ -20,7 +22,7 @@ commit is green.
     5. Wait for the ``CI`` run on that commit. A red run stops here, before any
        tag exists.
     6. Tag ``<version>`` (annotated) and push the tag, which starts
-       ``release.yml``.
+       ``release.yml``. Skipped when the tag already names HEAD.
     7. Wait for the release run, print the published assets, and report how
        long the prepare, CI, and release stages took.
 
@@ -32,6 +34,7 @@ Usage:
     python3 scripts/release.py 2.0.0-preview.21
     python3 scripts/release.py 2.0.0-preview.21 --skip-tests
     python3 scripts/release.py 2.0.0-preview.21 --resume
+    python3 scripts/release.py 2.0.0-preview.21 --resume   # after the tag too
     python3 scripts/release.py 2.0.0-preview.21 --dry-run
 """
 
@@ -60,10 +63,11 @@ RELEASE_NOTES = ROOT / "POLY_V2_PREVIEW_RELEASE_NOTES.md"
 # so it has already gone stale once (548,899 for a 548,185-byte module).
 NOTES_WASM_RE = re.compile(r"poly\.wasm:\s*(\d[\d,]*)\s*bytes")
 POLL_SECONDS = 10
-# 45 minutes covers a cold wasm build plus the three platform builds; the
-# timeout exists so a stuck queue cannot hang a terminal forever, not to fit
-# the normal case.
-DEFAULT_TIMEOUT_MINUTES = 45
+# Measured on 2.0.0-preview.21 (2026-11-25): CI 6m 09s, release 2m 06s. 20
+# minutes is about 3x the slower stage, which leaves room for a cold runner
+# queue while still failing long before the old 45-minute guess could hang a
+# terminal. Override with --timeout when the runners are slow.
+DEFAULT_TIMEOUT_MINUTES = 20
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$")
 # The release commit is metadata only. Docs are edited by hand before the
 # driver runs, so they are allowed; application sources are not, and an
@@ -130,6 +134,24 @@ def tag_exists(version: str) -> bool:
         return True
     remote = git("ls-remote", "--tags", "origin", f"refs/tags/{version}", allow_failure=True)
     return bool(remote.strip())
+
+
+def tag_commit(version: str) -> str | None:
+    """The commit a tag names (peeled), or None when it cannot be resolved.
+
+    The tag may exist only on the remote, so both the local ref and
+    ``ls-remote``'s peeled entry are consulted. Annotated tags peel to their
+    commit; a lightweight tag is its own commit.
+    """
+    local = git("rev-parse", "-q", "--verify", f"refs/tags/{version}^{{commit}}",
+                allow_failure=True).strip()
+    if local:
+        return local
+    for pattern in (f"refs/tags/{version}^{{}}", f"refs/tags/{version}"):
+        remote = git("ls-remote", "origin", pattern, allow_failure=True).strip()
+        if remote:
+            return remote.split()[0]
+    return None
 
 
 def find_run(workflow: str, *, commit: str | None, branch: str) -> dict[str, object]:
@@ -254,7 +276,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("version", help="version to release, e.g. 2.0.0-preview.21 (no v prefix)")
     parser.add_argument("--resume", action="store_true",
-                        help="the release commit is already pushed: wait for CI, then tag")
+                        help="the release commit is already pushed (and maybe tagged): "
+                             "pick up from the CI check / the release wait")
     parser.add_argument("--skip-tests", action="store_true",
                         help="pass --skip-tests to prepare_release.py")
     parser.add_argument("--dry-run", action="store_true",
@@ -280,19 +303,39 @@ def main() -> int:
             f"refusing to release from {branch}: releases are cut from the default development "
             "branch (v2.0-dev), and master must not receive direct commits"
         )
-    if tag_exists(version):
-        raise SystemExit(f"tag {version} already exists (locally or on origin); refusing to move it")
     head = git("rev-parse", "HEAD").strip()
-    print(f"  HEAD: {head[:9]}, tag {version} is free")
+    tagged: str | None = None
+    if tag_exists(version):
+        if not arguments.resume:
+            raise SystemExit(
+                f"tag {version} already exists (locally or on origin); refusing to move it. "
+                "If this run was interrupted after tagging, re-run with --resume to wait on the release."
+            )
+        tagged = tag_commit(version)
+        if tagged is None:
+            raise SystemExit(f"tag {version} exists but its commit could not be resolved; inspect it by hand")
+        if tagged != head:
+            raise SystemExit(
+                f"tag {version} names {tagged[:9]}, not HEAD ({head[:9]}); a tag on another commit "
+                "is a human call, so this run stops here"
+            )
+        print(f"  HEAD: {head[:9]}, tag {version} already names it: resuming after the tag")
+    else:
+        print(f"  HEAD: {head[:9]}, tag {version} is free")
 
     if arguments.dry_run:
         print("\nDry run: nothing was written. A real run would:")
-        if not arguments.resume:
-            print(f"  - run scripts/prepare_release.py {version}")
-        print(f"  - commit `chore(release): prepare {version}` and push {branch}")
-        print(f"  - check the wasm size in {RELEASE_NOTES.name} against the built module")
-        print(f"  - wait for the {CI_WORKFLOW} push run at that commit; stop if it is not green")
-        print(f"  - `git tag -a {version} -m \"Poly {version}\"` and push the tag")
+        if tagged:
+            print(f"  - check the wasm size in {RELEASE_NOTES.name} against the built module")
+            print(f"  - confirm {CI_WORKFLOW} was green at {head[:9]}")
+            print(f"  - skip tagging: {version} already names {head[:9]}")
+        else:
+            if not arguments.resume:
+                print(f"  - run scripts/prepare_release.py {version}")
+            print(f"  - commit `chore(release): prepare {version}` and push {branch}")
+            print(f"  - check the wasm size in {RELEASE_NOTES.name} against the built module")
+            print(f"  - wait for the {CI_WORKFLOW} push run at that commit; stop if it is not green")
+            print(f"  - `git tag -a {version} -m \"Poly {version}\"` and push the tag")
         print(f"  - wait for the {RELEASE_WORKFLOW} run and print the release")
         return 0
 
@@ -347,15 +390,23 @@ def main() -> int:
     ci_view = wait_run(ci_run, "CI", arguments.timeout)
     timings["CI wait"] = time.time() - ci_started
     if not print_jobs(ci_view):
+        if tagged:
+            raise SystemExit(
+                f"CI is red for {head[:9]} even though tag {version} already names it; the release "
+                "cannot be trusted. Inspect the run, and treat the tag as a human decision."
+            )
         raise SystemExit(
             f"CI is red for {head[:9]}, so no tag was created. Fix the cause, commit and push, then "
             f"re-run with --resume:\n  python3 scripts/release.py {version} --resume"
         )
     print(f"  CI is green after {duration(timings['CI wait'])}; the commit is safe to tag")
 
-    print("6/7 Tag and push")
-    git("tag", "-a", version, "-m", f"Poly {version}")
-    git("push", "origin", version)
+    if tagged:
+        print(f"6/7 Tag and push: skipped ({version} already names {head[:9]})")
+    else:
+        print("6/7 Tag and push")
+        git("tag", "-a", version, "-m", f"Poly {version}")
+        git("push", "origin", version)
 
     print("7/7 Wait for the release")
     release_started = time.time()

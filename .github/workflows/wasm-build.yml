@@ -112,6 +112,10 @@ jobs:
           fi
           echo "playground/poly.wasm matches the build ($(wc -c < playground/poly.wasm) B)"
 
+      # Besides the language cases, the smoke test asserts that the module, the
+      # playground selector, and the release notes agree about the asm target:
+      # re-enabling the backend in this module fails here until the page offers
+      # it and POLY_V2_PREVIEW_RELEASE_NOTES.md says the browser module has it.
       - name: Smoke test the wasm artifact
         if: inputs.run_smoke_test
         run: node scripts/playground_wasm_smoke.mjs

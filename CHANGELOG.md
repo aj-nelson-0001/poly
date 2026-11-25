@@ -4,6 +4,17 @@ All notable changes to the Poly language compiler will be documented in this fil
 
 ## [Unreleased]
 
+### Added
+
+- **CI fails if the browser module offers `asm` again without saying so.**
+  `scripts/playground_wasm_smoke.mjs` (already a step in
+  `wasm-build.yml`) now probes the module for its advertised target list and
+  compares it with the playground selector and the asm row of the release
+  notes' Target Contract. Re-enabling the backend, dropping an option, or
+  leaving the notes claiming the module lacks the target fails the job with
+  a message naming the file to update, so the download cannot grow and the
+  documentation cannot drift back.
+
 ## [2.0.0-preview.20] - 2026-11-25
 
 ### Changed

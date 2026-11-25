@@ -6,6 +6,8 @@
 //   - retired symbol programs are rejected with migration diagnostics
 //   - over-deep operator chains are rejected instead of overflowing the stack
 //   - transpile_target emits C and JavaScript for the selected backend
+//   - the module, the playground selector, and the release notes agree about
+//     the asm target (compiled out here, documented as absent)
 //
 // Runs in CI (see the `wasm` job in .github/workflows/ci.yml) and locally:
 //   node scripts/playground_wasm_smoke.mjs
@@ -154,10 +156,63 @@ for (const [target, markers] of targetCases) {
   }
 }
 
+// The module, the playground selector, and the release notes must agree about
+// the asm target. preview.20 compiled that backend out of this module (~88 KB)
+// because the page cannot run x86-64 assembly; if it comes back -- a dropped
+// `default-features = false` or a flipped feature -- CI has to stop until the
+// selector offers the target and the notes say the browser module carries it.
+// Otherwise the download grows silently and the documentation keeps describing
+// a module nobody rebuilds.
+{
+  const html = readFileSync(join(root, 'playground', 'index.html'), 'utf8');
+  const uiTargets = [...html.matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1]);
+  // An unknown target's diagnostic lists the set this build can reach, so one
+  // probe reports the compiled feature set without guessing at each backend.
+  const probe = transpileTarget('fn main()\n    put 1\nend fn\n', 'not-a-target');
+  const advertised = /Supported targets: ([a-z, ]+)/.exec(probe.out);
+  const notes = readFileSync(join(root, 'POLY_V2_PREVIEW_RELEASE_NOTES.md'), 'utf8');
+  const asmRow = notes.split('\n').find((line) => line.startsWith('| Asm '));
+  const sorted = (targets) => [...targets].sort().join(', ');
+
+  if (!advertised) {
+    failures += 1;
+    console.error(`TARGET probe did not advertise its supported targets:\n${probe.out}`);
+  } else if (!asmRow) {
+    failures += 1;
+    console.error(
+      'NOTES: POLY_V2_PREVIEW_RELEASE_NOTES.md has no `| Asm ...` Target Contract row, ' +
+        "so the browser module's asm status is undocumented"
+    );
+  } else {
+    const moduleTargets = advertised[1].split(',').map((t) => t.trim());
+    const moduleHasAsm = moduleTargets.includes('asm');
+    if (sorted(uiTargets) !== sorted(moduleTargets)) {
+      failures += 1;
+      console.error(
+        `TARGET parity: the wasm module supports [${sorted(moduleTargets)}] but ` +
+          `playground/index.html offers [${sorted(uiTargets)}]; update the selector ` +
+          '(and, for asm, the release notes) or build the extra target back out'
+      );
+    }
+    const notesSayAbsent = asmRow.includes('absent from the browser module');
+    if (moduleHasAsm === notesSayAbsent) {
+      failures += 1;
+      console.error(
+        moduleHasAsm
+          ? 'NOTES: the wasm module now compiles asm, but the Target Contract row still says it ' +
+              'is absent from the browser module; document the browser target (and its size budget)'
+          : 'NOTES: the Target Contract row no longer says asm is absent from the browser module, ' +
+              'but the wasm module does not compile it; correct the row'
+      );
+    }
+  }
+}
+
 if (failures > 0) {
   console.error(`playground wasm smoke test: ${failures} failure(s)`);
   process.exit(1);
 }
 console.log(
-  `playground wasm smoke test: ${good.length} good + ${bad.length} rejected + ${targetCases.length} target cases pass`
+  `playground wasm smoke test: ${good.length} good + ${bad.length} rejected + ` +
+    `${targetCases.length} target cases + module/UI/notes parity pass`
 );

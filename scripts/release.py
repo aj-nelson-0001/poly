@@ -45,6 +45,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PREPARE_SCRIPT = ROOT / "scripts" / "prepare_release.py"
 CI_WORKFLOW = "ci.yml"
 RELEASE_WORKFLOW = "release.yml"
+# The gate's own budget, read rather than repeated, so the summary cannot drift
+# from the number that actually fails a build.
+WASM_WORKFLOW = ROOT / ".github" / "workflows" / "wasm-build.yml"
+WASM_BUDGET_RE = re.compile(r"WASM_SIZE_BUDGET:\s*'(\d+)'")
 POLL_SECONDS = 10
 # 45 minutes covers a cold wasm build plus the three platform builds; the
 # timeout exists so a stuck queue cannot hang a terminal forever, not to fit
@@ -160,6 +164,35 @@ def wait_run(run_info: dict[str, object], label: str, timeout_minutes: int) -> d
         f"{label} run {run_id} did not finish within {timeout_minutes} minutes; "
         f"watch it with `gh run watch {run_id}`"
     )
+
+
+def wasm_size_budget() -> int | None:
+    """The byte budget wasm-build.yml gates against, or None if unreadable."""
+    match = WASM_BUDGET_RE.search(WASM_WORKFLOW.read_text(encoding="utf-8"))
+    return int(match.group(1)) if match else None
+
+
+def print_wasm_headroom(assets: list[dict[str, object]]) -> None:
+    """Report the published module against the budget the gate enforces."""
+    asset = next(
+        (item for item in assets
+         if str(item["name"]).startswith("poly-playground-")
+         and str(item["name"]).endswith(".wasm")),
+        None,
+    )
+    if asset is None:
+        print("  wasm: no playground module among the published assets")
+        return
+    size = int(asset["size"])
+    budget = wasm_size_budget()
+    if budget is None:
+        print(f"  wasm: {size:,} bytes (budget not found in {WASM_WORKFLOW.name})")
+        return
+    headroom = budget - size
+    share = size / budget * 100
+    state = f"{headroom:,} bytes of headroom" if headroom >= 0 else f"{-headroom:,} bytes OVER budget"
+    print(f"  wasm: {size:,} bytes against a {budget:,}-byte budget "
+          f"({share:.1f}% used, {state})")
 
 
 def print_jobs(view: dict[str, object]) -> bool:
@@ -282,6 +315,7 @@ def main() -> int:
           f"draft: {release['isDraft']})")
     for asset in release["assets"]:  # type: ignore[index]
         print(f"  {asset['name']}  {asset['size']} bytes")
+    print_wasm_headroom(release["assets"])  # type: ignore[arg-type]
     print(f"  {release['url']}")
     return 0
 

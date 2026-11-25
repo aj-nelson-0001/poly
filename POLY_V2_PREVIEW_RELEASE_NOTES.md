@@ -378,7 +378,7 @@ release workflow then rebuilds the module through that same reusable job,
 publishes those bytes, and runs `verify-release` to re-download every asset and
 check the checksum manifest, asset naming, the reported compiler version, the
 WASM header and budget, and the macOS/Windows binaries. The wasm job logs
-`poly.wasm: 547733 bytes (budget: 660000)`, and that is the size quoted in this
+`poly.wasm: 547152 bytes (budget: 660000)`, and that is the size quoted in this
 file, which `scripts/release.py` re-checks against the module before it tags.
 The release workflow rebuilds the module from the tagged commit and fails on
 drift, so the published bytes are the ones built from the repository.
